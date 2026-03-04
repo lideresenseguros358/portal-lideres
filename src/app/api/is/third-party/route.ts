@@ -114,9 +114,11 @@ async function fetchPlan(
 async function fetchAllPlans() {
   console.log('[API IS Third Party] Fetching plans from IS API...');
 
-  // Sequential calls to avoid rate limiting / timeouts (IS API is slow)
-  const basicResult = await fetchPlan(PLAN_SOAT, 'development');
-  const premiumResult = await fetchPlan(PLAN_INTERMEDIO, 'development');
+  // Parallel calls — IS API is slow so running both at once saves ~50% time
+  const [basicResult, premiumResult] = await Promise.all([
+    fetchPlan(PLAN_SOAT, 'development'),
+    fetchPlan(PLAN_INTERMEDIO, 'development'),
+  ]);
 
   const result = {
     success: true,
@@ -132,6 +134,10 @@ async function fetchAllPlans() {
           : FALLBACK_BASIC_PRICE,
         coverageList: basicResult?.coverages || [],
         fromApi: !!basicResult,
+        idCotizacion: basicResult?.idCotizacion || null,
+        vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
+        vcodmarca: REF_VEHICLE.codMarca,
+        vcodmodelo: REF_VEHICLE.codModelo,
         installments: { available: false, description: 'Solo al contado' },
       },
       {
@@ -143,6 +149,10 @@ async function fetchAllPlans() {
           : FALLBACK_PREMIUM_PRICE,
         coverageList: premiumResult?.coverages || [],
         fromApi: !!premiumResult,
+        idCotizacion: premiumResult?.idCotizacion || null,
+        vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
+        vcodmarca: REF_VEHICLE.codMarca,
+        vcodmodelo: REF_VEHICLE.codModelo,
         installments: { available: false, description: 'Solo al contado' },
       },
     ],

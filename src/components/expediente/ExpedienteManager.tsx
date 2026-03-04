@@ -256,6 +256,7 @@ export default function ExpedienteManager({
       cedula: 'CEDULA/PASAPORTE',
       licencia: 'Licencia',
       registro_vehicular: 'Registro Vehicular',
+      debida_diligencia: 'Debida Diligencia',
       otros: name || 'Otro Documento',
     };
     return labels[type];

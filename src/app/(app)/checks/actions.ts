@@ -6,6 +6,7 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/lib/supabase/client';
 import { revalidatePath } from 'next/cache';
 import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
 import { actionCheckAdvanceBeforeDelete } from './orphan-advances';
+import { logActivity } from '@/lib/operaciones/logActivity';
 
 const AMOUNT_TOLERANCE = 0.01;
 
@@ -323,6 +324,18 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
         .in('id', toUpdate);
     }
     
+    // ═══ Activity Log ═══
+    logActivity({
+      userId: userData.user.id,
+      actionType: 'check_bank_imported',
+      entityType: 'bank_transfer',
+      metadata: {
+        imported: newTransfers.length,
+        skipped: transfers.length - newTransfers.length,
+        payments_unlocked: toUpdate.length,
+      },
+    });
+
     return {
       ok: true,
       data: {
@@ -948,6 +961,24 @@ export async function actionCreatePendingPayment(payment: {
     } else if (pendingPayments.length > 1) {
       successMessage = `${pendingPayments.length} pagos pendientes creados exitosamente`;
     }
+
+    // ═══ Activity Log ═══
+    logActivity({
+      userId: user.id,
+      actionType: 'check_payment_created',
+      entityType: 'pending_payment',
+      entityId: pendingPayments[0]?.id || null,
+      metadata: {
+        client_name: payment.client_name,
+        amount: payment.amount_to_pay,
+        purpose: payment.purpose,
+        policy_number: payment.policy_number || null,
+        insurer: payment.insurer_name || null,
+        is_broker_deduction: !!isBrokerDeduction,
+        divisions: hasDivisions ? pendingPayments.length : 0,
+        count: pendingPayments.length,
+      },
+    });
 
     return { 
       ok: true, 
@@ -1851,6 +1882,24 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
     console.log('🎉 [actionMarkPaymentsAsPaidNew] PROCESO COMPLETADO EXITOSAMENTE');
     console.log('📊 [actionMarkPaymentsAsPaidNew] Total procesado:', paymentIds.length, 'pago(s)');
     
+    // ═══ Activity Log ═══
+    const userId = userData.user.id;
+    for (const p of payments) {
+      logActivity({
+        userId,
+        actionType: 'check_payment_paid',
+        entityType: 'pending_payment',
+        entityId: p.id,
+        metadata: {
+          client_name: p.client_name,
+          amount: p.amount_to_pay,
+          purpose: p.purpose,
+          policy_number: p.policy_number || null,
+          insurer: p.insurer_name || null,
+        },
+      });
+    }
+
     return {
       ok: true,
       message: `${paymentIds.length} pago(s) marcado(s) como pagado(s)`
@@ -2159,6 +2208,21 @@ export async function actionUpdatePendingPayment(paymentId: string, updates: {
 
     if (updateError) throw updateError;
 
+    // ═══ Activity Log ═══
+    logActivity({
+      userId: userData.user.id,
+      actionType: 'check_payment_updated',
+      entityType: 'pending_payment',
+      entityId: paymentId,
+      metadata: {
+        client_name: updates.client_name,
+        amount: updates.amount_to_pay,
+        purpose: updates.purpose,
+        policy_number: updates.policy_number || null,
+        insurer: updates.insurer_name || null,
+      },
+    });
+
     return { ok: true, message: 'Pago actualizado correctamente' };
   } catch (error: any) {
     console.error('Error updating pending payment:', error);
@@ -2441,6 +2505,22 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
         `• Ahora usa referencias bancarias normales`;
     }
     
+    // ═══ Activity Log ═══
+    logActivity({
+      userId: userData.user.id,
+      actionType: 'check_payment_updated',
+      entityType: 'pending_payment',
+      entityId: paymentId,
+      metadata: {
+        client_name: updates.client_name,
+        amount: updates.amount_to_pay,
+        purpose: updates.purpose,
+        policy_number: updates.policy_number || null,
+        insurer: updates.insurer_name || null,
+        full_update: true,
+      },
+    });
+
     return { ok: true, message: successMessage };
   } catch (error: any) {
     console.error('Error updating pending payment:', error);
@@ -2538,6 +2618,15 @@ export async function actionToggleEarlyPayment(paymentId: string, enable: boolea
         }
       }
 
+      // ═══ Activity Log ═══
+      logActivity({
+        userId: userData.user.id,
+        actionType: 'check_early_payment_enabled',
+        entityType: 'pending_payment',
+        entityId: paymentId,
+        metadata: { client_name: payment.client_name, amount: payment.amount_to_pay },
+      });
+
       revalidatePath('/(app)/checks');
       return { ok: true, message: 'Pago anticipado habilitado. Ahora puede marcarse como pagado.' };
     } else {
@@ -2583,6 +2672,15 @@ export async function actionToggleEarlyPayment(paymentId: string, enable: boolea
             .eq('id', advanceId);
         }
       }
+
+      // ═══ Activity Log ═══
+      logActivity({
+        userId: userData.user.id,
+        actionType: 'check_early_payment_reverted',
+        entityType: 'pending_payment',
+        entityId: paymentId,
+        metadata: { client_name: payment.client_name, amount: payment.amount_to_pay },
+      });
 
       revalidatePath('/(app)/checks');
       return { ok: true, message: 'Pago anticipado revertido. El pago queda bloqueado hasta que se complete el descuento.' };
@@ -2931,6 +3029,19 @@ export async function actionDeletePendingPayment(paymentId: string) {
         }
       }
     }
+
+    // ═══ Activity Log ═══
+    logActivity({
+      userId: userData.user.id,
+      actionType: 'check_payment_deleted',
+      entityType: 'pending_payment',
+      entityId: paymentId,
+      metadata: {
+        client_name: payment?.client_name || null,
+        had_advance: !!advanceIdToCancel,
+        batch_id: batchId || null,
+      },
+    });
 
     // Delete payment references first (cascade)
     const { error: refsError } = await supabase

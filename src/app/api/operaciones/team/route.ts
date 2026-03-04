@@ -63,12 +63,22 @@ export async function GET(req: NextRequest) {
         ) / 60;
 
         // Cases handled today (closed today)
-        const { count: casesToday } = await supabase
+        const { count: casesClosedToday } = await supabase
           .from('ops_cases')
           .select('id', { count: 'exact', head: true })
           .eq('assigned_master_id', m.id)
           .gte('closed_at', `${today}T00:00:00`)
           .lte('closed_at', `${today}T23:59:59`);
+
+        // Activity log actions today (includes checks, status changes, etc.)
+        const { count: actionsToday } = await supabase
+          .from('ops_activity_log')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', m.id)
+          .gte('created_at', `${today}T00:00:00`)
+          .lte('created_at', `${today}T23:59:59`);
+
+        const casesToday = Math.max(casesClosedToday || 0, actionsToday || 0);
 
         // Recent unproductive days (last 30 days)
         const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -99,6 +109,7 @@ export async function GET(req: NextRequest) {
 
     // ════════════════════════════════════════════
     // VIEW: DETAIL — full metrics for one user
+    // Computes metrics in real-time from ops_cases + ops_activity_log
     // ════════════════════════════════════════════
     if (view === 'detail') {
       const userId = searchParams.get('user_id');
@@ -108,50 +119,119 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'user_id, from, to required' }, { status: 400 });
       }
 
-      // Daily metrics in range
-      const { data: dailyMetrics } = await supabase
-        .from('ops_metrics_daily')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('date', from)
-        .lte('date', to)
-        .order('date', { ascending: true });
+      const rangeStart = `${from}T00:00:00`;
+      const rangeEnd = `${to}T23:59:59`;
 
-      // Sessions in range
+      // ── 1. Cases closed in range (the real source of truth) ──
+      const { data: closedCases } = await supabase
+        .from('ops_cases')
+        .select('id, case_type, status, closed_at, sla_breached, created_at, first_response_at')
+        .eq('assigned_master_id', userId)
+        .in('status', CLOSED)
+        .gte('closed_at', rangeStart)
+        .lte('closed_at', rangeEnd);
+
+      const allClosed = closedCases || [];
+
+      // ── 2. Activity log in range (for daily breakdown + checks actions) ──
+      const { data: activityLogs } = await supabase
+        .from('ops_activity_log')
+        .select('action_type, created_at, metadata')
+        .eq('user_id', userId)
+        .gte('created_at', rangeStart)
+        .lte('created_at', rangeEnd);
+
+      const allLogs = activityLogs || [];
+
+      // ── 3. Sessions in range ──
       const { data: sessions } = await supabase
         .from('ops_user_sessions')
         .select('session_start, duration_minutes')
         .eq('user_id', userId)
-        .gte('session_start', `${from}T00:00:00`)
-        .lte('session_start', `${to}T23:59:59`);
+        .gte('session_start', rangeStart)
+        .lte('session_start', rangeEnd);
 
-      // Hours from sessions
       const totalMinutes = (sessions || []).reduce(
         (s: number, r: { duration_minutes: number }) => s + (r.duration_minutes || 0), 0
       );
       const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
 
-      // Aggregate daily metrics
-      const rows = dailyMetrics || [];
-      const agg = {
-        total_hours: totalHours,
-        days_with_data: rows.length,
-        avg_daily_hours: rows.length > 0 ? Math.round((totalHours / rows.length) * 10) / 10 : 0,
-        cases_handled: rows.reduce((s: number, r: any) => s + (r.cases_handled || 0), 0),
-        renewals_handled: rows.reduce((s: number, r: any) => s + (r.renewals_handled || 0), 0),
-        petitions_handled: rows.reduce((s: number, r: any) => s + (r.petitions_handled || 0), 0),
-        urgencies_handled: rows.reduce((s: number, r: any) => s + (r.urgencies_handled || 0), 0),
-        emissions_confirmed: rows.reduce((s: number, r: any) => s + (r.emissions_confirmed || 0), 0),
-        conversions_count: rows.reduce((s: number, r: any) => s + (r.conversions_count || 0), 0),
-        sla_breaches: rows.reduce((s: number, r: any) => s + (r.sla_breaches || 0), 0),
-      };
+      // ── Compute aggregates from closed cases ──
+      const renewalsHandled = allClosed.filter((c: any) => c.case_type === 'renovacion').length;
+      const petitionsHandled = allClosed.filter((c: any) => c.case_type === 'peticion').length;
+      const urgenciesHandled = allClosed.filter((c: any) => c.case_type === 'urgencia').length;
+      const emissionsConfirmed = allClosed.filter((c: any) => c.status === 'cerrado_renovado' || c.case_type === 'peticion').length;
+      // Conversions: petitions that ended as cerrado_renovado
+      const conversionsCount = allClosed.filter((c: any) => c.case_type === 'peticion' && c.status === 'cerrado_renovado').length;
+      const slaBreaches = allClosed.filter((c: any) => c.sla_breached).length;
+
+      // Count check actions from activity log
+      const checksActions = allLogs.filter((l: any) => l.action_type.startsWith('check_')).length;
+
+      const casesHandled = allClosed.length;
+
+      // Build daily breakdown
+      const dailyMap = new Map<string, {
+        date: string; hours_worked: number; cases_handled: number;
+        renewals_handled: number; petitions_handled: number;
+        urgencies_handled: number; emissions_confirmed: number;
+        conversions_count: number; sla_breaches: number;
+        unresolved_cases: number; productivity_score: number;
+        low_productivity: boolean;
+      }>();
+
+      // Init all dates in range
+      const fDate = new Date(from);
+      const tDate = new Date(to);
+      for (let d = new Date(fDate); d <= tDate; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        dailyMap.set(key, {
+          date: key, hours_worked: 0, cases_handled: 0,
+          renewals_handled: 0, petitions_handled: 0, urgencies_handled: 0,
+          emissions_confirmed: 0, conversions_count: 0, sla_breaches: 0,
+          unresolved_cases: 0, productivity_score: 0, low_productivity: false,
+        });
+      }
+
+      // Fill from closed cases
+      for (const c of allClosed) {
+        const day = c.closed_at?.slice(0, 10);
+        if (!day || !dailyMap.has(day)) continue;
+        const row = dailyMap.get(day)!;
+        row.cases_handled++;
+        if (c.case_type === 'renovacion') row.renewals_handled++;
+        if (c.case_type === 'peticion') row.petitions_handled++;
+        if (c.case_type === 'urgencia') row.urgencies_handled++;
+        if (c.sla_breached) row.sla_breaches++;
+        if (c.case_type === 'peticion' && c.status === 'cerrado_renovado') row.conversions_count++;
+      }
+
+      // Fill from activity logs (count any activity as productivity)
+      for (const l of allLogs) {
+        const day = l.created_at?.slice(0, 10);
+        if (!day || !dailyMap.has(day)) continue;
+        const row = dailyMap.get(day)!;
+        row.productivity_score++;
+      }
+
+      // Fill sessions hours
+      for (const s of (sessions || [])) {
+        const day = (s.session_start as string)?.slice(0, 10);
+        if (!day || !dailyMap.has(day)) continue;
+        dailyMap.get(day)!.hours_worked += (s.duration_minutes || 0) / 60;
+      }
+
+      // Filter daily to only days with actual activity
+      const daily = Array.from(dailyMap.values())
+        .filter(d => d.cases_handled > 0 || d.productivity_score > 0 || d.hours_worked > 0)
+        .map(d => ({ ...d, hours_worked: Math.round(d.hours_worked * 10) / 10 }));
 
       // Conversion rate
-      const conversionRate = agg.petitions_handled > 0
-        ? Math.round((agg.conversions_count / agg.petitions_handled) * 10000) / 100
+      const conversionRate = petitionsHandled > 0
+        ? Math.round((conversionsCount / petitionsHandled) * 10000) / 100
         : 0;
 
-      // Unattended cases (>48h no first_response, currently open)
+      // ── Unattended cases (>48h no first_response, currently open) ──
       const { count: unattended } = await supabase
         .from('ops_cases')
         .select('id', { count: 'exact', head: true })
@@ -167,37 +247,30 @@ export async function GET(req: NextRequest) {
         .eq('assigned_master_id', userId)
         .not('status', 'in', `(${CLOSED.join(',')})`);
 
-      // Avg first response time (in hours) for cases closed in range
-      const { data: responseTimes } = await supabase
-        .from('ops_cases')
-        .select('created_at, first_response_at')
-        .eq('assigned_master_id', userId)
-        .not('first_response_at', 'is', null)
-        .gte('closed_at', `${from}T00:00:00`)
-        .lte('closed_at', `${to}T23:59:59`);
-
+      // Avg first response time (hours) for cases with first_response in range
+      const casesWithResponse = allClosed.filter((c: any) => c.first_response_at);
       let avgResponseHours = 0;
-      if (responseTimes && responseTimes.length > 0) {
-        const total = responseTimes.reduce((s: number, r: any) => {
+      if (casesWithResponse.length > 0) {
+        const total = casesWithResponse.reduce((s: number, r: any) => {
           return s + (new Date(r.first_response_at).getTime() - new Date(r.created_at).getTime()) / 3600000;
         }, 0);
-        avgResponseHours = Math.round((total / responseTimes.length) * 10) / 10;
+        avgResponseHours = Math.round((total / casesWithResponse.length) * 10) / 10;
       }
 
-      // SLA detail — urgencies within/outside SLA
+      // ── Urgencies SLA detail ──
       const { data: urgCases } = await supabase
         .from('ops_cases')
         .select('id, sla_breached')
         .eq('assigned_master_id', userId)
         .eq('case_type', 'urgencia')
-        .gte('created_at', `${from}T00:00:00`)
-        .lte('created_at', `${to}T23:59:59`);
+        .gte('created_at', rangeStart)
+        .lte('created_at', rangeEnd);
 
       const urgTotal = (urgCases || []).length;
       const urgBreached = (urgCases || []).filter((c: any) => c.sla_breached).length;
       const urgWithinSla = urgTotal - urgBreached;
 
-      // AI effectiveness data
+      // AI effectiveness
       const urgCaseIds = (urgCases || []).map((c: any) => c.id);
       let aiEffectivenessAvg = 0;
       let aiNegativeCount = 0;
@@ -216,7 +289,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Productivity flags in range
+      // Productivity flags
       const { data: flags } = await supabase
         .from('ops_productivity_flags')
         .select('*')
@@ -226,31 +299,42 @@ export async function GET(req: NextRequest) {
         .lte('date', to)
         .order('date', { ascending: false });
 
-      // Previous period comparison (same duration before 'from')
+      // Previous period comparison
       const fromDate = new Date(from);
       const toDate = new Date(to);
       const rangeDays = Math.ceil((toDate.getTime() - fromDate.getTime()) / 86400000) + 1;
       const prevTo = new Date(fromDate.getTime() - 86400000).toISOString().slice(0, 10);
       const prevFrom = new Date(fromDate.getTime() - rangeDays * 86400000).toISOString().slice(0, 10);
 
-      const { data: prevMetrics } = await supabase
-        .from('ops_metrics_daily')
-        .select('petitions_handled, conversions_count')
-        .eq('user_id', userId)
-        .gte('date', prevFrom)
-        .lte('date', prevTo);
+      // Previous period: count from ops_cases directly
+      const { data: prevClosed } = await supabase
+        .from('ops_cases')
+        .select('case_type, status')
+        .eq('assigned_master_id', userId)
+        .in('status', CLOSED)
+        .gte('closed_at', `${prevFrom}T00:00:00`)
+        .lte('closed_at', `${prevTo}T23:59:59`);
 
-      const prevRows = prevMetrics || [];
-      const prevPetitions = prevRows.reduce((s: number, r: any) => s + (r.petitions_handled || 0), 0);
-      const prevConversions = prevRows.reduce((s: number, r: any) => s + (r.conversions_count || 0), 0);
+      const prevAll = prevClosed || [];
+      const prevPetitions = prevAll.filter((c: any) => c.case_type === 'peticion').length;
+      const prevConversions = prevAll.filter((c: any) => c.case_type === 'peticion' && c.status === 'cerrado_renovado').length;
       const prevConvRate = prevPetitions > 0
         ? Math.round((prevConversions / prevPetitions) * 10000) / 100
         : 0;
 
       return NextResponse.json({
-        daily: rows,
+        daily,
         summary: {
-          ...agg,
+          total_hours: totalHours,
+          days_with_data: daily.length,
+          avg_daily_hours: daily.length > 0 ? Math.round((totalHours / daily.length) * 10) / 10 : 0,
+          cases_handled: casesHandled,
+          renewals_handled: renewalsHandled,
+          petitions_handled: petitionsHandled,
+          urgencies_handled: urgenciesHandled,
+          emissions_confirmed: emissionsConfirmed,
+          conversions_count: conversionsCount,
+          sla_breaches: slaBreaches,
           conversion_rate: conversionRate,
           unattended_cases: unattended || 0,
           pending_cases: pendingCases || 0,
@@ -262,6 +346,7 @@ export async function GET(req: NextRequest) {
           ai_effectiveness_avg: aiEffectivenessAvg,
           ai_negative_count: aiNegativeCount,
           ai_total_evaluated: aiTotalEvaluated,
+          checks_actions: checksActions,
         },
         productivity_flags: flags || [],
         previous_period: {
@@ -288,12 +373,17 @@ export async function GET(req: NextRequest) {
         .select('id, action_type, entity_type, entity_id, created_at, metadata')
         .eq('user_id', userId)
         .in('action_type', [
+          // Operaciones
           'status_change', 'case_assigned', 'case_created', 'petition_converted_to_emission',
           'cancellation_confirmed', 'renewal_confirmed', 'email_sent', 'first_response',
           'imap_manual_assign', 'imap_manual_discard',
+          // Cheques / Pagos
+          'check_payment_created', 'check_payment_paid', 'check_payment_deleted',
+          'check_payment_updated', 'check_bank_imported',
+          'check_early_payment_enabled', 'check_early_payment_reverted',
         ])
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (from) q = q.gte('created_at', `${from}T00:00:00`);
       if (to) q = q.lte('created_at', `${to}T23:59:59`);

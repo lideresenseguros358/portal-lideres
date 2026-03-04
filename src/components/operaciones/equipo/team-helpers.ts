@@ -136,23 +136,47 @@ export const fmtDateTime = (d: string) =>
 
 // ── Action labels for history ──
 export const ACTION_LABELS: Record<string, string> = {
+  // Operaciones
   status_change: 'Cambio de estado',
   case_assigned: 'Reasignación',
+  case_created: 'Caso creado',
   petition_converted_to_emission: 'Conversión a emisión',
   cancellation_confirmed: 'Cancelación confirmada',
   renewal_confirmed: 'Renovación confirmada',
   email_sent: 'Correo enviado',
   first_response: 'Primera respuesta',
+  imap_manual_assign: 'Asignación IMAP',
+  imap_manual_discard: 'Descarte IMAP',
+  // Cheques / Pagos
+  check_payment_created: 'Pago registrado',
+  check_payment_paid: 'Pago conciliado',
+  check_payment_deleted: 'Pago eliminado',
+  check_payment_updated: 'Pago editado',
+  check_bank_imported: 'Banco importado',
+  check_early_payment_enabled: 'Pago anticipado',
+  check_early_payment_reverted: 'Anticipo revertido',
 };
 
 export const ACTION_COLORS: Record<string, string> = {
+  // Operaciones
   status_change: 'bg-blue-100 text-blue-700',
   case_assigned: 'bg-purple-100 text-purple-700',
+  case_created: 'bg-indigo-100 text-indigo-700',
   petition_converted_to_emission: 'bg-green-100 text-green-700',
   cancellation_confirmed: 'bg-red-100 text-red-700',
   renewal_confirmed: 'bg-emerald-100 text-emerald-700',
   email_sent: 'bg-teal-100 text-teal-700',
   first_response: 'bg-amber-100 text-amber-700',
+  imap_manual_assign: 'bg-violet-100 text-violet-700',
+  imap_manual_discard: 'bg-gray-200 text-gray-600',
+  // Cheques / Pagos
+  check_payment_created: 'bg-lime-100 text-lime-700',
+  check_payment_paid: 'bg-green-100 text-green-700',
+  check_payment_deleted: 'bg-red-100 text-red-700',
+  check_payment_updated: 'bg-sky-100 text-sky-700',
+  check_bank_imported: 'bg-cyan-100 text-cyan-700',
+  check_early_payment_enabled: 'bg-orange-100 text-orange-700',
+  check_early_payment_reverted: 'bg-rose-100 text-rose-700',
 };
 
 // ── Initials from name ──

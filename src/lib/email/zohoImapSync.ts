@@ -123,6 +123,17 @@ export async function run(): Promise<SyncResult> {
           const parsed = await parseImapMessage(msg);
           if (!parsed) continue;
 
+          // ── Subject filter: only ingest portal-originated emails ──
+          // Accept: "Expediente Portal ..." subjects (sent by our portal)
+          // Accept: subjects containing ticket references (replies to our threads)
+          const subjectLower = (parsed.subject || '').toLowerCase();
+          const isPortalEmail = subjectLower.includes('expediente portal');
+          const hasTicketRef = /(?:PET|REN|URG|MOR)-\d{4}-\d{5}/i.test(parsed.subject);
+          if (!isPortalEmail && !hasTicketRef) {
+            console.log(`[IMAP-SYNC] Skipping non-portal email: "${parsed.subject.substring(0, 80)}" from ${parsed.fromEmail}`);
+            continue;
+          }
+
           // Deduplicate by message_id
           const exists = await messageExists(supabase, parsed.messageId);
           if (exists) {

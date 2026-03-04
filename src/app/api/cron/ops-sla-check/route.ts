@@ -26,15 +26,50 @@ export async function POST(request: Request) {
     }
 
     try {
-      const { data: breached, error } = await ctx.supabase.rpc('ops_check_sla');
+      // Try RPC first; if it doesn't exist, fall back to direct query
+      let breached: any[] = [];
+      let rpcAvailable = true;
 
-      if (error) {
-        console.error('Error running ops_check_sla:', error);
-        await failCronRun(ctx, error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+      try {
+        const { data, error } = await ctx.supabase.rpc('ops_check_sla');
+        if (error) {
+          console.warn('ops_check_sla RPC failed, falling back to direct query:', error.message);
+          rpcAvailable = false;
+        } else {
+          breached = data || [];
+        }
+      } catch {
+        console.warn('ops_check_sla RPC unavailable, falling back to direct query');
+        rpcAvailable = false;
       }
 
-      const breachedCount = breached?.length || 0;
+      // Fallback: mark cases with SLA breach directly
+      if (!rpcAvailable) {
+        const CLOSED = ['cerrado_renovado', 'cerrado_cancelado', 'cerrado', 'perdido', 'resuelto'];
+        const slaHours: Record<string, number> = { urgencia: 4, peticion: 48, renovacion: 72 };
+
+        for (const [caseType, hours] of Object.entries(slaHours)) {
+          const cutoff = new Date(Date.now() - hours * 3600000).toISOString();
+          const { data: cases } = await ctx.supabase
+            .from('ops_cases')
+            .select('id, case_type')
+            .eq('case_type', caseType)
+            .eq('sla_breached', false)
+            .not('status', 'in', `(${CLOSED.join(',')})`)
+            .lt('created_at', cutoff);
+
+          if (cases && cases.length > 0) {
+            const ids = cases.map((c: any) => c.id);
+            await ctx.supabase
+              .from('ops_cases')
+              .update({ sla_breached: true })
+              .in('id', ids);
+            breached.push(...cases.map((c: any) => ({ case_id: c.id, case_type: c.case_type, hours_elapsed: hours })));
+          }
+        }
+      }
+
+      const breachedCount = breached.length;
 
       // Log activity
       await ctx.supabase.from('ops_activity_log').insert({
@@ -45,7 +80,8 @@ export async function POST(request: Request) {
         metadata: {
           cron: JOB_NAME,
           breached_count: breachedCount,
-          breached_cases: (breached || []).map((b: any) => ({
+          used_fallback: !rpcAvailable,
+          breached_cases: breached.slice(0, 20).map((b: any) => ({
             case_id: b.case_id,
             case_type: b.case_type,
             hours_elapsed: b.hours_elapsed,
@@ -56,14 +92,14 @@ export async function POST(request: Request) {
       await completeCronRun(ctx, {
         success: true,
         processedCount: breachedCount,
-        metadata: { breached_count: breachedCount },
+        metadata: { breached_count: breachedCount, used_fallback: !rpcAvailable },
       });
 
       return NextResponse.json({
         ok: true,
         message: `SLA check completed`,
         breached_count: breachedCount,
-        breached: breached || [],
+        used_fallback: !rpcAvailable,
       });
     } catch (innerErr: any) {
       await failCronRun(ctx, innerErr);

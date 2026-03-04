@@ -18,8 +18,13 @@ import {
   FaStickyNote,
   FaChevronDown,
   FaPaperPlane,
+  FaEnvelope,
+  FaCommentDots,
+  FaReply,
+  FaPaperclip,
+  FaLink,
 } from 'react-icons/fa';
-import type { OpsCase, OpsCaseStatus } from '@/types/operaciones.types';
+import type { OpsCase, OpsCaseStatus, OpsCaseMessage } from '@/types/operaciones.types';
 import { STATUS_COLORS, STATUS_LABELS } from '@/types/operaciones.types';
 import type { MasterUser, OpsNote } from './urg-helpers';
 import {
@@ -112,6 +117,7 @@ function NotesPanel({ caseId, onAddNote }: { caseId: string; onAddNote: (note: s
           {/* Add note form */}
           <div className="flex gap-2">
             <textarea
+              data-no-uppercase
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               placeholder="Agregar nota (mín. 10 caracteres)..."
@@ -160,6 +166,118 @@ function NotesPanel({ caseId, onAddNote }: { caseId: string; onAddNote: (note: s
 }
 
 // ════════════════════════════════════════════
+// EMAIL MESSAGE BUBBLE
+// ════════════════════════════════════════════
+
+function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
+  const [expanded, setExpanded] = useState(false);
+  const isInbound = msg.direction === 'inbound';
+  const hasAttach = msg.metadata?.has_attachments;
+
+  return (
+    <div className={`rounded-lg p-3 border ${isInbound ? 'bg-blue-50/40 border-blue-100' : 'bg-green-50/40 border-green-100'}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        {isInbound ? <FaEnvelope className="text-blue-300 text-[10px]" /> : <FaReply className="text-green-300 text-[10px]" />}
+        <span className="font-semibold text-[10px] text-gray-600 truncate">{msg.from_email}</span>
+        <span className="text-[9px] text-gray-400 flex-shrink-0">{fmtDateTime(msg.received_at)}</span>
+        {hasAttach && <FaPaperclip className="text-gray-300 text-[9px]" />}
+      </div>
+      <p className="text-[10px] text-gray-500 mb-1 font-medium">{msg.subject}</p>
+      <div
+        className={`text-[11px] text-gray-600 leading-relaxed ${!expanded ? 'line-clamp-4' : ''}`}
+        dangerouslySetInnerHTML={{ __html: msg.body_html || msg.body_text?.replace(/\n/g, '<br/>') || '' }}
+      />
+      {(msg.body_text?.length || 0) > 300 && (
+        <button onClick={() => setExpanded(!expanded)} className="text-[10px] text-blue-500 mt-1 cursor-pointer hover:underline">
+          {expanded ? 'Menos' : 'Más...'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// EMAIL THREAD PANEL (for email-sourced urgencies)
+// ════════════════════════════════════════════
+
+function MessageThread({ caseId }: { caseId: string }) {
+  const [messages, setMessages] = useState<OpsCaseMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [open, setOpen] = useState(true);
+  const limit = 20;
+
+  const fetchMessages = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/operaciones/messages?case_id=${caseId}&page=${p}&limit=${limit}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const json = await res.json();
+      setMessages(json.messages || []);
+      setTotal(json.total || 0);
+    } catch (err) {
+      console.error('[UrgMessageThread] fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => { fetchMessages(page); }, [fetchMessages, page]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return (
+    <div className="border border-gray-100 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150"
+      >
+        <div className="flex items-center gap-2">
+          <FaEnvelope className="text-gray-300 text-[10px]" />
+          <span className="text-xs font-medium text-gray-600">Hilo de Correos</span>
+          {total > 0 && (
+            <span className="text-[9px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded-full font-medium">{total}</span>
+          )}
+        </div>
+        <FaChevronDown className={`text-gray-300 text-[10px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="p-3 space-y-3 border-t border-gray-50">
+          {loading && messages.length === 0 ? (
+            <div className="flex justify-center py-6">
+              <FaSync className="animate-spin text-gray-200 text-xs" />
+            </div>
+          ) : messages.length === 0 ? (
+            <p className="text-[10px] text-gray-400 text-center py-6">Sin mensajes en este caso</p>
+          ) : (
+            <>
+              {messages.map((m) => (
+                <MessageBubble key={m.id} msg={m} />
+              ))}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-50">
+                  <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="text-[10px] text-gray-400 disabled:opacity-30 cursor-pointer">← Anterior</button>
+                  <span className="text-[10px] text-gray-400">{page}/{totalPages}</span>
+                  <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="text-[10px] text-gray-400 disabled:opacity-30 cursor-pointer">Siguiente →</button>
+                </div>
+              )}
+            </>
+          )}
+          <button
+            onClick={() => fetchMessages(page)}
+            className="w-full text-center text-[9px] text-gray-400 hover:text-gray-600 cursor-pointer font-medium py-1 transition-colors duration-150"
+          >
+            <FaSync className="inline text-[8px] mr-1" /> Refrescar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
 // SKELETON
 // ════════════════════════════════════════════
 
@@ -192,15 +310,48 @@ interface CaseDetailProps {
   onAddNote: (note: string, noteType: string) => Promise<void>;
   onReEvaluate: () => void;
   onOpenChat: () => void;
+  onSendEmail: (body: string, template: string) => void;
+  onSendPaymentLink: (paymentLink: string) => void;
   masters: MasterUser[];
 }
+
+const EMAIL_TEMPLATES: Record<string, string> = {
+  seguimiento: 'Estimado/a cliente,\n\nLe escribimos para dar seguimiento a su caso urgente. ¿Podría indicarnos si la situación ha sido resuelta o si necesita asistencia adicional?\n\nQuedamos atentos.',
+  documentos: 'Estimado/a cliente,\n\nPara poder avanzar con la resolución de su caso, necesitamos que nos envíe la siguiente documentación:\n\n- [Documento requerido]\n\nQuedamos atentos.',
+  resolucion: 'Estimado/a cliente,\n\nNos complace informarle que su caso ha sido atendido y resuelto satisfactoriamente.\n\nSi tiene alguna consulta adicional, no dude en comunicarse con nosotros.\n\nSaludos cordiales.',
+};
 
 export default function UrgCaseDetail({
   caseData, loading, onBack, onRefresh,
   onStatusChange, onReassign, onShowHistory,
-  onAddNote, onReEvaluate, onOpenChat, masters,
+  onAddNote, onReEvaluate, onOpenChat, onSendEmail, onSendPaymentLink, masters,
 }: CaseDetailProps) {
   const [showReassign, setShowReassign] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [emailBody, setEmailBody] = useState('');
+  const [emailTemplate, setEmailTemplate] = useState('');
+  const [paymentLinkOpen, setPaymentLinkOpen] = useState(false);
+  const [paymentLink, setPaymentLink] = useState('');
+
+  const applyTemplate = (key: string) => {
+    setEmailBody(EMAIL_TEMPLATES[key] || '');
+    setEmailTemplate(key);
+  };
+
+  const handleSendEmail = () => {
+    if (!emailBody.trim()) return;
+    onSendEmail(emailBody, emailTemplate);
+    setEmailBody('');
+    setEmailTemplate('');
+    setComposerOpen(false);
+  };
+
+  const handleSendPaymentLink = () => {
+    if (!paymentLink.trim()) return;
+    onSendPaymentLink(paymentLink.trim());
+    setPaymentLink('');
+    setPaymentLinkOpen(false);
+  };
 
   if (!caseData) {
     return (
@@ -226,7 +377,9 @@ export default function UrgCaseDetail({
   const slaSt = slaStatus(businessHours);
   const slaC = slaColor(slaSt);
 
-  // Deep link
+  // Source detection
+  const isChat = !!c.chat_thread_id || c.source === 'adm_cot_chat' || c.source === 'whatsapp';
+  const isEmail = !isChat;
   const chatLink = buildChatDeepLink(c.chat_thread_id);
 
   return (
@@ -377,15 +530,34 @@ export default function UrgCaseDetail({
           />
         </div>
 
-        {/* Deep link to ADM COT chat */}
-        {chatLink && (
-          <button
-            onClick={onOpenChat}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#010139] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
-          >
-            <FaExternalLinkAlt className="text-[10px]" />
-            Abrir Conversación en ADM COT
-          </button>
+        {/* ── Source-aware action block ── */}
+        {isChat && chatLink && (
+          <div className="space-y-2">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center gap-2.5">
+              <FaCommentDots className="text-indigo-400 text-sm flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-indigo-800">Urgencia detectada desde Chat</p>
+                <p className="text-[10px] text-indigo-600 mt-0.5">Vertex AI categorizó este caso como urgente. Atiéndelo desde el módulo de Chats en ADM COT.</p>
+              </div>
+            </div>
+            <button
+              onClick={onOpenChat}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#010139] text-white rounded-lg text-sm font-bold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
+            >
+              <FaExternalLinkAlt className="text-xs" />
+              Ir a ADM COT — Atender Chat
+            </button>
+          </div>
+        )}
+
+        {isEmail && (
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">
+            <FaEnvelope className="text-teal-400 text-sm flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-teal-800">Urgencia detectada desde Correo</p>
+              <p className="text-[10px] text-teal-600 mt-0.5">Vertex AI categorizó este correo como urgente. Responde por correo desde aquí.</p>
+            </div>
+          </div>
         )}
 
         {/* Closed — Resuelto */}
@@ -461,6 +633,116 @@ export default function UrgCaseDetail({
           </div>
           <AiEvalWidget caseId={c.id} />
         </div>
+
+        {/* ── Email Thread (email-sourced only) ── */}
+        {isEmail && (
+          <MessageThread caseId={c.id} />
+        )}
+
+        {/* ── Email Composer (email-sourced only) ── */}
+        {isEmail && !isClosed && (
+          <div className="border border-gray-100 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setComposerOpen(!composerOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150"
+            >
+              <div className="flex items-center gap-2">
+                <FaEnvelope className="text-gray-300 text-[10px]" />
+                <span className="text-xs font-medium text-gray-600">Enviar Correo</span>
+              </div>
+              <FaChevronDown className={`text-gray-300 text-[10px] transition-transform duration-200 ${composerOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {composerOpen && (
+              <div className="p-3 space-y-3 border-t border-gray-50">
+                {/* Templates */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-gray-400 font-medium mr-1">Plantillas:</span>
+                  {(['seguimiento', 'documentos', 'resolucion'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => applyTemplate(t)}
+                      className={`px-2 py-0.5 text-[10px] rounded-full cursor-pointer transition-all duration-150 ${
+                        emailTemplate === t ? 'bg-[#010139] text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {t === 'seguimiento' ? 'Seguimiento' : t === 'documentos' ? 'Documentos' : 'Resolución'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Recipient */}
+                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                  <span className="font-medium">Para:</span>
+                  <span>{c.client_email || 'Sin email del cliente'}</span>
+                </div>
+
+                {/* Body */}
+                <textarea
+                  data-no-uppercase
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  placeholder="Escribe tu mensaje..."
+                  rows={5}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 resize-none transition-all duration-150"
+                />
+
+                {/* Send */}
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={handleSendEmail}
+                    disabled={!emailBody.trim() || !c.client_email}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-[#020270] disabled:opacity-40 transition-colors duration-150"
+                  >
+                    <FaPaperPlane className="text-[10px]" /> Enviar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Payment Link (email-sourced only) ── */}
+        {isEmail && !isClosed && (
+          <div className="border border-gray-100 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setPaymentLinkOpen(!paymentLinkOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150"
+            >
+              <div className="flex items-center gap-2">
+                <FaLink className="text-gray-300 text-[10px]" />
+                <span className="text-xs font-medium text-gray-600">Enviar Enlace de Pago</span>
+              </div>
+              <FaChevronDown className={`text-gray-300 text-[10px] transition-transform duration-200 ${paymentLinkOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {paymentLinkOpen && (
+              <div className="p-3 space-y-3 border-t border-gray-50">
+                <p className="text-[10px] text-gray-400">Pega el enlace de pago. Se enviará al cliente con la plantilla de pago corporativa.</p>
+                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                  <span className="font-medium">Para:</span>
+                  <span>{c.client_email || 'Sin email del cliente'}</span>
+                </div>
+                <input
+                  type="url"
+                  value={paymentLink}
+                  onChange={(e) => setPaymentLink(e.target.value)}
+                  placeholder="https://pago.example.com/..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 transition-all duration-150"
+                />
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={handleSendPaymentLink}
+                    disabled={!paymentLink.trim() || !c.client_email}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8AAA19] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-[#7a9916] disabled:opacity-40 transition-colors duration-150"
+                  >
+                    <FaLink className="text-[10px]" /> Enviar Enlace de Pago
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Notes Panel ── */}
         <NotesPanel caseId={c.id} onAddNote={onAddNote} />

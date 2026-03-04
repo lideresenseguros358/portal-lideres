@@ -668,7 +668,7 @@ export default function IncendioWizard() {
           </div>
 
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">$</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
             <input
               type="number"
               inputMode="numeric"
@@ -678,7 +678,7 @@ export default function IncendioWizard() {
               min="10000"
               step="5000"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
                 errors.valorBien ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
               }`}
             />

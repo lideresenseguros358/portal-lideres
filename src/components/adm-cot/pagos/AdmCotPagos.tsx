@@ -830,7 +830,7 @@ function RecurrenciaTab() {
             </div>
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                <span>{r.total_installments} cuotas · {r.frequency}</span>
+                <span>{(Array.isArray(r.schedule) ? r.schedule.filter((s: any) => s.status === 'PENDIENTE').length : r.total_installments)} de {r.total_installments} cuotas restantes · {r.frequency}</span>
                 <span>Próx: {fmtDate(r.next_due_date)}</span>
               </div>
               {r.status === 'ACTIVA' && (
@@ -875,7 +875,7 @@ function RecurrenciaTab() {
                   <td className="py-2 px-2 text-[11px] font-medium text-[#010139]">{r.client_name}</td>
                   <td className="py-2 px-2 text-[11px] font-mono text-gray-600">{r.nro_poliza || '—'}</td>
                   <td className="py-2 px-2 text-[11px]">{r.insurer}</td>
-                  <td className="py-2 px-2 text-[11px]">{r.total_installments}</td>
+                  <td className="py-2 px-2 text-[11px]">{(Array.isArray(r.schedule) ? r.schedule.filter((s: any) => s.status === 'PENDIENTE').length : r.total_installments)}/{r.total_installments}</td>
                   <td className="py-2 px-2 text-[11px]">{r.frequency}</td>
                   <td className="py-2 px-2 text-[11px] font-bold text-[#8AAA19]">{fmtMoney(r.installment_amount)}</td>
                   <td className="py-2 px-2 text-[11px] text-gray-500">{fmtDate(r.next_due_date)}</td>

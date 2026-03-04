@@ -31,26 +31,36 @@ export async function POST(request: Request) {
     // Get today's date in Panama timezone
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' });
 
-    // 1. Aggregate daily metrics
-    const { data: metricsCount, error: metricsError } = await supabase.rpc(
-      'ops_aggregate_daily_metrics',
-      { p_date: today }
-    );
-
-    if (metricsError) {
-      console.error('Error running ops_aggregate_daily_metrics:', metricsError);
-      return NextResponse.json({ error: metricsError.message }, { status: 500 });
+    // 1. Aggregate daily metrics (RPC may not exist — handle gracefully)
+    let metricsCount = 0;
+    try {
+      const { data, error: metricsError } = await supabase.rpc(
+        'ops_aggregate_daily_metrics',
+        { p_date: today }
+      );
+      if (metricsError) {
+        console.warn('ops_aggregate_daily_metrics RPC failed (non-fatal):', metricsError.message);
+      } else {
+        metricsCount = data || 0;
+      }
+    } catch (rpcErr: any) {
+      console.warn('ops_aggregate_daily_metrics RPC unavailable (non-fatal):', rpcErr.message);
     }
 
-    // 2. Detect low productivity
-    const { data: flagsCount, error: flagsError } = await supabase.rpc(
-      'ops_detect_low_productivity',
-      { p_date: today }
-    );
-
-    if (flagsError) {
-      console.error('Error running ops_detect_low_productivity:', flagsError);
-      // Non-fatal, continue
+    // 2. Detect low productivity (RPC may not exist — handle gracefully)
+    let flagsCount = 0;
+    try {
+      const { data, error: flagsError } = await supabase.rpc(
+        'ops_detect_low_productivity',
+        { p_date: today }
+      );
+      if (flagsError) {
+        console.warn('ops_detect_low_productivity RPC failed (non-fatal):', flagsError.message);
+      } else {
+        flagsCount = data || 0;
+      }
+    } catch (rpcErr: any) {
+      console.warn('ops_detect_low_productivity RPC unavailable (non-fatal):', rpcErr.message);
     }
 
     // 3. Update conversion rates for users with petition closures today
@@ -63,11 +73,13 @@ export async function POST(request: Request) {
     let conversionUpdates = 0;
     if (usersWithPetitions) {
       for (const row of usersWithPetitions) {
-        await supabase.rpc('ops_update_conversion_rate', {
-          p_user_id: row.user_id,
-          p_date: today,
-        });
-        conversionUpdates++;
+        try {
+          await supabase.rpc('ops_update_conversion_rate', {
+            p_user_id: row.user_id,
+            p_date: today,
+          });
+          conversionUpdates++;
+        } catch { /* non-fatal */ }
       }
     }
 

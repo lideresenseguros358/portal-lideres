@@ -837,7 +837,7 @@ export default function VidaWizard() {
             Salario mensual (USD) <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">$</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none">$</span>
             <input
               type="number"
               inputMode="decimal"
@@ -847,7 +847,7 @@ export default function VidaWizard() {
               min="1"
               step="any"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-8 sm:pl-9 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
                 errors.salarioMensual ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
               }`}
             />
@@ -1020,7 +1020,7 @@ export default function VidaWizard() {
                 Suma asegurada actual (USD) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">$</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none">$</span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -1028,7 +1028,7 @@ export default function VidaWizard() {
                   onChange={(e) => update({ sumaAseguradaActual: e.target.value })}
                   placeholder="50000"
                   onWheel={(e) => e.currentTarget.blur()}
-                  className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
+                  className={`w-full pl-8 sm:pl-9 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
                     errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-[#8AAA19]'
                   }`}
                 />
@@ -1080,7 +1080,7 @@ export default function VidaWizard() {
           )}
 
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">$</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
             <input
               type="number"
               inputMode="numeric"
@@ -1090,7 +1090,7 @@ export default function VidaWizard() {
               min={minimoFijo}
               max={maximoCalculado || undefined}
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
                 errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
               }`}
             />
@@ -1128,7 +1128,7 @@ export default function VidaWizard() {
             />
             <div>
               <p className="font-semibold text-[#010139] text-sm">Con ahorros</p>
-              <p className="text-xs text-gray-500 mt-1">Parte de tu pago se acumula en un fondo. Ese valor puede estar disponible según las condiciones de la póliza y puede afectar el costo y las proyecciones del plan.</p>
+              <p className="text-xs text-gray-500 mt-1">Parte de tu prima se destina a un fondo de ahorro. La prima es mayor, pero acumulas un valor en efectivo que puedes retirar o utilizar según las condiciones de la póliza.</p>
             </div>
           </label>
 

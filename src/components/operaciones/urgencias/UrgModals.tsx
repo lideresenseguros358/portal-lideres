@@ -81,6 +81,7 @@ export function NoteRequiredModal({ caseData, open, targetStatus, onClose, onCon
               Nota obligatoria <span className="text-red-500">*</span>
             </label>
             <textarea
+              data-no-uppercase
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder={isCerrar

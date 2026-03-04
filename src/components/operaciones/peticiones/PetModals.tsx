@@ -76,6 +76,7 @@ export function LostReasonModal({ caseData, open, onClose, onConfirm, saving }: 
               Motivo <span className="text-red-500">*</span>
             </label>
             <textarea
+              data-no-uppercase
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Describe el motivo (mín. 5 caracteres)..."

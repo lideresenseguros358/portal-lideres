@@ -99,6 +99,7 @@ export function BulkEmailModal({ open, onClose, selectedRows, onConfirm, sending
             <label className="text-[10px] font-bold text-gray-500 block mb-1">Asunto</label>
             <input
               type="text"
+              data-no-uppercase
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30"
@@ -109,6 +110,7 @@ export function BulkEmailModal({ open, onClose, selectedRows, onConfirm, sending
           <div>
             <label className="text-[10px] font-bold text-gray-500 block mb-1">Cuerpo del correo</label>
             <textarea
+              data-no-uppercase
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={8}
@@ -251,6 +253,7 @@ export function NoteModal({ open, onClose, policyNumber, clientName, onConfirm, 
           <div>
             <label className="text-[10px] font-bold text-gray-500 block mb-1">Nota (mín. 10 caracteres)</label>
             <textarea
+              data-no-uppercase
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Describe la observación sobre morosidad..."

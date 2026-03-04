@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { obtenerPlanPorTipo } from '@/lib/cotizadores/fedpa-plan-resolver';
+import { obtenerPlanPorTipo, resolverPlanCCPorValor } from '@/lib/cotizadores/fedpa-plan-resolver';
 import { 
   normalizeAssistanceBenefits, 
   normalizeDeductibles, 
@@ -473,7 +473,12 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     return { premium: null, basico: null };
   }
   
-  console.log(`[FEDPA] Usando plan: ${planInfo.planId} (${planInfo.nombre})`);
+  // Resolve the correct CC plan based on vehicle value (suma asegurada)
+  const valorVehiculo = quoteData.valorVehiculo || 15000;
+  const ccPlanResolved = resolverPlanCCPorValor(valorVehiculo);
+  const cotizacionPlanId = ccPlanResolved.planId;
+  
+  console.log(`[FEDPA] Plan genérico: ${planInfo.planId} | Plan CC por valor ($${valorVehiculo}): ${cotizacionPlanId} (${ccPlanResolved.nombre})`);
   
   try {
     // MAPEO DE DEDUCIBLE A OPCION FEDPA:
@@ -503,7 +508,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
         modelo: quoteData.modelo || 'COROLLA',
         vanioauto: quoteData.anio || new Date().getFullYear(),
         vsumaaseg: quoteData.valorVehiculo || 15000,
-        vcodplancobertura: parseInt(planInfo.planId),
+        vcodplancobertura: parseInt(cotizacionPlanId),
         vcodgrupotarifa: 1,
         lesionCorporalPersona: quoteData.lesionCorporalPersona || 10000,
         lesionCorporalAccidente: quoteData.lesionCorporalAccidente || 20000,
@@ -516,7 +521,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       }),
     });
     
-    const beneficiosPromise = fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`)
+    const beneficiosPromise = fetch(`/api/fedpa/planes/beneficios?plan=${cotizacionPlanId}&environment=${environment}`)
       .then(res => res.ok ? res.json() : null)
       .catch(() => null);
     
@@ -690,7 +695,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
       // Campos requeridos para emisión
-      _planCode: parseInt(planInfo.planId),
+      _planCode: parseInt(cotizacionPlanId),
       _marcaCodigo: quoteData.marcaCodigo || quoteData.marca,
       _modeloCodigo: quoteData.modeloCodigo || quoteData.modelo,
       _uso: quoteData.uso || '10',

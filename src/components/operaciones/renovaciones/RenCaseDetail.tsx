@@ -261,7 +261,7 @@ interface CaseDetailProps {
   onCancel: () => void;
   onReassign: (masterId: string) => void;
   onShowHistory: () => void;
-  onSendEmail: (body: string, template: string) => void;
+  onSendEmail: (body: string, template: string, attachments?: File[]) => void;
   masters: MasterUser[];
 }
 
@@ -307,7 +307,7 @@ export default function RenCaseDetail({
 
   const handleSendEmail = () => {
     if (!emailBody.trim()) return;
-    onSendEmail(emailBody, emailTemplate);
+    onSendEmail(emailBody, emailTemplate, attachments.length > 0 ? attachments : undefined);
     setEmailBody('');
     setEmailTemplate('');
     setAttachments([]);
@@ -548,6 +548,7 @@ export default function RenCaseDetail({
 
               {/* Body */}
               <textarea
+                data-no-uppercase
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
                 placeholder="Escribe tu mensaje..."
@@ -570,7 +571,10 @@ export default function RenCaseDetail({
                     multiple
                     className="hidden"
                     onChange={(e) => {
-                      if (e.target.files) setAttachments(Array.from(e.target.files));
+                      if (e.target.files) {
+                        setAttachments((prev) => [...prev, ...Array.from(e.target.files!)]);
+                        e.target.value = '';
+                      }
                     }}
                   />
                   {attachments.map((f, i) => (

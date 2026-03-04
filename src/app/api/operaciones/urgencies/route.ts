@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     const today = searchParams.get('today');
 
     // Lean columns for list view
-    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,urgency_flag,severity,category,chat_thread_id';
+    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,client_email,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,urgency_flag,severity,category,chat_thread_id,source,metadata';
     let query = supabase
       .from('ops_cases')
       .select(LIST_COLS, { count: 'exact' })

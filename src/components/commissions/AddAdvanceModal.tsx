@@ -180,7 +180,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                   </FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold leading-none">$</span>
                       <Input 
                         type="number" 
                         placeholder="0.00" 

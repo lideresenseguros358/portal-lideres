@@ -14,12 +14,19 @@ const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
 const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
 
+export interface ZeptoAttachment {
+  content: string;   // base64-encoded file content
+  mime_type: string;  // e.g. 'application/pdf', 'image/jpeg'
+  name: string;       // filename
+}
+
 interface ZeptoSendParams {
   to: string;
   subject: string;
   htmlBody: string;
   textBody?: string;
   replyTo?: string;
+  attachments?: ZeptoAttachment[];
 }
 
 interface ZeptoSendResult {
@@ -51,7 +58,7 @@ export async function sendZeptoEmail(params: ZeptoSendParams): Promise<ZeptoSend
     return { success: false, error: 'ZEPTO_API_KEY not configured', attempts: 0 };
   }
 
-  const requestBody = {
+  const requestBody: Record<string, any> = {
     from: { address: sender, name: senderName },
     to: [{ email_address: { address: params.to, name: params.to } }],
     subject: params.subject,
@@ -59,6 +66,11 @@ export async function sendZeptoEmail(params: ZeptoSendParams): Promise<ZeptoSend
     textbody: params.textBody || '',
     ...(params.replyTo ? { reply_to: [{ address: params.replyTo }] } : {}),
   };
+
+  // Add attachments if present (ZeptoMail max ~17MB total per email)
+  if (params.attachments && params.attachments.length > 0) {
+    requestBody.attachments = params.attachments;
+  }
 
   let lastError = '';
 

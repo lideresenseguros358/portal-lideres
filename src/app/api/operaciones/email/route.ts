@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { emailService } from '@/lib/email/emailService';
+import { buildPaymentLinkEmail, buildCaseNotificationEmail } from '@/lib/email/templates/OpsEmailTemplates';
+import { logActivity } from '@/lib/operaciones/logActivity';
 
 // ═══════════════════════════════════════════════════════
 // OPERACIONES — Email Threads & Messages API
-// IMAP sync + SMTP send stubs
+// IMAP sync + Zepto send
 // ═══════════════════════════════════════════════════════
 
 export async function GET(req: NextRequest) {
@@ -53,31 +56,197 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case 'send_email': {
-        // TODO: Send email via SMTP from portal@lideresenseguros.com
-        // For now, just save the outbound message record
-        const { thread_id, to_email, subject, body_html, body_text } = body;
+        const { thread_id, to_email, subject, body_html, body_text, user_id } = body;
 
+        if (!to_email || !subject) {
+          return NextResponse.json({ error: 'to_email and subject required' }, { status: 400 });
+        }
+
+        // Send via Zepto
+        const sendResult = await emailService.send({
+          to: to_email,
+          subject,
+          html: body_html || `<p>${(body_text || '').replace(/\n/g, '<br/>')}</p>`,
+          text: body_text,
+        });
+
+        // Save outbound message record
         const { data, error } = await supabase.from('ops_email_messages').insert({
-          thread_id,
+          thread_id: thread_id || null,
           direction: 'OUTBOUND',
-          from_email: 'portal@lideresenseguros.com',
+          from_email: process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com',
           to_email,
           subject,
           body_html,
           body_text,
+          metadata: {
+            zepto_message_id: sendResult.messageId || null,
+            zepto_success: sendResult.success,
+            zepto_error: sendResult.error || null,
+          },
         }).select().single();
         if (error) throw error;
 
         // Update thread last_message_at
-        await supabase.from('ops_email_threads')
-          .update({ last_message_at: new Date().toISOString() })
-          .eq('id', thread_id);
+        if (thread_id) {
+          await supabase.from('ops_email_threads')
+            .update({ last_message_at: new Date().toISOString() })
+            .eq('id', thread_id);
+        }
 
-        return NextResponse.json({ success: true, data });
+        // Log activity
+        logActivity({
+          userId: user_id || null,
+          actionType: 'email_sent',
+          entityType: 'email',
+          entityId: data?.id || null,
+          metadata: { to_email, subject: subject.substring(0, 100), sent: sendResult.success },
+        });
+
+        return NextResponse.json({
+          success: sendResult.success,
+          data,
+          email_sent: sendResult.success,
+          email_error: sendResult.error || null,
+        });
+      }
+
+      case 'send_payment_link': {
+        const {
+          to_email, client_name, policy_number, insurer_name,
+          ticket, case_type, payment_link, amount, concept,
+          expires_at, sender_name, case_id, user_id,
+        } = body;
+
+        if (!to_email || !payment_link || !ticket) {
+          return NextResponse.json({ error: 'to_email, payment_link, and ticket required' }, { status: 400 });
+        }
+
+        // Build email from template
+        const email = buildPaymentLinkEmail({
+          clientName: client_name || 'Cliente',
+          policyNumber: policy_number,
+          insurerName: insurer_name,
+          ticket,
+          caseType: case_type || 'renovacion',
+          paymentLink: payment_link,
+          amount,
+          concept,
+          expiresAt: expires_at,
+          senderName: sender_name,
+        });
+
+        // Send via Zepto
+        const sendResult = await emailService.send({
+          to: to_email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+        });
+
+        // Save outbound message record
+        await supabase.from('ops_email_messages').insert({
+          thread_id: null,
+          direction: 'OUTBOUND',
+          from_email: process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com',
+          to_email,
+          subject: email.subject,
+          body_html: email.html,
+          body_text: email.text,
+          metadata: {
+            template: 'payment_link',
+            payment_link,
+            case_id: case_id || null,
+            zepto_message_id: sendResult.messageId || null,
+            zepto_success: sendResult.success,
+          },
+        });
+
+        // Log activity
+        logActivity({
+          userId: user_id || null,
+          actionType: 'email_sent',
+          entityType: 'case',
+          entityId: case_id || null,
+          metadata: {
+            template: 'payment_link',
+            to_email,
+            ticket,
+            case_type,
+            amount,
+            sent: sendResult.success,
+          },
+        });
+
+        return NextResponse.json({
+          success: sendResult.success,
+          email_sent: sendResult.success,
+          email_error: sendResult.error || null,
+          subject: email.subject,
+        });
+      }
+
+      case 'send_case_notification': {
+        const {
+          to_email, client_name, ticket, case_type,
+          policy_number, insurer_name, body_html, body_text,
+          sender_name, case_id, user_id,
+        } = body;
+
+        if (!to_email || !ticket) {
+          return NextResponse.json({ error: 'to_email and ticket required' }, { status: 400 });
+        }
+
+        const email = buildCaseNotificationEmail({
+          clientName: client_name || 'Cliente',
+          ticket,
+          caseType: case_type || 'renovacion',
+          policyNumber: policy_number,
+          insurerName: insurer_name,
+          bodyHtml: body_html || '',
+          bodyText: body_text,
+          senderName: sender_name,
+        });
+
+        const sendResult = await emailService.send({
+          to: to_email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+        });
+
+        await supabase.from('ops_email_messages').insert({
+          thread_id: null,
+          direction: 'OUTBOUND',
+          from_email: process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com',
+          to_email,
+          subject: email.subject,
+          body_html: email.html,
+          body_text: email.text,
+          metadata: {
+            template: 'case_notification',
+            case_id: case_id || null,
+            zepto_message_id: sendResult.messageId || null,
+            zepto_success: sendResult.success,
+          },
+        });
+
+        logActivity({
+          userId: user_id || null,
+          actionType: 'email_sent',
+          entityType: 'case',
+          entityId: case_id || null,
+          metadata: { template: 'case_notification', to_email, ticket, sent: sendResult.success },
+        });
+
+        return NextResponse.json({
+          success: sendResult.success,
+          email_sent: sendResult.success,
+          email_error: sendResult.error || null,
+        });
       }
 
       case 'classify_thread': {
-        // Assign an unclassified thread to a ticket
         const { thread_id, ticket_id, ticket_type } = body;
         const { error } = await supabase.from('ops_email_threads').update({
           ticket_id,

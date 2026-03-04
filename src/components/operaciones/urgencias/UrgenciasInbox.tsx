@@ -335,6 +335,72 @@ export default function UrgenciasInbox() {
     window.open(link, '_blank');
   };
 
+  const handleSendEmail = async (body: string, template: string) => {
+    if (!selectedCase || !selectedCase.client_email) {
+      addToast('No hay email del cliente para enviar', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/api/operaciones/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send_email',
+          to_email: selectedCase.client_email,
+          subject: `[${selectedCase.ticket}] Urgencia — ${selectedCase.client_name || 'Cliente'}`,
+          body_html: `<p>${body.replace(/\n/g, '<br/>')}</p>`,
+          body_text: body,
+          user_id: null,
+        }),
+      });
+      const json = await res.json();
+      if (json.email_sent) {
+        addToast('Correo enviado exitosamente');
+        // Mark first response if not yet responded
+        if (!selectedCase.first_response_at) {
+          handleRefreshList();
+        }
+      } else {
+        addToast(json.email_error || 'Error al enviar correo', 'error');
+      }
+    } catch {
+      addToast('Error de conexión al enviar correo', 'error');
+    }
+  };
+
+  const handleSendPaymentLink = async (paymentLinkUrl: string) => {
+    if (!selectedCase || !selectedCase.client_email) {
+      addToast('No hay email del cliente para enviar', 'error');
+      return;
+    }
+    try {
+      const res = await fetch('/api/operaciones/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send_payment_link',
+          to_email: selectedCase.client_email,
+          client_name: selectedCase.client_name || 'Cliente',
+          policy_number: selectedCase.policy_number,
+          insurer_name: selectedCase.insurer_name,
+          ticket: selectedCase.ticket,
+          case_type: 'urgencia',
+          payment_link: paymentLinkUrl,
+          case_id: selectedCase.id,
+          user_id: null,
+        }),
+      });
+      const json = await res.json();
+      if (json.email_sent) {
+        addToast('Enlace de pago enviado exitosamente');
+      } else {
+        addToast(json.email_error || 'Error al enviar enlace', 'error');
+      }
+    } catch {
+      addToast('Error de conexión al enviar enlace', 'error');
+    }
+  };
+
   const handleBack = () => {
     setSelectedId(null);
     setSelectedCase(null);
@@ -401,6 +467,8 @@ export default function UrgenciasInbox() {
           onAddNote={handleAddNote}
           onReEvaluate={handleReEvaluate}
           onOpenChat={handleOpenChat}
+          onSendEmail={handleSendEmail}
+          onSendPaymentLink={handleSendPaymentLink}
           masters={masters}
         />
       </div>

@@ -106,6 +106,12 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                   // Update price from API, keep name and coverages (benefits) from constants
                   annualPremium: apiPlan.annualPremium || fallback.annualPremium,
                   coverageList: covList.length > 0 ? covList : undefined,
+                  // Carry forward quote data so we skip redundant API call on click
+                  idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
+                  vcodplancobertura: apiPlan.codPlanCobertura || fallback.vcodplancobertura,
+                  vcodgrupotarifa: apiPlan.vcodgrupotarifa || fallback.vcodgrupotarifa,
+                  vcodmarca: apiPlan.vcodmarca || fallback.vcodmarca,
+                  vcodmodelo: apiPlan.vcodmodelo || fallback.vcodmodelo,
                   installments: {
                     available: false,
                     description: 'Solo al contado',
@@ -137,52 +143,61 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   }, [plansLoaded]);
 
   const handlePlanClick = async (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
-    // IS: generate quote on-the-fly with correct plan codes (306=SOAT, 307=Intermedio)
+    // IS: reuse idCotizacion from initial load, only fetch if missing
     if (insurer.id === 'internacional') {
-      try {
-        setGeneratingQuote(true);
-        toast.loading('Generando cotización...');
-        const vcodplancobertura = type === 'basic' ? 306 : 307;
-        const quoteResponse = await fetch('/api/is/auto/quote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vcodtipodoc: 1, vnrodoc: '0-0-0', vnombre: 'Cliente', vapellido: 'Temporal',
-            vtelefono: '0000-0000', vcorreo: 'temp@ejemplo.com',
-            vcodmarca: 156, vcodmodelo: 2563, vanioauto: new Date().getFullYear(),
-            vsumaaseg: 0, vcodplancobertura, vcodgrupotarifa: 20, environment: 'development',
-          }),
-        });
-        if (!quoteResponse.ok) throw new Error('Error al generar cotización');
-        const quoteResult = await quoteResponse.json();
-        if (!quoteResult.success || !quoteResult.idCotizacion) throw new Error('No se obtuvo ID de cotización');
-        sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
-          idCotizacion: quoteResult.idCotizacion, insurerId: insurer.id, insurerName: insurer.name,
-          planType: type, vcodplancobertura, vcodgrupotarifa: 20, vcodmarca: 156, vcodmodelo: 2563,
-          annualPremium: plan.annualPremium, isRealAPI: true,
-        }));
-        toast.dismiss();
-        toast.success('Cotización generada');
+      const vcodplancobertura = plan.vcodplancobertura || (type === 'basic' ? 306 : 307);
+      const vcodgrupotarifa = plan.vcodgrupotarifa || 20;
+      const vcodmarca = plan.vcodmarca || 156;
+      const vcodmodelo = plan.vcodmodelo || 2563;
+      let idCotizacion = plan.idCotizacion;
 
-        // ═══ ADM COT: Track IS DT quote ═══
-        trackQuoteCreated({
-          quoteRef: `IS-${quoteResult.idCotizacion}-DT-${type === 'premium' ? 'P' : 'B'}`,
-          insurer: 'INTERNACIONAL',
-          clientName: 'Anónimo',
-          ramo: 'AUTO',
-          coverageType: 'Daños a Terceros',
-          planName: type === 'premium' ? 'Intermedio DT' : 'SOAT DT',
-          annualPremium: plan.annualPremium,
-        });
-      } catch (error) {
-        console.error('[INTERNACIONAL] Error:', error);
-        toast.dismiss();
-        toast.error('Error al generar cotización. Intenta de nuevo.');
-        setGeneratingQuote(false);
-        return;
-      } finally {
-        setGeneratingQuote(false);
+      // Only call the slow API if we don't have an idCotizacion from the initial load
+      if (!idCotizacion) {
+        try {
+          setGeneratingQuote(true);
+          toast.loading('Generando cotización...');
+          const quoteResponse = await fetch('/api/is/auto/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              vcodtipodoc: 1, vnrodoc: '0-0-0', vnombre: 'Cliente', vapellido: 'Temporal',
+              vtelefono: '0000-0000', vcorreo: 'temp@ejemplo.com',
+              vcodmarca, vcodmodelo, vanioauto: new Date().getFullYear(),
+              vsumaaseg: 0, vcodplancobertura, vcodgrupotarifa, environment: 'development',
+            }),
+          });
+          if (!quoteResponse.ok) throw new Error('Error al generar cotización');
+          const quoteResult = await quoteResponse.json();
+          if (!quoteResult.success || !quoteResult.idCotizacion) throw new Error('No se obtuvo ID de cotización');
+          idCotizacion = quoteResult.idCotizacion;
+          toast.dismiss();
+        } catch (error) {
+          console.error('[INTERNACIONAL] Error:', error);
+          toast.dismiss();
+          toast.error('Error al generar cotización. Intenta de nuevo.');
+          setGeneratingQuote(false);
+          return;
+        } finally {
+          setGeneratingQuote(false);
+        }
       }
+
+      sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
+        idCotizacion, insurerId: insurer.id, insurerName: insurer.name,
+        planType: type, vcodplancobertura, vcodgrupotarifa, vcodmarca, vcodmodelo,
+        annualPremium: plan.annualPremium, isRealAPI: true,
+      }));
+
+      // ═══ ADM COT: Track IS DT quote ═══
+      trackQuoteCreated({
+        quoteRef: `IS-${idCotizacion}-DT-${type === 'premium' ? 'P' : 'B'}`,
+        insurer: 'INTERNACIONAL',
+        clientName: 'Anónimo',
+        ramo: 'AUTO',
+        coverageType: 'Daños a Terceros',
+        planName: type === 'premium' ? 'Intermedio DT' : 'SOAT DT',
+        annualPremium: plan.annualPremium,
+      });
     }
     
     // FEDPA: store quote data for emission flow

@@ -7,6 +7,7 @@ import PetCaseList from './PetCaseList';
 import PetCaseDetail from './PetCaseDetail';
 import { LostReasonModal, ConvertToEmissionModal } from './PetModals';
 import PetHistoryDrawer from './PetHistoryDrawer';
+import PetQuoteDetailModal from './PetQuoteDetailModal';
 import UnclassifiedMessages from '../renovaciones/UnclassifiedMessages';
 import { useOpsKeyboard } from '../shared/ops-ui';
 import dynamic from 'next/dynamic';
@@ -88,6 +89,7 @@ export default function PeticionesInbox() {
   const [showLostModal, setShowLostModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
 
   // ── New Client Wizard (after convert-to-emission) ──
@@ -248,27 +250,49 @@ export default function PeticionesInbox() {
     apiAction({ action: 'reassign', case_id: selectedCase.id, master_id: masterId }, 'Caso reasignado');
   };
 
-  const handleSendEmail = async (body: string, template: string) => {
+  const handleSendEmail = async (body: string, template: string, attachments?: File[]) => {
     if (!selectedCase) return;
     const c = selectedCase;
     const ramoKey = (c.ramo || '').toLowerCase();
     const ramoLabel = ({ vida: 'Vida', incendio: 'Incendio', hogar: 'Hogar' } as Record<string, string>)[ramoKey] || c.ramo || '';
     const subject = `[${c.ticket}] Cotización ${ramoLabel} — ${c.client_name || ''}`;
+    const assignedMaster = masters.find((m) => m.id === c.assigned_master_id);
 
-    // 1. Record outbound message in ops_case_messages (marks first_response_at if needed)
+    // 1. Record outbound message + send via Zepto (with attachments if any)
     try {
-      await fetch('/api/operaciones/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'record_outbound',
-          case_id: c.id,
-          subject,
-          body_text: body,
-          to_emails: c.client_email ? [c.client_email] : [],
-          from_email: 'portal@lideresenseguros.com',
-        }),
-      });
+      if (attachments && attachments.length > 0) {
+        // Use FormData to send files
+        const fd = new FormData();
+        fd.append('action', 'record_outbound');
+        fd.append('case_id', c.id);
+        fd.append('subject', subject);
+        fd.append('body_text', body);
+        fd.append('to_emails', JSON.stringify(c.client_email ? [c.client_email] : []));
+        fd.append('from_email', 'portal@lideresenseguros.com');
+        if (assignedMaster) {
+          fd.append('master_name', assignedMaster.full_name);
+          fd.append('master_email', assignedMaster.email);
+        }
+        for (const file of attachments) {
+          fd.append('file', file, file.name);
+        }
+        await fetch('/api/operaciones/messages', { method: 'POST', body: fd });
+      } else {
+        await fetch('/api/operaciones/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'record_outbound',
+            case_id: c.id,
+            subject,
+            body_text: body,
+            to_emails: c.client_email ? [c.client_email] : [],
+            from_email: 'portal@lideresenseguros.com',
+            master_name: assignedMaster?.full_name || null,
+            master_email: assignedMaster?.email || null,
+          }),
+        });
+      }
     } catch (err) {
       console.error('[PeticionesInbox] record_outbound failed:', err);
     }
@@ -389,6 +413,7 @@ export default function PeticionesInbox() {
             onReassign={handleReassign}
             onShowHistory={() => setShowHistory(true)}
             onSendEmail={handleSendEmail}
+            onViewQuote={() => setShowQuoteModal(true)}
             masters={masters}
           />
         </div>
@@ -422,6 +447,21 @@ export default function PeticionesInbox() {
         onClose={() => setShowHistory(false)}
         caseId={selectedId}
       />
+
+      {/* ── Quote Detail Modal ── */}
+      {selectedCase && (
+        <PetQuoteDetailModal
+          open={showQuoteModal}
+          onClose={() => setShowQuoteModal(false)}
+          caseId={selectedCase.id}
+          ramo={selectedCase.ramo}
+          clientName={selectedCase.client_name}
+          onSaved={() => {
+            setToast({ message: 'Datos de solicitud actualizados', type: 'success' });
+            refresh();
+          }}
+        />
+      )}
 
       {/* ── New Client Wizard (after convert-to-emission) ── */}
       {showNewClientWizard && (

@@ -155,7 +155,13 @@ export default function UnclassifiedMessages() {
       const res = await fetch('/api/operaciones/messages?unclassified=true&limit=100');
       if (!res.ok) throw new Error('fetch error');
       const json = await res.json();
-      setMessages(json.messages || []);
+      // Filter: only show portal-originated emails (Expediente Portal...) or ticket replies
+      const TICKET_RE = /(?:PET|REN|URG|MOR)-\d{4}-\d{5}/i;
+      const filtered = (json.messages || []).filter((m: OpsCaseMessage) => {
+        const subj = (m.subject || '').toLowerCase();
+        return subj.includes('expediente portal') || TICKET_RE.test(m.subject || '');
+      });
+      setMessages(filtered);
     } catch (err) {
       console.error('[Unclassified] fetch error:', err);
     }

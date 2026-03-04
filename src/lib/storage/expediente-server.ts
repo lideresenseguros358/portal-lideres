@@ -11,7 +11,7 @@ const BUCKET_NAME = 'expediente';
 interface SaveDocumentParams {
   clientId: string;
   policyId: string | null;
-  documentType: 'cedula' | 'licencia' | 'registro_vehicular' | 'carta_autorizacion' | 'otros';
+  documentType: 'cedula' | 'licencia' | 'registro_vehicular' | 'carta_autorizacion' | 'debida_diligencia' | 'otros';
   fileName: string;
   fileBuffer: Buffer;
   mimeType: string;
@@ -29,9 +29,9 @@ async function saveDocument(params: SaveDocumentParams): Promise<{ ok: boolean; 
 
   // Build storage path
   let filePath: string;
-  if (params.documentType === 'registro_vehicular' && params.policyId) {
-    filePath = `clients/${params.clientId}/policies/${params.policyId}/${params.documentType}/${timestamp}_${sanitizedFileName}`;
-  } else if (params.policyId && (params.documentType === 'carta_autorizacion' || params.documentType === 'otros')) {
+  // Policy-level document types (stored under policy folder)
+  const policyLevelTypes = ['registro_vehicular', 'carta_autorizacion', 'debida_diligencia', 'otros'];
+  if (params.policyId && policyLevelTypes.includes(params.documentType)) {
     filePath = `clients/${params.clientId}/policies/${params.policyId}/${params.documentType}/${timestamp}_${sanitizedFileName}`;
   } else {
     filePath = `clients/${params.clientId}/${params.documentType}/${timestamp}_${sanitizedFileName}`;
@@ -89,6 +89,22 @@ async function saveDocument(params: SaveDocumentParams): Promise<{ ok: boolean; 
  * 
  * Inspection photos are NOT saved (those are for the insurer only).
  */
+/**
+ * Check if a client already has a specific document type uploaded.
+ */
+async function clientHasDocument(clientId: string, documentType: string): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from('expediente_documents')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('document_type', documentType)
+    .is('policy_id', null)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function guardarDocumentosExpediente(params: {
   clientId: string;
   policyId: string;
@@ -98,47 +114,54 @@ export async function guardarDocumentosExpediente(params: {
   cartaAutorizacion?: { buffer: Buffer; fileName: string; mimeType: string };
   polizaPdf?: { buffer: Buffer; fileName: string; mimeType: string };
   nroPoliza?: string;
-}): Promise<{ ok: boolean; saved: string[]; errors: string[] }> {
+}): Promise<{ ok: boolean; saved: string[]; errors: string[]; skipped: string[] }> {
   const saved: string[] = [];
   const errors: string[] = [];
+  const skipped: string[] = [];
 
   console.log('[Expediente Server] Guardando documentos para clientId:', params.clientId, 'policyId:', params.policyId);
 
-  // Save cédula (client-level, no policyId)
+  // ── Cédula (client-level): skip if client already has one ──
   if (params.cedula) {
-    const result = await saveDocument({
-      clientId: params.clientId,
-      policyId: null, // Client-level document
-      documentType: 'cedula',
-      fileName: params.cedula.fileName,
-      fileBuffer: params.cedula.buffer,
-      mimeType: params.cedula.mimeType,
-    });
-    if (result.ok) {
-      saved.push('cedula');
+    const alreadyExists = await clientHasDocument(params.clientId, 'cedula');
+    if (alreadyExists) {
+      console.log('[Expediente Server] Cliente ya tiene cédula, omitiendo');
+      skipped.push('cedula');
     } else {
-      errors.push(`cedula: ${result.error}`);
+      const result = await saveDocument({
+        clientId: params.clientId,
+        policyId: null,
+        documentType: 'cedula',
+        fileName: params.cedula.fileName,
+        fileBuffer: params.cedula.buffer,
+        mimeType: params.cedula.mimeType,
+      });
+      if (result.ok) saved.push('cedula');
+      else errors.push(`cedula: ${result.error}`);
     }
   }
 
-  // Save licencia (client-level, no policyId)
+  // ── Licencia (client-level): skip if client already has one ──
   if (params.licencia) {
-    const result = await saveDocument({
-      clientId: params.clientId,
-      policyId: null, // Client-level document
-      documentType: 'licencia',
-      fileName: params.licencia.fileName,
-      fileBuffer: params.licencia.buffer,
-      mimeType: params.licencia.mimeType,
-    });
-    if (result.ok) {
-      saved.push('licencia');
+    const alreadyExists = await clientHasDocument(params.clientId, 'licencia');
+    if (alreadyExists) {
+      console.log('[Expediente Server] Cliente ya tiene licencia, omitiendo');
+      skipped.push('licencia');
     } else {
-      errors.push(`licencia: ${result.error}`);
+      const result = await saveDocument({
+        clientId: params.clientId,
+        policyId: null,
+        documentType: 'licencia',
+        fileName: params.licencia.fileName,
+        fileBuffer: params.licencia.buffer,
+        mimeType: params.licencia.mimeType,
+      });
+      if (result.ok) saved.push('licencia');
+      else errors.push(`licencia: ${result.error}`);
     }
   }
 
-  // Save registro vehicular (policy-level)
+  // ── Registro vehicular (policy-level): always save — each policy has its own ──
   if (params.registroVehicular) {
     const result = await saveDocument({
       clientId: params.clientId,
@@ -148,33 +171,27 @@ export async function guardarDocumentosExpediente(params: {
       fileBuffer: params.registroVehicular.buffer,
       mimeType: params.registroVehicular.mimeType,
     });
-    if (result.ok) {
-      saved.push('registro_vehicular');
-    } else {
-      errors.push(`registro_vehicular: ${result.error}`);
-    }
+    if (result.ok) saved.push('registro_vehicular');
+    else errors.push(`registro_vehicular: ${result.error}`);
   }
 
-  // Save carta de autorización (policy-level)
+  // ── Debida diligencia / carta de autorización (policy-level): always save ──
   if (params.cartaAutorizacion) {
     const result = await saveDocument({
       clientId: params.clientId,
       policyId: params.policyId,
-      documentType: 'otros',
-      documentName: `Carta de Autorización${params.nroPoliza ? ` - Póliza ${params.nroPoliza}` : ''}`,
+      documentType: 'debida_diligencia',
+      documentName: `Debida Diligencia${params.nroPoliza ? ` - Póliza ${params.nroPoliza}` : ''}`,
       fileName: params.cartaAutorizacion.fileName,
       fileBuffer: params.cartaAutorizacion.buffer,
       mimeType: params.cartaAutorizacion.mimeType,
       notes: 'Autorización, Declaración de Veracidad y Términos y Condiciones firmados digitalmente durante la emisión.',
     });
-    if (result.ok) {
-      saved.push('carta_autorizacion');
-    } else {
-      errors.push(`carta_autorizacion: ${result.error}`);
-    }
+    if (result.ok) saved.push('debida_diligencia');
+    else errors.push(`debida_diligencia: ${result.error}`);
   }
 
-  // Save póliza PDF / carátula (policy-level)
+  // ── Carátula de póliza (policy-level): always save ──
   if (params.polizaPdf) {
     const result = await saveDocument({
       clientId: params.clientId,
@@ -186,13 +203,10 @@ export async function guardarDocumentosExpediente(params: {
       mimeType: params.polizaPdf.mimeType,
       notes: 'Documento oficial de póliza emitido por la aseguradora.',
     });
-    if (result.ok) {
-      saved.push('poliza_pdf');
-    } else {
-      errors.push(`poliza_pdf: ${result.error}`);
-    }
+    if (result.ok) saved.push('poliza_pdf');
+    else errors.push(`poliza_pdf: ${result.error}`);
   }
 
-  console.log(`[Expediente Server] Resultado: ${saved.length} guardados, ${errors.length} errores`, { saved, errors });
-  return { ok: errors.length === 0, saved, errors };
+  console.log(`[Expediente Server] Resultado: ${saved.length} guardados, ${skipped.length} omitidos (ya existen), ${errors.length} errores`, { saved, skipped, errors });
+  return { ok: errors.length === 0, saved, errors, skipped };
 }

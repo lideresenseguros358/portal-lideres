@@ -262,14 +262,15 @@ interface CaseDetailProps {
   onConvertToEmission: () => void;
   onReassign: (masterId: string) => void;
   onShowHistory: () => void;
-  onSendEmail: (body: string, template: string) => void;
+  onSendEmail: (body: string, template: string, attachments?: File[]) => void;
+  onViewQuote?: () => void;
   masters: MasterUser[];
 }
 
 export default function PetCaseDetail({
   caseData, loading, onBack, onRefresh,
   onStatusChange, onMarkLost, onConvertToEmission, onReassign,
-  onShowHistory, onSendEmail, masters,
+  onShowHistory, onSendEmail, onViewQuote, masters,
 }: CaseDetailProps) {
   const [showReassign, setShowReassign] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -313,7 +314,7 @@ export default function PetCaseDetail({
 
   const handleSendEmail = () => {
     if (!emailBody.trim()) return;
-    onSendEmail(emailBody, emailTemplate);
+    onSendEmail(emailBody, emailTemplate, attachments.length > 0 ? attachments : undefined);
     setEmailBody('');
     setEmailTemplate('');
     setAttachments([]);
@@ -447,6 +448,16 @@ export default function PetCaseDetail({
           {c.insurer_name && <InfoCard label="Aseguradora" value={c.insurer_name} icon={<FaShieldAlt />} />}
         </div>
 
+        {/* Ver solicitud button */}
+        {onViewQuote && c.source?.startsWith('COTIZADOR') && (
+          <button
+            onClick={onViewQuote}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg text-xs font-semibold cursor-pointer hover:opacity-90 transition-opacity duration-150"
+          >
+            <FaFileAlt className="text-[11px] text-white" /> Ver solicitud
+          </button>
+        )}
+
         {/* Closed — Cerrado (converted) */}
         {c.status === 'cerrado' && (
           <div className="rounded-lg p-3 bg-green-50 border border-green-200">
@@ -549,6 +560,7 @@ export default function PetCaseDetail({
 
               {/* Body */}
               <textarea
+                data-no-uppercase
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
                 placeholder="Escribe tu mensaje..."
@@ -571,7 +583,10 @@ export default function PetCaseDetail({
                     multiple
                     className="hidden"
                     onChange={(e) => {
-                      if (e.target.files) setAttachments(Array.from(e.target.files));
+                      if (e.target.files) {
+                        setAttachments((prev) => [...prev, ...Array.from(e.target.files!)]);
+                        e.target.value = '';
+                      }
                     }}
                   />
                   {attachments.map((f, i) => (

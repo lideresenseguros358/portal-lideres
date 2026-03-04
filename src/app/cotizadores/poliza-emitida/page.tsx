@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FaCheckCircle, FaDownload, FaHome, FaCar, FaUser, FaCalendar, FaDollarSign } from 'react-icons/fa';
+import { FaCheckCircle, FaDownload, FaHome, FaCar, FaUser, FaCalendar, FaDollarSign, FaEnvelope } from 'react-icons/fa';
 
 interface EmittedPolicy {
   insurer: 'INTERNACIONAL' | 'FEDPA' | string;
@@ -296,9 +296,23 @@ export default function PolizaEmitidaPage() {
           </div>
         </div>
 
-        {/* Botones de Acción */}
-        <div className="bg-white rounded-b-2xl shadow-xl p-8 flex flex-col sm:flex-row gap-4 justify-center">
-          {policy.pdfUrl && (
+        {/* Mensaje FedPa o Botones de Acción */}
+        <div className="bg-white rounded-b-2xl shadow-xl p-8 flex flex-col items-center gap-4">
+          {policy.insurer?.toUpperCase().includes('FEDPA') ? (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-2 max-w-md w-full text-center">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-[#010139] rounded-full flex items-center justify-center">
+                  <FaEnvelope className="text-white text-lg" />
+                </div>
+              </div>
+              <p className="text-base font-semibold text-[#010139] mb-2">
+                Su póliza será enviada en breve a su correo
+              </p>
+              <p className="text-sm text-gray-600">
+                Recuerde revisar la carpeta de <span className="font-semibold text-gray-800">spam</span> o <span className="font-semibold text-gray-800">correo no deseado</span> por si no lo ve en la bandeja principal.
+              </p>
+            </div>
+          ) : policy.pdfUrl ? (
             <button
               onClick={handleDownloadPDF}
               className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 shadow-lg"
@@ -306,7 +320,7 @@ export default function PolizaEmitidaPage() {
               <FaDownload className="text-white" />
               Descargar Póliza
             </button>
-          )}
+          ) : null}
           
           <button
             onClick={handleGoHome}

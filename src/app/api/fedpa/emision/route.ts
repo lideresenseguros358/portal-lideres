@@ -102,8 +102,9 @@ export async function POST(request: NextRequest) {
       Pasajero: emisionData.Pasajero,
       Puerta: emisionData.Puerta,
       
-      // Opcional
+      // Pago
       PrimaTotal: emisionData.PrimaTotal,
+      cantidadPago: emisionData.cantidadPago || 1,
     };
     
     // ═══ LOG: JSON completo que se envía a FEDPA ═══

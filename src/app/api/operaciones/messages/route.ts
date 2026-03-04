@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { sendZeptoEmail, type ZeptoAttachment } from '@/lib/email/zepto-api';
 
 export const runtime = 'nodejs';
 
@@ -76,12 +77,34 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// ── Helper: parse body as JSON or FormData ──
+async function parseBody(request: NextRequest): Promise<{ fields: Record<string, any>; files: File[] }> {
+  const ct = request.headers.get('content-type') || '';
+  if (ct.includes('multipart/form-data')) {
+    const fd = await request.formData();
+    const fields: Record<string, any> = {};
+    const files: File[] = [];
+    fd.forEach((value, key) => {
+      if (value instanceof File) {
+        files.push(value);
+      } else {
+        // Try parse JSON strings
+        try { fields[key] = JSON.parse(value as string); } catch { fields[key] = value; }
+      }
+    });
+    return { fields, files };
+  }
+  // Default: JSON body
+  const json = await request.json();
+  return { fields: json, files: [] };
+}
+
 // ── POST ──
 export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin();
 
   try {
-    const body = await request.json();
+    const { fields: body, files } = await parseBody(request);
     const { action, message_id, case_id, user_id } = body as {
       action: 'assign' | 'discard' | 'record_outbound';
       message_id: string;
@@ -91,12 +114,76 @@ export async function POST(request: NextRequest) {
 
     // Handle record_outbound first (doesn't require message_id)
     if (action === 'record_outbound') {
-      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header } = body as any;
+      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header, master_name, master_email } = body as any;
       if (!outCaseId) {
         return NextResponse.json({ error: 'case_id required for record_outbound' }, { status: 400 });
       }
 
+      const recipientList: string[] = to_emails || [];
+      const senderAddr = from_email || 'portal@lideresenseguros.com';
+      let zeptoMessageId: string | undefined;
+      let sendError: string | undefined;
+
+      // ── Convert file attachments to base64 for Zepto ──
+      const zeptoAttachments: ZeptoAttachment[] = [];
+      for (const file of files) {
+        try {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          zeptoAttachments.push({
+            content: buffer.toString('base64'),
+            mime_type: file.type || 'application/octet-stream',
+            name: file.name,
+          });
+        } catch (err) {
+          console.error(`[API messages] Failed to read attachment ${file.name}:`, err);
+        }
+      }
+      if (zeptoAttachments.length > 0) {
+        console.log(`[API messages] ${zeptoAttachments.length} attachment(s): ${zeptoAttachments.map(a => a.name).join(', ')}`);
+      }
+
+      // ── Build master signature block ──
+      let signatureHtml = '';
+      if (master_name || master_email) {
+        signatureHtml = `
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">
+  <p style="margin:0 0 4px;"><strong style="color:#010139;">${master_name || 'Equipo Líderes en Seguros'}</strong></p>
+  ${master_email ? `<p style="margin:0 0 4px;"><a href="mailto:${master_email}" style="color:#010139;text-decoration:none;">${master_email}</a></p>` : ''}
+  <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
+</div>`;
+      }
+
+      // ── Actually send the email via ZeptoMail ──
+      if (recipientList.length > 0 && recipientList[0]) {
+        // Build plain HTML wrapper if only body_text was provided
+        const bodyContent = body_html
+          || `<div style="font-family:Arial,sans-serif;font-size:14px;color:#333;white-space:pre-wrap;">${(body_text || '').replace(/\n/g, '<br/>')}</div>`;
+        const html = bodyContent + signatureHtml;
+
+        for (const recipientEmail of recipientList) {
+          const result = await sendZeptoEmail({
+            to: recipientEmail,
+            subject: subject || '(sin asunto)',
+            htmlBody: html,
+            textBody: body_text || undefined,
+            replyTo: senderAddr,
+            attachments: zeptoAttachments.length > 0 ? zeptoAttachments : undefined,
+          });
+
+          if (result.success) {
+            zeptoMessageId = result.messageId;
+            console.log(`[API messages] ✓ Email sent to ${recipientEmail} via Zepto (msgId: ${result.messageId})`);
+          } else {
+            sendError = result.error;
+            console.error(`[API messages] ✗ Zepto send failed for ${recipientEmail}:`, result.error);
+          }
+        }
+      } else {
+        console.warn(`[API messages] No recipient email — message recorded but NOT sent`);
+      }
+
       // Insert outbound message record
+      const attachmentNames = zeptoAttachments.map(a => a.name);
       const { error: insErr } = await (supabase as any)
         .from('ops_case_messages')
         .insert({
@@ -104,14 +191,20 @@ export async function POST(request: NextRequest) {
           unclassified: false,
           direction: 'outbound',
           provider: 'zepto',
-          message_id: message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          from_email: from_email || 'portal@lideresenseguros.com',
-          to_emails: to_emails || [],
+          message_id: zeptoMessageId || message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          from_email: senderAddr,
+          to_emails: recipientList,
           subject: subject || '',
           body_text: body_text || null,
           body_html: body_html || null,
           received_at: new Date().toISOString(),
-          metadata: { sent_by: user_id || null },
+          metadata: {
+            sent_by: user_id || null,
+            zepto_message_id: zeptoMessageId || null,
+            send_error: sendError || null,
+            has_attachments: attachmentNames.length > 0,
+            attachment_names: attachmentNames.length > 0 ? attachmentNames : undefined,
+          },
         });
 
       if (insErr) throw insErr;

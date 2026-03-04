@@ -273,7 +273,8 @@ export default function EmitirPage() {
           Color: vehicleData!.color,
           Pasajero: vehicleData!.pasajeros,
           Puerta: vehicleData!.puertas,
-          PrimaTotal: selectedPlan.annualPremium,
+          PrimaTotal: selectedPlan.annualPremium, // Always contado price — FedPa calculates cuotas surcharge internally
+          cantidadPago: installments > 1 ? installments : 1,
         };
 
         // ── EmisorPlan (2024): upload docs → emitirpoliza ──
@@ -404,12 +405,15 @@ export default function EmitirPage() {
             pasajeros: vehicleData?.pasajeros,
             puertas: vehicleData?.puertas,
             tipoTransmision: vehicleData?.tipoTransmision,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
           }));
           
           welcomeForm.append('quoteData', JSON.stringify({
-            marca: quoteData.marca,
-            modelo: quoteData.modelo,
-            anio: quoteData.anio || quoteData.anno,
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData.valorVehiculo || 0,
             cobertura: 'Cobertura Completa',
             primaTotal: selectedPlan?.annualPremium || 0,
@@ -636,6 +640,9 @@ export default function EmitirPage() {
             tipoTransmision: vehicleData?.tipoTransmision,
             aseguradoAnteriormente: vehicleData?.aseguradoAnteriormente,
             aseguradoraAnterior: vehicleData?.aseguradoraAnterior,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
           }));
           
           // Quote data

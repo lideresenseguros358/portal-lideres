@@ -231,8 +231,9 @@ export interface EmitirPolizaRequest {
   Pasajero: number;
   Puerta: number;
   
-  // Opcional
+  // Pago
   PrimaTotal?: number;
+  cantidadPago?: number; // 1=contado, 2=cuotas (from EmisorPlan Swagger)
 }
 
 export interface EmitirPolizaResponse {

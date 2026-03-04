@@ -33,13 +33,24 @@ export async function POST(request: Request) {
     const twoHoursAgo = new Date(now.getTime() - 2 * 3600000).toISOString();
 
     // 1. Find urgencies closed in last 24h that haven't been evaluated yet
-    const { data: closedCases } = await supabase
+    const { data: closedCasesRaw } = await supabase
       .from('ops_cases')
       .select('id, chat_thread_id')
       .eq('case_type', 'urgencia')
       .in('status', ['resuelto', 'cerrado'])
-      .gte('closed_at', twentyFourAgo)
-      .not('id', 'in', `(SELECT case_id FROM ops_ai_evaluations WHERE case_id IS NOT NULL)`);
+      .gte('closed_at', twentyFourAgo);
+
+    // Filter out already-evaluated cases (subquery not supported in Supabase JS)
+    let closedCases = closedCasesRaw || [];
+    if (closedCases.length > 0) {
+      const caseIds = closedCases.map((c: any) => c.id);
+      const { data: evaluated } = await supabase
+        .from('ops_ai_evaluations')
+        .select('case_id')
+        .in('case_id', caseIds);
+      const evaluatedIds = new Set((evaluated || []).map((e: any) => e.case_id));
+      closedCases = closedCases.filter((c: any) => !evaluatedIds.has(c.id));
+    }
 
     // 2. Find urgencies with recent human activity (new messages in last 2h) not yet evaluated
     const { data: activeCases } = await supabase

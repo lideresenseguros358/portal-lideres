@@ -5,7 +5,8 @@ import type { OpsCase, OpsCaseStatus } from '@/types/operaciones.types';
 import type { Counts, FilterKey, MasterUser } from './ren-helpers';
 import RenCaseList from './RenCaseList';
 import RenCaseDetail from './RenCaseDetail';
-import { ConfirmRenewalModal, CancelModal } from './RenModals';
+import { ConfirmRenewalModal, CancelModal, type RenewalConfirmData } from './RenModals';
+import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import RenHistoryDrawer from './RenHistoryDrawer';
 import UnclassifiedMessages from './UnclassifiedMessages';
 import { useOpsKeyboard } from '../shared/ops-ui';
@@ -210,12 +211,26 @@ export default function RenovacionesInbox() {
     apiAction({ action: 'update_status', id: selectedCase.id, status }, `Estado actualizado a ${status}`);
   };
 
-  const handleConfirmRenewal = (data: { new_start_date: string; new_end_date: string }) => {
+  const handleConfirmRenewal = (data: RenewalConfirmData) => {
     if (!selectedCase) return;
     apiAction(
-      { action: 'confirm_renewal', id: selectedCase.id, policy_id: selectedCase.policy_id, ...data },
+      { action: 'confirm_renewal', id: selectedCase.id, policy_id: selectedCase.policy_id, new_start_date: data.new_start_date, new_end_date: data.new_end_date },
       'Renovación confirmada exitosamente'
-    ).then(() => setShowRenewalModal(false));
+    ).then(() => {
+      setShowRenewalModal(false);
+      // Create pending payment + recurrence in ADM COT (fire-and-forget)
+      if (data.payment && selectedCase) {
+        createPaymentOnEmission({
+          insurer: selectedCase.insurer_name || '',
+          policyNumber: selectedCase.policy_number || '',
+          insuredName: selectedCase.client_name || '',
+          cedula: selectedCase.cedula || undefined,
+          totalPremium: data.payment.totalPremium,
+          installments: data.payment.installments,
+          ramo: selectedCase.ramo || 'AUTO',
+        });
+      }
+    });
   };
 
   const handleCancel = (reason: string) => {
@@ -231,13 +246,77 @@ export default function RenovacionesInbox() {
     apiAction({ action: 'reassign', case_id: selectedCase.id, master_id: masterId }, 'Caso reasignado');
   };
 
-  const handleSendEmail = (body: string, template: string) => {
-    // Placeholder — logs activity for now; IMAP integration will send actual emails
+  const handleSendEmail = async (body: string, template: string, attachments?: File[]) => {
     if (!selectedCase) return;
-    apiAction(
-      { action: 'update_status', id: selectedCase.id, status: selectedCase.status },
-      'Correo registrado en bitácora'
-    );
+    const c = selectedCase;
+    const subject = `[${c.ticket}] Renovación póliza ${c.policy_number || ''} — ${c.insurer_name || ''}`;
+    const assignedMaster = masters.find((m) => m.id === c.assigned_master_id);
+
+    // 1. Record outbound message + send via Zepto (with attachments if any)
+    try {
+      if (attachments && attachments.length > 0) {
+        const fd = new FormData();
+        fd.append('action', 'record_outbound');
+        fd.append('case_id', c.id);
+        fd.append('subject', subject);
+        fd.append('body_text', body);
+        fd.append('to_emails', JSON.stringify(c.client_email ? [c.client_email] : []));
+        fd.append('from_email', 'portal@lideresenseguros.com');
+        if (assignedMaster) {
+          fd.append('master_name', assignedMaster.full_name);
+          fd.append('master_email', assignedMaster.email);
+        }
+        for (const file of attachments) {
+          fd.append('file', file, file.name);
+        }
+        await fetch('/api/operaciones/messages', { method: 'POST', body: fd });
+      } else {
+        await fetch('/api/operaciones/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'record_outbound',
+            case_id: c.id,
+            subject,
+            body_text: body,
+            to_emails: c.client_email ? [c.client_email] : [],
+            from_email: 'portal@lideresenseguros.com',
+            master_name: assignedMaster?.full_name || null,
+            master_email: assignedMaster?.email || null,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('[RenovacionesInbox] record_outbound failed:', err);
+    }
+
+    // 2. Log email_sent activity
+    try {
+      await fetch('/api/operaciones/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_activity',
+          action_type: 'email_sent',
+          entity_type: 'case',
+          entity_id: c.id,
+          metadata: { ticket: c.ticket, template, to: c.client_email, subject },
+        }),
+      });
+    } catch (err) {
+      console.error('[RenovacionesInbox] log email_sent failed:', err);
+    }
+
+    // 3. If status is pendiente, auto-transition to en_revision (first response)
+    if (c.status === 'pendiente') {
+      await apiAction(
+        { action: 'update_status', id: c.id, status: 'en_revision' },
+        'Correo enviado — caso pasó a En Revisión'
+      );
+    } else {
+      setToast({ message: 'Correo enviado', type: 'success' });
+      refresh();
+    }
   };
 
   const hasMore = cases.length < total;

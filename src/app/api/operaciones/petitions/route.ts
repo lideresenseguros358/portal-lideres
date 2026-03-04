@@ -25,6 +25,17 @@ export async function GET(req: NextRequest) {
     const view = searchParams.get('view');
     const caseId = searchParams.get('case_id');
 
+    // ── Case details sub-endpoint (full details JSON) ──
+    if (view === 'details' && caseId) {
+      const { data: caseRow, error: dErr } = await supabase
+        .from('ops_cases')
+        .select('id, details, client_name, client_email, client_phone, cedula, ramo, source')
+        .eq('id', caseId)
+        .single();
+      if (dErr) throw dErr;
+      return NextResponse.json({ data: caseRow });
+    }
+
     // ── History sub-endpoint ──
     if (view === 'history' && caseId) {
       const { data: history, error: hErr } = await supabase
@@ -48,7 +59,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Main list query (lean columns for list view) ──
-    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,client_email,cedula,source';
+    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,client_email,client_phone,cedula,source';
     let query = supabase
       .from('ops_cases')
       .select(LIST_COLS, { count: 'exact' })
@@ -327,6 +338,42 @@ export async function POST(req: NextRequest) {
         const { case_id } = body;
         const { data: masterId } = await supabase.rpc('assign_case_equilibrado', { p_case_id: case_id });
         return NextResponse.json({ success: true, assigned_to: masterId });
+      }
+
+      // ── Update details (edit quote data) ──
+      case 'update_details': {
+        const { id, details: newDetails, user_id } = body;
+        if (!id || !newDetails) {
+          return NextResponse.json({ error: 'id y details son requeridos' }, { status: 400 });
+        }
+
+        // Get current details for history
+        const { data: currentCase } = await supabase.from('ops_cases').select('details').eq('id', id).single();
+
+        const { error } = await supabase.from('ops_cases')
+          .update({ details: newDetails })
+          .eq('id', id)
+          .eq('case_type', CASE_TYPE);
+        if (error) throw error;
+
+        // Log history
+        await supabase.from('ops_case_history').insert({
+          case_id: id,
+          changed_by: user_id || null,
+          change_type: 'details_updated',
+          before_state: { details: 'updated' },
+          after_state: { details: 'updated' },
+        });
+
+        await supabase.from('ops_activity_log').insert({
+          user_id: user_id || null,
+          action_type: 'details_updated',
+          entity_type: 'case',
+          entity_id: id,
+          metadata: { action: 'quote_details_edited' },
+        });
+
+        return NextResponse.json({ success: true });
       }
 
       default:

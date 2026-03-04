@@ -31,6 +31,31 @@ const DEFAULT_CC_PLAN_ID = '411';
 const DEFAULT_CC_PLAN_NAME = 'C.C. PARTICULAR - SOLO PARA WEB SERVICES';
 
 /**
+ * CC plans by suma asegurada range (Emisor Externo 2021)
+ * These are the web-services-specific plans that FedPa uses for CC.
+ * The plan is determined by the vehicle's insured value.
+ */
+const CC_PLAN_RANGES: { planId: string; nombre: string; min: number; max: number }[] = [
+  { planId: '461', nombre: 'CC 3,000 A 19,999.99 - SOLO WEB SERVICES', min: 3000, max: 19999.99 },
+  { planId: '462', nombre: 'CC 20,000 A 60,000 - SOLO WEB SERVICES', min: 20000, max: 60000 },
+  { planId: '463', nombre: 'CC 60,001 A 150,000 - SOLO WEB SERVICES', min: 60001, max: 150000 },
+];
+
+/**
+ * Resolve CC plan code based on suma asegurada (vehicle value)
+ */
+export function resolverPlanCCPorValor(sumaAsegurada: number): { planId: string; nombre: string } {
+  const match = CC_PLAN_RANGES.find(r => sumaAsegurada >= r.min && sumaAsegurada <= r.max);
+  if (match) {
+    console.log(`[FEDPA CC] Valor $${sumaAsegurada} → Plan ${match.planId} (${match.nombre})`);
+    return { planId: match.planId, nombre: match.nombre };
+  }
+  // Fallback: use generic plan 411 for values outside defined ranges
+  console.log(`[FEDPA CC] Valor $${sumaAsegurada} fuera de rango, usando plan genérico 411`);
+  return { planId: DEFAULT_CC_PLAN_ID, nombre: DEFAULT_CC_PLAN_NAME };
+}
+
+/**
  * Obtiene planes Básico y Premium de FEDPA
  * Ambos usan el mismo plan ID - la diferencia es EndosoIncluido (S/N)
  */
@@ -47,32 +72,11 @@ export async function obtenerPlanesFedpa(environment: 'DEV' | 'PROD' = 'DEV'): P
     };
   }
 
-  // Buscar el plan CC PARTICULAR en el catálogo
+  // Use default plan 411 (generic CC PARTICULAR) — the actual range-based plan
+  // (461/462/463) is resolved at cotización time via resolverPlanCCPorValor()
   let ccPlanId = DEFAULT_CC_PLAN_ID;
   let ccPlanName = DEFAULT_CC_PLAN_NAME;
-
-  try {
-    const planesResponse = await fetch(`/api/fedpa/planes?environment=${environment}&tipo=COBERTURA%20COMPLETA`);
-    if (planesResponse.ok) {
-      const planesData = await planesResponse.json();
-      const planes = planesData.data || [];
-      
-      // Buscar CC PARTICULAR (plan principal para web services)
-      const ccParticular = planes.find((p: any) => 
-        p.descripcion?.toUpperCase().includes('PARTICULAR') ||
-        p.nombreplan?.toUpperCase().includes('PARTICULAR')
-      );
-      
-      if (ccParticular) {
-        ccPlanId = ccParticular.plan?.toString() || DEFAULT_CC_PLAN_ID;
-        ccPlanName = ccParticular.descripcion || ccParticular.nombreplan || DEFAULT_CC_PLAN_NAME;
-      }
-      
-      console.log(`[FEDPA Plans] CC PARTICULAR encontrado: plan ${ccPlanId} (${ccPlanName})`);
-    }
-  } catch (error) {
-    console.warn('[FEDPA Plans] Error obteniendo catálogo, usando default plan 411');
-  }
+  console.log(`[FEDPA Plans] CC PARTICULAR: plan ${ccPlanId} (range-based plans resolved at cotización time)`);
 
   // Mismo plan para ambos - la diferencia es EndosoIncluido en la cotización
   const result = {

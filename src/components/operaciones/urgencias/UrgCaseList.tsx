@@ -8,6 +8,8 @@ import {
   FaUserTie,
   FaBolt,
   FaFire,
+  FaCommentDots,
+  FaEnvelope,
 } from 'react-icons/fa';
 import type { OpsCase, OpsCaseStatus } from '@/types/operaciones.types';
 import { STATUS_COLORS, STATUS_LABELS } from '@/types/operaciones.types';
@@ -68,6 +70,22 @@ function NewBadge({ createdAt }: { createdAt: string }) {
 function SeverityDot({ severity }: { severity?: string }) {
   const c = severity === 'high' ? 'bg-red-500' : severity === 'medium' ? 'bg-amber-500' : 'bg-green-500';
   return <span className={`w-2 h-2 rounded-full ${c} flex-shrink-0`} title={severity || 'low'} />;
+}
+
+function SourceBadge({ chatThreadId, source }: { chatThreadId: string | null; source: string | null }) {
+  const isChat = !!chatThreadId || source === 'adm_cot_chat' || source === 'whatsapp';
+  if (isChat) {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600" title="Origen: Chat ADM COT">
+        <FaCommentDots className="text-[8px]" /> Chat
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-50 text-teal-600" title="Origen: Correo">
+      <FaEnvelope className="text-[8px]" /> Email
+    </span>
+  );
 }
 
 
@@ -217,6 +235,7 @@ export default function UrgCaseList({
 
                   {/* Row 3: badges (compact) */}
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    <SourceBadge chatThreadId={c.chat_thread_id} source={c.source} />
                     <StatusBadge status={c.status} />
                     <SlaBadge createdAt={c.created_at} slaBreached={c.sla_breached} />
                     <NoResponseBadge firstResponseAt={c.first_response_at} />

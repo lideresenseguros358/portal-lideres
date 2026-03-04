@@ -595,6 +595,7 @@ export default function OpsConfigTab() {
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1">Asunto</label>
                 <input
                   type="text"
+                  data-no-uppercase
                   value={tplSubject}
                   onChange={e => setTplSubject(e.target.value)}
                   className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#010139]/30"
@@ -603,6 +604,7 @@ export default function OpsConfigTab() {
               <div>
                 <label className="block text-[10px] font-semibold text-gray-500 mb-1">Cuerpo (texto)</label>
                 <textarea
+                  data-no-uppercase
                   value={tplBody}
                   onChange={e => setTplBody(e.target.value)}
                   rows={6}

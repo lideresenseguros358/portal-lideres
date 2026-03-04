@@ -43,6 +43,10 @@ export interface AutoThirdPartyPlan {
   emissionPlanCode?: number;
   includedCoverages?: string[];
   idCotizacion?: string | number;
+  vcodplancobertura?: number;
+  vcodgrupotarifa?: number;
+  vcodmarca?: number;
+  vcodmodelo?: number;
 }
 
 export interface AutoInsurer {

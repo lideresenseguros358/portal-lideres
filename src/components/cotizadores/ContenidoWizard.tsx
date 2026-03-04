@@ -674,7 +674,7 @@ export default function ContenidoWizard() {
             </div>
           </div>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">$</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
             <input
               type="number"
               inputMode="numeric"
@@ -684,7 +684,7 @@ export default function ContenidoWizard() {
               min="5000"
               step="1000"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'}`}
+              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'}`}
             />
           </div>
           {errors.valorContenido && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorContenido}</p>}
@@ -744,7 +744,7 @@ export default function ContenidoWizard() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (USD) <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs sm:text-sm leading-none pointer-events-none">$</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -753,7 +753,7 @@ export default function ContenidoWizard() {
                       placeholder="2500"
                       min="2000"
                       onWheel={(e) => e.currentTarget.blur()}
-                      className={`w-full pl-7 pr-3 py-2.5 border-2 rounded-lg text-sm font-semibold focus:outline-none transition-colors appearance-none ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus:border-[#8AAA19]'}`}
+                      className={`w-full pl-7 sm:pl-7 pr-3 py-2.5 border-2 rounded-lg text-sm font-semibold focus:outline-none transition-colors appearance-none ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus:border-[#8AAA19]'}`}
                     />
                   </div>
                   {errors[`art_val_${i}`] && <p className="text-red-500 text-[11px] mt-0.5">{errors[`art_val_${i}`]}</p>}

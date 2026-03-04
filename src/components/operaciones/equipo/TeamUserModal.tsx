@@ -526,6 +526,18 @@ function TabHistorial({ history }: { history: HistoryEntry[] }) {
           else if (meta.ticket) detail = meta.ticket;
           else if (meta.assigned_to) detail = `Asignado a: ${meta.assigned_to}`;
           else if (meta.reason) detail = meta.reason;
+          // Check/payment details
+          if (h.action_type.startsWith('check_')) {
+            const parts: string[] = [];
+            if (meta.client_name) parts.push(meta.client_name);
+            if (meta.amount) parts.push(`$${Number(meta.amount).toFixed(2)}`);
+            if (meta.purpose) parts.push(meta.purpose === 'poliza' ? `Póliza${meta.policy_number ? ' ' + meta.policy_number : ''}` : meta.purpose);
+            if (meta.insurer) parts.push(meta.insurer);
+            if (meta.imported) parts.push(`${meta.imported} importadas`);
+            if (meta.payments_unlocked) parts.push(`${meta.payments_unlocked} pagos desbloqueados`);
+            if (meta.count && meta.count > 1) parts.push(`${meta.count} pagos`);
+            detail = parts.join(' · ');
+          }
 
           return (
             <div key={h.id} className="flex gap-3 pl-2">

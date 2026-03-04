@@ -24,6 +24,8 @@ import CreditCardInput from '@/components/is/CreditCardInput';
 
 // Utilidades
 import { generateInspectionReport } from '@/lib/utils/inspectionReportGenerator';
+import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
+import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
 
 interface Section {
   id: string;
@@ -55,6 +57,14 @@ export default function EmitirV2Page() {
   const [cardLast4, setCardLast4] = useState<string | null>(null);
   const [cardBrand, setCardBrand] = useState<string | null>(null);
   
+  // ═══ ADM COT: Helper to get quote ref for step tracking ═══
+  const getTrackingInfo = () => {
+    const refId = selectedPlan?._idCotizacion;
+    if (!refId) return { quoteRef: 'FEDPA-UNKNOWN', insurer: 'FEDPA' };
+    const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+    return { quoteRef: `FEDPA-${refId}-${planSuffix}`, insurer: 'FEDPA' };
+  };
+
   // Control de secciones
   const [activeSectionId, setActiveSectionId] = useState<string>('payment');
   const [sections, setSections] = useState<Section[]>([
@@ -182,21 +192,36 @@ export default function EmitirV2Page() {
   const handlePaymentComplete = (numInstallments: number, monthlyPaymentAmount: number) => {
     setInstallments(numInstallments);
     setMonthlyPayment(monthlyPaymentAmount);
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'payment' });
     unlockNextSection('payment');
   };
 
   const handleInsuredDataComplete = (data: InsuredData) => {
     setInsuredData(data);
+    const t = getTrackingInfo();
+    trackStepUpdate({
+      ...t,
+      step: 'insured',
+      clientName: `${data.primerNombre || ''} ${data.primerApellido || ''}`.trim() || undefined,
+      cedula: data.cedula,
+      email: data.email,
+      phone: data.telefono || data.celular,
+    });
     unlockNextSection('insured');
   };
 
   const handleVehicleDataComplete = (data: VehicleData) => {
     setVehicleData(data);
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'vehicle' });
     unlockNextSection('vehicle');
   };
 
   const handleDocumentsComplete = (data: ClientDocuments) => {
     setDocuments(data);
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'documents' });
     unlockNextSection('documents');
   };
 
@@ -220,11 +245,15 @@ export default function EmitirV2Page() {
       });
     }
     
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'inspection' });
     unlockNextSection('inspection');
   };
 
   const handleDeclarationComplete = () => {
     setDeclarationAccepted(true);
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'declaration' });
     unlockNextSection('declaration');
   };
 
@@ -233,6 +262,8 @@ export default function EmitirV2Page() {
     setCardLast4(last4);
     setCardBrand(brand);
     toast.success(`Tarjeta ${brand} ****${last4} registrada`);
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'payment-method' });
     unlockNextSection('payment-method');
   };
 
@@ -253,6 +284,28 @@ export default function EmitirV2Page() {
 
   // Estado de emisión para evitar doble click
   const [isEmitting, setIsEmitting] = useState(false);
+
+  // ═══ ADM COT: Detect abandonment — if user entered data and leaves page ═══
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (insuredData && !isEmitting) {
+        const t = getTrackingInfo();
+        trackQuoteFailed({
+          quoteRef: t.quoteRef,
+          insurer: t.insurer,
+          errorMessage: 'Proceso abandonado por el usuario',
+          lastStep: activeSectionId,
+          clientName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim() || undefined,
+          cedula: insuredData?.cedula,
+          email: insuredData?.email,
+          phone: insuredData?.telefono || insuredData?.celular,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insuredData, isEmitting, activeSectionId]);
 
   // Emisión final
   const handleConfirmEmission = async () => {
@@ -338,7 +391,96 @@ export default function EmitirV2Page() {
           throw new Error(emisionResult.error || 'Error emitiendo póliza FEDPA');
         }
         
-        // ========== PASO 3: Guardar datos completos para confirmación ==========
+        // ========== PASO 3: ADM COT — Tracking + Pago pendiente + Recurrencia ==========
+        const fedpaRef = selectedPlan?._idCotizacion;
+        if (fedpaRef) {
+          const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+          trackQuoteEmitted({
+            quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`,
+            insurer: 'FEDPA',
+            policyNumber: emisionResult.poliza || emisionResult.nroPoliza,
+            clientName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim(),
+            cedula: insuredData?.cedula,
+            email: insuredData?.email,
+            phone: insuredData?.telefono || insuredData?.celular,
+          });
+        }
+
+        createPaymentOnEmission({
+          insurer: 'FEDPA',
+          policyNumber: emisionResult.poliza || emisionResult.nroPoliza || '',
+          insuredName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim(),
+          cedula: insuredData?.cedula,
+          totalPremium: selectedPlan.annualPremium || 0,
+          installments,
+          ramo: 'AUTO',
+        });
+
+        // ========== PASO 4: Enviar expediente y guardar documentos ==========
+        try {
+          const welcomeForm = new FormData();
+          welcomeForm.append('tipoCobertura', 'CC');
+          welcomeForm.append('environment', 'development');
+          welcomeForm.append('nroPoliza', emisionResult.poliza || emisionResult.nroPoliza || '');
+          welcomeForm.append('insurerName', 'FEDPA Seguros');
+          if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
+
+          welcomeForm.append('clientData', JSON.stringify({
+            primerNombre: insuredData?.primerNombre,
+            segundoNombre: insuredData?.segundoNombre,
+            primerApellido: insuredData?.primerApellido,
+            segundoApellido: insuredData?.segundoApellido,
+            cedula: insuredData?.cedula,
+            email: insuredData?.email,
+            telefono: insuredData?.telefono,
+            celular: insuredData?.celular,
+            direccion: insuredData?.direccion,
+            fechaNacimiento: insuredData?.fechaNacimiento,
+            sexo: insuredData?.sexo,
+            esPEP: insuredData?.esPEP,
+          }));
+
+          welcomeForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vin,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            marca: quoteData?.marca || '',
+            modelo: quoteData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || '',
+          }));
+
+          welcomeForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca || '',
+            modelo: quoteData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || '',
+            valorVehiculo: quoteData?.valorVehiculo || 0,
+            cobertura: 'Cobertura Completa',
+            primaTotal: selectedPlan.annualPremium || 0,
+          }));
+
+          if (documents?.cedulaFile) welcomeForm.append('cedulaFile', documents.cedulaFile);
+          if (documents?.licenciaFile) welcomeForm.append('licenciaFile', documents.licenciaFile);
+          if (documents?.registroFile) welcomeForm.append('registroVehicularFile', documents.registroFile);
+
+          const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: welcomeForm,
+          });
+          const welcomeResult = await welcomeResponse.json();
+          if (welcomeResult.success) {
+            console.log('[FEDPA CC V2] ✅ Expediente enviado:', welcomeResult.messageId);
+          } else {
+            console.error('[FEDPA CC V2] Error expediente:', welcomeResult.error);
+          }
+        } catch (welcomeErr: any) {
+          console.error('[FEDPA CC V2] Error enviando expediente:', welcomeErr);
+        }
+
+        // ========== PASO 5: Guardar datos completos para confirmación ==========
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.poliza || emisionResult.nroPoliza,
           insurer: 'FEDPA Seguros',
@@ -387,6 +529,18 @@ export default function EmitirV2Page() {
     } catch (error: any) {
       console.error('Error emitiendo:', error);
       toast.error(error.message || 'Error al emitir póliza');
+      // ═══ ADM COT: Track emission failure ═══
+      const tFail = getTrackingInfo();
+      trackQuoteFailed({
+        quoteRef: tFail.quoteRef,
+        insurer: tFail.insurer,
+        errorMessage: error.message,
+        lastStep: 'emitir',
+        clientName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim() || undefined,
+        cedula: insuredData?.cedula,
+        email: insuredData?.email,
+        phone: insuredData?.telefono || insuredData?.celular,
+      });
       setIsEmitting(false);
     }
   };

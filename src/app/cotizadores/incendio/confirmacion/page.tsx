@@ -113,7 +113,7 @@ export default function IncendioConfirmacionPage() {
           <div className="space-y-3">
             <button
               onClick={handleNewQuote}
-              className="w-full px-6 py-3.5 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-xl font-bold text-sm hover:opacity-90 transition-opacity shadow-lg flex items-center justify-center gap-2"
+              className="w-full px-6 py-3.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-xl font-bold text-sm transition-colors shadow-lg flex items-center justify-center gap-2"
             >
               <FaShieldAlt /> Nueva cotización de incendio
             </button>

@@ -274,7 +274,8 @@ export default function EmitirDanosTercerosPage() {
           Color: vehicleData?.color || '',
           Pasajero: vehicleData?.pasajeros || 5,
           Puerta: vehicleData?.puertas || 4,
-          PrimaTotal: selectedPlan.annualPremium,
+          PrimaTotal: selectedPlan.annualPremium, // Always contado price — FedPa calculates cuotas surcharge internally
+          cantidadPago: selectedPaymentMode === 'cuotas' ? 2 : 1,
         };
 
         let emisionResult: any = null;
@@ -414,12 +415,15 @@ export default function EmitirDanosTercerosPage() {
             pasajeros: vehicleData?.pasajeros,
             puertas: vehicleData?.puertas,
             tipoTransmision: vehicleData?.tipoTransmision,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
           }));
           
           welcomeForm.append('quoteData', JSON.stringify({
-            marca: quoteData?.marca,
-            modelo: quoteData?.modelo,
-            anio: quoteData?.anio || quoteData?.anno,
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData?.valorVehiculo || 0,
             cobertura: 'Daños a Terceros',
             primaTotal: selectedPlan.annualPremium || 0,
@@ -465,7 +469,11 @@ export default function EmitirDanosTercerosPage() {
           cedula: emissionData.cedula,
           vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anno || quoteData?.anio || ''}`.trim(),
           placa: vehicleData?.placa || '',
-          primaTotal: selectedPlan.annualPremium,
+          primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : selectedPlan.annualPremium,
+          primaContado: selectedPlan.annualPremium,
+          formaPago: selectedPaymentMode,
+          cantidadCuotas: selectedPaymentMode === 'cuotas' ? 2 : 1,
+          montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
           tipoCobertura: 'Daños a Terceros',
           method: usedMethod,
         }));
@@ -647,12 +655,15 @@ export default function EmitirDanosTercerosPage() {
             tipoTransmision: vehicleData?.tipoTransmision,
             aseguradoAnteriormente: vehicleData?.aseguradoAnteriormente,
             aseguradoraAnterior: vehicleData?.aseguradoraAnterior,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
           }));
           
           expedienteForm.append('quoteData', JSON.stringify({
-            marca: quoteData?.marca,
-            modelo: quoteData?.modelo,
-            anio: quoteData?.anio || quoteData?.anno,
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData?.valorVehiculo || 0,
             tipoVehiculo: quoteData?.tipoVehiculo || 'SEDAN',
             cobertura: 'Daños a Terceros',

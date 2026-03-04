@@ -548,8 +548,9 @@ export async function POST(request: NextRequest) {
         });
         expedienteSaved = expedienteResult.saved;
         expedienteErrors = expedienteResult.errors;
+        const expedienteSkipped = expedienteResult.skipped || [];
         if (expedienteResult.ok) {
-          console.log('[IS EXPEDIENTE] ✅ Documentos guardados en expediente:', expedienteSaved);
+          console.log('[IS EXPEDIENTE] ✅ Documentos guardados en expediente:', expedienteSaved, '| Omitidos (ya existen):', expedienteSkipped);
         } else {
           console.warn('[IS EXPEDIENTE] ⚠️ Algunos documentos no se guardaron:', expedienteErrors);
         }

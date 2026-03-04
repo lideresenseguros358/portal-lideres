@@ -124,6 +124,9 @@ function normalizarDatosEmision(request: EmitirPolizaRequest): EmitirPolizaReque
     // Convertir números si vienen como string
     Telefono: typeof request.Telefono === 'string' ? parseInt(request.Telefono.replace(/\D/g, '')) : request.Telefono,
     Celular: typeof request.Celular === 'string' ? parseInt(request.Celular.replace(/\D/g, '')) : request.Celular,
+    
+    // Pago: 1=contado, 2=cuotas
+    cantidadPago: request.cantidadPago || 1,
   };
 }
 

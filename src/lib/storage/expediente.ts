@@ -5,7 +5,7 @@
 
 import { supabaseClient } from '@/lib/supabase/client';
 
-export type DocumentType = 'cedula' | 'licencia' | 'registro_vehicular' | 'otros';
+export type DocumentType = 'cedula' | 'licencia' | 'registro_vehicular' | 'debida_diligencia' | 'otros';
 
 export interface ExpedienteDocument {
   id: string;
@@ -49,7 +49,8 @@ function generateFilePath(
   const timestamp = Date.now();
   const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
   
-  if (documentType === 'registro_vehicular' && policyId) {
+  const policyLevelTypes: DocumentType[] = ['registro_vehicular', 'debida_diligencia', 'otros'];
+  if (policyId && policyLevelTypes.includes(documentType)) {
     return `clients/${clientId}/policies/${policyId}/${documentType}/${timestamp}_${sanitizedFileName}`;
   } else {
     return `clients/${clientId}/${documentType}/${timestamp}_${sanitizedFileName}`;
@@ -108,10 +109,10 @@ export async function uploadExpedienteDocument(
     }
 
     // Validate document type and policy relationship
-    if (documentType === 'registro_vehicular' && !policyId) {
+    if ((documentType === 'registro_vehicular' || documentType === 'debida_diligencia') && !policyId) {
       return {
         ok: false,
-        error: 'El registro vehicular debe estar asociado a una póliza',
+        error: `${documentType === 'registro_vehicular' ? 'El registro vehicular' : 'La debida diligencia'} debe estar asociado(a) a una póliza`,
       };
     }
 

@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt } from 'react-icons/fa';
+import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt, FaEnvelope } from 'react-icons/fa';
 import confetti from 'canvas-confetti';
 
 export default function ConfirmacionPage() {
@@ -197,11 +197,23 @@ export default function ConfirmacionPage() {
                   </div>
                 )}
                 {policyData.primaTotal && (
-                  <div className="flex justify-between items-center py-3 px-4 bg-[#010139] rounded-lg mt-2">
-                    <span className="text-sm text-white/80">Prima Total</span>
-                    <span className="text-xl font-bold text-[#8AAA19]">
-                      ${Number(policyData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </span>
+                  <div className="py-3 px-4 bg-[#010139] rounded-lg mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-white/80">
+                        {policyData.formaPago === 'cuotas' ? 'Prima Total (2 cuotas)' : 'Prima Total'}
+                      </span>
+                      <span className="text-xl font-bold text-[#8AAA19]">
+                        ${Number(policyData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {policyData.formaPago === 'cuotas' && policyData.montoCuota && (
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-xs text-white/60">Cuota mensual</span>
+                        <span className="text-sm font-semibold text-white/90">
+                          ${Number(policyData.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -216,8 +228,22 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
-          {/* Botón: Descargar Póliza */}
-          {policyData?.pdfUrl ? (
+          {/* Botón: Descargar Póliza o Mensaje FedPa */}
+          {policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 max-w-md mx-auto">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-[#010139] rounded-full flex items-center justify-center">
+                  <FaEnvelope className="text-white text-lg" />
+                </div>
+              </div>
+              <p className="text-base font-semibold text-[#010139] mb-2">
+                Su póliza será enviada en breve a su correo
+              </p>
+              <p className="text-sm text-gray-600">
+                Recuerde revisar la carpeta de <span className="font-semibold text-gray-800">spam</span> o <span className="font-semibold text-gray-800">correo no deseado</span> por si no lo ve en la bandeja principal.
+              </p>
+            </div>
+          ) : policyData?.pdfUrl ? (
             <a
               href={policyData.pdfUrl}
               target="_blank"
@@ -236,9 +262,11 @@ export default function ConfirmacionPage() {
               <span className="text-white">Descargar Póliza</span>
             </button>
           )}
-          <p className="text-xs text-gray-500 mb-6">
-            Documento oficial emitido por la aseguradora
-          </p>
+          {!policyData?.insurer?.toUpperCase().includes('FEDPA') && (
+            <p className="text-xs text-gray-500 mb-6">
+              Documento oficial emitido por la aseguradora
+            </p>
+          )}
 
           <div className="my-6 border-t border-gray-200"></div>
 
