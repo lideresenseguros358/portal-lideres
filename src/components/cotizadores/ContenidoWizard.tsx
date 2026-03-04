@@ -29,6 +29,7 @@ interface ContenidoFormData {
   distrito: string;
   corregimiento: string;
   barriada: string;
+  barriadaOtro: string;
   tipoVivienda: 'casa' | 'apartamento' | '';
   calle: string;
   numeroCasa: string;
@@ -63,6 +64,7 @@ const INITIAL_DATA: ContenidoFormData = {
   distrito: '',
   corregimiento: '',
   barriada: '',
+  barriadaOtro: '',
   tipoVivienda: '',
   calle: '',
   numeroCasa: '',
@@ -361,7 +363,7 @@ export default function ContenidoWizard() {
       const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
       const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
       const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
-      const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+      const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
       const valorNum = parseFloat(data.valorContenido) || 0;
       const seguridadMeta = data.seguridad.map(key => {
         const m = SECURITY_MEASURES.find(o => o.key === key);
@@ -574,12 +576,22 @@ export default function ContenidoWizard() {
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">Barriada / Urbanización</label>
           <select
             value={data.barriada}
-            onChange={(e) => update({ barriada: e.target.value })}
+            onChange={(e) => update({ barriada: e.target.value, barriadaOtro: e.target.value === 'OTRO' ? data.barriadaOtro : '' })}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none bg-white focus:border-[#8AAA19] transition-colors"
           >
             <option value="">Seleccionar (opcional)</option>
             {urbanizaciones.map(u => <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>)}
+            <option value="OTRO">Otro (especificar)</option>
           </select>
+          {data.barriada === 'OTRO' && (
+            <input
+              type="text"
+              value={data.barriadaOtro}
+              onChange={(e) => update({ barriadaOtro: e.target.value })}
+              placeholder="Nombre de la urbanización o barriada"
+              className="w-full mt-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none bg-white focus:border-[#8AAA19] transition-colors"
+            />
+          )}
         </div>
 
         {/* Tipo vivienda */}
@@ -674,17 +686,15 @@ export default function ContenidoWizard() {
             </div>
           </div>
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
               value={data.valorContenido}
-              onChange={(e) => update({ valorContenido: e.target.value })}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorContenido: v }); }}
               placeholder="Valor estimado del contenido"
-              min="5000"
-              step="1000"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'}`}
+              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'}`}
             />
           </div>
           {errors.valorContenido && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorContenido}</p>}
@@ -744,16 +754,15 @@ export default function ContenidoWizard() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (USD) <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs sm:text-sm leading-none pointer-events-none">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs sm:text-sm leading-none pointer-events-none select-none">$</span>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
                       value={item.valor}
-                      onChange={(e) => updateArticulo(i, 'valor', e.target.value)}
+                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateArticulo(i, 'valor', v); }}
                       placeholder="2500"
-                      min="2000"
                       onWheel={(e) => e.currentTarget.blur()}
-                      className={`w-full pl-7 sm:pl-7 pr-3 py-2.5 border-2 rounded-lg text-sm font-semibold focus:outline-none transition-colors appearance-none ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus:border-[#8AAA19]'}`}
+                      className={`w-full pl-7 pr-3 py-2.5 border-2 rounded-lg text-sm font-semibold focus:outline-none transition-colors appearance-none ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus:border-[#8AAA19]'}`}
                     />
                   </div>
                   {errors[`art_val_${i}`] && <p className="text-red-500 text-[11px] mt-0.5">{errors[`art_val_${i}`]}</p>}
@@ -793,7 +802,7 @@ export default function ContenidoWizard() {
     const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
     const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
     const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
-    const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+    const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
     const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
     const valorNum = parseFloat(data.valorContenido) || 0;
 

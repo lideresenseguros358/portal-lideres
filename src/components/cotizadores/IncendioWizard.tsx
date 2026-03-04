@@ -24,6 +24,7 @@ interface IncendioFormData {
   distrito: string;
   corregimiento: string;
   barriada: string;
+  barriadaOtro: string;
   tipoVivienda: 'casa' | 'apartamento' | '';
   // Casa
   calle: string;
@@ -58,6 +59,7 @@ const INITIAL_DATA: IncendioFormData = {
   distrito: '',
   corregimiento: '',
   barriada: '',
+  barriadaOtro: '',
   tipoVivienda: '',
   calle: '',
   numeroCasa: '',
@@ -309,7 +311,7 @@ export default function IncendioWizard() {
       const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
       const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
       const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
-      const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+      const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
       const valorNum = parseFloat(data.valorBien) || 0;
       const seguridadMeta = data.seguridad.map(key => {
         const m = SECURITY_MEASURES.find(o => o.key === key);
@@ -535,12 +537,22 @@ export default function IncendioWizard() {
           </label>
           <select
             value={data.barriada}
-            onChange={(e) => update({ barriada: e.target.value })}
+            onChange={(e) => update({ barriada: e.target.value, barriadaOtro: e.target.value === 'OTRO' ? data.barriadaOtro : '' })}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none bg-white focus:border-[#8AAA19] transition-colors"
           >
             <option value="">Seleccionar (opcional)</option>
             {urbanizaciones.map(u => <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>)}
+            <option value="OTRO">Otro (especificar)</option>
           </select>
+          {data.barriada === 'OTRO' && (
+            <input
+              type="text"
+              value={data.barriadaOtro}
+              onChange={(e) => update({ barriadaOtro: e.target.value })}
+              placeholder="Nombre de la urbanización o barriada"
+              className="w-full mt-2 px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none bg-white focus:border-[#8AAA19] transition-colors"
+            />
+          )}
         </div>
 
         {/* Tipo de vivienda */}
@@ -668,17 +680,15 @@ export default function IncendioWizard() {
           </div>
 
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
               value={data.valorBien}
-              onChange={(e) => update({ valorBien: e.target.value })}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorBien: v }); }}
               placeholder="Valor de la estructura"
-              min="10000"
-              step="5000"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
                 errors.valorBien ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
               }`}
             />
@@ -709,7 +719,7 @@ export default function IncendioWizard() {
     const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
     const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
     const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
-    const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+    const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
     const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
     const valorNum = parseFloat(data.valorBien) || 0;
 

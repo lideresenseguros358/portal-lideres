@@ -837,17 +837,15 @@ export default function VidaWizard() {
             Salario mensual (USD) <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
               value={data.salarioMensual}
-              onChange={(e) => update({ salarioMensual: e.target.value })}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); update({ salarioMensual: v }); }}
               placeholder="1500"
-              min="1"
-              step="any"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-8 sm:pl-9 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
                 errors.salarioMensual ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
               }`}
             />
@@ -1020,15 +1018,15 @@ export default function VidaWizard() {
                 Suma asegurada actual (USD) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none select-none">$</span>
                 <input
-                  type="number"
+                  type="text"
                   inputMode="numeric"
                   value={data.sumaAseguradaActual}
-                  onChange={(e) => update({ sumaAseguradaActual: e.target.value })}
+                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaActual: v }); }}
                   placeholder="50000"
                   onWheel={(e) => e.currentTarget.blur()}
-                  className={`w-full pl-8 sm:pl-9 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
+                  className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
                     errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-[#8AAA19]'
                   }`}
                 />
@@ -1080,17 +1078,15 @@ export default function VidaWizard() {
           )}
 
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none">$</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
               value={data.sumaAseguradaSolicitada}
-              onChange={(e) => update({ sumaAseguradaSolicitada: e.target.value })}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaSolicitada: v }); }}
               placeholder="Suma asegurada"
-              min={minimoFijo}
-              max={maximoCalculado || undefined}
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-9 sm:pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
+              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
                 errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
               }`}
             />
