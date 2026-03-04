@@ -196,7 +196,7 @@ export async function GET(req: NextRequest) {
         // Sum gaps between consecutive actions, capping each gap at 30 min (idle cutoff)
         let dayMinutes = 0;
         for (let i = 1; i < timestamps.length; i++) {
-          const gap = (new Date(timestamps[i]).getTime() - new Date(timestamps[i - 1]).getTime()) / 60000;
+          const gap = (new Date(timestamps[i]!).getTime() - new Date(timestamps[i - 1]!).getTime()) / 60000;
           dayMinutes += Math.min(gap, 30); // Cap individual gaps at 30 min
         }
         dayMinutes = Math.max(dayMinutes, 15); // Minimum 15 min per active day
