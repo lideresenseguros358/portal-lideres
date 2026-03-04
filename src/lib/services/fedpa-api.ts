@@ -275,12 +275,13 @@ class FedpaApiService {
   async generarNroPoliza(): Promise<{ NroPoliza: string }> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/Polizas/get_nropoliza?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}`,
+        `${this.baseUrl}/Polizas/get_nropoliza`,
         {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ Usuario: FEDPA_USER, Clave: FEDPA_CLAVE }),
         }
       );
 
@@ -314,9 +315,9 @@ class FedpaApiService {
         Clave: FEDPA_CLAVE,
       }));
 
-      // Agregar archivos
+      // Agregar archivos como File1, File2, File3 (per manual page 9-10)
       archivos.forEach((archivo, index) => {
-        formData.append(`file${index}`, archivo);
+        formData.append(`File${index + 1}`, archivo);
       });
 
       const response = await fetch(

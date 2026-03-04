@@ -277,56 +277,46 @@ export default function EmitirPage() {
           cantidadPago: installments > 1 ? installments : 1,
         };
 
-        // ── EmisorPlan (2024): upload docs → emitirpoliza ──
+        // ── Emisor Externo (2021): get_cotizacion → get_nropoliza → crear_poliza_auto_cc_externos ──
         let emisionResult: any = null;
 
         setEmissionProgress(15);
-        setEmissionStep('Subiendo documentos a la aseguradora...');
-        const docsFormData = new FormData();
-        docsFormData.append('environment', 'DEV');
-        docsFormData.append('documento_identidad', emissionData.cedulaFile!, emissionData.cedulaFile!.name || 'documento_identidad.pdf');
-        docsFormData.append('licencia_conducir', emissionData.licenciaFile!, emissionData.licenciaFile!.name || 'licencia_conducir.pdf');
+        setEmissionStep('Cotizando y preparando emisión con FEDPA...');
+
+        // Build multipart: emisionData JSON + File1/File2/File3
+        const extFormData = new FormData();
+        extFormData.append('emisionData', JSON.stringify({
+          ...emisionCommon,
+          CodPlan: selectedPlan._planCode || 411,
+          CodLimiteLesiones: quoteData.codLimiteLesiones || '1',
+          CodLimitePropiedad: quoteData.codLimitePropiedad || '7',
+          CodLimiteGastosMedico: quoteData.codLimiteGastosMedico || '16',
+          EndosoIncluido: 'S',
+        }));
+
+        // File1 = cédula/documento identidad
+        if (emissionData.cedulaFile) {
+          extFormData.append('File1', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
+        }
+        // File2 = licencia de conducir
+        if (emissionData.licenciaFile) {
+          extFormData.append('File2', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
+        }
+        // File3 = registro vehicular
         if (vehicleData?.registroVehicular) {
-          docsFormData.append('registro_vehicular', vehicleData.registroVehicular, vehicleData.registroVehicular.name || 'registro_vehicular.pdf');
+          extFormData.append('File3', vehicleData.registroVehicular, vehicleData.registroVehicular.name || 'registro_vehicular.pdf');
         }
 
-        const docsResponse = await fetch('/api/fedpa/documentos/upload', {
+        setEmissionProgress(25);
+        setEmissionStep('Emitiendo póliza con FEDPA (Emisor Externo)...');
+
+        const emisionResponse = await fetch('/api/fedpa/emision-externo', {
           method: 'POST',
-          body: docsFormData,
-        });
-
-        const docsResponseData = await docsResponse.json();
-        const isTokenBlocked = docsResponse.status === 424 || docsResponseData.code === 'TOKEN_NOT_AVAILABLE';
-
-        if (isTokenBlocked) {
-          throw new Error(
-            'El token de FEDPA está bloqueado temporalmente (~50 min). ' +
-            'Por favor intente nuevamente en unos minutos. ' +
-            'Si el problema persiste, contacte a soporte.'
-          );
-        }
-
-        if (!docsResponse.ok || !docsResponseData.success) {
-          throw new Error(docsResponseData.error || 'Error subiendo documentos');
-        }
-
-        console.log('[EMISIÓN CC FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-        setEmissionProgress(35);
-        setEmissionStep('Emitiendo póliza con FEDPA...');
-        const emisionResponse = await fetch('/api/fedpa/emision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
+          body: extFormData,
         });
         const emisionResponseData = await emisionResponse.json();
 
         if (!emisionResponse.ok || !emisionResponseData.success) {
-          if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
-            throw new Error(
-              'El token de FEDPA expiró durante la emisión. ' +
-              'Por favor intente nuevamente en unos minutos.'
-            );
-          }
           throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
         }
 
