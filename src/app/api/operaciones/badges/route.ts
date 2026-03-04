@@ -16,8 +16,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // ── Renovaciones: pendiente cases + unclassified messages ──
-    const [renCases, renUnclassified] = await Promise.all([
+    // ── Renovaciones: pendiente cases + unclassified messages (matching UI filters) ──
+    const TICKET_RE = /(?:PET|REN|URG|MOR)-\d{4}-\d{5}/i;
+    const [renCases, renUnclassifiedRaw] = await Promise.all([
       supabase
         .from('ops_cases')
         .select('id', { count: 'exact', head: true })
@@ -25,10 +26,16 @@ export async function GET() {
         .eq('status', 'pendiente'),
       supabase
         .from('ops_case_messages')
-        .select('id', { count: 'exact', head: true })
+        .select('id, subject, metadata')
         .eq('unclassified', true),
     ]);
-    const renovaciones = (renCases.count || 0) + (renUnclassified.count || 0);
+    // Apply same filters as UnclassifiedMessages UI: exclude discarded, only portal/ticket subjects
+    const visibleUnclassified = (renUnclassifiedRaw.data || []).filter((m: any) => {
+      if (m.metadata?.discarded) return false;
+      const subj = (m.subject || '').toLowerCase();
+      return subj.includes('expediente portal') || TICKET_RE.test(m.subject || '');
+    });
+    const renovaciones = (renCases.count || 0) + visibleUnclassified.length;
 
     // ── Peticiones: pendiente cases ──
     const { count: petCount } = await supabase
