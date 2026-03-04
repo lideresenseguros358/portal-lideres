@@ -50,7 +50,29 @@ export async function GET(req: NextRequest) {
           .eq('sla_breached', true)
           .not('status', 'in', `(${CLOSED.join(',')})`);
 
-        // Hours today
+        // Hours today — estimate from activity log timestamps (ops_user_sessions is empty)
+        const { data: todayLogs } = await supabase
+          .from('ops_activity_log')
+          .select('created_at')
+          .eq('user_id', m.id)
+          .gte('created_at', `${today}T00:00:00`)
+          .lte('created_at', `${today}T23:59:59`)
+          .order('created_at', { ascending: true });
+
+        let hoursToday = 0;
+        const todayTimestamps = (todayLogs || []).map((l: any) => l.created_at);
+        if (todayTimestamps.length === 1) {
+          hoursToday = 0.25; // single action = 15 min
+        } else if (todayTimestamps.length >= 2) {
+          let mins = 0;
+          for (let i = 1; i < todayTimestamps.length; i++) {
+            const gap = (new Date(todayTimestamps[i]).getTime() - new Date(todayTimestamps[i - 1]).getTime()) / 60000;
+            mins += Math.min(gap, 30); // Cap gaps at 30 min
+          }
+          hoursToday = Math.max(mins, 15) / 60;
+        }
+
+        // Supplement with ops_user_sessions if it has data
         const { data: sessions } = await supabase
           .from('ops_user_sessions')
           .select('duration_minutes')
@@ -58,27 +80,21 @@ export async function GET(req: NextRequest) {
           .gte('session_start', `${today}T00:00:00`)
           .lte('session_start', `${today}T23:59:59`);
 
-        const hoursToday = (sessions || []).reduce(
+        const sessionHours = (sessions || []).reduce(
           (s: number, r: { duration_minutes: number }) => s + (r.duration_minutes || 0), 0
         ) / 60;
+        hoursToday = Math.max(hoursToday, sessionHours);
 
-        // Cases handled today (closed today)
-        const { count: casesClosedToday } = await supabase
+        // Cases today: cases created today + cases with activity today
+        const { count: casesCreatedToday } = await supabase
           .from('ops_cases')
           .select('id', { count: 'exact', head: true })
           .eq('assigned_master_id', m.id)
-          .gte('closed_at', `${today}T00:00:00`)
-          .lte('closed_at', `${today}T23:59:59`);
-
-        // Activity log actions today (includes checks, status changes, etc.)
-        const { count: actionsToday } = await supabase
-          .from('ops_activity_log')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', m.id)
           .gte('created_at', `${today}T00:00:00`)
           .lte('created_at', `${today}T23:59:59`);
 
-        const casesToday = Math.max(casesClosedToday || 0, actionsToday || 0);
+        const actionsToday = todayTimestamps.length;
+        const casesToday = Math.max(casesCreatedToday || 0, actionsToday);
 
         // Recent unproductive days (last 30 days)
         const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -109,7 +125,7 @@ export async function GET(req: NextRequest) {
 
     // ════════════════════════════════════════════
     // VIEW: DETAIL — full metrics for one user
-    // Computes metrics in real-time from ops_cases + ops_activity_log
+    // Computes metrics from ALL cases (open + closed) + activity log
     // ════════════════════════════════════════════
     if (view === 'detail') {
       const userId = searchParams.get('user_id');
@@ -122,28 +138,73 @@ export async function GET(req: NextRequest) {
       const rangeStart = `${from}T00:00:00`;
       const rangeEnd = `${to}T23:59:59`;
 
-      // ── 1. Cases closed in range (the real source of truth) ──
-      const { data: closedCases } = await supabase
+      // ── 1. ALL cases assigned to this user created OR updated in range ──
+      const { data: casesCreatedInRange } = await supabase
         .from('ops_cases')
-        .select('id, case_type, status, closed_at, sla_breached, created_at, first_response_at')
+        .select('id, case_type, status, closed_at, sla_breached, created_at, first_response_at, updated_at')
+        .eq('assigned_master_id', userId)
+        .gte('created_at', rangeStart)
+        .lte('created_at', rangeEnd);
+
+      const { data: casesClosedInRange } = await supabase
+        .from('ops_cases')
+        .select('id, case_type, status, closed_at, sla_breached, created_at, first_response_at, updated_at')
         .eq('assigned_master_id', userId)
         .in('status', CLOSED)
         .gte('closed_at', rangeStart)
         .lte('closed_at', rangeEnd);
 
-      const allClosed = closedCases || [];
+      // Deduplicate (a case can be both created and closed in range)
+      const caseMap = new Map<string, any>();
+      for (const c of (casesCreatedInRange || [])) caseMap.set(c.id, c);
+      for (const c of (casesClosedInRange || [])) caseMap.set(c.id, c);
+      const allCases = Array.from(caseMap.values());
 
-      // ── 2. Activity log in range (for daily breakdown + checks actions) ──
+      const allClosed = allCases.filter((c: any) => CLOSED.includes(c.status));
+      const allOpen = allCases.filter((c: any) => !CLOSED.includes(c.status));
+
+      // ── 2. Activity log in range (for daily breakdown + checks actions + hours estimation) ──
       const { data: activityLogs } = await supabase
         .from('ops_activity_log')
         .select('action_type, created_at, metadata')
         .eq('user_id', userId)
         .gte('created_at', rangeStart)
-        .lte('created_at', rangeEnd);
+        .lte('created_at', rangeEnd)
+        .order('created_at', { ascending: true });
 
       const allLogs = activityLogs || [];
 
-      // ── 3. Sessions in range ──
+      // ── 3. Estimate hours from activity timestamps (since ops_user_sessions has no data) ──
+      // Group logs by day, estimate active hours from first→last activity + gap analysis
+      const logsByDay = new Map<string, string[]>();
+      for (const l of allLogs) {
+        const day = l.created_at?.slice(0, 10);
+        if (!day) continue;
+        if (!logsByDay.has(day)) logsByDay.set(day, []);
+        logsByDay.get(day)!.push(l.created_at);
+      }
+
+      let totalEstimatedMinutes = 0;
+      const dailyHoursFromLogs = new Map<string, number>();
+      for (const [day, timestamps] of logsByDay) {
+        if (timestamps.length < 2) {
+          // Single action = assume 15 min
+          dailyHoursFromLogs.set(day, 0.25);
+          totalEstimatedMinutes += 15;
+          continue;
+        }
+        // Sum gaps between consecutive actions, capping each gap at 30 min (idle cutoff)
+        let dayMinutes = 0;
+        for (let i = 1; i < timestamps.length; i++) {
+          const gap = (new Date(timestamps[i]).getTime() - new Date(timestamps[i - 1]).getTime()) / 60000;
+          dayMinutes += Math.min(gap, 30); // Cap individual gaps at 30 min
+        }
+        dayMinutes = Math.max(dayMinutes, 15); // Minimum 15 min per active day
+        dailyHoursFromLogs.set(day, dayMinutes / 60);
+        totalEstimatedMinutes += dayMinutes;
+      }
+
+      // Also try ops_user_sessions as supplement (in case it does have data)
       const { data: sessions } = await supabase
         .from('ops_user_sessions')
         .select('session_start, duration_minutes')
@@ -151,24 +212,35 @@ export async function GET(req: NextRequest) {
         .gte('session_start', rangeStart)
         .lte('session_start', rangeEnd);
 
-      const totalMinutes = (sessions || []).reduce(
+      const sessionMinutes = (sessions || []).reduce(
         (s: number, r: { duration_minutes: number }) => s + (r.duration_minutes || 0), 0
       );
-      const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
 
-      // ── Compute aggregates from closed cases ──
-      const renewalsHandled = allClosed.filter((c: any) => c.case_type === 'renovacion').length;
-      const petitionsHandled = allClosed.filter((c: any) => c.case_type === 'peticion').length;
-      const urgenciesHandled = allClosed.filter((c: any) => c.case_type === 'urgencia').length;
-      const emissionsConfirmed = allClosed.filter((c: any) => c.status === 'cerrado_renovado' || c.case_type === 'peticion').length;
+      // Use whichever is greater: session tracking or activity-based estimation
+      const totalHours = Math.round(Math.max(totalEstimatedMinutes, sessionMinutes) / 60 * 10) / 10;
+
+      // ── Compute aggregates from ALL cases (created + closed in range) ──
+      const renewalsHandled = allCases.filter((c: any) => c.case_type === 'renovacion').length;
+      const petitionsHandled = allCases.filter((c: any) => c.case_type === 'peticion').length;
+      const urgenciesHandled = allCases.filter((c: any) => c.case_type === 'urgencia').length;
+
+      // Emissions: closed cases that resulted in emission/renewal
+      const emissionsConfirmed = allClosed.filter((c: any) =>
+        c.status === 'cerrado_renovado' || c.status === 'emitido'
+      ).length;
+
       // Conversions: petitions that ended as cerrado_renovado
-      const conversionsCount = allClosed.filter((c: any) => c.case_type === 'peticion' && c.status === 'cerrado_renovado').length;
-      const slaBreaches = allClosed.filter((c: any) => c.sla_breached).length;
+      const conversionsCount = allClosed.filter((c: any) =>
+        c.case_type === 'peticion' && (c.status === 'cerrado_renovado' || c.status === 'emitido')
+      ).length;
+
+      const slaBreaches = allCases.filter((c: any) => c.sla_breached).length;
 
       // Count check actions from activity log
       const checksActions = allLogs.filter((l: any) => l.action_type.startsWith('check_')).length;
 
-      const casesHandled = allClosed.length;
+      // cases_handled = all cases this user touched in range
+      const casesHandled = allCases.length;
 
       // Build daily breakdown
       const dailyMap = new Map<string, {
@@ -193,9 +265,9 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // Fill from closed cases
-      for (const c of allClosed) {
-        const day = c.closed_at?.slice(0, 10);
+      // Fill from cases created in range (by created_at date)
+      for (const c of (casesCreatedInRange || [])) {
+        const day = c.created_at?.slice(0, 10);
         if (!day || !dailyMap.has(day)) continue;
         const row = dailyMap.get(day)!;
         row.cases_handled++;
@@ -203,28 +275,46 @@ export async function GET(req: NextRequest) {
         if (c.case_type === 'peticion') row.petitions_handled++;
         if (c.case_type === 'urgencia') row.urgencies_handled++;
         if (c.sla_breached) row.sla_breaches++;
-        if (c.case_type === 'peticion' && c.status === 'cerrado_renovado') row.conversions_count++;
+      }
+
+      // Also fill from closed cases (by closed_at date, for conversions)
+      for (const c of allClosed) {
+        const day = c.closed_at?.slice(0, 10);
+        if (!day || !dailyMap.has(day)) continue;
+        const row = dailyMap.get(day)!;
+        if ((c.status === 'cerrado_renovado' || c.status === 'emitido')) row.emissions_confirmed++;
+        if (c.case_type === 'peticion' && (c.status === 'cerrado_renovado' || c.status === 'emitido')) row.conversions_count++;
       }
 
       // Fill from activity logs (count any activity as productivity)
       for (const l of allLogs) {
         const day = l.created_at?.slice(0, 10);
         if (!day || !dailyMap.has(day)) continue;
-        const row = dailyMap.get(day)!;
-        row.productivity_score++;
+        dailyMap.get(day)!.productivity_score++;
       }
 
-      // Fill sessions hours
+      // Fill estimated hours per day from activity logs
+      for (const [day, hours] of dailyHoursFromLogs) {
+        if (dailyMap.has(day)) {
+          dailyMap.get(day)!.hours_worked = Math.round(hours * 10) / 10;
+        }
+      }
+
+      // Overlay sessions hours if they exist
       for (const s of (sessions || [])) {
         const day = (s.session_start as string)?.slice(0, 10);
         if (!day || !dailyMap.has(day)) continue;
-        dailyMap.get(day)!.hours_worked += (s.duration_minutes || 0) / 60;
+        const sessionH = (s.duration_minutes || 0) / 60;
+        // Use whichever is greater per day
+        const current = dailyMap.get(day)!.hours_worked;
+        if (sessionH > current) {
+          dailyMap.get(day)!.hours_worked = Math.round(sessionH * 10) / 10;
+        }
       }
 
       // Filter daily to only days with actual activity
       const daily = Array.from(dailyMap.values())
-        .filter(d => d.cases_handled > 0 || d.productivity_score > 0 || d.hours_worked > 0)
-        .map(d => ({ ...d, hours_worked: Math.round(d.hours_worked * 10) / 10 }));
+        .filter(d => d.cases_handled > 0 || d.productivity_score > 0 || d.hours_worked > 0);
 
       // Conversion rate
       const conversionRate = petitionsHandled > 0
@@ -240,15 +330,15 @@ export async function GET(req: NextRequest) {
         .not('status', 'in', `(${CLOSED.join(',')})`)
         .lt('created_at', new Date(Date.now() - 48 * 3600000).toISOString());
 
-      // Pending cases
+      // Pending cases (currently open)
       const { count: pendingCases } = await supabase
         .from('ops_cases')
         .select('id', { count: 'exact', head: true })
         .eq('assigned_master_id', userId)
         .not('status', 'in', `(${CLOSED.join(',')})`);
 
-      // Avg first response time (hours) for cases with first_response in range
-      const casesWithResponse = allClosed.filter((c: any) => c.first_response_at);
+      // Avg first response time (hours) for all cases with first_response
+      const casesWithResponse = allCases.filter((c: any) => c.first_response_at);
       let avgResponseHours = 0;
       if (casesWithResponse.length > 0) {
         const total = casesWithResponse.reduce((s: number, r: any) => {
@@ -301,23 +391,24 @@ export async function GET(req: NextRequest) {
 
       // Previous period comparison
       const fromDate = new Date(from);
-      const toDate = new Date(to);
-      const rangeDays = Math.ceil((toDate.getTime() - fromDate.getTime()) / 86400000) + 1;
+      const toDate2 = new Date(to);
+      const rangeDays = Math.ceil((toDate2.getTime() - fromDate.getTime()) / 86400000) + 1;
       const prevTo = new Date(fromDate.getTime() - 86400000).toISOString().slice(0, 10);
       const prevFrom = new Date(fromDate.getTime() - rangeDays * 86400000).toISOString().slice(0, 10);
 
-      // Previous period: count from ops_cases directly
-      const { data: prevClosed } = await supabase
+      // Previous period: count ALL cases (created in prev range)
+      const { data: prevCases } = await supabase
         .from('ops_cases')
         .select('case_type, status')
         .eq('assigned_master_id', userId)
-        .in('status', CLOSED)
-        .gte('closed_at', `${prevFrom}T00:00:00`)
-        .lte('closed_at', `${prevTo}T23:59:59`);
+        .gte('created_at', `${prevFrom}T00:00:00`)
+        .lte('created_at', `${prevTo}T23:59:59`);
 
-      const prevAll = prevClosed || [];
+      const prevAll = prevCases || [];
       const prevPetitions = prevAll.filter((c: any) => c.case_type === 'peticion').length;
-      const prevConversions = prevAll.filter((c: any) => c.case_type === 'peticion' && c.status === 'cerrado_renovado').length;
+      const prevConversions = prevAll.filter((c: any) =>
+        c.case_type === 'peticion' && (c.status === 'cerrado_renovado' || c.status === 'emitido')
+      ).length;
       const prevConvRate = prevPetitions > 0
         ? Math.round((prevConversions / prevPetitions) * 10000) / 100
         : 0;
