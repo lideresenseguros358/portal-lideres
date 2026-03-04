@@ -612,6 +612,11 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
             setEditingCaseId(null);
             loadCases();
           }}
+          onOpenFullWizard={(caseData) => {
+            setShowQuickEdit(false);
+            setEditingCaseId(null);
+            handleOpenFullWizard(caseData);
+          }}
         />
       )}
 
