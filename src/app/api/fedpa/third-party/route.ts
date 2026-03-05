@@ -123,9 +123,9 @@ export async function GET(request: NextRequest) {
     const premiumInstTotal = Math.round(premiumAnnual * RECARGO_CUOTAS * 100) / 100;
     const premiumInstAmount = Math.round((premiumInstTotal / 2) * 100) / 100;
 
-    // Obtener beneficios del endoso FAB y FAV desde la API
-    let fabBenefits: string[] = [];
-    let favBenefits: string[] = [];
+    // Obtener beneficios reales del plan 426 desde la API
+    // La API retorna beneficios por PLAN (no por endoso) — ambos planes comparten los mismos beneficios
+    let planBenefits: string[] = [];
     try {
       const benRes = await fetch(
         `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${USUARIO}&Clave=${CLAVE}&plan=426`
@@ -133,26 +133,14 @@ export async function GET(request: NextRequest) {
       if (benRes.ok) {
         const allBenefits = await benRes.json();
         if (Array.isArray(allBenefits)) {
-          fabBenefits = allBenefits
-            .filter((b: any) => b.PLAN === 426 && b.ENDOSO === 'FAB')
-            .map((b: any) => b.BENEFICIOS);
-          favBenefits = allBenefits
-            .filter((b: any) => b.PLAN === 426 && b.ENDOSO === 'FAV')
+          planBenefits = allBenefits
+            .filter((b: any) => b.PLAN === 426)
             .map((b: any) => b.BENEFICIOS);
         }
       }
+      console.log(`[API FEDPA Third Party] Beneficios plan 426: ${planBenefits.length} items`);
     } catch (e) {
-      console.warn('[API FEDPA Third Party] No se pudieron obtener beneficios del endoso');
-    }
-
-    // Si no hay beneficios del endpoint, extraer de las coberturas del endoso
-    if (fabBenefits.length === 0) {
-      const fabCov = basicAll.find((c: any) => c.COBERTURA === 'FAB');
-      if (fabCov) fabBenefits = [fabCov.DESCCOBERTURA];
-    }
-    if (favBenefits.length === 0) {
-      const favCov = premiumAll.find((c: any) => c.COBERTURA === 'FAV');
-      if (favCov) favBenefits = [favCov.DESCCOBERTURA];
+      console.warn('[API FEDPA Third Party] No se pudieron obtener beneficios del plan');
     }
 
     const result = {
@@ -175,7 +163,7 @@ export async function GET(request: NextRequest) {
           annualPremium: basicAnnual,
           annualPremiumExact: Math.round(basicPrima * 100) / 100,
           coverageList: basicCoverages,
-          endosoBenefits: fabBenefits,
+          endosoBenefits: planBenefits,
           installments: {
             available: true,
             payments: 2,
@@ -195,7 +183,7 @@ export async function GET(request: NextRequest) {
           annualPremium: premiumAnnual,
           annualPremiumExact: Math.round(premiumPrima * 100) / 100,
           coverageList: premiumCoverages,
-          endosoBenefits: favBenefits,
+          endosoBenefits: planBenefits,
           installments: {
             available: true,
             payments: 2,

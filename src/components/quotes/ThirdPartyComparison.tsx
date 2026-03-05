@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FaCheck, FaTimes, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
+import { FaCheck, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
+import { AUTO_THIRD_PARTY_INSURERS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
 import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 
@@ -73,14 +73,12 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                 if (!apiPlan) return fallback;
                 const covList: CoverageItem[] = apiPlan.coverageList || [];
                 
-                // Keep fixed prices and names from constants ($130/$165, Plan Básico/Plan VIP)
-                // Only take coverageList, endoso data, and idCotizacion from API
                 return {
                   ...fallback,
                   coverageList: covList.length > 0 ? covList : fallback.coverageList,
-                  endoso: fallback.endoso || apiPlan.endoso,
-                  endosoPdf: fallback.endosoPdf || apiPlan.endosoPdf,
-                  endosoBenefits: (fallback.endosoBenefits && fallback.endosoBenefits.length > 0) ? fallback.endosoBenefits : apiPlan.endosoBenefits,
+                  endoso: apiPlan.endoso || fallback.endoso,
+                  endosoPdf: apiPlan.endosoPdf || fallback.endosoPdf,
+                  endosoBenefits: apiPlan.endosoBenefits || [],
                   planCode: apiPlan.emissionPlanCode || fedpaData.planCode || fallback.planCode || 1000,
                   includedCoverages: apiPlan.includedCoverages || fallback.includedCoverages,
                   idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
@@ -105,7 +103,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
                 return {
                   ...fallback,
-                  // Update price from API, keep name and coverages (benefits) from constants
                   annualPremium: apiPlan.annualPremium || fallback.annualPremium,
                   coverageList: covList.length > 0 ? covList : undefined,
                   // Carry forward quote data so we skip redundant API call on click
@@ -296,21 +293,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     setExpandedBenefits(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Helper: render a benefit value badge
-  const renderBenefitValue = (value: string) => {
-    if (value === 'no') {
-      return <span className="text-red-400 flex items-center gap-1"><FaTimes size={10} /> No incluido</span>;
-    }
-    if (value === 'sí') {
-      return <span className="text-[#8AAA19] font-semibold flex items-center gap-1"><FaCheck size={10} /> Incluido</span>;
-    }
-    // "Conexión" and similar partial values → gray to differentiate
-    if (value.toLowerCase().includes('conexión')) {
-      return <span className="text-gray-400 italic text-xs">{value}</span>;
-    }
-    return <span className="text-[#8AAA19] font-semibold">{value}</span>;
-  };
-
   // Render a single plan card section
   const renderPlanSection = (
     insurer: AutoInsurer,
@@ -321,12 +303,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     const benefitsKey = `${insurer.id}-${type}-benefits`;
     const isBenefitsExpanded = expandedBenefits[benefitsKey] || false;
     const hasCoverageList = plan.coverageList && plan.coverageList.length > 0;
-
-    // All benefit keys to show (including excluded with red X)
-    const allBenefitKeys = [
-      'accidentAssistance', 'ambulance', 'roadAssistance', 'towing', 'legalAssistance',
-      'accidentalDeathDriver', 'accidentalDeathPassengers', 'funeralExpenses',
-    ];
+    const hasEndosoBenefits = plan.endosoBenefits && plan.endosoBenefits.length > 0;
 
     return (
       <div className={`p-4 sm:p-6 ${isPremium ? 'bg-gradient-to-br from-green-50 to-white' : 'border-b-2 border-gray-100'}`}>
@@ -357,98 +334,59 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           </div>
         )}
 
-        {/* Coberturas por accidentes - from API coverageList */}
-        <div className="mb-3">
-          <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-            <FaShieldAlt className="text-[#010139]" />
-            Coberturas por accidentes
-          </h5>
-          
-          {hasCoverageList ? (() => {
-            // Filter out endoso rows (FAB, FAV, FAP) — those are shown in the benefits dropdown
-            const filteredCovList = plan.coverageList!.filter(
-              cov => !['FAB', 'FAV', 'FAP'].includes(cov.code)
-            );
-            return (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 border-b border-gray-200">
-                  <span>Cobertura</span>
-                  <span>Límite</span>
-                </div>
-                {filteredCovList.map((cov, idx) => (
-                  <div key={cov.code} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${idx < filteredCovList.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                    <span className="text-gray-700 font-medium">{cov.name}</span>
-                    <span className="text-[#8AAA19] font-semibold text-right whitespace-nowrap">
-                      {cov.limit === 'INCLUIDO' ? (
-                        <span className="inline-flex items-center gap-1"><FaCheck size={10} /> INCLUIDO</span>
-                      ) : (
-                        cov.limit
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })() : (
-            /* Fallback: use coverages object — only monetary coverages */
+        {/* Coberturas — ONLY from API coverageList */}
+        {hasCoverageList && (
+          <div className="mb-3">
+            <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <FaShieldAlt className="text-[#010139]" />
+              Coberturas incluidas
+            </h5>
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              {['bodilyInjury', 'propertyDamage', 'medicalExpenses'].map((key, idx) => {
-                const value = plan.coverages[key as keyof typeof plan.coverages];
-                if (!value) return null;
-                return (
-                  <div key={key} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100 last:border-b-0`}>
-                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key]}</span>
-                    <span className="text-right">
-                      {value === 'no' ? (
-                        <span className="text-red-400 flex items-center gap-1"><FaTimes size={10} /> No incluido</span>
-                      ) : (
-                        <span className="text-[#8AAA19] font-semibold">{value}</span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
+              <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 border-b border-gray-200">
+                <span>Cobertura</span>
+                <span>Límite</span>
+              </div>
+              {plan.coverageList!.map((cov, idx) => (
+                <div key={cov.code || idx} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${idx < plan.coverageList!.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                  <span className="text-gray-700 font-medium">{cov.name}</span>
+                  <span className="text-[#8AAA19] font-semibold text-right whitespace-nowrap">
+                    {cov.limit === 'INCLUIDO' ? (
+                      <span className="inline-flex items-center gap-1"><FaCheck size={10} /> INCLUIDO</span>
+                    ) : (
+                      cov.limit
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Beneficios y Asistencia — single collapsible dropdown */}
-        <div className="mb-3">
-          <button
-            onClick={() => toggleBenefits(benefitsKey)}
-            className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <FaShieldAlt className="text-[#8AAA19]" size={14} />
-              Beneficios y Asistencia
-            </span>
-            {isBenefitsExpanded ? <FaChevronUp className="text-gray-500" size={12} /> : <FaChevronDown className="text-gray-500" size={12} />}
-          </button>
+        {/* Beneficios y Asistencia — ONLY from API endosoBenefits */}
+        {hasEndosoBenefits && (
+          <div className="mb-3">
+            <button
+              onClick={() => toggleBenefits(benefitsKey)}
+              className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <FaShieldAlt className="text-[#8AAA19]" size={14} />
+                Beneficios y Asistencia
+              </span>
+              {isBenefitsExpanded ? <FaChevronUp className="text-gray-500" size={12} /> : <FaChevronDown className="text-gray-500" size={12} />}
+            </button>
 
-          {isBenefitsExpanded && (
-            <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
-              {/* Benefit items table */}
-              {allBenefitKeys.map((key, idx) => {
-                const value = plan.coverages[key as keyof typeof plan.coverages] || 'no';
-                return (
-                  <div key={key} className={`flex items-start justify-between gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100`}>
-                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key] || key}</span>
-                    <span className="text-right flex-shrink-0">
-                      {renderBenefitValue(value)}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Endoso benefits list */}
-              {plan.endosoBenefits && plan.endosoBenefits.length > 0 && (
+            {isBenefitsExpanded && (
+              <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
                 <div className="bg-blue-50/50 p-3 sm:p-4">
-                  <p className="text-xs font-bold text-[#010139] mb-2 flex items-center gap-1.5">
-                    <FaShieldAlt className="text-blue-500" size={11} />
-                    {plan.endoso || 'Endoso de Asistencia'}
-                  </p>
+                  {plan.endoso && (
+                    <p className="text-xs font-bold text-[#010139] mb-2 flex items-center gap-1.5">
+                      <FaShieldAlt className="text-blue-500" size={11} />
+                      {plan.endoso}
+                    </p>
+                  )}
                   <ul className="space-y-1.5">
-                    {plan.endosoBenefits.map((benefit, idx) => (
+                    {plan.endosoBenefits!.map((benefit, idx) => (
                       <li key={idx} className="flex items-start gap-2 text-xs sm:text-sm text-gray-700">
                         <FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={10} />
                         <span>{benefit}</span>
@@ -466,10 +404,10 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                     </a>
                   )}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Emit Button */}
         <button
