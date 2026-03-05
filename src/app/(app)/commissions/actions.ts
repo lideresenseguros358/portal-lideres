@@ -4540,7 +4540,6 @@ export async function actionExportBankCsv(fortnightId: string) {
     const supabase = getSupabaseAdmin();
 
     // Get fortnight info
-    console.log('[actionExportBankCsv] Obteniendo datos de quincena...');
     const { data: fortnight, error: fError } = await supabase
       .from('fortnights')
       .select('*')
@@ -4552,13 +4551,14 @@ export async function actionExportBankCsv(fortnightId: string) {
       throw new Error('Quincena no encontrada');
     }
 
-    // Get imports for this fortnight
-    const { data: imports } = await supabase
-      .from('comm_imports')
-      .select('id')
-      .eq('period_label', fortnightId);
+    // ═══════════════════════════════════════════════════════════════════
+    // FUENTE ÚNICA DE VERDAD: usar actionGetDraftDetails (misma función
+    // que alimenta BrokerTotals.tsx en la UI). Esto garantiza que el TXT
+    // tenga EXACTAMENTE los mismos datos que la UI muestra.
+    // ═══════════════════════════════════════════════════════════════════
+    const detailsResult = await actionGetDraftDetails(fortnightId);
     
-    if (!imports || imports.length === 0) {
+    if (!detailsResult.ok || !detailsResult.data || detailsResult.data.length === 0) {
       return {
         ok: true as const,
         bankACH: '',
@@ -4567,94 +4567,72 @@ export async function actionExportBankCsv(fortnightId: string) {
         achTotalAmount: 0,
       };
     }
+
+    const details = detailsResult.data;
+    const LISSA_EMAIL = 'contacto@lideresenseguros.com';
+
+    // Agrupar por broker — EXACTAMENTE igual que BrokerTotals.tsx groupedData useMemo
+    const brokerGroups: Record<string, { broker_id: string; broker: any; gross_amount: number }> = {};
     
-    const importIds = imports.map(i => i.id);
-    
-    // Get comm_items and sum by broker (IGUAL QUE LA UI)
-    const { data: items } = await supabase
-      .from('comm_items')
-      .select(`
-        broker_id,
-        gross_amount,
-        brokers (*)
-      `)
-      .in('import_id', importIds)
-      .not('broker_id', 'is', null);
-    
-    if (!items || items.length === 0) {
-      return {
-        ok: true as const,
-        bankACH: '',
-        achErrors: [],
-        achValidCount: 0,
-        achTotalAmount: 0,
-      };
-    }
-    
-    // Agrupar por broker y sumar (EXACTAMENTE igual que BrokerTotals.tsx)
-    const brokerGroups = items.reduce((acc: any, item: any) => {
-      const brokerId = item.broker_id;
-      if (!acc[brokerId]) {
-        acc[brokerId] = {
+    for (const item of details) {
+      const broker = (item as any).brokers;
+      if (!broker) continue;
+      
+      const brokerId = broker.id;
+      if (!brokerGroups[brokerId]) {
+        brokerGroups[brokerId] = {
           broker_id: brokerId,
-          broker: item.brokers,
+          broker: broker,
           gross_amount: 0,
-          net_amount: 0
         };
       }
-      acc[brokerId].gross_amount += Number(item.gross_amount) || 0;
-      return acc;
-    }, {});
-    
-    // Get retention status from fortnight_broker_totals
-    const { data: brokerTotals } = await supabase
+      // SIN Math.abs() — respetar negativos (igual que BrokerTotals.tsx línea 194)
+      brokerGroups[brokerId].gross_amount += Number(item.gross_amount) || 0;
+    }
+
+    // Get retention status
+    const { data: retentionData } = await supabase
       .from('fortnight_broker_totals')
       .select('broker_id, is_retained')
       .eq('fortnight_id', fortnightId);
-    
-    // Get temporary discounts from fortnight_discounts
-    const { data: discounts } = await supabase
+
+    // Get temporary discounts
+    const { data: discountsData } = await supabase
       .from('fortnight_discounts')
       .select('broker_id, amount')
       .eq('fortnight_id', fortnightId)
       .eq('applied', false);
-    
-    // Group discounts by broker_id
+
     const discountsByBroker: Record<string, number> = {};
-    (discounts || []).forEach((d: any) => {
-      if (!discountsByBroker[d.broker_id]) {
-        discountsByBroker[d.broker_id] = 0;
-      }
-      discountsByBroker[d.broker_id] += d.amount;
+    (discountsData || []).forEach((d: any) => {
+      discountsByBroker[d.broker_id] = (discountsByBroker[d.broker_id] || 0) + d.amount;
     });
-    
-    // Apply retention and calculate net (gross - discounts)
-    const totalsArray = Object.values(brokerGroups).map((bg: any) => {
-      const total = brokerTotals?.find(bt => bt.broker_id === bg.broker_id);
+
+    // Calcular neto y filtrar — EXACTAMENTE igual que BrokerTotals.tsx
+    const totalsArray = Object.values(brokerGroups).map((bg) => {
+      const retention = retentionData?.find(r => r.broker_id === bg.broker_id);
       const discount = discountsByBroker[bg.broker_id] || 0;
+      const netAmount = bg.gross_amount - discount;
       return {
         ...bg,
-        is_retained: total?.is_retained || false,
+        is_retained: retention?.is_retained || false,
         discount_amount: discount,
-        net_amount: bg.gross_amount - discount
+        net_amount: netAmount,
       };
     });
-    
-    // Filter: net > 0 AND not retained AND not LISSA AND active (igual que UI BrokerTotals)
-    const filteredTotals = totalsArray.filter((t: any) => {
-      const isLissa = t.broker?.email?.toLowerCase() === 'contacto@lideresenseguros.com';
-      const isInactive = t.broker?.active === false;
-      console.log(`[actionExportBankCsv] Broker ${t.broker?.name}:`, {
-        gross_amount: t.gross_amount,
-        net_amount: t.net_amount,
-        retained: t.is_retained,
-        isLissa,
-        isInactive
-      });
-      return t.net_amount > 0 && !t.is_retained && !isLissa && !isInactive;
+
+    // Filtro IDÉNTICO a BrokerTotals.tsx onTotalNetChange:
+    // - Excluir LISSA (línea 234)
+    // - Solo net > 0
+    // - Excluir retenidos
+    // Nota: brokers inactivos ya fueron redirigidos a LISSA por actionGetDraftDetails
+    const filteredTotals = totalsArray.filter((t) => {
+      const isLissa = t.broker?.email?.toLowerCase() === LISSA_EMAIL;
+      console.log(`[actionExportBankCsv] Broker ${t.broker?.name}: gross=$${t.gross_amount.toFixed(2)} net=$${t.net_amount.toFixed(2)} retained=${t.is_retained} lissa=${isLissa}`);
+      return t.net_amount > 0 && !t.is_retained && !isLissa;
     });
-    
-    console.log('[actionExportBankCsv] Totales filtrados:', filteredTotals.length);
+
+    console.log(`[actionExportBankCsv] ${filteredTotals.length} brokers para TXT`);
 
     if (filteredTotals.length === 0) {
       return {
@@ -4666,7 +4644,21 @@ export async function actionExportBankCsv(fortnightId: string) {
       };
     }
 
-    const totalsWithBroker = filteredTotals;
+    // Obtener datos COMPLETOS del broker (bank_account_no, bank_route, etc.) para ACH
+    // actionGetDraftDetails solo retorna (id, name, email, percent_default, active)
+    const brokerIds = filteredTotals.map(t => t.broker_id);
+    const { data: fullBrokers } = await supabase
+      .from('brokers')
+      .select('*')
+      .in('id', brokerIds);
+
+    const fullBrokersMap = new Map((fullBrokers || []).map(b => [b.id, b]));
+
+    // Reemplazar broker parcial con datos completos
+    const totalsWithFullBroker = filteredTotals.map(t => ({
+      ...t,
+      broker: fullBrokersMap.get(t.broker_id) || t.broker,
+    }));
 
     // Generar label: Q1/Q2 MES AÑO - DD/MM/YYYY
     const endDate = new Date(fortnight.period_end);
@@ -4683,8 +4675,7 @@ export async function actionExportBankCsv(fortnightId: string) {
     
     const fortnightLabel = `${quincena} ${mesNombre} ${year} - ${fechaDescarga}`;
     console.log('[actionExportBankCsv] Generando ACH con label:', fortnightLabel);
-    console.log('[actionExportBankCsv] Primer broker a procesar:', totalsWithBroker[0]?.broker?.name);
-    const achResult = await buildBankACH(totalsWithBroker, fortnightLabel);
+    const achResult = await buildBankACH(totalsWithFullBroker, fortnightLabel);
 
     console.log('[actionExportBankCsv] ACH generado:', {
       contentLength: achResult.content.length,
