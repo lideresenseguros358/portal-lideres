@@ -37,6 +37,7 @@
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-x: hidden;
   box-sizing: border-box;
 }
@@ -249,16 +250,21 @@
    ============================================ */
 @media (max-width: 640px) {
   .standard-modal-backdrop {
-    padding: 0.5rem;
+    padding: 0.25rem;
   }
 
   .standard-modal-container {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    max-height: calc(100vh - 1rem);
+    max-height: calc(100dvh - 1rem);
+    border-radius: 0.75rem;
   }
 
   .standard-modal-header {
     padding: 1rem;
+    border-top-left-radius: 0.75rem;
+    border-top-right-radius: 0.75rem;
   }
 
   .standard-modal-title {
@@ -276,6 +282,8 @@
   .standard-modal-footer {
     padding: 0.75rem 1rem;
     flex-direction: column;
+    border-bottom-left-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
   }
 
   .standard-modal-footer > div:last-child {

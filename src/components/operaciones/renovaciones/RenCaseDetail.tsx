@@ -38,12 +38,12 @@ import { VALID_TRANSITIONS, fmtDate, fmtDateTime, hoursElapsed } from './ren-hel
 
 function InfoCard({ label, value, icon, critical }: { label: string; value: string; icon: React.ReactNode; critical?: boolean }) {
   return (
-    <div className={`rounded-lg p-3 border ${critical ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
+    <div className={`rounded-lg p-3 border min-w-0 overflow-hidden ${critical ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
       <div className="flex items-center gap-1.5 mb-1">
-        <span className={`text-[10px] ${critical ? 'text-red-400' : 'text-gray-400'}`}>{icon}</span>
+        <span className={`text-[10px] flex-shrink-0 ${critical ? 'text-red-400' : 'text-gray-400'}`}>{icon}</span>
         <span className={`text-[10px] font-medium ${critical ? 'text-red-500' : 'text-gray-500'}`}>{label}</span>
       </div>
-      <p className={`text-xs font-bold ${critical ? 'text-red-800' : 'text-gray-800'}`}>{value}</p>
+      <p className={`text-xs font-bold truncate ${critical ? 'text-red-800' : 'text-gray-800'}`} title={value}>{value}</p>
     </div>
   );
 }
@@ -347,11 +347,11 @@ export default function RenCaseDetail({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-white/40">
-              <span className="flex items-center gap-1"><FaShieldAlt className="text-[8px]" /> {c.policy_number || '—'}</span>
-              <span className="flex items-center gap-1"><FaIdBadge className="text-[8px]" /> {c.ticket}</span>
-              {c.insurer_name && <span>{c.insurer_name}</span>}
-              {c.ramo && <span>· {c.ramo}</span>}
+            <div className="flex items-center gap-3 text-[10px] text-white/40 min-w-0 flex-wrap">
+              <span className="flex items-center gap-1 flex-shrink-0"><FaShieldAlt className="text-[8px]" /> {c.policy_number || '—'}</span>
+              <span className="flex items-center gap-1 flex-shrink-0"><FaIdBadge className="text-[8px]" /> {c.ticket}</span>
+              {c.insurer_name && <span className="flex-shrink-0">{c.insurer_name}</span>}
+              {c.ramo && <span className="flex-shrink-0">· {c.ramo}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -384,23 +384,23 @@ export default function RenCaseDetail({
       )}
 
       {/* ── Assignment bar ── */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-50/50 border-b border-gray-50 flex-shrink-0">
-        <div className="flex items-center gap-3 text-[10px]">
-          <span className="text-gray-400">Asignado:</span>
-          <span className="font-medium text-gray-600 flex items-center gap-1">
-            <FaUserTie className="text-[8px] text-gray-400" />
-            {assignedMaster ? assignedMaster.full_name : 'Sin asignar'}
+      <div className="flex flex-wrap items-center justify-between gap-y-1 px-4 py-2 bg-gray-50/50 border-b border-gray-50 flex-shrink-0">
+        <div className="flex items-center gap-2.5 text-[10px] min-w-0">
+          <span className="text-gray-400 flex-shrink-0">Asignado:</span>
+          <span className="font-medium text-gray-600 flex items-center gap-1 truncate">
+            <FaUserTie className="text-[8px] text-gray-400 flex-shrink-0" />
+            <span className="truncate">{assignedMaster ? assignedMaster.full_name : 'Sin asignar'}</span>
           </span>
           {!isClosed && (
             <button
               onClick={() => setShowReassign(!showReassign)}
-              className="text-[#010139]/50 hover:text-[#010139] cursor-pointer font-medium transition-colors duration-150"
+              className="text-[#010139]/50 hover:text-[#010139] cursor-pointer font-medium transition-colors duration-150 flex-shrink-0"
             >
               {showReassign ? 'Cerrar' : 'Reasignar'}
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 tabular-nums">
+        <div className="flex items-center gap-2 text-[10px] text-gray-400 tabular-nums flex-shrink-0">
           <span>Creado: {fmtDate(c.created_at)}</span>
           {c.renewal_date && <span>· Vence: {fmtDate(c.renewal_date)}</span>}
         </div>

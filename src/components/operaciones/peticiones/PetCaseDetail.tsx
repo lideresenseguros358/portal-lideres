@@ -40,12 +40,12 @@ import { VALID_TRANSITIONS, fmtDate, fmtDateTime, hoursElapsed, RAMO_LABELS, RAM
 
 function InfoCard({ label, value, icon, critical }: { label: string; value: string; icon: React.ReactNode; critical?: boolean }) {
   return (
-    <div className={`rounded-lg p-2.5 border ${critical ? 'border-red-100 bg-red-50/50' : 'border-gray-100 bg-gray-50/80'}`}>
+    <div className={`rounded-lg p-2.5 border min-w-0 overflow-hidden ${critical ? 'border-red-100 bg-red-50/50' : 'border-gray-100 bg-gray-50/80'}`}>
       <div className="flex items-center gap-1.5 mb-0.5">
-        <span className={`text-[9px] ${critical ? 'text-red-300' : 'text-gray-300'}`}>{icon}</span>
+        <span className={`text-[9px] flex-shrink-0 ${critical ? 'text-red-300' : 'text-gray-300'}`}>{icon}</span>
         <span className={`text-[9px] font-medium uppercase tracking-wider ${critical ? 'text-red-400' : 'text-gray-400'}`}>{label}</span>
       </div>
-      <p className={`text-xs font-semibold ${critical ? 'text-red-700' : 'text-gray-700'}`}>{value}</p>
+      <p className={`text-xs font-semibold truncate ${critical ? 'text-red-700' : 'text-gray-700'}`} title={value}>{value}</p>
     </div>
   );
 }
@@ -360,10 +360,10 @@ export default function PetCaseDetail({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-white/40">
-              <span className="flex items-center gap-1"><FaIdBadge className="text-[8px]" /> {c.ticket}</span>
-              {c.client_email && <span className="flex items-center gap-1"><FaEnvelope className="text-[8px]" /> {c.client_email}</span>}
-              {c.insurer_name && <span>{c.insurer_name}</span>}
+            <div className="flex items-center gap-3 text-[10px] text-white/40 min-w-0">
+              <span className="flex items-center gap-1 flex-shrink-0"><FaIdBadge className="text-[8px]" /> {c.ticket}</span>
+              {c.client_email && <span className="flex items-center gap-1 min-w-0 truncate"><FaEnvelope className="text-[8px] flex-shrink-0" /> <span className="truncate">{c.client_email}</span></span>}
+              {c.insurer_name && <span className="flex-shrink-0">{c.insurer_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -396,25 +396,25 @@ export default function PetCaseDetail({
       )}
 
       {/* ── Assignment bar ── */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-50 flex-shrink-0">
-        <div className="flex items-center gap-2.5 text-[10px]">
-          <span className="text-gray-400">Asignado:</span>
-          <span className="font-medium text-gray-600 flex items-center gap-1">
-            <FaUserTie className="text-[8px] text-gray-300" />
-            {assignedMaster ? assignedMaster.full_name : 'Sin asignar'}
+      <div className="flex flex-wrap items-center justify-between gap-y-1 px-4 py-2 border-b border-gray-50 flex-shrink-0">
+        <div className="flex items-center gap-2.5 text-[10px] min-w-0">
+          <span className="text-gray-400 flex-shrink-0">Asignado:</span>
+          <span className="font-medium text-gray-600 flex items-center gap-1 truncate">
+            <FaUserTie className="text-[8px] text-gray-300 flex-shrink-0" />
+            <span className="truncate">{assignedMaster ? assignedMaster.full_name : 'Sin asignar'}</span>
           </span>
           {!isClosed && (
             <button
               onClick={() => setShowReassign(!showReassign)}
-              className="text-[#010139]/50 hover:text-[#010139] cursor-pointer font-medium transition-colors duration-150"
+              className="text-[#010139]/50 hover:text-[#010139] cursor-pointer font-medium transition-colors duration-150 flex-shrink-0"
             >
               {showReassign ? 'Cerrar' : 'Reasignar'}
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400">
+        <div className="flex items-center gap-2 text-[10px] text-gray-400 flex-shrink-0">
           <span>{fmtDate(c.created_at)}</span>
-          {c.source && <span>· {c.source}</span>}
+          {c.source && <span className="truncate max-w-[150px]">· {c.source}</span>}
         </div>
       </div>
 

@@ -522,12 +522,12 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
   const ramoLabel = ramo === 'vida' ? 'Vida' : ramo === 'incendio' ? 'Incendio' : ramo === 'hogar' ? 'Contenido / Hogar' : ramo || '—';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-4 max-sm:p-1">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-200">
+      <div className="relative bg-white rounded-2xl max-sm:rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] max-h-[85dvh] max-sm:max-h-[calc(100dvh-0.5rem)] flex flex-col overflow-hidden border border-gray-200">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0 bg-gradient-to-r from-[#010139] to-[#020270]">
           <div>
