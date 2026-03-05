@@ -12,37 +12,12 @@ interface ThirdPartyComparisonProps {
 }
 
 export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyComparisonProps) {
-  const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
   const [generatingQuote, setGeneratingQuote] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [plansLoaded, setPlansLoaded] = useState(false);
   const [insurersData, setInsurersData] = useState<AutoInsurer[]>(AUTO_THIRD_PARTY_INSURERS);
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
-
-  useEffect(() => {
-    fetch('/api/insurers')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.insurers)) {
-          const logos: Record<string, string | null> = {};
-          data.insurers.forEach((ins: any) => {
-            const variations = [
-              ins.name.toUpperCase(),
-              ins.name.toUpperCase().replace(/\s+SEGUROS$/i, '').trim(),
-              ins.name.toUpperCase().replace(/\s+DE\s+/gi, ' ').trim(),
-              ins.name.toUpperCase().replace(/PANAMÁ/gi, 'PANAMA').trim(),
-              ins.name.toUpperCase().split(' ')[0],
-            ];
-            variations.forEach(variation => {
-              if (variation && !logos[variation]) logos[variation] = ins.logo_url;
-            });
-          });
-          setInsurerLogos(logos);
-        }
-      })
-      .catch(err => console.error('Error loading insurer logos:', err));
-  }, []);
 
   // Cargar planes de FEDPA e IS en tiempo real
   useEffect(() => {
@@ -279,14 +254,14 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     onSelectPlan(insurer.id, type, plan);
   };
 
-  const getLogoUrl = (insurerName: string): string | null => {
-    const normalized = insurerName.toUpperCase()
-      .replace(/PANAMÁ/gi, 'PANAMA').replace(/[ÁÉÍÓÚ]/g, m => ({ 'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U' }[m] || m)).trim();
-    const firstWord = normalized.split(' ')[0] || '';
-    for (const v of [normalized, normalized.replace(/\s+SEGUROS$/i,'').trim(), normalized.replace(/\s+DE\s+/gi,' ').trim(), firstWord]) {
-      if (v && insurerLogos[v]) return insurerLogos[v];
-    }
-    return null;
+  const INSURER_LOGOS: Record<string, string> = {
+    fedpa: '/aseguradoras/fedpa.png',
+    internacional: '/aseguradoras/internacional.png',
+    regional: '/aseguradoras/regional.png',
+  };
+
+  const getLogoUrl = (insurerId: string): string | null => {
+    return INSURER_LOGOS[insurerId] || null;
   };
 
   const toggleBenefits = (key: string) => {
@@ -447,7 +422,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
             {/* Header */}
             <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-6 text-white">
               <div className="flex items-center gap-4 mb-4">
-                <InsurerLogo logoUrl={getLogoUrl(insurer.name)} insurerName={insurer.name} size="lg" />
+                <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
                 <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
               </div>
               <div className="text-sm text-white/80 font-medium">
