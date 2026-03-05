@@ -14,6 +14,19 @@ export interface BankTransferCommRow {
   credit: number; // Monto en crédito
 }
 
+export interface ParseResult {
+  transfers: BankTransferCommRow[];
+  debug: {
+    totalDataRows: number;
+    emptyRows: number;
+    dateFail: number;
+    noRef: number;
+    noCredit: number;
+    filtered: number;
+    accepted: number;
+  };
+}
+
 type HeaderMap = {
   dateIdx: number;
   ref1Idx: number;
@@ -82,7 +95,7 @@ export function shouldFilterDescription(description: string): boolean {
 /**
  * Parser XLSX
  */
-function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
+function parseBankCommXLSX(file: File): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -97,7 +110,10 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         const firstSheet = workbook.Sheets[sheetName];
         if (!firstSheet) throw new Error('No se pudo leer la hoja del archivo');
         
-        const jsonData: any[] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        // defval: null ensures all cells are present (no sparse arrays)
+        const jsonData: any[] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: null });
+        
+        console.log(`[BancoParser] Total rows in file: ${jsonData.length}`);
         
         // Encontrar encabezado - buscar fila que tenga TODAS las columnas clave
         let headerIndex = -1;
@@ -107,7 +123,6 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           
           const rowStr = row.map((cell: any) => String(cell || '').toLowerCase().trim()).join('|');
           
-          // Verificar que tenga las columnas clave: Fecha, Referencia, Descripción, Crédito
           const hasFecha = rowStr.includes('fecha');
           const hasReferencia = rowStr.includes('referencia');
           const hasDescripcion = rowStr.includes('descri');
@@ -125,12 +140,11 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         }
         
         const headers = jsonData[headerIndex].map((h: any) => String(h || '').toLowerCase().trim());
-        console.log('[BancoParser] Headers detectados:', headers);
+        console.log('[BancoParser] Headers:', headers);
 
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
           ref1Idx: headers.findIndex((h: string) => {
-            // SOLO buscar "REFERENCIA 1" exacta
             const normalized = h.replace(/\s+/g, ' ').trim();
             return normalized === 'referencia 1' || normalized.includes('referencia 1');
           }),
@@ -138,34 +152,61 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
         };
         
+        // Fallback: if "referencia 1" not found, try just "referencia" (first match)
+        if (headerMap.ref1Idx === -1) {
+          headerMap.ref1Idx = headers.findIndex((h: string) => h.includes('referencia'));
+          console.log(`[BancoParser] ⚠️ Fallback 'referencia' at idx: ${headerMap.ref1Idx}`);
+        }
+        
         console.log('[BancoParser] HeaderMap:', headerMap);
 
         if (headerMap.dateIdx === -1 || headerMap.ref1Idx === -1 || headerMap.creditIdx === -1 || headerMap.descIdx === -1) {
-          console.error('[BancoParser] Error: Columnas no encontradas. Headers:', headers);
-          console.error('[BancoParser] HeaderMap resultante:', headerMap);
           throw new Error(`Columnas requeridas no encontradas. Fecha: ${headerMap.dateIdx}, Referencia: ${headerMap.ref1Idx}, Descripción: ${headerMap.descIdx}, Crédito: ${headerMap.creditIdx}`);
         }
         
         const transfers: BankTransferCommRow[] = [];
+        const debug = { totalDataRows: 0, emptyRows: 0, dateFail: 0, noRef: 0, noCredit: 0, filtered: 0, accepted: 0 };
+        let loggedSamples = 0;
         
         for (let i = headerIndex + 1; i < jsonData.length; i++) {
           const row = jsonData[i];
-          if (!Array.isArray(row) || row.length === 0) continue;
-          
-          const transfer = normalizeTransferRow(
-            row[headerMap.dateIdx],
-            row[headerMap.ref1Idx],
-            row[headerMap.descIdx],
-            row[headerMap.creditIdx]
-          );
-
-          if (transfer) {
-            transfers.push(transfer);
+          if (!Array.isArray(row) || row.every((c: any) => c === null || c === '' || c === undefined)) { 
+            debug.emptyRows++; 
+            continue; 
           }
+          
+          debug.totalDataRows++;
+          
+          const rawDate = row[headerMap.dateIdx];
+          const rawRef = row[headerMap.ref1Idx];
+          const rawDesc = row[headerMap.descIdx];
+          const rawCredit = row[headerMap.creditIdx];
+          
+          // Log first 3 data rows for diagnostics
+          if (loggedSamples < 3) {
+            console.log(`[BancoParser] Row[${i}]: date=${JSON.stringify(rawDate)}, ref=${JSON.stringify(rawRef)}, desc=${JSON.stringify(rawDesc)?.substring(0, 40)}, credit=${JSON.stringify(rawCredit)}, rowLen=${row.length}`);
+            loggedSamples++;
+          }
+          
+          // Track skip reasons
+          const date = parseDateValue(rawDate);
+          if (!date) { debug.dateFail++; continue; }
+          
+          const reference = String(rawRef ?? '').trim();
+          if (!reference) { debug.noRef++; continue; }
+          
+          const credit = parseAmountValue(rawCredit);
+          if (credit <= 0) { debug.noCredit++; continue; }
+          
+          const description = String(rawDesc ?? '').trim();
+          if (shouldFilterDescription(description)) { debug.filtered++; continue; }
+          
+          debug.accepted++;
+          transfers.push({ date, reference_number: reference, description, credit });
         }
         
-        console.log(`[BancoParser] Total transferencias procesadas: ${transfers.length}`);
-        resolve(transfers);
+        console.log(`[BancoParser] RESULT: ${debug.totalDataRows} rows → ${debug.accepted} accepted, ${debug.noCredit} no-credit, ${debug.dateFail} bad-date, ${debug.noRef} no-ref, ${debug.filtered} filtered, ${debug.emptyRows} empty`);
+        resolve({ transfers, debug });
       } catch (error) {
         reject(error);
       }
@@ -179,7 +220,7 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
 /**
  * Parser CSV
  */
-function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
+function parseBankCommCSV(file: File): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -189,6 +230,7 @@ function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
         try {
           const rows = results.data as Record<string, any>[];
           const transfers: BankTransferCommRow[] = [];
+          const debug = { totalDataRows: 0, emptyRows: 0, dateFail: 0, noRef: 0, noCredit: 0, filtered: 0, accepted: 0 };
 
           rows.forEach((row) => {
             const keys = Object.keys(row);
@@ -206,20 +248,27 @@ function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
               return;
             }
 
+            debug.totalDataRows++;
             const values = keys.map((k) => row[k]);
-            const transfer = normalizeTransferRow(
-              values[headerMap.dateIdx],
-              values[headerMap.ref1Idx],
-              values[headerMap.descIdx],
-              values[headerMap.creditIdx]
-            );
-
-            if (transfer) {
-              transfers.push(transfer);
-            }
+            
+            const date = parseDateValue(values[headerMap.dateIdx]);
+            if (!date) { debug.dateFail++; return; }
+            
+            const reference = String(values[headerMap.ref1Idx] ?? '').trim();
+            if (!reference) { debug.noRef++; return; }
+            
+            const credit = parseAmountValue(values[headerMap.creditIdx]);
+            if (credit <= 0) { debug.noCredit++; return; }
+            
+            const description = String(values[headerMap.descIdx] ?? '').trim();
+            if (shouldFilterDescription(description)) { debug.filtered++; return; }
+            
+            debug.accepted++;
+            transfers.push({ date, reference_number: reference, description, credit });
           });
 
-          resolve(transfers);
+          console.log(`[BancoParser CSV] RESULT: ${debug.totalDataRows} rows → ${debug.accepted} accepted, ${debug.noCredit} no-credit, ${debug.dateFail} bad-date, ${debug.noRef} no-ref, ${debug.filtered} filtered`);
+          resolve({ transfers, debug });
         } catch (error) {
           reject(error);
         }
@@ -227,41 +276,6 @@ function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
       error: (error) => reject(error)
     });
   });
-}
-
-/**
- * Normalizar fila de transferencia
- */
-function normalizeTransferRow(
-  rawDate: any,
-  rawReference: any,
-  rawDescription: any,
-  rawCredit: any
-): BankTransferCommRow | null {
-  // Parse date
-  const date = parseDateValue(rawDate);
-  if (!date) return null;
-
-  const reference = String(rawReference ?? '').trim();
-  if (!reference) return null;
-
-  const description = String(rawDescription ?? '').trim();
-  
-  // Filtrar si es 0.00 en crédito
-  const credit = parseAmountValue(rawCredit);
-  if (credit <= 0) return null;
-
-  // Filtrar si la descripción contiene LIDERES EN SEGUROS
-  if (shouldFilterDescription(description)) {
-    return null;
-  }
-
-  return {
-    date,
-    reference_number: reference,
-    description, // Mantener RAW
-    credit,
-  };
 }
 
 /**
@@ -321,7 +335,7 @@ function parseAmountValue(value: any): number {
 /**
  * Parser principal
  */
-export async function parseBankCommFile(file: File): Promise<BankTransferCommRow[]> {
+export async function parseBankCommFile(file: File): Promise<ParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'csv') {
     return parseBankCommCSV(file);

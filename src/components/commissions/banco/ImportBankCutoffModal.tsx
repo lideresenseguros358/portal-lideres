@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { FaTimes, FaFileExcel, FaCheckCircle, FaCalendar, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { parseBankCommFile, validateBankCommFile, normalizeDescription } from '@/lib/banco/bancoParser';
-import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
+import type { BankTransferCommRow, ParseResult } from '@/lib/banco/bancoParser';
 import { actionImportBankCutoff } from '@/app/(app)/commissions/banco-actions';
 
 interface ImportBankCutoffModalProps {
@@ -84,10 +84,23 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
     setLoading(true);
 
     try {
-      const transfers = await parseBankCommFile(selectedFile);
+      const result = await parseBankCommFile(selectedFile);
+      const transfers = result.transfers;
+      const dbg = result.debug;
 
       if (transfers.length === 0) {
-        toast.warning('No se encontraron transferencias válidas en el archivo');
+        // Build a descriptive message based on skip reasons
+        let detail = `${dbg.totalDataRows} filas procesadas.`;
+        if (dbg.noCredit > 0) detail += ` ${dbg.noCredit} sin crédito (son débitos).`;
+        if (dbg.dateFail > 0) detail += ` ${dbg.dateFail} con fecha inválida.`;
+        if (dbg.noRef > 0) detail += ` ${dbg.noRef} sin referencia.`;
+        if (dbg.filtered > 0) detail += ` ${dbg.filtered} filtradas (LIDERES/LISSA).`;
+        if (dbg.emptyRows > 0) detail += ` ${dbg.emptyRows} filas vacías.`;
+        
+        toast.warning('No se encontraron transferencias con crédito > 0', { 
+          description: detail,
+          duration: 8000,
+        });
         setFile(null);
         setPreview([]);
         setShowPreview(false);
