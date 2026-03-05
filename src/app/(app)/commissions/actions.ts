@@ -4602,7 +4602,7 @@ export async function actionExportBankCsv(fortnightId: string) {
           net_amount: 0
         };
       }
-      acc[brokerId].gross_amount += Math.abs(Number(item.gross_amount) || 0);
+      acc[brokerId].gross_amount += Number(item.gross_amount) || 0;
       return acc;
     }, {});
     
@@ -4640,14 +4640,18 @@ export async function actionExportBankCsv(fortnightId: string) {
       };
     });
     
-    // Filter: net > 0 AND not retained
+    // Filter: net > 0 AND not retained AND not LISSA AND active (igual que UI BrokerTotals)
     const filteredTotals = totalsArray.filter((t: any) => {
+      const isLissa = t.broker?.email?.toLowerCase() === 'contacto@lideresenseguros.com';
+      const isInactive = t.broker?.active === false;
       console.log(`[actionExportBankCsv] Broker ${t.broker?.name}:`, {
         gross_amount: t.gross_amount,
         net_amount: t.net_amount,
-        retained: t.is_retained
+        retained: t.is_retained,
+        isLissa,
+        isInactive
       });
-      return t.net_amount > 0 && !t.is_retained;
+      return t.net_amount > 0 && !t.is_retained && !isLissa && !isInactive;
     });
     
     console.log('[actionExportBankCsv] Totales filtrados:', filteredTotals.length);
