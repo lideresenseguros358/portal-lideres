@@ -1,0 +1,191 @@
+/**
+ * HTTP Client para La Regional de Seguros
+ * Maneja autenticación Basic Auth + headers codInter/token
+ */
+
+import {
+  getRegionalBaseUrl,
+  getRegionalCredentials,
+  RETRY_CONFIG,
+  type RegionalEnvironment,
+} from './config';
+
+const ENV: RegionalEnvironment =
+  (process.env.NODE_ENV === 'production' ? 'production' : 'development') as RegionalEnvironment;
+
+function getBasicAuthHeader(): string {
+  const creds = getRegionalCredentials(ENV);
+  const encoded = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
+  return `Basic ${encoded}`;
+}
+
+function getDefaultHeaders(): Record<string, string> {
+  const creds = getRegionalCredentials(ENV);
+  return {
+    'Content-Type': 'application/json',
+    Authorization: getBasicAuthHeader(),
+    codInter: creds.codInter,
+    token: creds.token,
+  };
+}
+
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  body?: unknown;
+  params?: Record<string, string>;
+  timeout?: number;
+  extraHeaders?: Record<string, string>;
+}
+
+export interface RegionalResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  status?: number;
+  raw?: unknown;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Core request function with retry logic
+ */
+export async function regionalRequest<T = unknown>(
+  endpoint: string,
+  options: RequestOptions = {}
+): Promise<RegionalResponse<T>> {
+  const { method = 'GET', body, params, timeout = 30000, extraHeaders } = options;
+  const baseUrl = getRegionalBaseUrl(ENV);
+
+  let url = `${baseUrl}${endpoint}`;
+  if (params) {
+    const qs = new URLSearchParams(params).toString();
+    url += (url.includes('?') ? '&' : '?') + qs;
+  }
+
+  const headers = { ...getDefaultHeaders(), ...extraHeaders };
+
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+
+      console.log(
+        `[REGIONAL] ${method} ${endpoint}${attempt > 0 ? ` (attempt ${attempt + 1})` : ''}`
+      );
+
+      const res = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timer);
+
+      const contentType = res.headers.get('content-type') || '';
+      let data: unknown;
+
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else if (contentType.includes('text')) {
+        data = await res.text();
+      } else {
+        // Try JSON first, fallback to text
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = text;
+        }
+      }
+
+      console.log(
+        `[REGIONAL] ${method} ${endpoint} → ${res.status}${
+          res.ok ? '' : ` ERROR: ${JSON.stringify(data).slice(0, 200)}`
+        }`
+      );
+
+      if (!res.ok) {
+        // Retry on retryable status codes
+        if (
+          RETRY_CONFIG.retryableStatusCodes.includes(res.status) &&
+          attempt < RETRY_CONFIG.maxRetries
+        ) {
+          const delay = RETRY_CONFIG.baseDelays[attempt] || 3000;
+          console.log(`[REGIONAL] Retrying in ${delay}ms...`);
+          await sleep(delay);
+          continue;
+        }
+
+        return {
+          success: false,
+          error:
+            typeof data === 'object' && data !== null
+              ? (data as Record<string, unknown>).message?.toString() ||
+                (data as Record<string, unknown>).mensaje?.toString() ||
+                JSON.stringify(data)
+              : String(data),
+          status: res.status,
+          raw: data,
+        };
+      }
+
+      return {
+        success: true,
+        data: data as T,
+        status: res.status,
+        raw: data,
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[REGIONAL] ${method} ${endpoint} ERROR: ${errMsg}`);
+
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = RETRY_CONFIG.baseDelays[attempt] || 3000;
+        console.log(`[REGIONAL] Retrying in ${delay}ms...`);
+        await sleep(delay);
+        continue;
+      }
+
+      return {
+        success: false,
+        error: errMsg,
+      };
+    }
+  }
+
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * GET request helper
+ */
+export async function regionalGet<T = unknown>(
+  endpoint: string,
+  params?: Record<string, string>
+): Promise<RegionalResponse<T>> {
+  return regionalRequest<T>(endpoint, { method: 'GET', params });
+}
+
+/**
+ * POST request helper
+ */
+export async function regionalPost<T = unknown>(
+  endpoint: string,
+  body: unknown
+): Promise<RegionalResponse<T>> {
+  return regionalRequest<T>(endpoint, { method: 'POST', body });
+}
+
+/**
+ * PUT request helper
+ */
+export async function regionalPut<T = unknown>(
+  endpoint: string,
+  body: unknown
+): Promise<RegionalResponse<T>> {
+  return regionalRequest<T>(endpoint, { method: 'PUT', body });
+}

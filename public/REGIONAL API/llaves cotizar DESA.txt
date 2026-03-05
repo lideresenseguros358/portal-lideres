@@ -1,0 +1,7 @@
+Accesos Cotizar Cobertura Completa WS
+-----------------------
+
+AMBIENTE DE DESARROLLO
+
+cToken:    6NWEDYFWVCQoaqzppdjswFKPAPGQQPBnxMBTzhzDGTFRG8R4THEDS--X+*ieO
+cCodInter: 99  

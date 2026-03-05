@@ -72,8 +72,9 @@ export default function EmitirDanosTercerosPage() {
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
     const isFedpa = selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA');
-    const prefix = isFedpa ? 'FEDPA' : 'IS';
-    const insurer = isFedpa ? 'FEDPA' : 'INTERNACIONAL';
+    const isRegional = selectedPlan?.isREGIONAL || selectedPlan?.insurerName?.includes('Regional');
+    const prefix = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'IS';
+    const insurer = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'INTERNACIONAL';
     const tpQuoteRaw = typeof window !== 'undefined' ? sessionStorage.getItem('thirdPartyQuote') : null;
     const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
     const refId = selectedPlan?._idCotizacion || tpQuote?.idCotizacion || 'DT';
@@ -721,6 +722,199 @@ export default function EmitirDanosTercerosPage() {
         sessionStorage.removeItem('selectedQuote');
         sessionStorage.removeItem('thirdPartyQuote');
         
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
+
+      // ═══════════════════════════════════════════════════════
+      // EMISIÓN REGIONAL — Daños a Terceros
+      // ═══════════════════════════════════════════════════════
+      } else if (selectedPlan?._isReal && (selectedPlan?.isREGIONAL || selectedPlan?.insurerName?.includes('Regional'))) {
+        console.log('[EMISIÓN DT REGIONAL] Iniciando emisión con API real...');
+        setEmissionProgress(15);
+        setEmissionStep('Conectando con La Regional de Seguros...');
+
+        const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
+        const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+
+        // Parse cedula parts (formato panameño: P-T-A o PE-T-A)
+        const cedulaParts = (emissionData.cedula || '').split('-');
+        let cedulaProv: number | null = null;
+        let cedulaLetra: string | null = null;
+        let cedulaTomo: number | null = null;
+        let cedulaAsiento: number | null = null;
+        if (cedulaParts.length >= 3) {
+          const first = cedulaParts[0] || '';
+          if (/^\d+$/.test(first)) {
+            cedulaProv = parseInt(first);
+          } else {
+            cedulaLetra = first || null;
+          }
+          cedulaTomo = parseInt(cedulaParts[1] || '') || null;
+          cedulaAsiento = parseInt(cedulaParts[2] || '') || null;
+        }
+
+        const emisionResponse = await fetch('/api/regional/auto/emit-rc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan: tpQuote?.planCode || selectedPlan._planCode || '',
+            nombre: emissionData.primerNombre,
+            apellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
+            fechaNacimiento: emissionData.fechaNacimiento,
+            edad: emissionData.fechaNacimiento
+              ? Math.floor((Date.now() - new Date(emissionData.fechaNacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+              : 35,
+            sexo: emissionData.sexo === 'M' ? 'M' : 'F',
+            edocivil: emissionData.estadoCivil === 'casado' ? 'C' : 'S',
+            telefono: emissionData.telefono,
+            celular: emissionData.celular || emissionData.telefono,
+            email: emissionData.email,
+            // Dirección
+            codpais: 507,
+            codestado: emissionData.codProvincia || 8,
+            codciudad: emissionData.codDistrito || 1,
+            codmunicipio: emissionData.codCorregimiento || 1,
+            codurb: emissionData.codUrbanizacion || 1,
+            dirhab: emissionData.direccion || 'Ciudad de Panamá',
+            // Identificación
+            tppersona: 'N',
+            tpodoc: 'C',
+            prov: cedulaProv,
+            letra: cedulaLetra,
+            tomo: cedulaTomo,
+            asiento: cedulaAsiento,
+            // Vehículo
+            codmarca: vehicleData?.marcaCodigo || selectedPlan._vcodmarca || 74,
+            codmodelo: vehicleData?.modeloCodigo || selectedPlan._vcodmodelo || 1,
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
+            numplaca: vehicleData?.placa || '',
+            serialcarroceria: vehicleData?.vinChasis || '',
+            serialmotor: vehicleData?.motor || '',
+            color: vehicleData?.color || '001',
+            // Conductor habitual (same as client)
+            condHabNombre: emissionData.primerNombre,
+            condHabApellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
+            condHabSexo: emissionData.sexo === 'M' ? 'M' : 'F',
+            condHabEdocivil: emissionData.estadoCivil === 'casado' ? 'C' : 'S',
+          }),
+        });
+
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error al emitir póliza REGIONAL');
+        }
+
+        const emisionResult = await emisionResponse.json();
+        if (!emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error al emitir póliza REGIONAL');
+        }
+
+        console.log('[EMISIÓN DT REGIONAL] Póliza emitida:', emisionResult.poliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
+
+        // ═══ ADM COT: Track successful REGIONAL DT emission ═══
+        const tRegional = getTrackingInfo();
+        trackQuoteEmitted({
+          quoteRef: tRegional.quoteRef,
+          insurer: 'REGIONAL',
+          policyNumber: emisionResult.poliza,
+          clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(),
+          cedula: emissionData.cedula,
+          email: emissionData.email,
+          phone: emissionData.telefono || emissionData.celular,
+        });
+
+        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        createPaymentOnEmission({
+          insurer: 'REGIONAL',
+          policyNumber: emisionResult.poliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPlan.annualPremium || 0,
+          installments: 1,
+          ramo: 'AUTO',
+        });
+
+        // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
+        try {
+          const expedienteForm = new FormData();
+          expedienteForm.append('tipoCobertura', 'DT');
+          expedienteForm.append('environment', 'development');
+          expedienteForm.append('nroPoliza', emisionResult.poliza || '');
+          expedienteForm.append('insurerName', 'La Regional de Seguros');
+          expedienteForm.append('firmaDataUrl', signatureRef.current || '');
+
+          expedienteForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+          }));
+
+          expedienteForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
+          }));
+
+          expedienteForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
+            cobertura: 'Daños a Terceros',
+            primaTotal: selectedPlan.annualPremium || 0,
+          }));
+
+          if (emissionData.cedulaFile) expedienteForm.append('cedulaFile', emissionData.cedulaFile);
+          if (emissionData.licenciaFile) expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          if (vehicleData?.registroVehicular) expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
+
+          const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: expedienteForm,
+          });
+          const expedienteResult = await expedienteResponse.json();
+          if (expedienteResult.success) {
+            console.log('[REGIONAL EXPEDIENTE DT] ✅ Correo enviado');
+          } else {
+            console.warn('[REGIONAL EXPEDIENTE DT] Error:', expedienteResult.error);
+          }
+        } catch (expError: any) {
+          console.warn('[REGIONAL EXPEDIENTE DT] Error enviando expediente:', expError);
+        }
+
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: emisionResult.poliza,
+          insurer: 'La Regional de Seguros',
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan.annualPremium,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+          tipoCobertura: 'Daños a Terceros',
+        }));
+
+        sessionStorage.removeItem('selectedQuote');
+        sessionStorage.removeItem('thirdPartyQuote');
         setEmissionProgress(100);
         setEmissionStep('¡Emisión completada!');
 

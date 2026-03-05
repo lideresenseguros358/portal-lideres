@@ -218,7 +218,11 @@ function mapearCoberturasDesdeAPI(limites: any[], beneficios: any[]): ThirdParty
     accidentAssistance: 'sí', // Siempre incluido
     ambulance: 'sí', // Siempre incluido
     roadAssistance: tieneAsistenciaVial ? 'sí' : 'no',
-    towing: tieneAsistenciaVial ? 'Por accidente o avería' : 'no',
+    towing: tieneAsistenciaVial
+      ? (beneficiosTexto.includes('AVERÍA') || beneficiosTexto.includes('AVERIA')
+        ? 'Por accidente o avería'
+        : 'Por accidente')
+      : 'no',
     legalAssistance: tieneAsistenciaLegal ? 'sí' : 'no',
   };
 }

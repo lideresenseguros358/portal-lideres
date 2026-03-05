@@ -1,0 +1,12 @@
+Basic Auth Credentials
+-----------------------
+AMBIENTE DE DESARROLLO
+
+Usuario:  LIDERES_EN_SEGUROS_99
+Clave:    F?V3pTl*_cPL
+codInter: 99
+
+
+
+
+

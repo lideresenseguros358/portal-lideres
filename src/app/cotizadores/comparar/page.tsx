@@ -824,6 +824,183 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
   }
 };
 
+/**
+ * Genera cotización REAL con LA REGIONAL usando las APIs
+ * Básico = Endoso Básico, Premium = Endoso Plus
+ * Deducibles: bajo/medio/alto mapeados según las opciones de REGIONAL
+ */
+const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | null; premium: any | null }> => {
+  try {
+    const edad = quoteData.fechaNacimiento
+      ? Math.floor((Date.now() - new Date(quoteData.fechaNacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : 35;
+
+    // Map deducible to REGIONAL endoso codes
+    // bajo = endoso 1, medio = endoso 2, alto = endoso 3
+    const endosoBasico = '1';
+    const endosoPlus = '2';
+
+    const baseParams = {
+      nombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
+      apellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
+      edad,
+      sexo: quoteData.sexo || 'M',
+      edocivil: 'S',
+      codMarca: quoteData.marcaCodigo || 74,
+      codModelo: quoteData.modeloCodigo || 1,
+      anio: quoteData.anio || new Date().getFullYear(),
+      valorVeh: quoteData.valorVehiculo || 15000,
+      email: quoteData.email || 'cotizacion@web.com',
+    };
+
+    console.log('[REGIONAL] Cotizando CC en paralelo (básico + premium)...');
+    const t0 = performance.now();
+
+    const [basicoRes, premiumRes] = await Promise.allSettled([
+      fetch('/api/regional/auto/quote-cc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...baseParams, endoso: endosoBasico }),
+      }).then(r => r.json()),
+      fetch('/api/regional/auto/quote-cc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...baseParams, endoso: endosoPlus }),
+      }).then(r => r.json()),
+    ]);
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    console.log(`[REGIONAL] CC quotes completed in ${elapsed}s`);
+
+    const basicoData = basicoRes.status === 'fulfilled' && basicoRes.value?.success ? basicoRes.value : null;
+    const premiumData = premiumRes.status === 'fulfilled' && premiumRes.value?.success ? premiumRes.value : null;
+
+    if (!basicoData && !premiumData) {
+      console.warn('[REGIONAL] No se pudieron generar cotizaciones CC');
+      return { basico: null, premium: null };
+    }
+
+    // Build shared data
+    const sharedData = {
+      insurerName: 'La Regional de Seguros',
+      _isReal: true,
+      _isREGIONAL: true,
+      _sumaAsegurada: quoteData.valorVehiculo || 0,
+      _deducibleOriginal: quoteData.deducible,
+      _marcaNombre: quoteData.marca,
+      _modeloNombre: quoteData.modelo,
+      _marcaCodigo: quoteData.marcaCodigo,
+      _modeloCodigo: quoteData.modeloCodigo,
+      _anio: quoteData.anio || new Date().getFullYear(),
+    };
+
+    // Helper to build a quote object from REGIONAL CC response
+    const buildQuote = (data: any, planType: 'basico' | 'premium', endosoNombre: string) => {
+      if (!data) return null;
+
+      // REGIONAL returns pricing in opciones array — pick first option (lowest deductible)
+      const opciones = data.opciones || [];
+      const selectedOption = opciones[0] || {};
+      const primaTotal = selectedOption.primaTotal || data.primaTotal || data.prima || 0;
+      const numcot = data.numcot || data.idCotizacion || '';
+      const coberturas = (data.coberturas || []).map((c: any) => ({
+        codigo: c.codigo || c.cod || '',
+        nombre: c.descripcion || c.nombre || '',
+        descripcion: c.descripcion || c.nombre || '',
+        limite: c.limite || c.monto || 'Incluido',
+        prima: parseFloat(c.prima) || 0,
+        deducible: c.deducible || '',
+        incluida: true,
+      }));
+
+      // Extract deductibles from selected option (opciones[0].dedColision / dedComprensivo)
+      const dedColision = parseFloat(selectedOption.dedColision) || 0;
+      const dedComprensivo = parseFloat(selectedOption.dedComprensivo) || 0;
+
+      // Fallback: try from coberturas if opciones didn't have them
+      if (!dedColision && !dedComprensivo) {
+        const cobComprensivo = coberturas.find((c: any) =>
+          (c.nombre || '').toUpperCase().includes('COMPRENSIVO')
+        );
+        const cobColision = coberturas.find((c: any) =>
+          (c.nombre || '').toUpperCase().includes('COLISION') || (c.nombre || '').toUpperCase().includes('VUELCO')
+        );
+        // Use coberturas-based deductibles as fallback
+        const fallbackDedComprensivo = parseFloat(cobComprensivo?.deducible) || 0;
+        const fallbackDedColision = parseFloat(cobColision?.deducible) || 0;
+        if (fallbackDedColision || fallbackDedComprensivo) {
+          // These will be 0 if opciones had values, so no overwrite needed
+        }
+      }
+
+      const deducibleInfo = {
+        valor: dedColision || dedComprensivo,
+        tipo: quoteData.deducible || 'bajo',
+        descripcion: `Colisión/Vuelco: ${dedColision.toFixed(2)} | Comprensivo: ${dedComprensivo.toFixed(2)}`,
+        tooltip: `Colisión/Vuelco: $${dedColision.toFixed(2)}\nComprensivo: $${dedComprensivo.toFixed(2)}`,
+      };
+
+      // Endosos for this plan
+      const endosos = [{
+        codigo: endosoNombre.toUpperCase().replace(/\s+/g, '_'),
+        nombre: endosoNombre,
+        incluido: true,
+        descripcion: `Incluido en la prima`,
+        subBeneficios: (data.beneficios || []).map((b: any) => b.descripcion || b.nombre || b),
+      }];
+
+      return {
+        ...sharedData,
+        id: `regional-${planType}`,
+        planType,
+        isRecommended: planType === 'premium',
+        annualPremium: Math.round(primaTotal * 100) / 100,
+        deductible: deducibleInfo.valor,
+        coverages: coberturas.map((c: any) => ({ name: c.nombre, included: true })),
+        _coberturasDetalladas: coberturas,
+        _limites: [],
+        _deducibleInfo: deducibleInfo,
+        _deduciblesReales: {
+          comprensivo: dedComprensivo > 0 ? { amount: dedComprensivo, label: 'Comprensivo' } : null,
+          colisionVuelco: dedColision > 0 ? { amount: dedColision, label: 'Colisión/Vuelco' } : null,
+        },
+        _idCotizacion: numcot,
+        _numcot: numcot,
+        _opciones: opciones,
+        _opcionSelec: data.opcionSelec || 1,
+        _priceBreakdown: {
+          primaBase: primaTotal,
+          descuentoBuenConductor: 0,
+          descuentoPorcentaje: 0,
+          impuesto: 0,
+          totalConTarjeta: primaTotal,
+          totalAlContado: primaTotal,
+          ahorroContado: 0,
+        },
+        _beneficios: (data.beneficios || []).map((b: any) => ({
+          nombre: b.descripcion || b.nombre || b,
+          descripcion: b.descripcion || b.nombre || b,
+          incluido: true,
+        })),
+        _endosos: endosos,
+        _endosoIncluido: endosoNombre,
+        _endosoTexto: endosoNombre.toUpperCase(),
+      };
+    };
+
+    const basico = buildQuote(basicoData, 'basico', 'Endoso Básico');
+    const premium = buildQuote(premiumData, 'premium', 'Endoso Plus');
+
+    if (basico) console.log(`[REGIONAL] ✅ Básico: $${basico.annualPremium}`);
+    if (premium) console.log(`[REGIONAL] ✅ Premium: $${premium.annualPremium}`);
+
+    return { basico, premium };
+  } catch (error) {
+    console.error('[REGIONAL] Error generando cotización CC:', error);
+    return { basico: null, premium: null };
+  }
+};
+
 export default function ComparePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -856,14 +1033,14 @@ export default function ComparePage() {
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
           
-          // ── PARALELO: IS y FEDPA al mismo tiempo ──
-          // IS tarda ~28s y FEDPA ~1s. Antes era secuencial (29s+), ahora paralelo (~28s)
-          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA)...');
+          // ── PARALELO: IS, FEDPA y REGIONAL al mismo tiempo ──
+          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA + REGIONAL)...');
           const t0 = Date.now();
           
-          const [isResult, fedpaResult] = await Promise.allSettled([
+          const [isResult, fedpaResult, regionalResult] = await Promise.allSettled([
             generateInternacionalQuotes(input),
             generateFedpaQuotes(input),
+            generateRegionalQuotes(input),
           ]);
           
           console.log(`[Comparar] Cotizaciones completadas en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
@@ -938,9 +1115,47 @@ export default function ComparePage() {
             toast.error('Error al obtener cotizaciones de FEDPA');
           }
           
+          // Procesar resultado REGIONAL
+          if (regionalResult.status === 'fulfilled') {
+            const regionalQuotes = regionalResult.value;
+            if (regionalQuotes.premium) {
+              realQuotes.push(regionalQuotes.premium);
+              console.log('[REGIONAL] ✅ Premium:', regionalQuotes.premium.annualPremium);
+            }
+            if (regionalQuotes.basico) {
+              realQuotes.push(regionalQuotes.basico);
+              console.log('[REGIONAL] ✅ Básico:', regionalQuotes.basico.annualPremium);
+            }
+            if (!regionalQuotes.premium && !regionalQuotes.basico) {
+              console.warn('[REGIONAL] ⚠️ No se pudieron generar cotizaciones CC');
+            }
+            // ═══ ADM COT: Track REGIONAL quotes ═══
+            const regionalRef = regionalQuotes.premium?._idCotizacion || regionalQuotes.basico?._idCotizacion;
+            if (regionalRef) {
+              const trackBase = {
+                clientName: input.nombreCompleto || 'Anónimo',
+                cedula: input.cedula,
+                email: input.email,
+                phone: input.telefono,
+                ramo: 'AUTO',
+                coverageType: 'Cobertura Completa',
+                vehicleInfo: { marca: input.marca, modelo: input.modelo, anio: input.anio, valor: input.valorVehiculo },
+              };
+              if (regionalQuotes.premium) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `REGIONAL-${regionalRef}-P`, insurer: 'REGIONAL', planName: 'Premium (Endoso Plus)', annualPremium: regionalQuotes.premium.annualPremium });
+              }
+              if (regionalQuotes.basico) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `REGIONAL-${regionalRef}-B`, insurer: 'REGIONAL', planName: 'Básico (Endoso Básico)', annualPremium: regionalQuotes.basico.annualPremium });
+              }
+            }
+          } else {
+            console.error('[REGIONAL] Error obteniendo cotizaciones:', regionalResult.reason);
+            toast.error('Error al obtener cotizaciones de REGIONAL');
+          }
+          
           if (realQuotes.length > 0) {
             setQuotes(realQuotes);
-            toast.success(`${realQuotes.length} cotización(es) generada(s): INTERNACIONAL y FEDPA`);
+            toast.success(`${realQuotes.length} cotización(es) generada(s): IS, FEDPA y REGIONAL`);
           } else {
             toast.error('No se pudieron generar cotizaciones. Intenta nuevamente.');
           }

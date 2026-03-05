@@ -62,7 +62,9 @@ export function normalizeFedpaBenefits(
           : montoMatch 
             ? `Hasta B/. ${montoMatch[1]}` 
             : 'Ver póliza',
-        tooltip: 'Remolque en caso de avería o accidente',
+        tooltip: (planType === 'premium' || text.includes('AVERIA') || text.includes('AVERÍA'))
+          ? 'Remolque en caso de avería o accidente'
+          : 'Remolque en caso de accidente',
         included: true,
       });
     }

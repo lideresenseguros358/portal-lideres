@@ -52,13 +52,15 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       setLoadingPlans(true);
       
       try {
-        const [fedpaRes, isRes] = await Promise.allSettled([
+        const [fedpaRes, isRes, regionalRes] = await Promise.allSettled([
           fetch('/api/fedpa/third-party').then(r => r.json()),
           fetch('/api/is/third-party').then(r => r.json()),
+          fetch('/api/regional/third-party').then(r => r.json()),
         ]);
 
         const fedpaData = fedpaRes.status === 'fulfilled' ? fedpaRes.value : null;
         const isData = isRes.status === 'fulfilled' ? isRes.value : null;
+        const regionalData = regionalRes.status === 'fulfilled' ? regionalRes.value : null;
 
         setInsurersData(prevInsurers => {
           return prevInsurers.map(insurer => {
@@ -123,6 +125,39 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                 ...insurer,
                 basicPlan: mapIsPlan(basicApi, insurer.basicPlan),
                 premiumPlan: mapIsPlan(premiumApi, insurer.premiumPlan),
+              };
+            }
+
+            // ── REGIONAL ──
+            if (insurer.id === 'regional' && regionalData?.success && regionalData.plans?.length > 0) {
+              const basicApi = regionalData.plans.find((p: any) => p.planType === 'basic');
+              const premiumApi = regionalData.plans.find((p: any) => p.planType === 'premium');
+
+              const mapRegionalPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+                if (!apiPlan) return fallback;
+                const covList: CoverageItem[] = (apiPlan.coberturas || []).map((c: any) => ({
+                  code: String(c.codigo || c.cod || ''),
+                  name: c.descripcion || c.nombre || '',
+                  limit: c.limite || '',
+                  prima: parseFloat(c.prima) || 0,
+                }));
+                return {
+                  ...fallback,
+                  annualPremium: apiPlan.annualPremium || fallback.annualPremium,
+                  coverageList: covList.length > 0 ? covList : fallback.coverageList,
+                  idCotizacion: apiPlan.numcot || fallback.idCotizacion,
+                  planCode: apiPlan.codplan ? parseInt(apiPlan.codplan) : fallback.planCode,
+                  installments: {
+                    available: false,
+                    description: 'Solo al contado',
+                  },
+                };
+              };
+
+              return {
+                ...insurer,
+                basicPlan: mapRegionalPlan(basicApi, insurer.basicPlan),
+                premiumPlan: mapRegionalPlan(premiumApi, insurer.premiumPlan),
               };
             }
 
@@ -200,6 +235,27 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       });
     }
     
+    // REGIONAL: store quote data for emission flow
+    if (insurer.id === 'regional') {
+      sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
+        insurerId: insurer.id, insurerName: insurer.name, planType: type,
+        annualPremium: plan.annualPremium, isRealAPI: true, isREGIONAL: true,
+        idCotizacion: plan.idCotizacion, planCode: plan.planCode,
+        installments: plan.installments,
+      }));
+
+      // ═══ ADM COT: Track REGIONAL DT quote ═══
+      trackQuoteCreated({
+        quoteRef: `REGIONAL-DT-${type === 'premium' ? 'P' : 'B'}`,
+        insurer: 'REGIONAL',
+        clientName: 'Anónimo',
+        ramo: 'AUTO',
+        coverageType: 'Daños a Terceros',
+        planName: type === 'premium' ? 'Plan Premium DT' : 'Plan Básico DT',
+        annualPremium: plan.annualPremium,
+      });
+    }
+
     // FEDPA: store quote data for emission flow
     if (insurer.id === 'fedpa') {
       sessionStorage.setItem('thirdPartyQuote', JSON.stringify({

@@ -139,7 +139,7 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
       endosoPdf: '/API FEDPA/ENDOSO ASIST BASICO.pdf',
       endosoBenefits: [
         'Asistencia vial 24/7 a nivel nacional',
-        'Servicio de grúa por accidente o avería',
+        'Servicio de grúa por accidente',
         'Servicio de ambulancia incluido',
         'Asistencia legal en caso de accidente',
         'Orientación médica telefónica',
@@ -214,6 +214,58 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
       includedCoverages: ['A', 'B', 'C', 'FAV', 'H-1', 'K6'],
     },
   },
+  {
+    id: 'regional',
+    name: 'La Regional de Seguros',
+    color: 'bg-red-500',
+    emoji: '🟥',
+    basicPlan: {
+      name: 'Plan Básico',
+      endoso: 'Endoso Básico',
+      endosoBenefits: [],
+      coverages: {
+        bodilyInjury: '5,000 / 10,000',
+        propertyDamage: '5,000',
+        medicalExpenses: '500 / 2,500',
+        accidentalDeathDriver: 'no',
+        accidentalDeathPassengers: 'no',
+        funeralExpenses: 'no',
+        accidentAssistance: 'sí',
+        ambulance: 'sí',
+        roadAssistance: 'sí',
+        towing: 'sí',
+        legalAssistance: 'no',
+      },
+      annualPremium: 145,
+      installments: {
+        available: false,
+        description: 'Solo al contado',
+      },
+    },
+    premiumPlan: {
+      name: 'Plan Premium',
+      endoso: 'Endoso Plus',
+      endosoBenefits: [],
+      coverages: {
+        bodilyInjury: '5,000 / 10,000',
+        propertyDamage: '5,000',
+        medicalExpenses: '500 / 2,500',
+        accidentalDeathDriver: 'no',
+        accidentalDeathPassengers: 'no',
+        funeralExpenses: 'no',
+        accidentAssistance: 'sí',
+        ambulance: 'sí',
+        roadAssistance: 'sí',
+        towing: 'sí',
+        legalAssistance: 'sí',
+      },
+      annualPremium: 162,
+      installments: {
+        available: false,
+        description: 'Solo al contado',
+      },
+    },
+  },
 ];
 
 export const COVERAGE_LABELS: Record<string, string> = {
@@ -237,4 +289,5 @@ export const COMPREHENSIVE_COVERAGE_INSURERS = [
   'MAPFRE',
   'FEDPA',
   'INTERNACIONAL',
+  'REGIONAL',
 ];
