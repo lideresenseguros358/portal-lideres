@@ -243,26 +243,19 @@ export async function GET(request: NextRequest) {
         return true;
       })
       .map(broker => {
-        // Usar totales de fortnight_broker_totals si existen, sino calcular
         const totalsFromDB = totalsMap.get(broker.broker_id);
         
-        // Calcular totales desde las pólizas
-        let calculatedGross = 0;
-        let calculatedNet = 0;
-        broker.insurers.forEach((ins: any) => {
-          ins.policies.forEach((pol: any) => {
-            calculatedGross += pol.gross_amount;
-            calculatedNet += pol.net_amount;
-          });
-        });
+        // CRÍTICO: Calcular totales desde items reales para que todo cuadre
+        // items → aseguradora → broker → total (matemática básica)
+        const discountsTotal = totalsFromDB?.discounts?.total || 0;
         
         return {
           broker_id: broker.broker_id,
           broker_name: broker.broker_name,
           broker_email: broker.broker_email,
           percent_default: broker.percent_default,
-          total_gross: totalsFromDB?.gross || calculatedGross,
-          total_net: totalsFromDB?.net || calculatedNet,
+          total_gross: broker.total_gross,
+          total_net: broker.total_gross - discountsTotal,
           discounts_json: totalsFromDB?.discounts || {},
           is_retained: totalsFromDB?.is_retained || false,
           is_lissa: broker.broker_id === lissaBrokerId, // Marcar como LISSA para que la interfaz pueda filtrarlo

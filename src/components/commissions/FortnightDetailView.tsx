@@ -327,7 +327,7 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
                       <div className="text-right flex-1 md:flex-initial">
                         <p className="text-sm text-gray-600">Total Neto</p>
                         <p className="text-xl font-bold text-[#8AAA19] font-mono">
-                          ${(broker.net_amount - (broker.discounts_json?.total || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${broker.net_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
                       
@@ -530,7 +530,7 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
                         <div className="flex justify-between items-center">
                           <p className="text-base font-bold text-gray-900">TOTAL NETO:</p>
                           <p className="text-2xl font-bold text-[#8AAA19] font-mono">
-                            ${(broker.net_amount - (broker.discounts_json?.total || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${broker.net_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       </div>

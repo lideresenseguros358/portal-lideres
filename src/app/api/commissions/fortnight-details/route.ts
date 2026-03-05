@@ -147,23 +147,36 @@ export async function GET(request: NextRequest) {
     const activeBrokerIds = new Set((activeBrokersData || []).map(b => b.id));
     console.log('[fortnight-details] Cantidad de brokers activos:', activeBrokerIds.size);
 
-    // 5. Convertir Map a Array y agregar totales
+    // 5. Convertir Map a Array y calcular totales desde los ITEMS REALES
+    // CRÍTICO: gross_amount = suma de commission_calculated de todos los items
+    // Esto garantiza que clientes → aseguradora → broker → total SIEMPRE cuadren
     const brokers = Array.from(brokerMap.values()).map(broker => {
-      const totals = totalsMap.get(broker.broker_id) || { 
+      const savedTotals = totalsMap.get(broker.broker_id) || { 
         gross: 0, 
         net: 0, 
         discount: 0,
         discounts_json: {},
         is_retained: false
       };
+      
+      const insurersArray = Array.from(broker.insurers.values());
+      
+      // Sumar desde items reales para que todo cuadre matemáticamente
+      const insurersSum = insurersArray.reduce((sum: number, ins: any) => sum + ins.total, 0);
+      const assaCodesSum = (broker.assa_codes || []).reduce((sum: number, item: any) => sum + (item.commission_calculated || 0), 0);
+      const grossFromItems = insurersSum + assaCodesSum;
+      
+      // Descuentos del snapshot guardado
+      const discountsTotal = savedTotals.discounts_json?.total || 0;
+      
       return {
         ...broker,
-        insurers: Array.from(broker.insurers.values()),
-        gross_amount: totals.gross,
-        net_amount: totals.net,
-        discount_amount: totals.discount,
-        discounts_json: totals.discounts_json,
-        is_retained: totals.is_retained
+        insurers: insurersArray,
+        gross_amount: grossFromItems,
+        net_amount: grossFromItems - discountsTotal,
+        discount_amount: discountsTotal,
+        discounts_json: savedTotals.discounts_json,
+        is_retained: savedTotals.is_retained
       };
     }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
@@ -186,7 +199,7 @@ export async function GET(request: NextRequest) {
         
         return true;
       })
-      .reduce((sum, b) => sum + b.net_amount - (b.discounts_json?.total || 0), 0);
+      .reduce((sum, b) => sum + b.net_amount, 0);
     
     console.log('[fortnight-details] Total Corredores (sin LISSA ni inactivos):', totalCorredores);
       
