@@ -226,13 +226,16 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
     setExpandedInsurers(newSet);
   };
 
-  // Calcular y emitir total neto (EXCLUIR LISSA) - Se ejecuta cada vez que groupedData cambia
+  // Calcular y emitir total neto (EXCLUIR LISSA y RETENIDOS) - Debe coincidir con TXT banco
   useEffect(() => {
     if (onTotalNetChange) {
       const totalNet = Object.keys(groupedData).length > 0
-        ? Object.values(groupedData)
-            .filter(broker => broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com')
-            .reduce((sum, broker) => sum + broker.total_net, 0)
+        ? Object.entries(groupedData)
+            .filter(([, broker]) => 
+              broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com' &&
+              !broker.is_retained
+            )
+            .reduce((sum, [, broker]) => sum + broker.total_net, 0)
         : 0;
       onTotalNetChange(totalNet);
     }
