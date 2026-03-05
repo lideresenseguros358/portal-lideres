@@ -272,7 +272,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         // Obtener comisiones desde comm_items directamente (más confiable)
         const { data: items } = await supabaseClient()
           .from('comm_items')
-          .select('gross_amount')
+          .select('gross_amount, policy_number')
           .eq('import_id', imp.id)
           .not('broker_id', 'is', null);
         
@@ -283,9 +283,13 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         const totalReporte = Number(imp.total_amount) || 0;
         const gananciaOficina = totalReporte - totalComisionesBrokers;
         
+        // Detectar Códigos ASSA (todos los items son PJ750-xxx)
+        const isAssaCodigos = (items || []).length > 0 && (items || []).every(item => 
+          item.policy_number?.startsWith('PJ750-') || item.policy_number === 'PJ750'
+        );
         
-        // Clasificar según is_life_insurance
-        if (imp.is_life_insurance) {
+        // Clasificar según is_life_insurance O si es Códigos ASSA (van a Vida)
+        if (imp.is_life_insurance || isAssaCodigos) {
           vida += gananciaOficina;
         } else {
           generales += gananciaOficina;

@@ -155,9 +155,9 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
             let vida = 0;
             let generales = 0;
             
-            // Clasificar según is_life_insurance
+            // Clasificar según is_life_insurance O Códigos ASSA (van a Vida)
             for (const imp of importsData.imports || []) {
-              if (imp.is_life_insurance) {
+              if (imp.is_life_insurance || imp.is_assa_codigos) {
                 vida += imp.office_profit || 0;
               } else {
                 generales += imp.office_profit || 0;

@@ -39,12 +39,24 @@ export async function GET(request: NextRequest) {
         const totalReporte = Math.abs(Number(imp.total_amount) || 0);
         const officeProfit = totalReporte - totalComisionesBrokers;
 
+        // Detectar Códigos ASSA (todos los items son PJ750-xxx)
+        const { data: items } = await supabase
+          .from('comm_items')
+          .select('policy_number')
+          .eq('import_id', imp.id)
+          .limit(100);
+        
+        const isAssaCodigos = (items || []).length > 0 && (items || []).every(item => 
+          item.policy_number?.startsWith('PJ750-') || item.policy_number === 'PJ750'
+        );
+
         return {
           id: imp.id,
           total_amount: totalReporte,
           broker_commissions: totalComisionesBrokers,
           office_profit: officeProfit,
           is_life_insurance: imp.is_life_insurance || false,
+          is_assa_codigos: isAssaCodigos,
         };
       })
     );
