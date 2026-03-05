@@ -107,16 +107,18 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
               const mapRegionalPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
                 if (!apiPlan) return fallback;
-                const covList: CoverageItem[] = (apiPlan.coberturas || []).map((c: any) => ({
-                  code: String(c.codigo || c.cod || ''),
-                  name: c.descripcion || c.nombre || '',
-                  limit: c.limite || '',
-                  prima: parseFloat(c.prima) || 0,
+                const covList: CoverageItem[] = (apiPlan.coverageList || []).map((c: any) => ({
+                  code: String(c.code || ''),
+                  name: c.name || '',
+                  limit: c.limit || '',
+                  prima: Number(c.prima) || 0,
                 }));
                 return {
                   ...fallback,
                   annualPremium: apiPlan.annualPremium || fallback.annualPremium,
                   coverageList: covList.length > 0 ? covList : fallback.coverageList,
+                  endosoBenefits: apiPlan.endosoBenefits || [],
+                  endoso: apiPlan.endoso || fallback.endoso,
                   idCotizacion: apiPlan.numcot || fallback.idCotizacion,
                   planCode: apiPlan.codplan ? parseInt(apiPlan.codplan) : fallback.planCode,
                   installments: {

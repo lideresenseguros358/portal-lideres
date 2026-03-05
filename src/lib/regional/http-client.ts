@@ -88,16 +88,22 @@ export async function regionalRequest<T = unknown>(
       const contentType = res.headers.get('content-type') || '';
       let data: unknown;
 
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else if (contentType.includes('text')) {
-        data = await res.text();
-      } else {
-        // Try JSON first, fallback to text
-        const text = await res.text();
-        try {
-          data = JSON.parse(text);
-        } catch {
+      // Always read as text first, then try to parse as JSON.
+      // Some REGIONAL endpoints return bare key-value like "PLANES":[...]
+      // which is not valid JSON — we wrap it in {} before parsing.
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // Try wrapping bare key-value pairs in {}
+        const trimmed = text.trim();
+        if (trimmed.startsWith('"') && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+          try {
+            data = JSON.parse(`{${trimmed}}`);
+          } catch {
+            data = contentType.includes('text') ? text : text;
+          }
+        } else {
           data = text;
         }
       }
