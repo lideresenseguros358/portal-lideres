@@ -115,7 +115,14 @@ export async function processAssaCodigosImport(
     }
 
     // 5. Calcular monto total
-    const totalAmount = codigosRows.reduce((sum, row) => sum + row.comision_pagada, 0);
+    // Prioridad: monto del formulario (viene del grupo bancario) > suma de filas parseadas
+    const parsedSum = codigosRows.reduce((sum, row) => sum + row.comision_pagada, 0);
+    const formAmount = parseFloat(parsed.total_amount) || 0;
+    const totalAmount = formAmount > 0 ? formAmount : parsedSum;
+    
+    console.log(`[ASSA_CODIGOS] Monto formulario (grupo banco): $${formAmount.toFixed(2)}`);
+    console.log(`[ASSA_CODIGOS] Suma comisiones parseadas: $${parsedSum.toFixed(2)}`);
+    console.log(`[ASSA_CODIGOS] Total Reporte final: $${totalAmount.toFixed(2)}`);
 
     // 6. Crear registro de importación
     const { data: importRecord, error: importError } = await supabase
