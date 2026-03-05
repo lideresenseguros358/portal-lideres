@@ -243,7 +243,6 @@ function buildScenarios(): Scenario[] {
 async function runFedpaDT(
   s: Scenario,
   fedpaToken: string | null,
-  fedpaIdDoc: string | null,
   dryrun: boolean,
 ): Promise<any> {
   const t0 = Date.now();
@@ -269,9 +268,27 @@ async function runFedpaDT(
     return result;
   }
 
-  if (!fedpaIdDoc) {
+  // Upload FRESH docs per scenario — FEDPA requires unique idDoc per emission
+  let fedpaIdDoc: string | null = null;
+  try {
+    const testDocs = {
+      documento_identidad: [createTestJpeg('documento_identidad.jpg')],
+      licencia_conducir: [createTestJpeg('licencia_conducir.jpg')],
+      registro_vehicular: [] as File[],
+    };
+    const uploadResult = await subirDocumentos(testDocs, 'DEV');
+    if (uploadResult.success && uploadResult.idDoc) {
+      fedpaIdDoc = uploadResult.idDoc;
+      console.log(`[SMOKE FEDPA] ✅ Fresh idDoc: ${fedpaIdDoc}`);
+    } else {
+      result.success = false;
+      result.error = `Doc upload failed: ${uploadResult.error}`;
+      result.timing = Date.now() - t0;
+      return result;
+    }
+  } catch (docErr: any) {
     result.success = false;
-    result.error = 'No idDoc — document upload failed earlier';
+    result.error = `Doc upload exception: ${docErr.message}`;
     result.timing = Date.now() - t0;
     return result;
   }
@@ -549,10 +566,9 @@ export async function GET(request: NextRequest) {
   }
 
   // ══════════════════════════════════════════════════════
-  // PHASE 1: FEDPA token + docs (shared across all FEDPA scenarios)
+  // PHASE 1: FEDPA token (docs uploaded per-scenario since idDoc is single-use)
   // ══════════════════════════════════════════════════════
   let fedpaToken: string | null = null;
-  let fedpaIdDoc: string | null = null;
   const hasFedpaScenarios = scenarios.some(s => s.insurer === 'FEDPA');
 
   if (hasFedpaScenarios && !dryrun) {
@@ -562,20 +578,6 @@ export async function GET(request: NextRequest) {
       if (tokenResult.success && tokenResult.token) {
         fedpaToken = tokenResult.token;
         console.log('[SMOKE] ✅ FEDPA token obtained');
-
-        // Upload shared test docs
-        const testDocs = {
-          documento_identidad: [createTestJpeg('documento_identidad.jpg')],
-          licencia_conducir: [createTestJpeg('licencia_conducir.jpg')],
-          registro_vehicular: [] as File[],
-        };
-        const uploadResult = await subirDocumentos(testDocs, 'DEV');
-        if (uploadResult.success && uploadResult.idDoc) {
-          fedpaIdDoc = uploadResult.idDoc;
-          console.log('[SMOKE] ✅ FEDPA docs uploaded, idDoc:', fedpaIdDoc);
-        } else {
-          console.error('[SMOKE] ❌ FEDPA doc upload failed:', uploadResult.error);
-        }
       } else {
         console.warn('[SMOKE] ⚠️ FEDPA token unavailable:', tokenResult.error);
       }
@@ -599,7 +601,7 @@ export async function GET(request: NextRequest) {
     let scenarioResult: any;
 
     if (s.insurer === 'FEDPA') {
-      scenarioResult = await runFedpaDT(s, fedpaToken, fedpaIdDoc, dryrun);
+      scenarioResult = await runFedpaDT(s, fedpaToken, dryrun);
     } else {
       scenarioResult = await runISScenario(s, dryrun);
     }
@@ -668,7 +670,7 @@ export async function GET(request: NextRequest) {
     catalogValidation,
     fedpaSetup: {
       tokenAvailable: !!fedpaToken,
-      idDocAvailable: !!fedpaIdDoc,
+      idDocPerScenario: true,
     },
     summary,
     totalTimeMs: totalTime,
