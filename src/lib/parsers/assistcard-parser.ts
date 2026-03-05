@@ -55,19 +55,22 @@ function extractRowsFromText(text: string): AssistcardRow[] {
     if (isHeaderLine(line)) continue;
     const u = line.toUpperCase();
     if (u.includes('TOTAL') || u.includes('SUBTOTAL')) continue;
+    // Skip agency-only lines
+    if (u === 'LIDERES EN SEGUROS' || u === 'LIDERES EN SEGUROS, S.A.' || u === 'LIDERES EN SEGUROS S.A.') continue;
 
-    // Check if this is a client data line (has LIDERES/SEGUROS + digit sequences)
-    const hasAgency = u.includes('LIDERES') || u.includes('SEGUROS');
     const digitSeqs = [...line.matchAll(/\d{7,}/g)].map(m => ({ value: m[0], index: m.index! }));
 
-    if (hasAgency && digitSeqs.length >= 2) {
-      // Voucher = first digit sequence after agency name
+    // Detect data line: needs 2+ long digit sequences (voucher + doc number)
+    // Agency name may or may not be on the same line (OCR often separates it)
+    const hasAgency = u.includes('LIDERES') || u.includes('SEGUROS');
+
+    if (digitSeqs.length >= 2) {
       const voucher = digitSeqs[0]!.value;
       const docNumber = digitSeqs[1]!;
 
       // Client name = text after doc number, before any decimal amounts
       const afterDoc = line.substring(docNumber.index + docNumber.value.length);
-      const decimalMatches = [...afterDoc.matchAll(/\d+\.\d{2}/g)];
+      const decimalMatches = [...afterDoc.matchAll(/\d+\.\d{1,2}/g)];
 
       let clientName: string;
       let inlineCommission: number | undefined;
@@ -85,18 +88,29 @@ function extractRowsFromText(text: string): AssistcardRow[] {
         clientName = afterDoc.trim();
       }
 
+      // If agency name is on the same line, strip it from the beginning
+      if (hasAgency) {
+        // The text before the first digit sequence might contain the agency name
+        const beforeVoucher = line.substring(0, digitSeqs[0]!.index).trim();
+        // clientName comes from afterDoc, so agency is already excluded
+        // But if afterDoc is empty and the name was before digits, handle it
+        if (!clientName && beforeVoucher) {
+          clientName = beforeVoucher.replace(/LIDERES\s*(EN\s*)?SEGUROS\s*,?\s*(S\.?A\.?)?/i, '').trim();
+        }
+      }
+
       // Clean up name
       clientName = clientName.replace(/^\s*[,.\-]\s*/, '').replace(/\s*[,.\-]\s*$/, '').trim();
 
       if (clientName && clientName.length >= 2) {
         clients.push({ voucher, name: clientName, inlineCommission });
-        console.log(`[ASSISTCARD PARSER] Cliente: Voucher=${voucher} Name="${clientName}"${inlineCommission ? ` InlineComm=${inlineCommission}` : ''}`);
+        console.log(`[ASSISTCARD PARSER] Cliente: Voucher=${voucher} Name="${clientName}"${inlineCommission !== undefined ? ` InlineComm=${inlineCommission}` : ''}`);
       }
       continue;
     }
 
-    // Check if this is a standalone amount line (just a decimal number)
-    if (/^-?\d+\.\d{2}$/.test(line.trim())) {
+    // Check if this is a standalone amount line (decimal number, with optional trailing chars)
+    if (/^-?\d+\.\d{1,2}$/.test(line.trim())) {
       standaloneAmounts.push(parseNumber(line));
       continue;
     }
