@@ -86,11 +86,14 @@ function mergeApiData(
       const mapIsPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
         if (!apiPlan) return fallback;
         const covList: CoverageItem[] = apiPlan.coverageList || [];
+        const apiBenefits: string[] = apiPlan.endosoBenefits || [];
 
         return {
           ...fallback,
           annualPremium: apiPlan.annualPremium || fallback.annualPremium,
           coverageList: covList.length > 0 ? covList : undefined,
+          endosoBenefits: apiBenefits.length > 0 ? apiBenefits : fallback.endosoBenefits,
+          endoso: apiBenefits.length > 0 ? apiPlan.name || fallback.name : fallback.endoso,
           idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
           vcodplancobertura: apiPlan.codPlanCobertura || fallback.vcodplancobertura,
           vcodgrupotarifa: apiPlan.vcodgrupotarifa || fallback.vcodgrupotarifa,

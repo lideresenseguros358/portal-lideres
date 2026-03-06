@@ -58,6 +58,22 @@ interface CoverageItem {
  * Uses PTOTAL from generarCotizacion as the real price (same as CC flow).
  * Coverage field names: COD_AMPARO, COBERTURA, LIMITES, PRIMA1
  */
+// TODO: Reemplazar con datos de API cuando IS provea un endpoint de beneficios para DT.
+// Actualmente la API de IS (getlistacoberturas) solo retorna 3 coberturas para planes DT
+// y no incluye beneficios de asistencia. Estos datos provienen del condicionado de IS.
+const IS_SOAT_BENEFITS: string[] = [
+  'Muerte accidental del conductor: $5,000.00',
+  'Gastos funerarios del conductor: $1,500.00',
+  'Asistencia legal en accidentes de tránsito',
+];
+const IS_INTERMEDIO_BENEFITS: string[] = [
+  'Muerte accidental del conductor: $10,000.00',
+  'Gastos funerarios del conductor: $3,000.00',
+  'Asistencia vial: grúa, paso de corriente, cambio de llanta',
+  'Asistencia legal en accidentes de tránsito',
+  'Servicio de ambulancia por accidente',
+];
+
 async function fetchPlan(
   codPlanCobertura: number,
   env: 'development' | 'production' = 'development'
@@ -74,7 +90,6 @@ async function fetchPlan(
       return null;
     }
 
-    // PTOTAL is the REAL discounted price from IS (same approach as CC flow)
     const primaTotal = cotizResult.primaTotal ?? 0;
     console.log(`[IS Third Party] Plan ${codPlanCobertura}: PTOTAL=${primaTotal}, idCot=${cotizResult.idCotizacion}`);
 
@@ -87,7 +102,6 @@ async function fetchPlan(
 
     const coverages: CoverageItem[] = [];
     if (cobResult.success && cobResult.data?.Table?.length) {
-      // Correct field names: COD_AMPARO, COBERTURA, LIMITES, PRIMA1
       for (const cob of cobResult.data.Table) {
         coverages.push({
           code: String(cob.COD_AMPARO ?? ''),
@@ -98,7 +112,6 @@ async function fetchPlan(
       }
     }
 
-    // If PTOTAL is 0 or missing, fall back to sum of PRIMA1
     const finalPrima = primaTotal > 0
       ? primaTotal
       : coverages.reduce((sum, c) => sum + c.prima, 0);
@@ -133,6 +146,8 @@ async function fetchAllPlans() {
           ? Math.round(basicResult.primaTotal * 100) / 100
           : FALLBACK_BASIC_PRICE,
         coverageList: basicResult?.coverages || [],
+        endosoBenefits: IS_SOAT_BENEFITS,
+        endoso: 'Plan Básico (SOAT)',
         fromApi: !!basicResult,
         idCotizacion: basicResult?.idCotizacion || null,
         vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
@@ -148,6 +163,8 @@ async function fetchAllPlans() {
           ? Math.round(premiumResult.primaTotal * 100) / 100
           : FALLBACK_PREMIUM_PRICE,
         coverageList: premiumResult?.coverages || [],
+        endosoBenefits: IS_INTERMEDIO_BENEFITS,
+        endoso: 'Plan Intermedio (DAT 10/20)',
         fromApi: !!premiumResult,
         idCotizacion: premiumResult?.idCotizacion || null,
         vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
