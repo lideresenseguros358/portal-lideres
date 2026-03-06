@@ -102,6 +102,30 @@ export default function ThirdPartyPage() {
         },
       }));
       router.push('/cotizadores/emitir-danos-terceros');
+    } else if (insurerId === 'regional' && tpQuote?.isRealAPI) {
+      // REGIONAL: usar flujo completo con secciones (mismo wizard que FEDPA/IS)
+      sessionStorage.setItem('selectedQuote', JSON.stringify({
+        insurerName: 'La Regional de Seguros',
+        planType: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
+        annualPremium: plan.annualPremium,
+        _isReal: true,
+        isREGIONAL: true,
+        _planCode: tpQuote.planCode || plan.emissionPlanCode || plan.planCode || '',
+        _idCotizacion: tpQuote.idCotizacion,
+        _includedCoverages: plan.includedCoverages,
+        _vcodmarca: tpQuote.vcodmarca,
+        _vcodmodelo: tpQuote.vcodmodelo,
+        installments: plan.installments,
+        quoteData: {
+          cobertura: 'TERCEROS',
+          policyType: 'AUTO',
+          marca: '',
+          modelo: '',
+          ano: new Date().getFullYear(),
+          uso: '10',
+        },
+      }));
+      router.push('/cotizadores/emitir-danos-terceros');
     } else {
       // Otras aseguradoras: flujo existente (formulario simple)
       router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);

@@ -849,9 +849,11 @@ export default function EmitirDanosTercerosPage() {
           const expedienteForm = new FormData();
           expedienteForm.append('tipoCobertura', 'DT');
           expedienteForm.append('environment', 'development');
-          expedienteForm.append('nroPoliza', emisionResult.poliza || '');
+          const regionalPoliza = emisionResult.poliza || '';
+          expedienteForm.append('nroPoliza', regionalPoliza);
           expedienteForm.append('insurerName', 'La Regional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureRef.current || '');
+          if (regionalPoliza) expedienteForm.append('pdfUrl', `/api/regional/auto/print?poliza=${encodeURIComponent(regionalPoliza)}`);
 
           expedienteForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -909,6 +911,7 @@ export default function EmitirDanosTercerosPage() {
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.poliza,
           insurer: 'La Regional de Seguros',
+          regionalPoliza: emisionResult.poliza,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
           cedula: emissionData.cedula,
           vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),

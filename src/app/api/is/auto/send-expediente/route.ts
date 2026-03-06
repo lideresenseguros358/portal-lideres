@@ -415,12 +415,18 @@ export async function POST(request: NextRequest) {
     const welcomeRecipient = clientEmail || OFFICE_EMAIL;
     
     try {
-      // Build FEDPA carátula download URL if applicable
+      // Build download URLs for email links
+      const siteUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com');
       const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
-      const siteUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com';
       const caratulaUrl = isFedpa && codCotizacion
         ? `${siteUrl}/api/fedpa/caratula?codCotizacion=${encodeURIComponent(codCotizacion)}&env=PROD`
         : '';
+
+      // Resolve pdfUrl: make relative paths absolute for email links
+      let resolvedPdfUrl = (formData.get('pdfUrl') as string) || '';
+      if (resolvedPdfUrl && resolvedPdfUrl.startsWith('/')) {
+        resolvedPdfUrl = `${siteUrl}${resolvedPdfUrl}`;
+      }
 
       const welcomeHtml = buildWelcomeEmail({
         nombreCompleto,
@@ -438,7 +444,7 @@ export async function POST(request: NextRequest) {
         montoCuota: quoteData.montoCuota || 0,
         vigenciaDesde,
         vigenciaHasta,
-        pdfUrl: (formData.get('pdfUrl') as string) || '',
+        pdfUrl: resolvedPdfUrl,
         insurerName,
         caratulaUrl,
       });
