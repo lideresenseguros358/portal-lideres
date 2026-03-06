@@ -460,7 +460,11 @@ export default function EmitirV2Page() {
             anio: quoteData?.anio || quoteData?.anno || '',
             valorVehiculo: quoteData?.valorVehiculo || 0,
             cobertura: 'Cobertura Completa',
-            primaTotal: selectedPlan.annualPremium || 0,
+            primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan.annualPremium || 0),
+            primaContado: selectedPlan.annualPremium || 0,
+            formaPago: installments > 1 ? 'cuotas' : 'contado',
+            cantidadCuotas: installments,
+            montoCuota: installments > 1 ? monthlyPayment : undefined,
           }));
 
           if (documents?.cedulaFile) welcomeForm.append('cedulaFile', documents.cedulaFile);
@@ -491,8 +495,13 @@ export default function EmitirV2Page() {
           codCotizacion: emisionResult.cotizacion,
           policyId: emisionResult.policyId,
           clientId: emisionResult.clientId,
-          primaTotal: selectedPlan.annualPremium,
+          primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan.annualPremium || 0),
+          primaContado: selectedPlan.annualPremium,
+          formaPago: installments > 1 ? 'cuotas' : 'contado',
+          cantidadCuotas: installments,
+          montoCuota: installments > 1 ? monthlyPayment : undefined,
           planType: selectedPlan.planType,
+          tipoCobertura: 'Cobertura Completa',
           asegurado: `${insuredData?.primerNombre} ${insuredData?.primerApellido}`,
           cedula: insuredData?.cedula,
           vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${emisionPayload.Ano}`,

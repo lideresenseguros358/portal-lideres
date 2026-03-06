@@ -252,19 +252,31 @@ export default function ConfirmacionPage() {
                   <div className="py-3 px-4 bg-[#010139] rounded-lg mt-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-white/80">
-                        {policyData.formaPago === 'cuotas' ? 'Prima Total (2 cuotas)' : 'Prima Total'}
+                        {policyData.formaPago === 'cuotas' && policyData.cantidadCuotas > 1
+                          ? `Prima Total (${policyData.cantidadCuotas} cuotas)`
+                          : 'Prima Total'}
                       </span>
                       <span className="text-xl font-bold text-[#8AAA19]">
                         ${Number(policyData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
-                    {policyData.formaPago === 'cuotas' && policyData.montoCuota && (
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-xs text-white/60">Cuota mensual</span>
-                        <span className="text-sm font-semibold text-white/90">
-                          ${Number(policyData.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
+                    {policyData.formaPago === 'cuotas' && policyData.montoCuota && policyData.cantidadCuotas > 1 && (
+                      <>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-xs text-white/60">Cuota</span>
+                          <span className="text-sm font-semibold text-[#8AAA19]">
+                            {policyData.cantidadCuotas} x ${Number(policyData.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {policyData.primaContado > 0 && (
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-xs text-white/40">Precio al contado</span>
+                            <span className="text-xs text-white/60">
+                              ${Number(policyData.primaContado).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

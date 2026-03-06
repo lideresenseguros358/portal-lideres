@@ -432,6 +432,10 @@ export async function POST(request: NextRequest) {
         nroPoliza,
         cobertura: coberturaLabel,
         primaTotal,
+        primaContado: quoteData.primaContado || 0,
+        formaPago: quoteData.formaPago || 'contado',
+        cantidadCuotas: quoteData.cantidadCuotas || 1,
+        montoCuota: quoteData.montoCuota || 0,
         vigenciaDesde,
         vigenciaHasta,
         pdfUrl: (formData.get('pdfUrl') as string) || '',
@@ -627,6 +631,10 @@ function buildWelcomeEmail(data: {
   pdfUrl: string;
   insurerName: string;
   caratulaUrl?: string;
+  primaContado?: number;
+  formaPago?: string;
+  cantidadCuotas?: number;
+  montoCuota?: number;
 }): string {
   const emergencyNumber = getInsurerEmergencyNumber(data.insurerName);
   const whatsappUrl = 'https://wa.me/14155238886';
@@ -729,8 +737,24 @@ function buildWelcomeEmail(data: {
 
       ${data.primaTotal ? `
       <div class="prima-box">
-        <div class="lbl">Prima Total Anual</div>
-        <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+        ${data.formaPago === 'cuotas' && data.cantidadCuotas && data.cantidadCuotas > 1 && data.montoCuota ? `
+          <div class="lbl">Prima Total (${data.cantidadCuotas} cuotas)</div>
+          <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;opacity:0.75;">Cuota</span>
+              <span style="font-size:18px;font-weight:800;color:#8AAA19;">${data.cantidadCuotas} x $${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>
+            ${data.primaContado ? `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+              <span style="font-size:11px;opacity:0.6;">Precio al contado</span>
+              <span style="font-size:13px;opacity:0.7;">$${Number(data.primaContado).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            </div>` : ''}
+          </div>
+        ` : `
+          <div class="lbl">Prima Total Anual</div>
+          <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+        `}
       </div>` : ''}
 
       ${data.caratulaUrl ? `

@@ -428,7 +428,11 @@ export default function EmitirDanosTercerosPage() {
             anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData?.valorVehiculo || 0,
             cobertura: 'Daños a Terceros',
-            primaTotal: selectedPlan.annualPremium || 0,
+            primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+            primaContado: selectedPlan.annualPremium || 0,
+            formaPago: selectedPaymentMode,
+            cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
+            montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
           }));
           
           if (emissionData.cedulaFile) {

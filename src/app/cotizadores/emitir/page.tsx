@@ -409,7 +409,11 @@ export default function EmitirPage() {
             anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData.valorVehiculo || 0,
             cobertura: 'Cobertura Completa',
-            primaTotal: selectedPlan?.annualPremium || 0,
+            primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+            primaContado: selectedPlan?.annualPremium || 0,
+            formaPago: installments > 1 ? 'cuotas' : 'contado',
+            cantidadCuotas: installments,
+            montoCuota: installments > 1 ? monthlyPayment : undefined,
           }));
           
           if (emissionData.cedulaFile) {
