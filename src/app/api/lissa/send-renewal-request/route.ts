@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const daysUntilRenewal = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     // Generar URLs para botones SI/NO
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com';
     const yesUrl = `${baseUrl}/api/renewal-response?response=yes&clientId=${client_id}&policyId=${policy_id}`;
     const noUrl = `${baseUrl}/api/renewal-response?response=no&clientId=${client_id}&policyId=${policy_id}`;
 

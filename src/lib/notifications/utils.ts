@@ -36,12 +36,12 @@ export function getDeepLink(
   type: NotificationType,
   params: Record<string, string>
 ): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com';
   
   switch (type) {
     case 'renewal':
       // Link a la página de clientes con filtro de póliza
-      return `${baseUrl}/clientes${params.policy_id ? `?policy=${params.policy_id}` : ''}`;
+      return `${baseUrl}/db${params.policy_id ? `?policy=${params.policy_id}` : ''}`;
     
     case 'case_digest':
       // Link a casos filtrados por fecha
@@ -49,28 +49,28 @@ export function getDeepLink(
     
     case 'commission':
       // Link a comisiones con quincena específica
-      return `${baseUrl}/comisiones${params.quincena_id ? `?quincena=${params.quincena_id}` : ''}`;
+      return `${baseUrl}/commissions${params.quincena_id ? `?quincena=${params.quincena_id}` : ''}`;
     
     case 'delinquency':
       // Link a morosidad con filtros
       const delinquencyParams = new URLSearchParams();
       if (params.insurer_id) delinquencyParams.set('insurer', params.insurer_id);
       if (params.date) delinquencyParams.set('date', params.date);
-      return `${baseUrl}/morosidad${delinquencyParams.toString() ? `?${delinquencyParams}` : ''}`;
+      return `${baseUrl}/delinquency${delinquencyParams.toString() ? `?${delinquencyParams}` : ''}`;
     
     case 'download':
       // Link a descargas con filtros
       const downloadParams = new URLSearchParams();
       if (params.insurer_id) downloadParams.set('insurer', params.insurer_id);
       if (params.doc_id) downloadParams.set('doc', params.doc_id);
-      return `${baseUrl}/descargas${downloadParams.toString() ? `?${downloadParams}` : ''}`;
+      return `${baseUrl}/downloads${downloadParams.toString() ? `?${downloadParams}` : ''}`;
     
     case 'guide':
       // Link a guías con sección y doc
       const guideParams = new URLSearchParams();
       if (params.section) guideParams.set('section', params.section);
       if (params.guide_id) guideParams.set('id', params.guide_id);
-      return `${baseUrl}/guias${guideParams.toString() ? `?${guideParams}` : ''}`;
+      return `${baseUrl}/guides${guideParams.toString() ? `?${guideParams}` : ''}`;
     
     case 'carnet_renewal':
       // Link a cuenta del broker

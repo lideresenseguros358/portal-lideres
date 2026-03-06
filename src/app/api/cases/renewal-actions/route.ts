@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
           clientName: caso.client_name,
           newStatus: 'Cerrado - Renovación Aprobada',
           message: 'La renovación ha sido procesada exitosamente. La carátula ha sido adjuntada al caso.',
-          portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+          portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com',
         });
 
         await sendEmail({
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
         brokerName: caso.brokers?.name,
         brokerEmail: caso.brokers?.email,
         brokerPhone: caso.brokers?.phone,
-        portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+        portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com',
       });
 
       await sendEmail({
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         policyNumber: caso.policy_number,
         insurerName: (caso.policies as any)?.insurers?.name || 'N/A',
         brokerName: caso.brokers?.name,
-        portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+        portalUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com',
       });
 
       await sendEmail({

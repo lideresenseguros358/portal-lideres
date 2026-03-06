@@ -6191,15 +6191,16 @@ export async function actionPayFortnight(fortnight_id: string) {
             })),
           };
           
+          const realNet = currentBT.gross_amount - discountData.total;
+          
           await supabase
             .from('fortnight_broker_totals')
             .update({
               discounts_json: discountsJson,
+              net_amount: realNet,
             })
             .eq('fortnight_id', fortnight_id)
             .eq('broker_id', brokerId);
-          
-          const realNet = currentBT.gross_amount - discountData.total;
           console.log(`[actionPayFortnight]   📊 ${(currentBT.brokers as any)?.name}: Bruto $${currentBT.gross_amount.toFixed(2)} - Desc $${discountData.total.toFixed(2)} = Neto $${realNet.toFixed(2)}`);
           
           // 7.5.2 CRÍTICO: Habilitar pending_payments existentes vinculados a los adelantos pagados

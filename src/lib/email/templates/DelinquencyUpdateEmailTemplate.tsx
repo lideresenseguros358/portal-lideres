@@ -115,7 +115,7 @@ export function getDelinquencyUpdateEmailContent(data: DelinquencyUpdateEmailDat
     </p>
   `;
 
-  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/delinquency?insurer=${insurerName}&date=${cutoffDate}`;
+  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com'}/delinquency?insurer=${insurerName}&date=${cutoffDate}`;
 
   const html = BaseEmailTemplate({
     preheader: `${recordsCount} cliente${recordsCount > 1 ? 's' : ''} en mora - ${insurerName}`,

@@ -131,7 +131,7 @@ export function getAgendaEventEmailContent(data: AgendaEventEmailData): { subjec
     </p>
   `;
 
-  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/agenda`;
+  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com'}/agenda`;
 
   const html = BaseEmailTemplate({
     preheader: `${eventTypeText}: ${eventTitle} - ${formattedDate}`,

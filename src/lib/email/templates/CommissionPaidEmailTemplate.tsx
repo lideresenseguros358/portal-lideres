@@ -84,7 +84,7 @@ export function getCommissionPaidEmailContent(data: CommissionPaidEmailData): { 
     </p>
   `;
 
-  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/comisiones?quincena=${fortnightId}`;
+  const deepLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com'}/commissions?quincena=${fortnightId}`;
 
   const html = BaseEmailTemplate({
     preheader: `Pago procesado: ${formatMoney(netAmount)} - ${periodLabel}`,

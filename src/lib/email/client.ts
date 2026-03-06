@@ -13,8 +13,8 @@ export const EMAIL_CONFIG = {
   replyTo: 'portal@lideresenseguros.com',
   
   // URLs base para links y assets
-  baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
-  logoUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/logo.png`,
+  baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com',
+  logoUrl: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com'}/logo.png`,
   
   // Colores corporativos
   colors: {
