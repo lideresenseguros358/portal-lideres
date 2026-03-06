@@ -11,15 +11,160 @@ interface ThirdPartyComparisonProps {
   onSelectPlan: (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => void;
 }
 
+// ── Cache helpers ──
+const CACHE_KEY = 'tp_plans_cache';
+const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours — matches server-side TTL
+
+interface ApiCache {
+  fedpa: any | null;
+  is: any | null;
+  regional: any | null;
+  timestamp: number;
+}
+
+function readCache(): ApiCache | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed: ApiCache = JSON.parse(raw);
+    if (Date.now() - parsed.timestamp > CACHE_TTL) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch { return null; }
+}
+
+function writeCache(fedpa: any, is: any, regional: any) {
+  try {
+    const entry: ApiCache = { fedpa, is, regional, timestamp: Date.now() };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+/** Merge API responses into the base insurer list */
+function mergeApiData(
+  baseInsurers: AutoInsurer[],
+  fedpaData: any | null,
+  isData: any | null,
+  regionalData: any | null,
+): AutoInsurer[] {
+  return baseInsurers.map(insurer => {
+    // ── FEDPA ──
+    if (insurer.id === 'fedpa' && fedpaData?.success && fedpaData.plans?.length > 0) {
+      const basicApi = fedpaData.plans.find((p: any) => p.planType === 'basic');
+      const premiumApi = fedpaData.plans.find((p: any) => p.planType === 'premium');
+
+      const mapFedpaPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+        if (!apiPlan) return fallback;
+        const covList: CoverageItem[] = apiPlan.coverageList || [];
+
+        return {
+          ...fallback,
+          coverageList: covList.length > 0 ? covList : fallback.coverageList,
+          endoso: apiPlan.endoso || fallback.endoso,
+          endosoPdf: apiPlan.endosoPdf || fallback.endosoPdf,
+          endosoBenefits: apiPlan.endosoBenefits || [],
+          planCode: apiPlan.emissionPlanCode || fedpaData.planCode || fallback.planCode || 1000,
+          includedCoverages: apiPlan.includedCoverages || fallback.includedCoverages,
+          idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
+        };
+      };
+
+      return {
+        ...insurer,
+        basicPlan: mapFedpaPlan(basicApi, insurer.basicPlan),
+        premiumPlan: mapFedpaPlan(premiumApi, insurer.premiumPlan),
+      };
+    }
+
+    // ── INTERNACIONAL DE SEGUROS ──
+    if (insurer.id === 'internacional' && isData?.success && isData.plans?.length > 0) {
+      const basicApi = isData.plans.find((p: any) => p.planType === 'basic');
+      const premiumApi = isData.plans.find((p: any) => p.planType === 'premium');
+
+      const mapIsPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+        if (!apiPlan) return fallback;
+        const covList: CoverageItem[] = apiPlan.coverageList || [];
+
+        return {
+          ...fallback,
+          annualPremium: apiPlan.annualPremium || fallback.annualPremium,
+          coverageList: covList.length > 0 ? covList : undefined,
+          idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
+          vcodplancobertura: apiPlan.codPlanCobertura || fallback.vcodplancobertura,
+          vcodgrupotarifa: apiPlan.vcodgrupotarifa || fallback.vcodgrupotarifa,
+          vcodmarca: apiPlan.vcodmarca || fallback.vcodmarca,
+          vcodmodelo: apiPlan.vcodmodelo || fallback.vcodmodelo,
+          installments: {
+            available: false,
+            description: 'Solo al contado',
+          },
+        };
+      };
+
+      return {
+        ...insurer,
+        basicPlan: mapIsPlan(basicApi, insurer.basicPlan),
+        premiumPlan: mapIsPlan(premiumApi, insurer.premiumPlan),
+      };
+    }
+
+    // ── REGIONAL ──
+    if (insurer.id === 'regional' && regionalData?.success && regionalData.plans?.length > 0) {
+      const basicApi = regionalData.plans.find((p: any) => p.planType === 'basic');
+      const premiumApi = regionalData.plans.find((p: any) => p.planType === 'premium');
+
+      const mapRegionalPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+        if (!apiPlan) return fallback;
+        const covList: CoverageItem[] = (apiPlan.coverageList || []).map((c: any) => ({
+          code: String(c.code || ''),
+          name: c.name || '',
+          limit: c.limit || '',
+          prima: Number(c.prima) || 0,
+        }));
+        return {
+          ...fallback,
+          annualPremium: apiPlan.annualPremium || fallback.annualPremium,
+          coverageList: covList.length > 0 ? covList : fallback.coverageList,
+          endosoBenefits: apiPlan.endosoBenefits || [],
+          endoso: apiPlan.endoso || fallback.endoso,
+          idCotizacion: apiPlan.numcot || fallback.idCotizacion,
+          planCode: apiPlan.codplan ? parseInt(apiPlan.codplan) : fallback.planCode,
+          installments: {
+            available: false,
+            description: 'Solo al contado',
+          },
+        };
+      };
+
+      return {
+        ...insurer,
+        basicPlan: mapRegionalPlan(basicApi, insurer.basicPlan),
+        premiumPlan: mapRegionalPlan(premiumApi, insurer.premiumPlan),
+      };
+    }
+
+    return insurer;
+  });
+}
+
 export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyComparisonProps) {
   const [generatingQuote, setGeneratingQuote] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [plansLoaded, setPlansLoaded] = useState(false);
-  const [insurersData, setInsurersData] = useState<AutoInsurer[]>(AUTO_THIRD_PARTY_INSURERS);
+  const [insurersData, setInsurersData] = useState<AutoInsurer[]>(() => {
+    // Inicializar con cache si existe — coberturas y beneficios se muestran de inmediato
+    const cached = readCache();
+    if (cached) {
+      return mergeApiData(AUTO_THIRD_PARTY_INSURERS, cached.fedpa, cached.is, cached.regional);
+    }
+    return AUTO_THIRD_PARTY_INSURERS;
+  });
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
 
-  // Cargar planes de FEDPA e IS en tiempo real
+  // Cargar planes de FEDPA, IS y REGIONAL en tiempo real (background refresh)
   useEffect(() => {
     const loadAllPlans = async () => {
       if (plansLoaded || fetchingRef.current) return;
@@ -37,107 +182,10 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         const isData = isRes.status === 'fulfilled' ? isRes.value : null;
         const regionalData = regionalRes.status === 'fulfilled' ? regionalRes.value : null;
 
-        setInsurersData(prevInsurers => {
-          return prevInsurers.map(insurer => {
-            // ── FEDPA ──
-            if (insurer.id === 'fedpa' && fedpaData?.success && fedpaData.plans?.length > 0) {
-              const basicApi = fedpaData.plans.find((p: any) => p.planType === 'basic');
-              const premiumApi = fedpaData.plans.find((p: any) => p.planType === 'premium');
-              
-              const mapFedpaPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
-                if (!apiPlan) return fallback;
-                const covList: CoverageItem[] = apiPlan.coverageList || [];
-                
-                return {
-                  ...fallback,
-                  coverageList: covList.length > 0 ? covList : fallback.coverageList,
-                  endoso: apiPlan.endoso || fallback.endoso,
-                  endosoPdf: apiPlan.endosoPdf || fallback.endosoPdf,
-                  endosoBenefits: apiPlan.endosoBenefits || [],
-                  planCode: apiPlan.emissionPlanCode || fedpaData.planCode || fallback.planCode || 1000,
-                  includedCoverages: apiPlan.includedCoverages || fallback.includedCoverages,
-                  idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
-                };
-              };
-              
-              return {
-                ...insurer,
-                basicPlan: mapFedpaPlan(basicApi, insurer.basicPlan),
-                premiumPlan: mapFedpaPlan(premiumApi, insurer.premiumPlan),
-              };
-            }
+        // Guardar en localStorage para carga instantánea en próxima visita
+        writeCache(fedpaData, isData, regionalData);
 
-            // ── INTERNACIONAL DE SEGUROS ──
-            if (insurer.id === 'internacional' && isData?.success && isData.plans?.length > 0) {
-              const basicApi = isData.plans.find((p: any) => p.planType === 'basic');
-              const premiumApi = isData.plans.find((p: any) => p.planType === 'premium');
-
-              const mapIsPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
-                if (!apiPlan) return fallback;
-                const covList: CoverageItem[] = apiPlan.coverageList || [];
-
-                return {
-                  ...fallback,
-                  annualPremium: apiPlan.annualPremium || fallback.annualPremium,
-                  coverageList: covList.length > 0 ? covList : undefined,
-                  // Carry forward quote data so we skip redundant API call on click
-                  idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
-                  vcodplancobertura: apiPlan.codPlanCobertura || fallback.vcodplancobertura,
-                  vcodgrupotarifa: apiPlan.vcodgrupotarifa || fallback.vcodgrupotarifa,
-                  vcodmarca: apiPlan.vcodmarca || fallback.vcodmarca,
-                  vcodmodelo: apiPlan.vcodmodelo || fallback.vcodmodelo,
-                  installments: {
-                    available: false,
-                    description: 'Solo al contado',
-                  },
-                };
-              };
-
-              return {
-                ...insurer,
-                basicPlan: mapIsPlan(basicApi, insurer.basicPlan),
-                premiumPlan: mapIsPlan(premiumApi, insurer.premiumPlan),
-              };
-            }
-
-            // ── REGIONAL ──
-            if (insurer.id === 'regional' && regionalData?.success && regionalData.plans?.length > 0) {
-              const basicApi = regionalData.plans.find((p: any) => p.planType === 'basic');
-              const premiumApi = regionalData.plans.find((p: any) => p.planType === 'premium');
-
-              const mapRegionalPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
-                if (!apiPlan) return fallback;
-                const covList: CoverageItem[] = (apiPlan.coverageList || []).map((c: any) => ({
-                  code: String(c.code || ''),
-                  name: c.name || '',
-                  limit: c.limit || '',
-                  prima: Number(c.prima) || 0,
-                }));
-                return {
-                  ...fallback,
-                  annualPremium: apiPlan.annualPremium || fallback.annualPremium,
-                  coverageList: covList.length > 0 ? covList : fallback.coverageList,
-                  endosoBenefits: apiPlan.endosoBenefits || [],
-                  endoso: apiPlan.endoso || fallback.endoso,
-                  idCotizacion: apiPlan.numcot || fallback.idCotizacion,
-                  planCode: apiPlan.codplan ? parseInt(apiPlan.codplan) : fallback.planCode,
-                  installments: {
-                    available: false,
-                    description: 'Solo al contado',
-                  },
-                };
-              };
-
-              return {
-                ...insurer,
-                basicPlan: mapRegionalPlan(basicApi, insurer.basicPlan),
-                premiumPlan: mapRegionalPlan(premiumApi, insurer.premiumPlan),
-              };
-            }
-
-            return insurer;
-          });
-        });
+        setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, fedpaData, isData, regionalData));
         
         setPlansLoaded(true);
         if (fedpaData?.success) toast.success('Precios actualizados en tiempo real', { duration: 2000 });
@@ -311,8 +359,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           </div>
         )}
 
-        {/* Coberturas — ONLY from API coverageList */}
-        {hasCoverageList && (
+        {/* Coberturas — from API coverageList (cached or live) */}
+        {hasCoverageList ? (
           <div className="mb-3">
             <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
               <FaShieldAlt className="text-[#010139]" />
@@ -337,9 +385,24 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
               ))}
             </div>
           </div>
+        ) : loadingPlans && (
+          <div className="mb-3">
+            <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <FaShieldAlt className="text-[#010139]" />
+              Coberturas incluidas
+            </h5>
+            <div className="border border-gray-200 rounded-lg overflow-hidden animate-pulse">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2.5 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${i < 4 ? 'border-b border-gray-100' : ''}`}>
+                  <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-16"></div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Beneficios y Asistencia — ONLY from API endosoBenefits */}
+        {/* Beneficios y Asistencia — from API endosoBenefits (cached or live) */}
         {hasEndosoBenefits && (
           <div className="mb-3">
             <button
