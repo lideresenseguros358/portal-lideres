@@ -12,7 +12,7 @@ interface ThirdPartyComparisonProps {
 }
 
 // ── Cache helpers ──
-const CACHE_KEY = 'tp_plans_cache';
+const CACHE_KEY = 'tp_plans_cache_v2';
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours — matches server-side TTL
 
 interface ApiCache {

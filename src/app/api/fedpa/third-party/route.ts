@@ -123,25 +123,26 @@ export async function GET(request: NextRequest) {
     const premiumInstTotal = Math.round(premiumAnnual * RECARGO_CUOTAS * 100) / 100;
     const premiumInstAmount = Math.round((premiumInstTotal / 2) * 100) / 100;
 
-    // Obtener beneficios reales del plan 426 desde la API
-    // La API retorna beneficios por PLAN (no por endoso) — ambos planes comparten los mismos beneficios
-    let planBenefits: string[] = [];
-    try {
-      const benRes = await fetch(
-        `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${USUARIO}&Clave=${CLAVE}&plan=426`
-      );
-      if (benRes.ok) {
-        const allBenefits = await benRes.json();
-        if (Array.isArray(allBenefits)) {
-          planBenefits = allBenefits
-            .filter((b: any) => b.PLAN === 426)
-            .map((b: any) => b.BENEFICIOS);
-        }
-      }
-      console.log(`[API FEDPA Third Party] Beneficios plan 426: ${planBenefits.length} items`);
-    } catch (e) {
-      console.warn('[API FEDPA Third Party] No se pudieron obtener beneficios del plan');
-    }
+    // Beneficios por endoso DT — derivados de los documentos oficiales de endoso FEDPA.
+    // La API consultar_beneficios_planes_externos retorna beneficios genéricos del plan 426
+    // que mezclan CC y DT (ej. Grúa $150/2 eventos es de CC, no de DT). Los endosos DT
+    // tienen límites distintos según el tipo (FAB vs FAV), definidos en los PDFs oficiales.
+    // Fuente: /API FEDPA/ENDOSO ASIST BASICO.pdf y /API FEDPA/ENDOSO ASIST VIP.pdf
+    const FAB_BENEFITS: string[] = [
+      'Inspección In Situ por accidente de tránsito (sin límite de eventos)',
+      'Ambulancia por accidente de tránsito (hasta $200.00/año, sin límite de eventos)',
+      'Grúa por accidente de tránsito (1 evento/año, hasta $100.00)',
+    ];
+    const FAV_BENEFITS: string[] = [
+      'Inspección In Situ por accidente de tránsito (sin límite de eventos)',
+      'Ambulancia por accidente de tránsito (hasta $200.00/año, sin límite de eventos)',
+      'Grúa por accidente o avería (2 eventos/año: 1 accidente + 1 avería, hasta $150.00)',
+      'Auxilio vial: cambio de llanta, pase de corriente, combustible (1 evento/año, hasta $100.00)',
+      'Cerrajería vehicular (1 evento/año, hasta $80.00)',
+      'Asistencia médica telefónica 24 horas',
+      'Telemedicina — DR. FEDLINE (video consulta ilimitada)',
+      'Asistencia en el Hogar: plomero, cerrajero, electricista (2 eventos/año, hasta $75.00)',
+    ];
 
     const result = {
       success: true,
@@ -163,7 +164,7 @@ export async function GET(request: NextRequest) {
           annualPremium: basicAnnual,
           annualPremiumExact: Math.round(basicPrima * 100) / 100,
           coverageList: basicCoverages,
-          endosoBenefits: planBenefits,
+          endosoBenefits: FAB_BENEFITS,
           installments: {
             available: true,
             payments: 2,
@@ -183,7 +184,7 @@ export async function GET(request: NextRequest) {
           annualPremium: premiumAnnual,
           annualPremiumExact: Math.round(premiumPrima * 100) / 100,
           coverageList: premiumCoverages,
-          endosoBenefits: planBenefits,
+          endosoBenefits: FAV_BENEFITS,
           installments: {
             available: true,
             payments: 2,
