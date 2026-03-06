@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
     const insurerName = formData.get('insurerName') as string || 'Internacional de Seguros';
     const clientId = formData.get('clientId') as string || '';
     const policyId = formData.get('policyId') as string || '';
+    const codCotizacion = formData.get('codCotizacion') as string || '';
     // Use server-side env to determine prod vs dev (client always sends 'development')
     const serverEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development';
     const isProduction = serverEnv === 'production';
@@ -414,6 +415,13 @@ export async function POST(request: NextRequest) {
     const welcomeRecipient = clientEmail || OFFICE_EMAIL;
     
     try {
+      // Build FEDPA carátula download URL if applicable
+      const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
+      const siteUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com';
+      const caratulaUrl = isFedpa && codCotizacion
+        ? `${siteUrl}/api/fedpa/caratula?codCotizacion=${encodeURIComponent(codCotizacion)}&env=PROD`
+        : '';
+
       const welcomeHtml = buildWelcomeEmail({
         nombreCompleto,
         cedula: clientData.cedula,
@@ -428,6 +436,7 @@ export async function POST(request: NextRequest) {
         vigenciaHasta,
         pdfUrl: (formData.get('pdfUrl') as string) || '',
         insurerName,
+        caratulaUrl,
       });
       
       const welcomeSubject = `¡Bienvenido! Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`;
@@ -617,6 +626,7 @@ function buildWelcomeEmail(data: {
   vigenciaHasta: string;
   pdfUrl: string;
   insurerName: string;
+  caratulaUrl?: string;
 }): string {
   const emergencyNumber = getInsurerEmergencyNumber(data.insurerName);
   const whatsappUrl = 'https://wa.me/14155238886';
@@ -723,7 +733,11 @@ function buildWelcomeEmail(data: {
         <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
       </div>` : ''}
 
-      ${data.pdfUrl ? `
+      ${data.caratulaUrl ? `
+      <div style="text-align:center;margin:20px 0;">
+        <a href="${data.caratulaUrl}" style="display:inline-block;background:#8AAA19;color:white;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Póliza Oficial</a>
+        <p style="font-size:11px;color:#999;margin-top:8px;">Descargue su carátula de póliza oficial emitida por ${data.insurerName}</p>
+      </div>` : data.pdfUrl ? `
       <div style="text-align:center;margin:20px 0;">
         <a href="${data.pdfUrl}" class="btn-green">📄 Descargar Póliza Oficial</a>
         <p style="font-size:11px;color:#999;margin-top:8px;">Enlace al documento oficial emitido por ${data.insurerName}</p>

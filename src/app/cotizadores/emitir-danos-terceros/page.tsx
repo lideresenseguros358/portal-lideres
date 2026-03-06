@@ -377,6 +377,7 @@ export default function EmitirDanosTercerosPage() {
           welcomeForm.append('insurerName', 'FEDPA Seguros');
           if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
+          if (emisionResult.cotizacion) welcomeForm.append('codCotizacion', String(emisionResult.cotizacion));
           
           welcomeForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -464,6 +465,7 @@ export default function EmitirDanosTercerosPage() {
           insurer: 'FEDPA Seguros',
           clientId: emisionResult.clientId,
           policyId: emisionResult.policyId,
+          codCotizacion: emisionResult.cotizacion,
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,

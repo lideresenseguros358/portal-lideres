@@ -358,6 +358,7 @@ export default function EmitirPage() {
           welcomeForm.append('firmaDataUrl', signatureRef.current || '');
           if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
+          if (emisionResult.cotizacion) welcomeForm.append('codCotizacion', String(emisionResult.cotizacion));
           
           welcomeForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
