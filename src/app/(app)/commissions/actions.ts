@@ -4769,11 +4769,14 @@ export async function actionRefreshCommItems(fortnight_id: string) {
       
       // PRIORIDAD 2: Broker de la PÓLIZA (fallback si cliente no tiene)
       const policyBrokerId = p.broker_id;
-      const policyPercent = p.percent_override ?? p.brokers?.percent_default;
       
       // Usar broker del cliente si existe, sino usar el de la póliza
       const finalBrokerId = clientBrokerId || policyBrokerId;
-      const finalPercent = clientBrokerId ? (clientPercent ?? 1.0) : (policyPercent ?? 1.0);
+      
+      // CRÍTICO: percent_override de la PÓLIZA SIEMPRE tiene prioridad sobre percent_default
+      // Sin importar si el broker viene del cliente o de la póliza
+      const defaultPercent = clientBrokerId ? (clientPercent ?? 1.0) : (p.brokers?.percent_default ?? 1.0);
+      const finalPercent = p.percent_override ?? defaultPercent;
       
       policyMap.set(p.policy_number, {
         broker_id: finalBrokerId,
@@ -4850,22 +4853,32 @@ export async function actionRefreshCommItems(fortnight_id: string) {
       
       if (!brokerChanged) {
         // Broker no cambió, verificar si el porcentaje cambió
+        // CRÍTICO: Necesitamos saber qué % se usó REALMENTE para calcular el gross_amount actual
+        // No podemos asumir que fue percent_default — pudo haber sido percent_override
         const { data: currentBroker } = await supabase
           .from('brokers')
           .select('percent_default')
           .eq('id', item.broker_id!)
           .single();
         
-        const currentPercent = currentBroker?.percent_default ?? 1.0;
-        const percentChanged = Math.abs(currentPercent - newPercent) > 0.0001;
+        // Inferir qué porcentaje se usó originalmente:
+        // Si la póliza NO tenía override antes, se usó percent_default del broker
+        // Si SÍ tenía override, se usó ese override
+        // Como no sabemos con certeza, usamos percent_default como base para el reverse-calc
+        const brokerDefault = currentBroker?.percent_default ?? 1.0;
+        
+        // El porcentaje que DEBERÍA usarse ahora (ya incluye percent_override si existe)
+        const percentChanged = Math.abs(brokerDefault - newPercent) > 0.0001;
         
         if (!percentChanged) {
           unchangedCount++;
           continue;
         }
         
-        // Solo cambió el porcentaje, recalcular gross_amount
-        const commissionRaw = currentPercent !== 0 ? (item.gross_amount || 0) / currentPercent : 0;
+        // El porcentaje cambió - recalcular gross_amount
+        // commission_raw = gross_amount / porcentaje_que_se_usó
+        // El gross_amount actual se calculó con brokerDefault (ya que no había override antes)
+        const commissionRaw = brokerDefault !== 0 ? (item.gross_amount || 0) / brokerDefault : 0;
         const newGrossAmount = commissionRaw * newPercent;
         
         const { error: updateError } = await supabase
@@ -4875,7 +4888,7 @@ export async function actionRefreshCommItems(fortnight_id: string) {
         
         if (!updateError) {
           updatedCount++;
-          console.log(`[actionRefreshCommItems] ✅ ${item.insured_name} [${item.policy_number}] - % actualizado: ${currentPercent} → ${newPercent} (${updateSource})`);
+          console.log(`[actionRefreshCommItems] ✅ ${item.insured_name} [${item.policy_number}] - % actualizado: ${brokerDefault} → ${newPercent} (${updateSource})`);
         }
         continue;
       }
