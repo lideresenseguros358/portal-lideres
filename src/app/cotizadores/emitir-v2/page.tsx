@@ -487,6 +487,7 @@ export default function EmitirV2Page() {
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
           cotizacion: emisionResult.cotizacion,
+          codCotizacion: emisionResult.cotizacion,
           policyId: emisionResult.policyId,
           clientId: emisionResult.clientId,
           primaTotal: selectedPlan.annualPremium,

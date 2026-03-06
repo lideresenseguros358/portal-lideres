@@ -7,13 +7,15 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt, FaEnvelope } from 'react-icons/fa';
+import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt, FaEnvelope, FaSpinner } from 'react-icons/fa';
 import confetti from 'canvas-confetti';
 
 export default function ConfirmacionPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [policyData, setPolicyData] = useState<any>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const caratulaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,6 +111,56 @@ export default function ConfirmacionPage() {
     `);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
+  };
+
+  const handleDownloadFedpaPdf = async () => {
+    if (!policyData?.codCotizacion || downloadingPdf) return;
+    setDownloadingPdf(true);
+    setPdfError(null);
+
+    try {
+      const response = await fetch('/api/fedpa/caratula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codCotizacion: policyData.codCotizacion,
+          environment: 'PROD',
+        }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('application/pdf')) {
+        // Direct PDF binary
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `poliza-fedpa-${policyData.codCotizacion}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // JSON response — might have a URL
+        const data = await response.json();
+        if (data.pdfUrl) {
+          window.open(data.pdfUrl, '_blank');
+        } else if (!data.success) {
+          throw new Error(data.error || 'No se pudo obtener la carátula');
+        } else {
+          // Fallback: use the HTML print carátula
+          handleDownloadCaratula();
+        }
+      }
+    } catch (err: any) {
+      console.error('[Confirmación] Error descargando PDF FEDPA:', err);
+      setPdfError(err.message || 'Error descargando póliza');
+      // Fallback to HTML carátula
+      handleDownloadCaratula();
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const handleGoHome = () => {
@@ -228,21 +280,40 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
-          {/* Botón: Descargar Póliza o Mensaje FedPa */}
-          {policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 max-w-md mx-auto">
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-[#010139] rounded-full flex items-center justify-center">
-                  <FaEnvelope className="text-white text-lg" />
-                </div>
-              </div>
-              <p className="text-base font-semibold text-[#010139] mb-2">
-                Su póliza será enviada en breve a su correo
-              </p>
-              <p className="text-sm text-gray-600">
-                Recuerde revisar la carpeta de <span className="font-semibold text-gray-800">spam</span> o <span className="font-semibold text-gray-800">correo no deseado</span> por si no lo ve en la bandeja principal.
-              </p>
+          {/* Botón: Descargar Póliza */}
+          {policyData?.insurer?.toUpperCase().includes('FEDPA') && policyData?.codCotizacion ? (
+            <div className="mb-6">
+              <button
+                onClick={handleDownloadFedpaPdf}
+                disabled={downloadingPdf}
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <FaSpinner className="text-xl text-white animate-spin" />
+                    <span className="text-white">Descargando...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaDownload className="text-xl text-white" />
+                    <span className="text-white">Descargar Póliza</span>
+                  </>
+                )}
+              </button>
+              {pdfError && (
+                <p className="text-xs text-amber-600 mt-2 text-center">
+                  {pdfError} — Se generó carátula alternativa
+                </p>
+              )}
             </div>
+          ) : policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
+            <button
+              onClick={handleDownloadCaratula}
+              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
+            >
+              <FaDownload className="text-xl text-white" />
+              <span className="text-white">Descargar Póliza</span>
+            </button>
           ) : policyData?.pdfUrl ? (
             <a
               href={policyData.pdfUrl}
@@ -262,11 +333,9 @@ export default function ConfirmacionPage() {
               <span className="text-white">Descargar Póliza</span>
             </button>
           )}
-          {!policyData?.insurer?.toUpperCase().includes('FEDPA') && (
-            <p className="text-xs text-gray-500 mb-6">
-              Documento oficial emitido por la aseguradora
-            </p>
-          )}
+          <p className="text-xs text-gray-500 mb-6">
+            Documento oficial emitido por la aseguradora
+          </p>
 
           <div className="my-6 border-t border-gray-200"></div>
 

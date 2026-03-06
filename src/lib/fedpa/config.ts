@@ -70,6 +70,10 @@ export const EMISOR_EXTERNO_ENDPOINTS = {
   // Emisión
   GET_NRO_POLIZA: '/api/Polizas/get_nropoliza',
   CREAR_POLIZA: '/api/Polizas/crear_poliza_auto_cc_externos',
+  
+  // Carátula (PDF de la póliza emitida)
+  GET_CARATULA_TEST: '/api/Polizas/get_nropoliza',
+  GET_CARATULA_PROD: '/api/Polizas/get_nropoliza_emitir',
 } as const;
 
 // ============================================
