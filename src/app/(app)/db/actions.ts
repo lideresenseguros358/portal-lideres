@@ -132,8 +132,28 @@ export async function actionMergeClients(sourceClientId: string, targetClientId:
     if (tempErr) {
       console.error('[actionMergeClients] Error reasignando temp_client_import:', tempErr);
     }
+
+    // 7. Reasignar chat_threads
+    const { error: chatThreadsErr } = await supabase
+      .from('chat_threads')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
     
-    // 7. Eliminar el cliente origen (ahora sin referencias)
+    if (chatThreadsErr) {
+      console.error('[actionMergeClients] Error reasignando chat_threads:', chatThreadsErr);
+    }
+
+    // 8. Reasignar chat_interactions
+    const { error: chatInterErr } = await supabase
+      .from('chat_interactions')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (chatInterErr) {
+      console.error('[actionMergeClients] Error reasignando chat_interactions:', chatInterErr);
+    }
+    
+    // 9. Eliminar el cliente origen (ahora sin referencias)
     const { error: deleteError } = await supabase
       .from('clients')
       .delete()
