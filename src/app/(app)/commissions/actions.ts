@@ -4675,7 +4675,7 @@ export async function actionExportBankCsv(fortnightId: string) {
     
     const fortnightLabel = `${quincena} ${mesNombre} ${year} - ${fechaDescarga}`;
     console.log('[actionExportBankCsv] Generando ACH con label:', fortnightLabel);
-    const achResult = await buildBankACH(totalsWithFullBroker, fortnightLabel);
+    const achResult = await buildBankACH(totalsWithFullBroker as any, fortnightLabel);
 
     console.log('[actionExportBankCsv] ACH generado:', {
       contentLength: achResult.content.length,

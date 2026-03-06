@@ -271,6 +271,9 @@ async function processMessage(msg: EmailMessage): Promise<any> {
     emailFrom: msg.from?.email || '',
     emailCc: msg.cc.map(c => c.email),
     emailSubject: msg.subject,
+    emailSubjectNormalized: msg.subjectNormalized,
+    inReplyTo: msg.inReplyTo,
+    threadReferences: msg.threadReferences,
     pendientesClassification: pendAi,
   });
 

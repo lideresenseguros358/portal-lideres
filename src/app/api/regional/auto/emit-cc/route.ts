@@ -53,7 +53,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Emit policy
+    const { getRegionalCredentials } = await import('@/lib/regional/config');
+    const creds = getRegionalCredentials('development');
+
     const emissionBody: RegionalCCEmissionBody = {
+      codInter: creds.codInter,
       numcot: parseInt(numcot),
       cliente: {
         direccion: {
@@ -115,6 +119,14 @@ export async function POST(request: NextRequest) {
       numcot: result.numcot,
       pdfUrl,
       insurer: 'REGIONAL',
+      // Echo back sent data for carátula verification
+      vehiculo: {
+        placa: numplaca || '',
+        serialcarroceria: serialcarroceria || '',
+        serialmotor: serialmotor || '',
+        color: color || '',
+      },
+      cuotasSent: cuotas ? parseInt(cuotas) : 1,
       _timing: { totalMs: elapsed },
     });
   } catch (error: any) {

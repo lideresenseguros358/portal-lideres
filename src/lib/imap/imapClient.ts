@@ -231,8 +231,14 @@ async function parseMessage(
 function normalizeSubject(subject: string): string {
   if (!subject) return '(sin asunto)';
   
-  return subject
-    .replace(/^(re:|fwd?:|fw:)\s*/gi, '')
+  let s = subject;
+  // Strip Re:/Fwd:/FW: prefixes repeatedly (handles "Re: Re: Fwd: ...")
+  let prev = '';
+  while (s !== prev) {
+    prev = s;
+    s = s.replace(/^(re|fwd?|fw)\s*:\s*/i, '');
+  }
+  return s
     .replace(/\s+/g, ' ')
     .trim() || '(sin asunto)';
 }

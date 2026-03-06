@@ -154,6 +154,24 @@ export async function POST(request: NextRequest) {
       policyId,
       requestId,
       message: `Póliza ${result.poliza} emitida exitosamente`,
+      // Echo back sent data for carátula verification
+      cliente: {
+        nombre: `${emisionRequest.PrimerNombre} ${emisionRequest.PrimerApellido}`.trim(),
+        cedula: emisionRequest.Identificacion,
+        email: emisionRequest.Email,
+        telefono: emisionRequest.Celular || emisionRequest.Telefono,
+        sexo: emisionRequest.Sexo,
+        fechaNacimiento: emisionRequest.FechaNacimiento,
+      },
+      vehiculo: {
+        marca: emisionRequest.Marca,
+        modelo: emisionRequest.Modelo,
+        ano: emisionRequest.Ano,
+        placa: emisionRequest.Placa,
+        motor: emisionRequest.Motor,
+        vin: emisionRequest.Vin,
+        color: emisionRequest.Color,
+      },
     });
   } catch (error: any) {
     console.error(`[API FEDPA Emisión] ${requestId} Error no controlado:`, error);

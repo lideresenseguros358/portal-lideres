@@ -23,6 +23,12 @@ export interface CaseCreationInput {
   emailFrom: string;
   emailCc: string[];
   emailSubject: string;
+  /** Normalized subject (Re:/Fwd: stripped) for grouping */
+  emailSubjectNormalized?: string;
+  /** In-Reply-To header for thread matching */
+  inReplyTo?: string | null;
+  /** References header for thread matching */
+  threadReferences?: string | null;
   /** Enhanced Pendientes classification (optional — used for ticket exceptions) */
   pendientesClassification?: PendientesClassificationResult;
 }
@@ -33,6 +39,19 @@ export interface CaseCreationResult {
   ticket?: string;
   action: 'created' | 'linked' | 'provisional' | 'error';
   message: string;
+}
+
+/**
+ * Normaliza subject para agrupar: quita Re:/Fwd:/FW:, números de ticket,
+ * espacios extra, y pasa a minúsculas.
+ */
+function normalizeSubjectForGrouping(subject: string): string {
+  if (!subject) return '';
+  return subject
+    .replace(/^(re|fwd?|fw)\s*:\s*/gi, '')  // Remove Re: Fwd: FW:
+    .replace(/\s+/g, ' ')                    // Collapse whitespace
+    .trim()
+    .toLowerCase();
 }
 
 /**
@@ -73,18 +92,42 @@ export async function processInboundEmail(
       input.aiClassification.ramo_bucket
     );
 
-    // 3. Verificar si debe agruparse con caso existente (solo si hay broker)
-    const existingCaseId = brokerId ? await findExistingCase(
+    // 3. Verificar si debe agruparse con caso existente
+    //    Busca por: thread headers, ticket en subject, subject normalizado, o mismo remitente reciente
+    const existingCaseId = await findExistingCase(
       supabase,
       input.emailSubject,
+      input.emailSubjectNormalized || normalizeSubjectForGrouping(input.emailSubject),
       input.emailFrom,
-      brokerId
-    ) : null;
+      brokerId,
+      input.inReplyTo || null,
+      input.threadReferences || null,
+    );
 
     if (existingCaseId) {
       // VINCULAR a caso existente
       await linkEmailToCase(supabase, existingCaseId, input.inboundEmailId);
-      
+
+      // Update inbound_email status immediately
+      // @ts-ignore - tabla nueva
+      await supabase
+        .from('inbound_emails')
+        .update({ processed_status: 'linked', processed_at: new Date().toISOString() })
+        .eq('id', input.inboundEmailId);
+
+      await logImapDebug({
+        inboundEmailId: input.inboundEmailId,
+        caseId: existingCaseId,
+        stage: 'case_link',
+        status: 'success',
+        message: `Correo vinculado a caso existente ${existingCaseId}`,
+        payload: {
+          strategy: 'findExistingCase',
+          inReplyTo: input.inReplyTo,
+          subjectNormalized: input.emailSubjectNormalized,
+        },
+      });
+
       return {
         success: true,
         caseId: existingCaseId,
@@ -330,42 +373,152 @@ async function determineMaster(
 }
 
 /**
- * Busca caso existente para agrupar (24h)
+ * Busca caso existente para agrupar un correo entrante.
+ *
+ * Estrategia de búsqueda (por prioridad):
+ *   1. Thread matching: In-Reply-To / References apuntan a un message_id ya vinculado
+ *   2. Ticket en subject: un ticket posicional (12+ dígitos) referenciado
+ *   3. Subject normalizado: mismo subject base en un caso activo (ventana 30 días)
+ *   4. Mismo remitente + broker reciente (48h) como fallback
  */
 async function findExistingCase(
   supabase: any,
   subject: string,
+  subjectNormalized: string,
   emailFrom: string,
-  brokerId: string
+  brokerId: string | null,
+  inReplyTo: string | null,
+  threadReferences: string | null,
 ): Promise<string | null> {
-  // 1. Si subject contiene ticket, buscar por ticket
-  const ticketMatch = subject.match(/\d{12,}/); // 12 dígitos
+
+  // ── 1. THREAD MATCHING (In-Reply-To / References) ──
+  // If the email is a reply, its In-Reply-To or References header points to
+  // a previous message_id that should already be linked to a case via case_emails.
+  const refIds: string[] = [];
+  if (inReplyTo) refIds.push(inReplyTo.trim());
+  if (threadReferences) {
+    // References header is space-separated list of message-ids
+    const refs = threadReferences.split(/\s+/).map(r => r.trim()).filter(Boolean);
+    for (const r of refs) {
+      if (!refIds.includes(r)) refIds.push(r);
+    }
+  }
+
+  if (refIds.length > 0) {
+    // Find inbound_emails matching those message_ids
+    // @ts-ignore - tabla nueva
+    const { data: linkedEmails } = await supabase
+      .from('inbound_emails')
+      .select('id')
+      .in('message_id', refIds)
+      .limit(10);
+
+    if (linkedEmails && linkedEmails.length > 0) {
+      const emailIds = linkedEmails.map((e: any) => e.id);
+      // Find the case linked to any of those emails
+      // @ts-ignore - tabla nueva
+      const { data: caseLink } = await supabase
+        .from('case_emails')
+        .select('case_id')
+        .in('inbound_email_id', emailIds)
+        .limit(1)
+        .single();
+
+      if (caseLink?.case_id) {
+        // Verify the case is still active (not deleted)
+        const { data: activeCase } = await supabase
+          .from('cases')
+          .select('id')
+          .eq('id', caseLink.case_id)
+          .neq('is_deleted', true)
+          .single();
+
+        if (activeCase) {
+          console.log(`[CASE ENGINE] Thread match: linked to case ${activeCase.id} via In-Reply-To/References`);
+          return activeCase.id;
+        }
+      }
+    }
+  }
+
+  // ── 2. TICKET EN SUBJECT ──
+  const ticketMatch = subject.match(/\d{12,}/); // 12+ digit positional ticket
   if (ticketMatch) {
     const { data: caseByTicket } = await supabase
       .from('cases')
       .select('id')
       .eq('ticket', ticketMatch[0])
+      .neq('is_deleted', true)
       .single();
 
     if (caseByTicket) {
+      console.log(`[CASE ENGINE] Ticket match: linked to case ${caseByTicket.id} via ticket ${ticketMatch[0]}`);
       return caseByTicket.id;
     }
   }
 
-  // 2. Buscar caso del mismo broker creado en últimas 24h con mismo remitente
-  const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // ── 3. SUBJECT NORMALIZADO (same base subject in active case, 30-day window) ──
+  if (subjectNormalized && subjectNormalized.length > 5) {
+    const last30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: recentCase } = await supabase
-    .from('cases')
-    .select('id, detected_broker_email')
-    .eq('broker_id', brokerId)
-    .gte('created_at', last24h)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    // Find inbound_emails with matching normalized subject linked to a case
+    // Use ilike for case-insensitive comparison; escape LIKE wildcards
+    const escapedSubject = subjectNormalized.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    // @ts-ignore - tabla nueva
+    const { data: subjectMatches } = await supabase
+      .from('inbound_emails')
+      .select('id, subject_normalized')
+      .ilike('subject_normalized', escapedSubject)
+      .gte('date_sent', last30d)
+      .eq('processed_status', 'linked')
+      .order('date_sent', { ascending: false })
+      .limit(5);
 
-  if (recentCase && recentCase.detected_broker_email === emailFrom) {
-    return recentCase.id;
+    if (subjectMatches && subjectMatches.length > 0) {
+      const matchedIds = subjectMatches.map((e: any) => e.id);
+      // @ts-ignore - tabla nueva
+      const { data: caseLinkBySubject } = await supabase
+        .from('case_emails')
+        .select('case_id')
+        .in('inbound_email_id', matchedIds)
+        .limit(1)
+        .single();
+
+      if (caseLinkBySubject?.case_id) {
+        // Verify the case is still active
+        const { data: activeCase } = await supabase
+          .from('cases')
+          .select('id')
+          .eq('id', caseLinkBySubject.case_id)
+          .neq('is_deleted', true)
+          .single();
+
+        if (activeCase) {
+          console.log(`[CASE ENGINE] Subject match: linked to case ${activeCase.id} via normalized subject "${subjectNormalized}"`);
+          return activeCase.id;
+        }
+      }
+    }
+  }
+
+  // ── 4. SAME SENDER + BROKER (48h fallback) ──
+  if (brokerId) {
+    const last48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    const { data: recentCase } = await supabase
+      .from('cases')
+      .select('id, detected_broker_email')
+      .eq('broker_id', brokerId)
+      .gte('created_at', last48h)
+      .neq('is_deleted', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (recentCase && recentCase.detected_broker_email === emailFrom) {
+      console.log(`[CASE ENGINE] Recent broker match: linked to case ${recentCase.id} (same sender within 48h)`);
+      return recentCase.id;
+    }
   }
 
   return null;
@@ -386,6 +539,12 @@ async function linkEmailToCase(
     linked_by: 'system',
     visible_to_broker: true,
   });
+
+  // Touch the case's updated_at so it stays fresh in listings
+  await supabase
+    .from('cases')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', caseId);
 
   // Crear evento de historial
   await createHistoryEvent(supabase, caseId, 'email_linked', {

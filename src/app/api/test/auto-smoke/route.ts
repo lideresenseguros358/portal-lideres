@@ -171,8 +171,8 @@ function buildScenarios(): Scenario[] {
 
   // ── DT FEDPA: 10 scenarios (idx 0-4, basic contado + premium 2cuotas) ──
   for (let i = 0; i < 5; i++) {
-    const v = VEHICLE_POOL[i];
-    const y = years[i % years.length];
+    const v = VEHICLE_POOL[i]!;
+    const y = years[i % years.length]!;
     scenarios.push({
       id: id++, type: 'DT', insurer: 'FEDPA', vehicle: v, year: y,
       plan: 'Básico', planCode: 1000, cuotas: 1, deducible: 1,
@@ -189,8 +189,8 @@ function buildScenarios(): Scenario[] {
 
   // ── DT IS Internacional: 5 scenarios (idx 5-9) ──
   for (let i = 5; i < 10; i++) {
-    const v = VEHICLE_POOL[i];
-    const y = years[i % years.length];
+    const v = VEHICLE_POOL[i]!;
+    const y = years[i % years.length]!;
     scenarios.push({
       id: id++, type: 'DT', insurer: 'IS', vehicle: v, year: y,
       plan: 'DAT Particular', planCode: 306, cuotas: 1, deducible: 1,
@@ -203,11 +203,11 @@ function buildScenarios(): Scenario[] {
   const ccDeducibles = [1, 2, 3];
   const ccCuotas = [1, 2, 6, 10];
   for (let i = 10; i < VEHICLE_POOL.length; i++) {
-    const v = VEHICLE_POOL[i];
-    const y = years[i % years.length];
-    const val = ccValues[i % ccValues.length];
-    const ded = ccDeducibles[i % ccDeducibles.length];
-    const cuot = ccCuotas[i % ccCuotas.length];
+    const v = VEHICLE_POOL[i]!;
+    const y = years[i % years.length]!;
+    const val = ccValues[i % ccValues.length]!;
+    const ded = ccDeducibles[i % ccDeducibles.length]!;
+    const cuot = ccCuotas[i % ccCuotas.length]!;
     const dedLabel = ded === 1 ? 'bajo' : ded === 2 ? 'medio' : 'alto';
     scenarios.push({
       id: id++, type: 'CC', insurer: 'IS', vehicle: v, year: y,
@@ -220,10 +220,10 @@ function buildScenarios(): Scenario[] {
   // Pad to exactly 50 with extra CC
   while (scenarios.length < 50) {
     const idx = scenarios.length % VEHICLE_POOL.length;
-    const v = VEHICLE_POOL[idx];
-    const ded = ccDeducibles[scenarios.length % 3];
-    const cuot = ccCuotas[scenarios.length % 4];
-    const val = ccValues[scenarios.length % ccValues.length];
+    const v = VEHICLE_POOL[idx]!;
+    const ded = ccDeducibles[scenarios.length % 3]!;
+    const cuot = ccCuotas[scenarios.length % 4]!;
+    const val = ccValues[scenarios.length % ccValues.length]!;
     const dedLabel = ded === 1 ? 'bajo' : ded === 2 ? 'medio' : 'alto';
     scenarios.push({
       id: id++, type: 'CC', insurer: 'IS', vehicle: v, year: 2025,
@@ -317,7 +317,7 @@ async function runFedpaDT(
       Motor: `SMKM${String(s.id).padStart(8, '0')}`,
       Placa: `SMK${String(s.id).padStart(3, '0')}`,
       Vin: `SMKVIN${String(s.id).padStart(11, '0')}`,
-      Color: ['BLANCO', 'NEGRO', 'GRIS', 'ROJO', 'AZUL'][s.id % 5],
+      Color: ['BLANCO', 'NEGRO', 'GRIS', 'ROJO', 'AZUL'][s.id % 5]!,
       Pasajero: 5,
       Puerta: 4,
       PrimaTotal: s.planCode === 1000 ? 130 : 165,
@@ -338,7 +338,7 @@ async function runFedpaDT(
 
     // ── HARDCODED DATA CHECK ──
     result.hardcodedChecks = {
-      planCodeDynamic: s.planCode !== 1000 || s.planCode !== 1002 ? 'OK — varies' : 'WARN — check',
+      planCodeDynamic: s.planCode !== 1000 && s.planCode !== 1002 ? 'OK — varies' : 'WARN — check',
       primaMatchesPlan: (s.planCode === 1000 && payload.PrimaTotal === 130) ||
         (s.planCode === 1002 && payload.PrimaTotal === 165) ? 'OK' : 'MISMATCH',
       cuotasSent: payload.cantidadPago,
@@ -590,7 +590,7 @@ export async function GET(request: NextRequest) {
   // PHASE 2: Run scenarios sequentially
   // ══════════════════════════════════════════════════════
   for (let i = 0; i < scenarios.length; i++) {
-    const s = scenarios[i];
+    const s = scenarios[i]!;
     const cat = s.type === 'DT' && s.insurer === 'FEDPA' ? 'DT_FEDPA'
       : s.type === 'DT' && s.insurer === 'IS' ? 'DT_IS'
       : 'CC_IS';

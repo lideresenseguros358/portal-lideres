@@ -123,6 +123,25 @@ export async function POST(request: NextRequest) {
       poliza: result.poliza,
       numcot: result.numcot,
       insurer: 'REGIONAL',
+      // Echo back sent data for carátula verification
+      cliente: {
+        nombre: `${nombre} ${apellido}`.trim(),
+        cedula: prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || ''),
+        email: email || '',
+        telefono: celular || telefono || '',
+        sexo: sexo || 'M',
+        fechaNacimiento: fechaNacimiento || '',
+      },
+      vehiculo: {
+        codmarca: parseInt(codmarca),
+        codmodelo: parseInt(codmodelo),
+        anio: parseInt(anio),
+        placa: numplaca || '',
+        serialcarroceria: serialcarroceria || '',
+        serialmotor: serialmotor || '',
+        color: color || '',
+      },
+      plan: String(plan),
       _timing: { totalMs: elapsed },
     });
   } catch (error: any) {
