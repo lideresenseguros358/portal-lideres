@@ -192,23 +192,25 @@ async function fetchAllPlans() {
 }
 
 export async function GET() {
+  const cacheHeaders = { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' };
+
   try {
     if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
       console.log('[API REGIONAL Third Party] Usando cache');
-      return NextResponse.json(cache.data);
+      return NextResponse.json(cache.data, { headers: cacheHeaders });
     }
 
     if (inflightPromise) {
       console.log('[API REGIONAL Third Party] Esperando request en vuelo...');
       const data = await inflightPromise;
-      return NextResponse.json(data);
+      return NextResponse.json(data, { headers: cacheHeaders });
     }
 
     inflightPromise = fetchAllPlans().finally(() => {
       inflightPromise = null;
     });
     const data = await inflightPromise;
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: cacheHeaders });
   } catch (error: any) {
     console.error('[API REGIONAL Third Party] Error:', error);
     return NextResponse.json({

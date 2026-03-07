@@ -76,7 +76,9 @@ export async function GET(request: NextRequest) {
     // Usar cache si disponible
     if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
       console.log('[API FEDPA Third Party] Usando cache');
-      return NextResponse.json(cache.data);
+      return NextResponse.json(cache.data, {
+        headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      });
     }
 
     // Cotización Opción A (Básico): B=5,000, sin gastos médicos, con endoso
@@ -201,7 +203,11 @@ export async function GET(request: NextRequest) {
     // Guardar en cache
     cache = { data: result, timestamp: Date.now() };
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200',
+      },
+    });
   } catch (error: any) {
     console.error('[API FEDPA Third Party] Error:', error);
     return NextResponse.json(

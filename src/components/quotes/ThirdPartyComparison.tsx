@@ -154,7 +154,8 @@ function mergeApiData(
 
 export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyComparisonProps) {
   const [generatingQuote, setGeneratingQuote] = useState(false);
-  const [loadingPlans, setLoadingPlans] = useState(false);
+  const hasCacheRef = useRef(!!readCache());
+  const [loadingPlans, setLoadingPlans] = useState(!hasCacheRef.current);
   const [plansLoaded, setPlansLoaded] = useState(false);
   const [insurersData, setInsurersData] = useState<AutoInsurer[]>(() => {
     // Inicializar con cache si existe — coberturas y beneficios se muestran de inmediato
@@ -167,12 +168,13 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
 
-  // Cargar planes de FEDPA, IS y REGIONAL en tiempo real (background refresh)
+  // Cargar planes de FEDPA, IS y REGIONAL (silent refresh si hay cache, loading si no)
   useEffect(() => {
     const loadAllPlans = async () => {
       if (plansLoaded || fetchingRef.current) return;
       fetchingRef.current = true;
-      setLoadingPlans(true);
+      // Only show loading spinner if we DON'T have a cache (first visit)
+      if (!hasCacheRef.current) setLoadingPlans(true);
       
       try {
         const [fedpaRes, isRes, regionalRes] = await Promise.allSettled([
@@ -191,7 +193,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, fedpaData, isData, regionalData));
         
         setPlansLoaded(true);
-        if (fedpaData?.success) toast.success('Precios actualizados en tiempo real', { duration: 2000 });
       } catch (error) {
         console.error('[ThirdParty] Error cargando planes:', error);
       } finally {

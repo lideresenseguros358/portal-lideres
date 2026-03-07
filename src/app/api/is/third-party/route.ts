@@ -183,24 +183,26 @@ async function fetchAllPlans() {
 }
 
 export async function GET() {
+  const cacheHeaders = { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' };
+
   try {
     // 1. Return cache if fresh
     if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
       console.log('[API IS Third Party] Usando cache');
-      return NextResponse.json(cache.data);
+      return NextResponse.json(cache.data, { headers: cacheHeaders });
     }
 
     // 2. Dedup: if another request is already fetching, wait for it
     if (inflightPromise) {
       console.log('[API IS Third Party] Esperando request en vuelo...');
       const data = await inflightPromise;
-      return NextResponse.json(data);
+      return NextResponse.json(data, { headers: cacheHeaders });
     }
 
     // 3. Fetch and dedup
     inflightPromise = fetchAllPlans().finally(() => { inflightPromise = null; });
     const data = await inflightPromise;
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: cacheHeaders });
   } catch (error: any) {
     console.error('[API IS Third Party] Error:', error);
     // Return fallback so UI doesn't break
