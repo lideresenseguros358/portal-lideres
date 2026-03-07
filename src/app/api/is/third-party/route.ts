@@ -62,16 +62,22 @@ interface CoverageItem {
 // Actualmente la API de IS (getlistacoberturas) solo retorna 3 coberturas para planes DT
 // y no incluye beneficios de asistencia. Estos datos provienen del condicionado de IS.
 const IS_SOAT_BENEFITS: string[] = [
-  'Muerte accidental del conductor: $5,000.00',
-  'Gastos funerarios del conductor: $1,500.00',
-  'Asistencia legal en accidentes de tránsito',
+  'Coordinación de envío de ambulancia por accidente de tránsito',
+  'Asistencia vial: cambio de llanta, envío de combustible, pase de corriente (Conexión)',
+  'Cerrajería vial (Conexión)',
+  'Grúa por accidente o desperfectos mecánicos (Conexión)',
+  'Transmisión de mensajes urgentes',
+  'Inspección "in situ"',
 ];
 const IS_INTERMEDIO_BENEFITS: string[] = [
-  'Muerte accidental del conductor: $10,000.00',
-  'Gastos funerarios del conductor: $3,000.00',
-  'Asistencia vial: grúa, paso de corriente, cambio de llanta',
   'Asistencia legal en accidentes de tránsito',
-  'Servicio de ambulancia por accidente',
+  'Coordinación de envío de ambulancia por accidente de tránsito',
+  'Asistencia vial: cambio de llanta, envío de combustible, pase de corriente (hasta B/.150, máx. 3 eventos/año)',
+  'Cerrajería vial (hasta B/.150, máx. 3 eventos/año)',
+  'Grúa por accidente o desperfectos mecánicos (hasta B/.150, máx. 3 eventos/año)',
+  'Transmisión de mensajes urgentes',
+  'Inspección "in situ"',
+  'Depósito y custodia de vehículos',
 ];
 
 async function fetchPlan(

@@ -27,6 +27,32 @@ const FALLBACK_PREMIUM_PRICE = 162.00;
 const PLAN_BASICO_CODE = '30';
 const PLAN_PLUS_CODE = '31';
 
+// ── Hardcoded coverages & benefits (planesRc endpoint is unreliable) ──
+const REGIONAL_BASIC_COVERAGES = [
+  { code: 'LC', name: 'Lesiones Corporales', limit: '$5,000.00 / $10,000.00', prima: 0 },
+  { code: 'DPA', name: 'Daños a la Propiedad Ajena', limit: '$5,000.00', prima: 0 },
+];
+const REGIONAL_PREMIUM_COVERAGES = [
+  { code: 'LC', name: 'Lesiones Corporales', limit: '$10,000.00 / $20,000.00', prima: 0 },
+  { code: 'DPA', name: 'Daños a la Propiedad Ajena', limit: '$10,000.00', prima: 0 },
+  { code: 'GM', name: 'Gastos Médicos', limit: '$500.00 / $2,500.00', prima: 0 },
+];
+const REGIONAL_BASIC_BENEFITS: string[] = [
+  'Coordinación de envío de ambulancia por accidente de tránsito',
+  'Inspección "in situ"',
+  'Transmisión de mensajes urgentes',
+];
+const REGIONAL_PREMIUM_BENEFITS: string[] = [
+  'Asistencia legal en accidentes de tránsito',
+  'Coordinación de envío de ambulancia por accidente de tránsito',
+  'Asistencia vial: cambio de llanta, envío de combustible, pase de corriente (hasta B/.150, máx. 3 eventos/año)',
+  'Cerrajería vial (hasta B/.150, máx. 3 eventos/año)',
+  'Grúa por accidente o desperfectos mecánicos (hasta B/.150, máx. 3 eventos/año)',
+  'Transmisión de mensajes urgentes',
+  'Inspección "in situ"',
+  'Depósito y custodia de vehículos',
+];
+
 /**
  * Fetch all RC plans from REGIONAL API (includes COBERTURAS + BENEFICIOS)
  */
@@ -142,22 +168,26 @@ async function fetchAllPlans() {
   const premium = premiumPlan || premiumFallback;
 
   const buildPlanResponse = (plan: any | null, planType: string, fallbackPrice: number, fallbackName: string) => {
+    const fallbackCoverages = planType === 'basic' ? REGIONAL_BASIC_COVERAGES : REGIONAL_PREMIUM_COVERAGES;
+    const fallbackBenefits = planType === 'basic' ? REGIONAL_BASIC_BENEFITS : REGIONAL_PREMIUM_BENEFITS;
+
     if (!plan) {
       return {
         planType,
-        name: fallbackName,
+        name: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
         apiName: fallbackName,
-        codplan: '',
+        codplan: planType === 'basic' ? PLAN_BASICO_CODE : PLAN_PLUS_CODE,
         annualPremium: fallbackPrice,
         fromApi: false,
-        coverageList: [],
-        endosoBenefits: [],
+        coverageList: fallbackCoverages,
+        endosoBenefits: fallbackBenefits,
+        endoso: planType === 'basic' ? 'Endoso Básico' : 'Endoso Plus',
         installments: { available: false, description: 'Solo al contado' },
       };
     }
 
-    const coverageList = normalizeCoberturas(plan.COBERTURAS || []);
-    const endosoBenefits = normalizeBeneficios(plan.BENEFICIOS || []);
+    const apiCoverages = normalizeCoberturas(plan.COBERTURAS || []);
+    const apiBenefits = normalizeBeneficios(plan.BENEFICIOS || []);
 
     return {
       planType,
@@ -166,8 +196,8 @@ async function fetchAllPlans() {
       codplan: String(plan.CODPLAN || ''),
       annualPremium: Number(plan.MT_PRIMA) || fallbackPrice,
       fromApi: true,
-      coverageList,
-      endosoBenefits,
+      coverageList: apiCoverages.length > 0 ? apiCoverages : fallbackCoverages,
+      endosoBenefits: apiBenefits.length > 0 ? apiBenefits : fallbackBenefits,
       endoso: planType === 'basic' ? 'Endoso Básico' : 'Endoso Plus',
       installments: { available: false, description: 'Solo al contado' },
     };
