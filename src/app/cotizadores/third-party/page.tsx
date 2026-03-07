@@ -110,7 +110,7 @@ export default function ThirdPartyPage() {
         annualPremium: plan.annualPremium,
         _isReal: true,
         isREGIONAL: true,
-        _planCode: tpQuote.planCode || plan.emissionPlanCode || plan.planCode || '',
+        _planCode: tpQuote.planCode || plan.emissionPlanCode || plan.planCode || (planType === 'basic' ? 30 : 31),
         _idCotizacion: tpQuote.idCotizacion,
         _includedCoverages: plan.includedCoverages,
         _vcodmarca: tpQuote.vcodmarca,

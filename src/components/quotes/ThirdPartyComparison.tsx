@@ -266,7 +266,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
         insurerId: insurer.id, insurerName: insurer.name, planType: type,
         annualPremium: plan.annualPremium, isRealAPI: true, isREGIONAL: true,
-        idCotizacion: plan.idCotizacion, planCode: plan.planCode,
+        idCotizacion: plan.idCotizacion,
+        planCode: plan.planCode || (type === 'basic' ? 30 : 31),
         installments: plan.installments,
       }));
 

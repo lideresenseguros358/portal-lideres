@@ -176,6 +176,7 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
     emoji: '🟥',
     basicPlan: {
       name: 'Plan Básico',
+      planCode: 30,
       endoso: 'Endoso Básico',
       coverages: {
         bodilyInjury: '',
@@ -198,6 +199,7 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
     },
     premiumPlan: {
       name: 'Plan Premium',
+      planCode: 31,
       endoso: 'Endoso Plus',
       coverages: {
         bodilyInjury: '',
