@@ -577,6 +577,14 @@ export default function FinalQuoteSummary({
                 <p className="font-bold text-[#010139]">DÉCIMA: ACEPTACIÓN DIGITAL</p>
                 <p>Acepto que la firma digital incorporada en el portal mediante validación electrónica constituye aceptación plena, válida y vinculante del presente documento, conforme a la legislación vigente sobre comercio electrónico en la República de Panamá.</p>
               </div>
+
+              {/* Regulatory Banner */}
+              <div className="bg-[#010139] rounded-lg py-4 px-4 text-center mt-6">
+                <p className="text-[10px] text-gray-400 leading-relaxed mb-2">
+                  Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+                </p>
+                <img src="/aseguradoras/logo-SSRP.png" alt="SSRP" className="inline-block w-[70px] opacity-85" />
+              </div>
             </div>
 
             {/* Footer */}

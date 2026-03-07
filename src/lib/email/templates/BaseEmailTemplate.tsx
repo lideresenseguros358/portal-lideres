@@ -221,17 +221,21 @@ export function BaseEmailTemplate({
         ` : ''}
       </div>
       
-      <!-- Footer -->
+      <!-- Regulatory Footer -->
+      <div style="background:#010139;padding:20px 35px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5;">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <img src="${baseUrl}/aseguradoras/logo-SSRP.png" alt="SSRP" width="100" height="auto" style="display:inline-block;max-width:100px;opacity:0.85;" />
+      </div>
+
+      <!-- Informational Footer -->
       <div class="email-footer">
         <p class="email-footer-brand">Líderes en Seguros</p>
         <p>${footerText}</p>
         <p style="margin-top: 12px;">
           <a href="${baseUrl}">Portal Web</a> | 
           <a href="${baseUrl}/soporte">Soporte Técnico</a>
-        </p>
-        <p style="margin-top: 16px; font-size: 12px; color: #999;">
-          Este es un correo automático generado por el Portal Líderes.<br>
-          Por favor no responder directamente a este mensaje.
         </p>
       </div>
     </div>

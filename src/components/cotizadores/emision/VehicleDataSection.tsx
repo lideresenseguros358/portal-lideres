@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { FaCar } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { VEHICLE_COLORS } from '@/lib/regional/color-map';
 
 export interface VehicleData {
   placa: string;
@@ -239,13 +240,16 @@ export default function VehicleDataSection({
         <label className="block text-sm font-semibold text-gray-700 mb-2">
           Color <span className="text-red-500">*</span>
         </label>
-        <input
-          type="text"
+        <select
           value={formData.color}
           onChange={(e) => handleChange('color', e.target.value)}
-          className={`${inputClass} ${errors.color ? errorInputClass : normalInputClass}`}
-          placeholder="Ej: Rojo, Blanco, Negro"
-        />
+          className={`${inputClass} bg-white ${errors.color ? errorInputClass : normalInputClass}`}
+        >
+          <option value="">Seleccionar color</option>
+          {VEHICLE_COLORS.map((c) => (
+            <option key={c.code} value={c.label}>{c.label}</option>
+          ))}
+        </select>
         {errors.color && (
           <p className="text-red-500 text-xs mt-1">{errors.color}</p>
         )}

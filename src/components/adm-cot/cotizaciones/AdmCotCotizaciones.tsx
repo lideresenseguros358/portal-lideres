@@ -253,7 +253,7 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
       doc.setFontSize(6.5);
       doc.setTextColor(150, 150, 150);
       doc.text(`Página ${data.pageNumber}`, w - margin, h - 8, { align: 'right' });
-      doc.text('Líderes en Seguros, S.A. — Documento generado automáticamente', margin, h - 8);
+      doc.text('Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750', margin, h - 8);
     },
   });
 

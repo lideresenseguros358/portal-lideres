@@ -216,6 +216,14 @@ export default function TruthDeclarationSection({
         </p>
       </div>
 
+      {/* Regulatory Banner */}
+      <div className="bg-[#010139] rounded-lg py-4 px-4 text-center">
+        <p className="text-[10px] text-gray-400 leading-relaxed mb-2">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <img src="/aseguradoras/logo-SSRP.png" alt="SSRP" className="inline-block w-[70px] opacity-85" />
+      </div>
+
       {/* Validación visual */}
       {!isAccepted && (
         <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3">

@@ -255,7 +255,13 @@ async function sendEscalationEmail(conversation: any, summary: string, messages:
       </table>
       <h3>Historial completo:</h3>
       <pre style="background: #f3f4f6; padding: 16px; border-radius: 8px; font-size: 12px; white-space: pre-wrap;">${messageHistory}</pre>
-      <p style="color: #6b7280; font-size: 12px; margin-top: 24px;">Prioridad: <strong style="color: #dc2626;">URGENTE</strong> — Generado automáticamente por ADM COT</p>
+      <p style="color: #6b7280; font-size: 12px; margin-top: 24px;">Prioridad: <strong style="color: #dc2626;">URGENTE</strong></p>
+      <div style="margin-top:20px;padding:16px;background:#010139;border-radius:8px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:10px;color:#9ca3af;line-height:1.5;">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <img src="https://portal.lideresenseguros.com/aseguradoras/logo-SSRP.png" alt="SSRP" width="80" style="display:inline-block;max-width:80px;opacity:0.85;" />
+      </div>
     `;
 
     const result = await sendEmail({

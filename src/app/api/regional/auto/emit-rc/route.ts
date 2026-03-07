@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaRC } from '@/lib/regional/emission.service';
 import { getRegionalCredentials } from '@/lib/regional/config';
+import { colorToRegionalCode } from '@/lib/regional/color-map';
 import type { RegionalRCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -54,18 +55,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Convert color from free text to Regional catalog code
+    const colorCode = colorToRegionalCode(color || '');
+
+    // Sanitize phone numbers: digits only, min 7 chars
+    const cleanPhone = (ph: string | undefined, fallback: string) => {
+      const digits = (ph || '').replace(/\D/g, '');
+      return digits.length >= 7 ? digits : fallback;
+    };
+
     const emissionBody: RegionalRCEmissionBody = {
       codInter: creds.codInter,
       plan: String(plan),
       cliente: {
-        nomter: nombre,
-        apeter: apellido,
+        nomter: (nombre || '').toUpperCase(),
+        apeter: (apellido || '').toUpperCase(),
         fchnac: fechaNacimiento || '1990-01-01',
         edad: parseInt(edad) || 35,
         sexo: sexo || 'M',
         edocivil: edocivil || 'S',
-        t1numero: (telefono || '2900000').replace(/-/g, ''),
-        t2numero: (celular || '62900000').replace(/-/g, ''),
+        t1numero: cleanPhone(telefono, '2900000'),
+        t2numero: cleanPhone(celular || telefono, '62900000'),
         email: email || '',
         direccion: {
           codpais: parseInt(codpais) || 507,
@@ -90,14 +100,14 @@ export async function POST(request: NextRequest) {
         codmarca: parseInt(codmarca),
         codmodelo: parseInt(codmodelo),
         anio: parseInt(anio),
-        numplaca: numplaca || '',
-        serialcarroceria: serialcarroceria || '',
-        serialmotor: serialmotor || '',
-        color: color || '001',
+        numplaca: (numplaca || '').toUpperCase(),
+        serialcarroceria: (serialcarroceria || '').toUpperCase(),
+        serialmotor: (serialmotor || '').toUpperCase(),
+        color: colorCode,
       },
       condHab: {
-        nomter: condHabNombre || nombre,
-        apeter: condHabApellido || apellido,
+        nomter: (condHabNombre || nombre || '').toUpperCase(),
+        apeter: (condHabApellido || apellido || '').toUpperCase(),
         sexo: condHabSexo || sexo || 'M',
         edocivil: condHabEdocivil || edocivil || 'S',
       },
@@ -139,7 +149,7 @@ export async function POST(request: NextRequest) {
         placa: numplaca || '',
         serialcarroceria: serialcarroceria || '',
         serialmotor: serialmotor || '',
-        color: color || '',
+        color: colorCode,
       },
       plan: String(plan),
       _timing: { totalMs: elapsed },

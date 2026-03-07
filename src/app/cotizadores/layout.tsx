@@ -101,38 +101,43 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
       </main>
 
       {/* Footer — hidden on mobile, Info panel replaces it */}
-      <footer className="hidden md:block bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white py-8 sm:py-12 mt-16 sm:mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Logo y descripción */}
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-white/20 to-white/10 flex items-center justify-center backdrop-blur-sm border border-white/30">
-                <span className="text-white font-bold text-xl">L</span>
-              </div>
-              <div className="text-left">
-                <h3 className="text-lg sm:text-xl font-bold text-white">Líderes en Seguros</h3>
-                <p className="text-xs sm:text-sm text-gray-300">Cotizador Digital</p>
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm text-gray-300 max-w-2xl mx-auto px-4">
-              Más de 20 años ofreciendo soluciones de seguros personalizadas para ti y tu familia
-            </p>
-          </div>
-          
-          {/* Información */}
-          <div className="border-t border-white/20 pt-6 sm:pt-8 text-center">
-            <p className="text-xs sm:text-sm text-gray-300 mb-2">
-              © {new Date().getFullYear()} Líderes en Seguros. Todos los derechos reservados.
-            </p>
-            <p className="text-xs text-gray-400">
-              Cotizaciones en línea • Auto • Vida • Incendio • Contenido
-            </p>
-            <p className="text-xs text-gray-500 mt-2">
-              Proceso 100% digital y seguro
-            </p>
-          </div>
+      <footer className="hidden md:block mt-16 sm:mt-20">
+        {/* Regulatory Footer */}
+        <div className="bg-[#010139] py-5 px-4 text-center">
+          <p className="text-[11px] text-gray-400 leading-relaxed mb-2">
+            Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+          </p>
+          <Image
+            src="/aseguradoras/logo-SSRP.png"
+            alt="SSRP"
+            width={90}
+            height={30}
+            className="inline-block opacity-85"
+            unoptimized
+          />
+        </div>
+        {/* Informational Footer */}
+        <div className="bg-[#010139]/95 py-4 px-4 text-center border-t border-white/10">
+          <p className="text-[11px] text-gray-500">
+            © {new Date().getFullYear()} Líderes en Seguros, S.A. — Cotizador Digital
+          </p>
         </div>
       </footer>
+
+      {/* Mobile Regulatory Footer — visible only on mobile, above bottom nav */}
+      <div className="block md:hidden bg-[#010139] py-4 px-4 text-center mb-16">
+        <p className="text-[10px] text-gray-400 leading-relaxed mb-2">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <Image
+          src="/aseguradoras/logo-SSRP.png"
+          alt="SSRP"
+          width={70}
+          height={24}
+          className="inline-block opacity-85"
+          unoptimized
+        />
+      </div>
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav />

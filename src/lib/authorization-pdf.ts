@@ -584,13 +584,18 @@ export async function generateAuthorizationPdf(data: AuthorizationPdfData): Prom
     pm.moveDown(20);
   }
 
-  // ── FOOTER NOTE ───────────────────────────────────────────────────────────
-  pm.ensureSpace(40);
+  // ── REGULATORY NOTE ──────────────────────────────────────────────────────
+  pm.ensureSpace(50);
   pm.drawLine(MARGIN_L, pm.getY(), PAGE_W - MARGIN_R);
   pm.moveDown(10);
   pm.drawWrapped(
+    'Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750',
+    MARGIN_L, 7.5, CONTENT_W, rgb(0.4, 0.4, 0.4), true, 12,
+  );
+  pm.moveDown(12);
+  pm.drawWrapped(
     'Este documento fue generado electrónicamente por el portal de LÍDERES EN SEGUROS, S.A. La firma digital incorporada constituye aceptación válida conforme a la Ley 51 de 22 de julio de 2008 y normativa de comercio electrónico vigente en la República de Panamá.',
-    MARGIN_L, 7.5, CONTENT_W, rgb(0.45, 0.45, 0.45), false, 12,
+    MARGIN_L, 7, CONTENT_W, rgb(0.5, 0.5, 0.5), false, 11,
   );
 
   // ── PAGE NUMBERS (Página X de Y) + consent version ──────────────────────

@@ -57,21 +57,21 @@ const baseWrapper = (content: string) => `
         </div>
       </div>
 
-      <!-- Footer -->
-      <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;">
+      <!-- Regulatory Footer -->
+      <div style="background:#010139;padding:16px 32px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:10px;color:#9ca3af;line-height:1.5;">
+          ${REGULATORY_TEXT}
+        </p>
+        <img src="${PORTAL_URL}/aseguradoras/logo-SSRP.png" alt="SSRP" width="80" height="auto" style="display:inline-block;max-width:80px;opacity:0.85;" />
+      </div>
+
+      <!-- Informational Footer -->
+      <div style="background:#f9fafb;padding:12px 32px;border-top:1px solid #e5e7eb;">
         <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;line-height:1.5;">
-          Este correo fue generado automáticamente desde el portal de Líderes en Seguros.<br/>
           Si tiene dudas, puede responder directamente a este correo.
         </p>
       </div>
 
-    </div>
-
-    <!-- Regulatory cintillo (outside card, below) -->
-    <div style="text-align:center;padding:16px 8px 4px;">
-      <p style="margin:0;font-size:10px;color:#9ca3af;line-height:1.4;letter-spacing:0.2px;">
-        ${REGULATORY_TEXT}
-      </p>
     </div>
 
   </div>

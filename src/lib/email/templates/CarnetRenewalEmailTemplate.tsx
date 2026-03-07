@@ -162,14 +162,12 @@ function buildCarnetEmailHtml(data: CarnetRenewalEmailData): string {
         </p>
       </div>
 
-      <!-- Footer -->
-      <div style="background-color: ${colors.backgroundAlt}; padding: 24px; text-align: center; border-top: 1px solid ${colors.backgroundAlt};">
-        <p style="margin: 0 0 8px 0; font-size: 12px; color: ${colors.textLight};">
-          Este es un mensaje automático del Portal Líderes en Seguros
+      <!-- Regulatory Footer -->
+      <div style="background:#010139;padding:20px 24px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5;">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
         </p>
-        <p style="margin: 0; font-size: 11px; color: ${colors.textLight};">
-          © 2025 Líderes en Seguros | Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá
-        </p>
+        <img src="${baseUrl}/aseguradoras/logo-SSRP.png" alt="SSRP" width="90" height="auto" style="display:inline-block;max-width:90px;opacity:0.85;" />
       </div>
       
     </div>

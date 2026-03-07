@@ -418,8 +418,8 @@ export async function POST(request: NextRequest) {
       // Build download URLs for email links
       const siteUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com');
       const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
-      const caratulaUrl = isFedpa && codCotizacion
-        ? `${siteUrl}/api/fedpa/caratula?codCotizacion=${encodeURIComponent(codCotizacion)}&env=PROD`
+      const caratulaUrl = isFedpa && nroPoliza
+        ? `${siteUrl}/api/fedpa/caratula?poliza=${encodeURIComponent(nroPoliza)}&env=PROD`
         : '';
 
       // Resolve pdfUrl: make relative paths absolute for email links
@@ -816,16 +816,20 @@ function buildWelcomeEmail(data: {
 
     </div>
 
+    <!-- Regulatory Footer -->
+    <div style="background:#010139;padding:20px 32px;text-align:center;">
+      <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5;">
+        Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+      </p>
+      <img src="https://portal.lideresenseguros.com/aseguradoras/logo-SSRP.png" alt="SSRP" width="90" style="display:inline-block;max-width:90px;opacity:0.85;" />
+    </div>
+
     <!-- FOOTER -->
     <div class="footer">
       <p><strong>Líderes en Seguros, S.A.</strong> — Corredores de Seguros Autorizados</p>
-      <p style="margin-top:4px;">Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá</p>
       <p style="margin-top:4px;">
         <a href="mailto:${contactEmail}">${contactEmail}</a> &nbsp;|&nbsp;
         <a href="${whatsappUrl}">WhatsApp ${whatsappNumber}</a>
-      </p>
-      <p style="margin-top:8px;color:#ccc;">
-        Correo generado automáticamente — ${new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}
       </p>
     </div>
 

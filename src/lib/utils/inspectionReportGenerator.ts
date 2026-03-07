@@ -213,13 +213,21 @@ export async function generateInspectionReport(
   doc.setFontSize(8);
   doc.text('Firma Digital Automatizada', 25, yPosition);
 
-  // Footer
-  doc.setFontSize(8);
+  // Regulatory Footer
+  doc.setFontSize(7);
   doc.setTextColor(100, 100, 100);
   doc.text(
-    'Documento generado automáticamente por el sistema de emisión digital',
+    'Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750',
     pageWidth / 2,
-    pageHeight - 10,
+    pageHeight - 14,
+    { align: 'center' }
+  );
+  doc.setFontSize(6.5);
+  doc.setTextColor(140, 140, 140);
+  doc.text(
+    'Líderes en Seguros, S.A. — Documento generado electrónicamente',
+    pageWidth / 2,
+    pageHeight - 9,
     { align: 'center' }
   );
 

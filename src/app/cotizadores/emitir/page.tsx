@@ -752,35 +752,34 @@ export default function EmitirPage() {
         setEmissionProgress(20);
         setEmissionStep('Conectando con La Regional de Seguros...');
         
-        // Build emission request
+        // Build emission request — field names accepted by /api/regional/auto/emit-cc
         const regionalEmitBody = {
           numcot: selectedPlan._numcot || selectedPlan._idCotizacion || '',
-          nombre: emissionData.primerNombre,
-          nombre2: emissionData.segundoNombre || '',
-          apellido: emissionData.primerApellido,
-          apellido2: emissionData.segundoApellido || '',
-          cedula: emissionData.cedula,
-          fechaNac: emissionData.fechaNacimiento,
-          sexo: emissionData.sexo === 'M' ? 'M' : 'F',
-          email: emissionData.email,
-          telefono: emissionData.telefono?.replace(/\D/g, '') || '',
-          celular: (emissionData.celular || emissionData.telefono)?.replace(/\D/g, '') || '',
-          direccion: emissionData.direccion,
-          estadoCivil: emissionData.estadoCivil || 'S',
-          esPEP: emissionData.esPEP ? 'S' : 'N',
-          actividad: emissionData.actividadEconomica || '',
-          placa: vehicleData?.placa || '',
-          motor: vehicleData?.motor || '',
-          chasis: vehicleData?.vinChasis || '',
+          // Dirección (Regional API catalog codes)
+          codpais: 507,
+          codestado: emissionData.codProvincia || 8,
+          codciudad: emissionData.codDistrito || 1,
+          codmunicipio: emissionData.codCorregimiento || 1,
+          codurb: emissionData.codUrbanizacion || 1,
+          dirhab: emissionData.direccion || 'Ciudad de Panamá',
+          // Datos cumplimiento
+          ocupacion: 1,
+          ingresoAnual: parseInt(emissionData.nivelIngresos) || 1,
+          paisTributa: 507,
+          pep: emissionData.esPEP ? 'S' : 'N',
+          // Vehículo
+          vehnuevo: 'N',
+          numplaca: vehicleData?.placa || '',
+          serialcarroceria: vehicleData?.vinChasis || '',
+          serialmotor: vehicleData?.motor || '',
           color: vehicleData?.color || '',
-          pasajeros: vehicleData?.pasajeros || 5,
-          puertas: vehicleData?.puertas || 4,
-          marca: vehicleData?.marca || quoteData?.marca || '',
-          modelo: vehicleData?.modelo || quoteData?.modelo || '',
-          anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
-          valorVeh: quoteData?.valorVehiculo || 15000,
-          cantCuotas: installments || 1,
-          acreedor: emissionData.acreedor || '',
+          usoveh: 'P',
+          peso: 'L',
+          // Acreedor
+          acreedor: emissionData.acreedor || '81',
+          // Cuotas
+          cuotas: installments || 1,
+          opcionPrima: 1,
         };
         
         setEmissionProgress(30);

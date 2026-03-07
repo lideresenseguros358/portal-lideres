@@ -77,9 +77,12 @@ export async function sendEscalationAlert(data: EscalationData): Promise<boolean
             ${historyHtml || '<p style="color: #9ca3af;">Sin historial previo</p>'}
           </div>
 
-          <p style="color: #6b7280; font-size: 12px; margin-top: 24px; text-align: center;">
-            Generado automáticamente por el sistema de chat de Líderes en Seguros
-          </p>
+          <div style="margin-top:24px;padding:16px;background:#010139;border-radius:8px;text-align:center;">
+            <p style="margin:0 0 6px;font-size:10px;color:#9ca3af;line-height:1.5;">
+              Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+            </p>
+            <img src="https://portal.lideresenseguros.com/aseguradoras/logo-SSRP.png" alt="SSRP" width="80" style="display:inline-block;max-width:80px;opacity:0.85;" />
+          </div>
         </div>
       </div>
     `;

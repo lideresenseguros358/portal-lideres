@@ -339,6 +339,14 @@ export default function EmitirDanosTercerosPage() {
 
         emisionResult = emisionResponseData;
 
+        // Save the emission payload for carátula download on confirmation page
+        try {
+          sessionStorage.setItem('fedpaEmissionPayload', JSON.stringify({
+            ...emisionCommon,
+            idDoc: docsResponseData.idDoc,
+          }));
+        } catch { /* quota */ }
+
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
         setEmissionProgress(60);
         setEmissionStep('Póliza emitida — guardando en sistema...');
@@ -796,7 +804,7 @@ export default function EmitirDanosTercerosPage() {
             numplaca: vehicleData?.placa || '',
             serialcarroceria: vehicleData?.vinChasis || '',
             serialmotor: vehicleData?.motor || '',
-            color: vehicleData?.color || '001',
+            color: vehicleData?.color || '',
             // Conductor habitual (same as client)
             condHabNombre: emissionData.primerNombre,
             condHabApellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),

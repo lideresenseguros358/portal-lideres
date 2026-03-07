@@ -12,8 +12,9 @@ interface ThirdPartyComparisonProps {
 }
 
 // ── Cache helpers ──
-const CACHE_KEY = 'tp_plans_cache_v2';
-const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours — matches server-side TTL
+const CACHE_KEY = 'tp_plans_cache_v3';
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — plans/benefits rarely change
+const API_TIMEOUT = 15_000; // 15s max per API call — don't block UI if a provider is down
 
 interface ApiCache {
   fedpa: any | null;
@@ -152,13 +153,18 @@ function mergeApiData(
   });
 }
 
+/** Fetch with timeout — returns null on failure instead of blocking */
+function fetchWithTimeout(url: string, ms = API_TIMEOUT): Promise<any> {
+  return Promise.race([
+    fetch(url).then(r => r.json()),
+    new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]).catch(() => null);
+}
+
 export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyComparisonProps) {
   const [generatingQuote, setGeneratingQuote] = useState(false);
-  const hasCacheRef = useRef(!!readCache());
-  const [loadingPlans, setLoadingPlans] = useState(!hasCacheRef.current);
-  const [plansLoaded, setPlansLoaded] = useState(false);
   const [insurersData, setInsurersData] = useState<AutoInsurer[]>(() => {
-    // Inicializar con cache si existe — coberturas y beneficios se muestran de inmediato
+    // Always start with cached data merged into base — instant render
     const cached = readCache();
     if (cached) {
       return mergeApiData(AUTO_THIRD_PARTY_INSURERS, cached.fedpa, cached.is, cached.regional);
@@ -168,40 +174,39 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
 
-  // Cargar planes de FEDPA, IS y REGIONAL (silent refresh si hay cache, loading si no)
+  // Silent background refresh — NEVER shows loading/skeleton/banner
   useEffect(() => {
-    const loadAllPlans = async () => {
-      if (plansLoaded || fetchingRef.current) return;
+    const refreshPlans = async () => {
+      if (fetchingRef.current) return;
       fetchingRef.current = true;
-      // Only show loading spinner if we DON'T have a cache (first visit)
-      if (!hasCacheRef.current) setLoadingPlans(true);
-      
+
       try {
-        const [fedpaRes, isRes, regionalRes] = await Promise.allSettled([
-          fetch('/api/fedpa/third-party').then(r => r.json()),
-          fetch('/api/is/third-party').then(r => r.json()),
-          fetch('/api/regional/third-party').then(r => r.json()),
+        const [fedpaData, isData, regionalData] = await Promise.all([
+          fetchWithTimeout('/api/fedpa/third-party'),
+          fetchWithTimeout('/api/is/third-party'),
+          fetchWithTimeout('/api/regional/third-party'),
         ]);
 
-        const fedpaData = fedpaRes.status === 'fulfilled' ? fedpaRes.value : null;
-        const isData = isRes.status === 'fulfilled' ? isRes.value : null;
-        const regionalData = regionalRes.status === 'fulfilled' ? regionalRes.value : null;
+        // Only update cache & UI if we got at least one valid response
+        if (fedpaData || isData || regionalData) {
+          // Merge: keep previous cached data for providers that timed out
+          const prev = readCache();
+          const finalFedpa = fedpaData || prev?.fedpa || null;
+          const finalIs = isData || prev?.is || null;
+          const finalRegional = regionalData || prev?.regional || null;
 
-        // Guardar en localStorage para carga instantánea en próxima visita
-        writeCache(fedpaData, isData, regionalData);
-
-        setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, fedpaData, isData, regionalData));
-        
-        setPlansLoaded(true);
+          writeCache(finalFedpa, finalIs, finalRegional);
+          setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, finalFedpa, finalIs, finalRegional));
+        }
       } catch (error) {
-        console.error('[ThirdParty] Error cargando planes:', error);
+        console.error('[ThirdParty] Error refrescando planes:', error);
       } finally {
-        setLoadingPlans(false);
+        fetchingRef.current = false;
       }
     };
-    
-    loadAllPlans();
-  }, [plansLoaded]);
+
+    refreshPlans();
+  }, []);
 
   const handlePlanClick = async (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
     // IS: reuse idCotizacion from initial load, only fetch if missing
@@ -390,22 +395,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
               ))}
             </div>
           </div>
-        ) : loadingPlans && (
-          <div className="mb-3">
-            <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <FaShieldAlt className="text-[#010139]" />
-              Coberturas incluidas
-            </h5>
-            <div className="border border-gray-200 rounded-lg overflow-hidden animate-pulse">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2.5 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${i < 4 ? 'border-b border-gray-100' : ''}`}>
-                  <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-3 bg-gray-200 rounded w-16"></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        ) : null}
 
         {/* Beneficios y Asistencia — from API endosoBenefits (cached or live) */}
         {hasEndosoBenefits && (
@@ -476,16 +466,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
   return (
     <>
-      {loadingPlans && (
-        <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3">
-          <FaSpinner className="animate-spin text-blue-600 text-xl" />
-          <div>
-            <p className="font-semibold text-blue-900">Actualizando planes...</p>
-            <p className="text-sm text-blue-700">Obteniendo precios en tiempo real desde las aseguradoras</p>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {insurersData.map((insurer) => (
           <div key={insurer.id} className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl transition-all duration-300 overflow-hidden">

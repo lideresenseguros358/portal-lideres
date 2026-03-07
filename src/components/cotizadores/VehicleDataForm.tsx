@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import Image from 'next/image';
 import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useISCatalogs } from '@/hooks/useISCatalogs';
+import { VEHICLE_COLORS } from '@/lib/regional/color-map';
 
 interface VehicleDataFormProps {
   quoteData: any;
@@ -490,15 +491,18 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Color <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={formData.color}
                 onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors bg-white ${
                   errors.color ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
-                placeholder="EJ: ROJO"
-              />
+              >
+                <option value="">Seleccionar color</option>
+                {VEHICLE_COLORS.map((c) => (
+                  <option key={c.code} value={c.label}>{c.label}</option>
+                ))}
+              </select>
               {errors.color && <p className="text-xs text-red-500 mt-1">{errors.color}</p>}
             </div>
 

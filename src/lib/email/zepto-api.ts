@@ -213,10 +213,15 @@ export async function sendEscalationEmail(data: EscalationEmailData): Promise<Ze
         ${historyHtml}
       </div>
 
-      <!-- Footer -->
-      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;">
-        <p>Generado automáticamente por ADM COT Chats — ${new Date().toLocaleString('es-PA')}</p>
-        <p>Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
+      <!-- Regulatory Footer -->
+      <div style="margin-top:24px;padding:16px;background:#010139;border-radius:8px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:10px;color:#9ca3af;line-height:1.5;">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <img src="https://portal.lideresenseguros.com/aseguradoras/logo-SSRP.png" alt="SSRP" width="80" style="display:inline-block;max-width:80px;opacity:0.85;" />
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:#9ca3af;text-align:center;">
+        <p style="margin:0;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
       </div>
     </div>
   </div>

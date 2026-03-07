@@ -300,18 +300,21 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
         </div>
       </div>
 
-      <!-- Footer -->
+      <!-- Regulatory Footer -->
+      <div style="background:#010139;padding:20px 35px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5;">
+          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+        </p>
+        <img src="${baseUrl}/aseguradoras/logo-SSRP.png" alt="SSRP" width="100" height="auto" style="display:inline-block;max-width:100px;opacity:0.85;" />
+      </div>
+
+      <!-- Informational Footer -->
       <div class="email-footer">
         <p class="footer-brand">Líderes en Seguros, S.A.</p>
         <p>Tu aliado de confianza en protección vehicular</p>
         <p style="margin-top: 12px;">
           <a href="${baseUrl}/cotizadores">Cotizar Ahora</a> |
           <a href="https://wa.me/50760001234">WhatsApp</a>
-        </p>
-        <p style="margin-top: 16px; font-size: 12px; color: #999;">
-          Este es un correo automático de seguimiento.<br>
-          Si ya completaste tu póliza, puedes ignorar este mensaje.<br>
-          Regulado por la Superintendencia de Seguros y Reaseguros de Panamá.
         </p>
       </div>
     </div>

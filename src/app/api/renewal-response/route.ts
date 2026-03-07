@@ -223,9 +223,14 @@ export async function GET(request: NextRequest) {
           ${broker?.phone ? `<p><strong>Teléfono:</strong> ${broker.phone}</p>` : ''}
         </div>
 
-        <div class="footer">
-          <p>Líderes en Seguros<br>
-          Este mensaje fue generado automáticamente.</p>
+        <div style="background:#010139;padding:16px;border-radius:8px;text-align:center;margin-top:30px;">
+          <p style="margin:0 0 6px;font-size:11px;color:#9ca3af;line-height:1.5;">
+            Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750
+          </p>
+          <img src="https://portal.lideresenseguros.com/aseguradoras/logo-SSRP.png" alt="SSRP" width="90" style="display:inline-block;max-width:90px;opacity:0.85;" />
+        </div>
+        <div class="footer" style="margin-top:12px;">
+          <p>Líderes en Seguros</p>
         </div>
       </div>
     </body>

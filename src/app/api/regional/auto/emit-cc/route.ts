@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaCC, actualizarPlanPago, imprimirPoliza } from '@/lib/regional/emission.service';
+import { colorToRegionalCode } from '@/lib/regional/color-map';
 import type { RegionalCCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -17,19 +18,33 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const {
-      numcot,
-      // Dirección
-      codpais, codestado, codciudad, codmunicipio, codurb, dirhab,
-      // Datos cumplimiento
-      ocupacion, ingresoAnual, paisTributa, pep,
-      // Vehículo
-      vehnuevo, numplaca, serialcarroceria, serialmotor, color, usoveh, peso,
-      // Acreedor
-      acreedor,
-      // Cuotas (optional)
-      cuotas, opcionPrima,
-    } = body;
+    // Accept both raw API field names AND the friendly names sent by the CC frontend
+    const numcot = body.numcot;
+    // Dirección — raw or defaults
+    const codpais = body.codpais;
+    const codestado = body.codestado || body.codProvincia;
+    const codciudad = body.codciudad || body.codDistrito;
+    const codmunicipio = body.codmunicipio || body.codCorregimiento;
+    const codurb = body.codurb || body.codUrbanizacion;
+    const dirhab = body.dirhab || body.direccion;
+    // Datos cumplimiento
+    const ocupacion = body.ocupacion || body.actividad;
+    const ingresoAnual = body.ingresoAnual || body.nivelIngresos;
+    const paisTributa = body.paisTributa;
+    const pep = body.pep || body.esPEP;
+    // Vehículo — accept frontend names: placa/motor/chasis/color
+    const vehnuevo = body.vehnuevo;
+    const numplaca = body.numplaca || body.placa || '';
+    const serialcarroceria = body.serialcarroceria || body.chasis || '';
+    const serialmotor = body.serialmotor || body.motor || '';
+    const rawColor = body.color || '';
+    const usoveh = body.usoveh;
+    const peso = body.peso;
+    // Acreedor
+    const acreedor = body.acreedor;
+    // Cuotas
+    const cuotas = body.cuotas || body.cantCuotas;
+    const opcionPrima = body.opcionPrima;
 
     if (!numcot) {
       return NextResponse.json(
@@ -38,13 +53,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Convert color from free text to Regional catalog code
+    const colorCode = colorToRegionalCode(rawColor);
+
     // 1. Update plan de pago if cuotas > 1
-    if (cuotas && parseInt(cuotas) > 1) {
-      console.log(`[REGIONAL CC Emit] Updating plan pago: numcot=${numcot}, cuotas=${cuotas}`);
+    const cuotasNum = cuotas ? parseInt(String(cuotas)) : 1;
+    if (cuotasNum > 1) {
+      console.log(`[REGIONAL CC Emit] Updating plan pago: numcot=${numcot}, cuotas=${cuotasNum}`);
       const pagoResult = await actualizarPlanPago({
-        numcot: parseInt(numcot),
-        cuotas: parseInt(cuotas),
-        opcionPrima: parseInt(opcionPrima) || 1,
+        numcot: parseInt(String(numcot)),
+        cuotas: cuotasNum,
+        opcionPrima: parseInt(String(opcionPrima)) || 1,
       });
       if (!pagoResult.success) {
         console.warn('[REGIONAL CC Emit] Plan pago failed:', pagoResult.message);
@@ -58,29 +77,29 @@ export async function POST(request: NextRequest) {
 
     const emissionBody: RegionalCCEmissionBody = {
       codInter: creds.codInter,
-      numcot: parseInt(numcot),
+      numcot: parseInt(String(numcot)),
       cliente: {
         direccion: {
-          codpais: parseInt(codpais) || 507,
-          codestado: parseInt(codestado) || 8,
-          codciudad: parseInt(codciudad) || 1,
-          codmunicipio: parseInt(codmunicipio) || 1,
-          codurb: parseInt(codurb) || 1,
+          codpais: parseInt(String(codpais)) || 507,
+          codestado: parseInt(String(codestado)) || 8,
+          codciudad: parseInt(String(codciudad)) || 1,
+          codmunicipio: parseInt(String(codmunicipio)) || 1,
+          codurb: parseInt(String(codurb)) || 1,
           dirhab: dirhab || 'Ciudad de Panamá',
         },
         datosCumplimiento: {
-          ocupacion: parseInt(ocupacion) || 1,
-          ingresoAnual: parseInt(ingresoAnual) || 1,
-          paisTributa: parseInt(paisTributa) || 507,
-          pep: pep || 'N',
+          ocupacion: parseInt(String(ocupacion)) || 1,
+          ingresoAnual: parseInt(String(ingresoAnual)) || 1,
+          paisTributa: parseInt(String(paisTributa)) || 507,
+          pep: (pep === true || pep === 'S') ? 'S' : 'N',
         },
       },
       datosveh: {
         vehnuevo: vehnuevo || 'N',
-        numplaca: numplaca || '',
-        serialcarroceria: serialcarroceria || '',
-        serialmotor: serialmotor || '',
-        color: color || '093',
+        numplaca: String(numplaca).toUpperCase(),
+        serialcarroceria: String(serialcarroceria).toUpperCase(),
+        serialmotor: String(serialmotor).toUpperCase(),
+        color: colorCode,
         usoveh: usoveh || 'P',
         peso: peso || 'L',
       },
@@ -116,6 +135,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       poliza: result.poliza,
+      nroPoliza: result.poliza,
       numcot: result.numcot,
       pdfUrl,
       insurer: 'REGIONAL',
@@ -124,9 +144,9 @@ export async function POST(request: NextRequest) {
         placa: numplaca || '',
         serialcarroceria: serialcarroceria || '',
         serialmotor: serialmotor || '',
-        color: color || '',
+        color: colorCode,
       },
-      cuotasSent: cuotas ? parseInt(cuotas) : 1,
+      cuotasSent: cuotasNum,
       _timing: { totalMs: elapsed },
     });
   } catch (error: any) {

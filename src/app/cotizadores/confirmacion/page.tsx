@@ -114,44 +114,53 @@ export default function ConfirmacionPage() {
   };
 
   const handleDownloadFedpaPdf = async () => {
-    if (!policyData?.codCotizacion || downloadingPdf) return;
+    if (downloadingPdf) return;
     setDownloadingPdf(true);
     setPdfError(null);
 
     try {
+      // Retrieve the emission payload saved during emission
+      const payloadRaw = sessionStorage.getItem('fedpaEmissionPayload');
+      if (!payloadRaw) {
+        console.warn('[Confirmación] No hay payload de emisión guardado — usando carátula HTML');
+        handleDownloadCaratula();
+        return;
+      }
+
+      const emissionPayload = JSON.parse(payloadRaw);
+      const poliza = policyData?.nroPoliza || policyData?.poliza || 'unknown';
+
       const response = await fetch('/api/fedpa/caratula', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          codCotizacion: policyData.codCotizacion,
-          environment: 'PROD',
+          ...emissionPayload,
+          poliza,
+          environment: 'DEV',
         }),
       });
 
       const contentType = response.headers.get('content-type') || '';
 
       if (contentType.includes('application/pdf')) {
-        // Direct PDF binary
+        // Direct PDF binary — trigger download
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `poliza-fedpa-${policyData.codCotizacion}.pdf`;
+        a.download = `poliza-fedpa-${poliza}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
-        // JSON response — might have a URL
+        // JSON response — error or unexpected
         const data = await response.json();
-        if (data.pdfUrl) {
-          window.open(data.pdfUrl, '_blank');
-        } else if (!data.success) {
+        if (!data.success) {
           throw new Error(data.error || 'No se pudo obtener la carátula');
-        } else {
-          // Fallback: use the HTML print carátula
-          handleDownloadCaratula();
         }
+        // Fallback: use the HTML print carátula
+        handleDownloadCaratula();
       }
     } catch (err: any) {
       console.error('[Confirmación] Error descargando PDF FEDPA:', err);
@@ -212,6 +221,7 @@ export default function ConfirmacionPage() {
     sessionStorage.removeItem('emissionFormData');
     sessionStorage.removeItem('emissionCedulaFile');
     sessionStorage.removeItem('emissionLicenciaFile');
+    sessionStorage.removeItem('fedpaEmissionPayload');
     router.push('/cotizadores');
   };
 
@@ -335,7 +345,7 @@ export default function ConfirmacionPage() {
           )}
 
           {/* Botón: Descargar Póliza */}
-          {policyData?.insurer?.toUpperCase().includes('FEDPA') && policyData?.codCotizacion ? (
+          {policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
             <div className="mb-6">
               <button
                 onClick={handleDownloadFedpaPdf}
@@ -385,14 +395,6 @@ export default function ConfirmacionPage() {
                 </p>
               )}
             </div>
-          ) : policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
-            <button
-              onClick={handleDownloadCaratula}
-              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
-            >
-              <FaDownload className="text-xl text-white" />
-              <span className="text-white">Descargar Póliza</span>
-            </button>
           ) : policyData?.pdfUrl ? (
             <a
               href={policyData.pdfUrl}
