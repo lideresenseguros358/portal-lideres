@@ -1849,6 +1849,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 <div className="flex items-center justify-between">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge payment={payment} />
+                    <SLAIndicator payment={payment} />
 
                     {/* Etiqueta de motivo del pago */}
                     {(() => {
@@ -2060,6 +2061,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                             <div className="bg-gradient-to-br from-indigo-100 to-indigo-50 border-2 border-indigo-400 rounded-xl p-4 shadow-lg">
                               <div className="text-xs font-bold text-indigo-600 uppercase mb-2 tracking-wider">Estado</div>
                               <StatusBadge payment={payment} />
+                              <div className="mt-2"><SLAIndicator payment={payment} /></div>
                             </div>
                             <div className="bg-gradient-to-br from-pink-100 to-pink-50 border-2 border-pink-400 rounded-xl p-4 shadow-lg">
                               <div className="text-xs font-bold text-pink-600 uppercase mb-2 tracking-wider">📅 Fecha</div>
@@ -2218,7 +2220,10 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
                     {/* Status badge - Solo desktop */}
                     <div className="hidden lg:flex items-center justify-between">
-                      <StatusBadge payment={payment} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge payment={payment} />
+                        <SLAIndicator payment={payment} />
+                      </div>
                       <div className="text-xs text-gray-500">
                         {(() => {
                           // Determinar qué fecha mostrar según el tipo de pago
@@ -2320,6 +2325,80 @@ function isDescuentoACorredor(payment: any): boolean {
   return false;
 }
 
+function getPaymentSLA(payment: any): { daysRemaining: number; dueDate: string | null; isOverdue: boolean; isWarning: boolean; label: string } {
+  const now = new Date();
+  let dueDate: Date | null = null;
+
+  if (payment.due_date) {
+    dueDate = new Date(payment.due_date);
+  } else if (payment.created_at) {
+    // Default SLA: 15 days from creation
+    dueDate = new Date(payment.created_at);
+    dueDate.setDate(dueDate.getDate() + 15);
+  }
+
+  if (!dueDate) {
+    return { daysRemaining: 999, dueDate: null, isOverdue: false, isWarning: false, label: '' };
+  }
+
+  const diffMs = dueDate.getTime() - now.getTime();
+  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const isOverdue = daysRemaining < 0;
+  const isWarning = daysRemaining >= 0 && daysRemaining <= 3;
+
+  let label = '';
+  if (isOverdue) {
+    label = `Vencido hace ${Math.abs(daysRemaining)}d`;
+  } else if (daysRemaining === 0) {
+    label = 'Vence hoy';
+  } else if (daysRemaining === 1) {
+    label = 'Vence mañana';
+  } else {
+    label = `${daysRemaining}d restantes`;
+  }
+
+  return {
+    daysRemaining,
+    dueDate: dueDate.toISOString().split('T')[0] ?? null,
+    isOverdue,
+    isWarning,
+    label,
+  };
+}
+
+function SLAIndicator({ payment }: { payment: any }) {
+  const sla = getPaymentSLA(payment);
+  if (!sla.dueDate) return null;
+
+  let colorClass = 'text-gray-500';
+  let bgClass = 'bg-gray-50';
+  let icon = '';
+
+  if (sla.isOverdue) {
+    colorClass = 'text-red-700';
+    bgClass = 'bg-red-50 border border-red-200';
+    icon = '🔴';
+  } else if (sla.isWarning) {
+    colorClass = 'text-amber-700';
+    bgClass = 'bg-amber-50 border border-amber-200';
+    icon = '🟡';
+  } else if (sla.daysRemaining <= 7) {
+    colorClass = 'text-yellow-700';
+    bgClass = 'bg-yellow-50 border border-yellow-200';
+    icon = '🟠';
+  } else {
+    colorClass = 'text-green-700';
+    bgClass = 'bg-green-50 border border-green-200';
+    icon = '🟢';
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${bgClass} ${colorClass}`}>
+      {icon} {sla.label}
+    </span>
+  );
+}
+
 function getPaymentState(payment: any) {
   const now = new Date();
   const created = new Date(payment.created_at);
@@ -2327,6 +2406,7 @@ function getPaymentState(payment: any) {
   const total = Number(payment.amount_to_pay ?? payment.amount ?? 0);
   const applied = Number(payment.total_received ?? 0);
   const remaining = Math.max(total - applied, 0);
+  const sla = getPaymentSLA(payment);
 
   const isDescuentoCorredor = isDescuentoACorredor(payment);
   
@@ -2352,6 +2432,7 @@ function getPaymentState(payment: any) {
       label: 'Actualizar referencia para conciliar',
       badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
       blocked: false,
+      sla,
     } as const;
   }
   
@@ -2363,6 +2444,7 @@ function getPaymentState(payment: any) {
         label: 'Adelanto pendiente',
         badgeClass: 'bg-red-100 text-red-800 border-red-300',
         blocked: true,
+        sla,
       } as const;
     }
     // can_be_paid === true (pago anticipado habilitado o adelanto ya pagado) → no bloqueado, continuar
@@ -2375,6 +2457,7 @@ function getPaymentState(payment: any) {
         label: 'Referencia no conciliada',
         badgeClass: 'bg-red-100 text-red-800 border-red-300',
         blocked: true,
+        sla,
       } as const;
     }
   }
@@ -2385,6 +2468,7 @@ function getPaymentState(payment: any) {
       label: 'Aplazado',
       badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
       blocked: true,
+      sla,
     } as const;
   }
 
@@ -2394,15 +2478,28 @@ function getPaymentState(payment: any) {
       label: 'Conciliado',
       badgeClass: 'bg-green-100 text-green-800 border-green-300',
       blocked: false,
+      sla,
     } as const;
   }
 
-  if (daysDiff > 30) {
+  // SLA-based states take precedence over simple day counting
+  if (sla.isOverdue) {
     return {
       key: 'overdue',
-      label: 'Vencido (+30d)',
+      label: `Vencido (${sla.label})`,
       badgeClass: 'bg-red-100 text-red-800 border-red-300',
-      blocked: true,
+      blocked: false,
+      sla,
+    } as const;
+  }
+
+  if (sla.isWarning) {
+    return {
+      key: 'urgent',
+      label: `Urgente (${sla.label})`,
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
+      blocked: false,
+      sla,
     } as const;
   }
 
@@ -2412,6 +2509,7 @@ function getPaymentState(payment: any) {
       label: 'Sin clasificar 15-30d',
       badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       blocked: false,
+      sla,
     } as const;
   }
 
@@ -2420,5 +2518,6 @@ function getPaymentState(payment: any) {
     label: 'Pendiente por conciliar',
     badgeClass: 'bg-gray-100 text-gray-800 border-gray-300',
     blocked: false,
+    sla,
   } as const;
 }

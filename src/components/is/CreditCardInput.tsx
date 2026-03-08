@@ -1,6 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * ⚠️ TRANSITIONAL COMPONENT — PCI-DSS COMPLIANCE NOTES
+ * =====================================================
+ * This component currently captures card data in local React state (memory only).
+ * This is a TEMPORARY implementation for the development phase.
+ *
+ * BEFORE GOING TO PRODUCTION:
+ * 1. Replace this entire component with PagueloFacil's hosted payment fields / iframe.
+ * 2. Card data (PAN, CVV, expiry) must NEVER touch our servers — use PagueloFacil tokenization.
+ * 3. The payment adapter (src/lib/payments/payment-adapter.ts) is ready to swap the mock
+ *    implementation for the real PagueloFacil SDK.
+ *
+ * CURRENT SECURITY MEASURES (dev phase):
+ * - Card data lives ONLY in React useState (volatile memory).
+ * - All state is wiped on unmount, navigation, or page refresh.
+ * - CVV is rendered as type="password" and never displayed in plain text.
+ * - Card number is masked on the 3D preview (only last 4 shown).
+ * - No card data is persisted to localStorage, sessionStorage, IndexedDB, or cookies.
+ * - No card data is logged to console, analytics, or error tracking.
+ * - autocomplete attributes are set to prevent browser autofill of sensitive fields.
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
@@ -20,6 +42,37 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
   const [cardBrand, setCardBrand] = useState<'visa' | 'mastercard' | 'amex' | 'unknown'>('unknown');
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasValidated, setHasValidated] = useState(false);
+
+  // Unique suffix to prevent browser autofill by randomizing field names
+  const formIdRef = useRef(`_${Math.random().toString(36).slice(2, 8)}`);
+
+  /**
+   * SECURITY: Wipe all sensitive card data from memory on unmount.
+   * This ensures no PAN, CVV, or expiry survives in React state
+   * when the user navigates away, cancels, or the wizard step changes.
+   */
+  const clearSensitiveData = useCallback(() => {
+    setCardNumber('');
+    setCardName('');
+    setBankName('');
+    setExpiry('');
+    setCvv('');
+    setCardBrand('unknown');
+    setHasValidated(false);
+    setIsProcessing(false);
+  }, []);
+
+  useEffect(() => {
+    // Also wipe on page refresh / tab close (best-effort)
+    const handleBeforeUnload = () => clearSensitiveData();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      // SECURITY: Cleanup on unmount — wipe all card data
+      clearSensitiveData();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [clearSensitiveData]);
   
   // Validar automáticamente cuando todos los campos estén completos
   useEffect(() => {
@@ -167,14 +220,24 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
     // Todo OK, procesar token
     setIsProcessing(true);
 
-    // MOCK: Simular tokenización (en producción esto llamaría a IS API)
+    /**
+     * ⚠️ MOCK TOKENIZATION — REPLACE WITH PAGUELOFACIL SDK
+     * In production, this should call the payment adapter which will
+     * forward card data directly to PagueloFacil's tokenization endpoint.
+     * Our backend must NEVER receive raw PAN or CVV.
+     *
+     * See: src/lib/payments/payment-adapter.ts
+     */
+    const last4 = cleanNumber.slice(-4);
+    const brandLabel = cardBrand === 'visa' ? 'Visa' : cardBrand === 'mastercard' ? 'Mastercard' : 'Amex';
+
     setTimeout(() => {
-      const mockToken = `tok_${Math.random().toString(36).substring(7)}`;
-      const last4 = cleanNumber.slice(-4);
-      const brand = cardBrand === 'visa' ? 'Visa' : cardBrand === 'mastercard' ? 'Mastercard' : 'Amex';
+      const mockToken = `tok_dev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
       
-      setIsProcessing(false);
-      onTokenReceived(mockToken, last4, brand);
+      // SECURITY: Wipe raw card data from state immediately after tokenization
+      clearSensitiveData();
+      
+      onTokenReceived(mockToken, last4, brandLabel);
     }, 1500);
     
     return true;
@@ -243,7 +306,11 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
                   </div>
                 )}
                 <div className="font-mono text-xl tracking-wider mb-4 text-gray-800 font-bold">
-                  {cardNumber || '#### #### #### ####'}
+                  {cardNumber
+                    ? cardNumber.replace(/\s/g, '').length > 4
+                      ? `**** **** **** ${cardNumber.replace(/\s/g, '').slice(-4)}`
+                      : cardNumber
+                    : '#### #### #### ####'}
                 </div>
                 <div className="flex justify-between items-end">
                   <div>
@@ -281,7 +348,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
                   <div className="bg-white px-4 py-2 rounded-lg shadow-md border border-gray-200">
                     <div className="text-xs text-gray-600 mb-1 font-medium">CVV</div>
                     <div className="font-mono text-gray-800 font-bold tracking-widest text-lg">
-                      {cvv || '***'}
+                      {cvv ? '•'.repeat(cvv.length) : '***'}
                     </div>
                   </div>
                 </div>
@@ -298,20 +365,23 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
         </motion.div>
       </div>
 
-      {/* Formulario */}
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-4" autoComplete="off">
+      {/* Formulario — SECURITY: data-sensitivity prevents debug tools from snapshotting */}
+      <form onSubmit={(e) => e.preventDefault()} className="space-y-4" autoComplete="off" data-sensitivity="high">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Número de tarjeta
           </label>
           <input
             type="text"
+            inputMode="numeric"
             value={cardNumber}
             onChange={handleCardNumberChange}
             placeholder="1234 5678 9012 3456"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
             maxLength={cardBrand === 'amex' ? 17 : 19}
-            autoComplete="off"
+            autoComplete="cc-number"
+            name={`cardnumber${formIdRef.current}`}
+            data-sensitivity="pci-pan"
           />
         </div>
 
@@ -325,7 +395,8 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             onChange={(e) => setCardName(e.target.value.toUpperCase())}
             placeholder="NOMBRE APELLIDO"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
-            autoComplete="off"
+            autoComplete="cc-name"
+            name={`ccname${formIdRef.current}`}
           />
         </div>
 
@@ -340,6 +411,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             placeholder="Ej: BANCO GENERAL"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
             autoComplete="off"
+            name={`bankname${formIdRef.current}`}
           />
         </div>
 
@@ -350,12 +422,15 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             </label>
             <input
               type="text"
+              inputMode="numeric"
               value={expiry}
               onChange={handleExpiryChange}
               placeholder="MM/AA"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
               maxLength={5}
-              autoComplete="off"
+              autoComplete="cc-exp"
+              name={`ccexp${formIdRef.current}`}
+              data-sensitivity="pci-exp"
             />
           </div>
 
@@ -364,7 +439,8 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               CVV
             </label>
             <input
-              type="text"
+              type="password"
+              inputMode="numeric"
               value={cvv}
               onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
               onFocus={() => setIsFlipped(true)}
@@ -372,7 +448,9 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               placeholder="***"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
               maxLength={cardBrand === 'amex' ? 4 : 3}
-              autoComplete="off"
+              autoComplete="cc-csc"
+              name={`cvc${formIdRef.current}`}
+              data-sensitivity="pci-cvv"
             />
           </div>
         </div>

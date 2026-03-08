@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
 
         if (!paymentId) {
           // Create payment as PENDIENTE_CONFIRMACION — requires manual confirm before grouping
+          const slaDueDate = nextInstallment.sla_due_date || null;
           const { data: newPayment, error: insertErr } = await sb.from('adm_cot_payments').insert({
             client_name: rec.client_name,
             cedula: rec.cedula || null,
@@ -100,6 +101,7 @@ export async function GET(request: NextRequest) {
             recurrence_id: rec.id,
             installment_num: installmentNum,
             payment_source: 'CRON_RECURRENCE',
+            ...(slaDueDate ? { due_date: slaDueDate } : {}),
           }).select('id').single();
 
           if (insertErr) {

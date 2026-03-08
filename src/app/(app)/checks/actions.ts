@@ -499,6 +499,9 @@ export async function actionCreatePendingPayment(payment: {
   discount_amount?: number;
   orphan_advance_id?: string; // ID de adelanto huérfano a recuperar (NO crear nuevo)
   is_other_bank?: boolean; // Marcar como otro banco/depósito (pendiente de conciliar)
+  payment_source?: 'bank' | 'paguelofacil' | 'broker_deduction' | 'manual';
+  payment_mode?: 'contado' | 'cuotas' | 'recurrente';
+  due_date?: string; // YYYY-MM-DD
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -774,7 +777,10 @@ export async function actionCreatePendingPayment(payment: {
             can_be_paid: isBrokerDeduction ? false : can_be_paid, // false para descuentos
             status: 'pending' as const,
             notes: JSON.stringify(divMetadata),
-            created_by: user.id
+            created_by: user.id,
+            payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
+            payment_mode: payment.payment_mode || 'contado',
+            due_date: payment.due_date || null,
           };
         }))
       : [{
@@ -791,7 +797,10 @@ export async function actionCreatePendingPayment(payment: {
             advance_id: createdAdvanceId,
             notes: `Adelanto ID: ${createdAdvanceId}`
           }) : JSON.stringify(metadata),
-          created_by: user.id
+          created_by: user.id,
+          payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
+          payment_mode: payment.payment_mode || 'contado',
+          due_date: payment.due_date || null,
         }];
     
     // Insert pending payments (uno o múltiples)
@@ -3077,6 +3086,271 @@ export async function actionDeletePendingPayment(paymentId: string) {
     };
   } catch (error: any) {
     console.error('Error deleting pending payment:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// ========================================
+// BANK TRANSFER — BLOCK / UNBLOCK
+// ========================================
+
+export async function actionToggleBlockTransfer(
+  transferId: string,
+  block: boolean,
+  reason?: string
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { data: currentUser } = await (await getSupabaseServer()).auth.getUser();
+    const userId = currentUser?.user?.id;
+
+    const updatePayload: Record<string, any> = {
+      is_blocked: block,
+      blocked_reason: block ? (reason || 'Bloqueado manualmente') : null,
+      blocked_at: block ? new Date().toISOString() : null,
+      blocked_by: block ? userId : null,
+    };
+
+    const { error } = await supabase
+      .from('bank_transfers')
+      .update(updatePayload)
+      .eq('id', transferId);
+
+    if (error) throw error;
+
+    revalidatePath('/checks');
+    return {
+      ok: true,
+      message: block
+        ? 'Transferencia bloqueada correctamente'
+        : 'Transferencia desbloqueada correctamente',
+    };
+  } catch (error: any) {
+    console.error('Error toggling block on transfer:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// ========================================
+// BANK TRANSFER — CATEGORIZE
+// ========================================
+
+export async function actionCategorizeTransfer(
+  transferId: string,
+  category: 'prima' | 'devolucion' | 'comision' | 'adelanto' | 'otro' | 'uncategorized'
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await supabase
+      .from('bank_transfers')
+      .update({ category })
+      .eq('id', transferId);
+
+    if (error) throw error;
+
+    revalidatePath('/checks');
+    return { ok: true, message: `Transferencia categorizada como "${category}"` };
+  } catch (error: any) {
+    console.error('Error categorizing transfer:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// ========================================
+// BANK TRANSFER — VALIDATE REFERENCE WITH 110% FLEX
+// ========================================
+
+export async function actionValidateReferenceWithFlex(
+  referenceNumber: string,
+  requestedAmount: number
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { data: transfer, error } = await supabase
+      .from('bank_transfers')
+      .select('id, amount, used_amount, remaining_amount, status, is_blocked')
+      .eq('reference_number', referenceNumber)
+      .single();
+
+    if (error || !transfer) {
+      return {
+        ok: true,
+        exists: false,
+        message: 'Referencia no encontrada en historial de banco',
+      };
+    }
+
+    if (transfer.is_blocked) {
+      return {
+        ok: true,
+        exists: true,
+        blocked: true,
+        message: 'Esta referencia está bloqueada y no puede usarse',
+      };
+    }
+
+    const remaining = Number(transfer.remaining_amount || 0);
+    const totalAmount = Number(transfer.amount || 0);
+
+    // 110% flex rule: allow using up to 110% of transfer amount
+    const maxAllowed = totalAmount * 1.10;
+    const currentUsed = Number(transfer.used_amount || 0);
+    const wouldUse = currentUsed + requestedAmount;
+
+    if (wouldUse > maxAllowed) {
+      return {
+        ok: true,
+        exists: true,
+        blocked: false,
+        exceeds_flex: true,
+        remaining,
+        max_allowed: maxAllowed - currentUsed,
+        message: `El monto solicitado ($${requestedAmount.toFixed(2)}) excede el 110% del monto de la transferencia. Máximo disponible: $${(maxAllowed - currentUsed).toFixed(2)}`,
+      };
+    }
+
+    return {
+      ok: true,
+      exists: true,
+      blocked: false,
+      exceeds_flex: false,
+      remaining,
+      max_allowed: maxAllowed - currentUsed,
+      transfer_amount: totalAmount,
+    };
+  } catch (error: any) {
+    console.error('Error validating reference with flex:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// ========================================
+// INSURER PAYMENT DETAIL — EXPORTABLE
+// ========================================
+
+export async function actionGetInsurerPaymentDetail(filters?: {
+  startDate?: string;
+  endDate?: string;
+  insurerName?: string;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    let query = supabase
+      .from('payment_details')
+      .select('*')
+      .order('paid_at', { ascending: false });
+
+    if (filters?.startDate) {
+      query = query.gte('paid_at', filters.startDate);
+    }
+    if (filters?.endDate) {
+      query = query.lte('paid_at', filters.endDate + 'T23:59:59');
+    }
+    if (filters?.insurerName) {
+      query = query.ilike('insurer_name', `%${filters.insurerName}%`);
+    }
+
+    const { data: details, error } = await query;
+    if (error) throw error;
+
+    // Group by insurer
+    const byInsurer: Record<string, {
+      insurer: string;
+      totalAmount: number;
+      count: number;
+      payments: any[];
+    }> = {};
+
+    (details || []).forEach((d: any) => {
+      const insurer = d.insurer_name || 'Sin aseguradora';
+      if (!byInsurer[insurer]) {
+        byInsurer[insurer] = { insurer, totalAmount: 0, count: 0, payments: [] };
+      }
+      byInsurer[insurer]!.totalAmount += Number(d.amount_used || 0);
+      byInsurer[insurer]!.count += 1;
+      byInsurer[insurer]!.payments.push(d);
+    });
+
+    const groups = Object.values(byInsurer).sort((a, b) => b.totalAmount - a.totalAmount);
+    const grandTotal = groups.reduce((sum, g) => sum + g.totalAmount, 0);
+
+    return {
+      ok: true,
+      data: {
+        groups,
+        grandTotal,
+        totalPayments: details?.length || 0,
+      },
+    };
+  } catch (error: any) {
+    console.error('Error fetching insurer payment detail:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+export async function actionExportInsurerPaymentCSV(filters?: {
+  startDate?: string;
+  endDate?: string;
+  insurerName?: string;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    let query = supabase
+      .from('payment_details')
+      .select('*')
+      .order('paid_at', { ascending: false });
+
+    if (filters?.startDate) {
+      query = query.gte('paid_at', filters.startDate);
+    }
+    if (filters?.endDate) {
+      query = query.lte('paid_at', filters.endDate + 'T23:59:59');
+    }
+    if (filters?.insurerName) {
+      query = query.ilike('insurer_name', `%${filters.insurerName}%`);
+    }
+
+    const { data: details, error } = await query;
+    if (error) throw error;
+
+    // Build CSV
+    const headers = [
+      'Fecha Pago',
+      'Aseguradora',
+      'Cliente',
+      'Póliza',
+      'Propósito',
+      'Monto Aplicado',
+      'Referencia Banco',
+      'Fuente',
+      'ID Transacción',
+    ];
+
+    const rows = (details || []).map((d: any) => [
+      d.paid_at ? new Date(d.paid_at).toLocaleDateString('es-PA') : '',
+      d.insurer_name || '',
+      d.client_name || '',
+      d.policy_number || '',
+      d.purpose || '',
+      Number(d.amount_used || 0).toFixed(2),
+      d.bank_transfer_id || '',
+      d.source || '',
+      d.transaction_id || '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    return { ok: true, csv: csvContent, filename: `pagos-aseguradora-${new Date().toISOString().slice(0, 10)}.csv` };
+  } catch (error: any) {
+    console.error('Error exporting insurer payment CSV:', error);
     return { ok: false, error: error.message };
   }
 }

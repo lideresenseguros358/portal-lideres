@@ -5,7 +5,21 @@
  * Creates:
  *   1. A pending payment (PAY_TO_INSURER) for the first installment
  *   2. A recurrence record if installments > 1
+ * 
+ * Enhanced: passes payment_mode, due_date, installment metadata
+ * for SLA tracking and installment grouping.
  */
+
+function computePaymentMode(installments: number): 'contado' | 'cuotas' | 'recurrente' {
+  if (installments <= 1) return 'contado';
+  return 'cuotas';
+}
+
+function computeSLADueDate(baseDate: Date, slaBusinessDays: number = 15): string {
+  const due = new Date(baseDate);
+  due.setDate(due.getDate() + slaBusinessDays);
+  return due.toISOString().slice(0, 10);
+}
 
 export async function createPaymentOnEmission(params: {
   insurer: string;
@@ -20,6 +34,7 @@ export async function createPaymentOnEmission(params: {
     const { insurer, policyNumber, insuredName, cedula, totalPremium, installments, ramo } = params;
     const installmentAmount = Math.round((totalPremium / installments) * 100) / 100;
     const today = new Date().toISOString().slice(0, 10);
+    const paymentMode = computePaymentMode(installments);
 
     // 1. Create first pending payment
     await fetch('/api/adm-cot/payments', {
@@ -37,6 +52,9 @@ export async function createPaymentOnEmission(params: {
           type: 'PAY_TO_INSURER',
           ramo: ramo || 'AUTO',
           installment_num: 1,
+          total_installments: installments,
+          payment_mode: paymentMode,
+          due_date: computeSLADueDate(new Date()),
           source: 'EMISSION',
         },
       }),
@@ -56,6 +74,7 @@ export async function createPaymentOnEmission(params: {
         schedule.push({
           num: i,
           due_date: dueDate.toISOString().slice(0, 10),
+          sla_due_date: computeSLADueDate(dueDate),
           status: i === 1 ? 'PAGADO' : 'PENDIENTE',
           payment_id: null,
         });

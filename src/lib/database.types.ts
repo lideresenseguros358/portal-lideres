@@ -1768,39 +1768,57 @@ export type Database = {
       bank_transfers: {
         Row: {
           amount: number
+          blocked_at: string | null
+          blocked_by: string | null
+          blocked_reason: string | null
+          category: string | null
           created_at: string | null
           date: string
           description: string | null
           id: string
           imported_at: string | null
+          is_blocked: boolean | null
           reference_number: string
           remaining_amount: number | null
+          source: string | null
           status: string | null
           transaction_code: string | null
           used_amount: number | null
         }
         Insert: {
           amount: number
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
+          category?: string | null
           created_at?: string | null
           date: string
           description?: string | null
           id?: string
           imported_at?: string | null
+          is_blocked?: boolean | null
           reference_number: string
           remaining_amount?: number | null
+          source?: string | null
           status?: string | null
           transaction_code?: string | null
           used_amount?: number | null
         }
         Update: {
           amount?: number
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
+          category?: string | null
           created_at?: string | null
           date?: string
           description?: string | null
           id?: string
           imported_at?: string | null
+          is_blocked?: boolean | null
           reference_number?: string
           remaining_amount?: number | null
+          source?: string | null
           status?: string | null
           transaction_code?: string | null
           used_amount?: number | null
@@ -6631,10 +6649,13 @@ export type Database = {
           client_name: string
           id: string
           insurer_name: string | null
+          notes: string | null
           paid_at: string | null
           payment_id: string | null
           policy_number: string | null
           purpose: string
+          source: string | null
+          transaction_id: string | null
         }
         Insert: {
           amount_used: number
@@ -6642,10 +6663,13 @@ export type Database = {
           client_name: string
           id?: string
           insurer_name?: string | null
+          notes?: string | null
           paid_at?: string | null
           payment_id?: string | null
           policy_number?: string | null
           purpose: string
+          source?: string | null
+          transaction_id?: string | null
         }
         Update: {
           amount_used?: number
@@ -6653,10 +6677,13 @@ export type Database = {
           client_name?: string
           id?: string
           insurer_name?: string | null
+          notes?: string | null
           paid_at?: string | null
           payment_id?: string | null
           policy_number?: string | null
           purpose?: string
+          source?: string | null
+          transaction_id?: string | null
         }
         Relationships: [
           {
@@ -6827,13 +6854,19 @@ export type Database = {
           client_name: string
           created_at: string | null
           created_by: string | null
+          due_date: string | null
           id: string
+          installment_number: number | null
           insurer_name: string | null
           notes: string | null
           paid_at: string | null
+          parent_payment_id: string | null
+          payment_mode: string | null
+          payment_source: string | null
           policy_number: string | null
           purpose: string
           status: string | null
+          total_installments: number | null
           total_received: number | null
         }
         Insert: {
@@ -6842,13 +6875,19 @@ export type Database = {
           client_name: string
           created_at?: string | null
           created_by?: string | null
+          due_date?: string | null
           id?: string
+          installment_number?: number | null
           insurer_name?: string | null
           notes?: string | null
           paid_at?: string | null
+          parent_payment_id?: string | null
+          payment_mode?: string | null
+          payment_source?: string | null
           policy_number?: string | null
           purpose: string
           status?: string | null
+          total_installments?: number | null
           total_received?: number | null
         }
         Update: {
@@ -6857,13 +6896,19 @@ export type Database = {
           client_name?: string
           created_at?: string | null
           created_by?: string | null
+          due_date?: string | null
           id?: string
+          installment_number?: number | null
           insurer_name?: string | null
           notes?: string | null
           paid_at?: string | null
+          parent_payment_id?: string | null
+          payment_mode?: string | null
+          payment_source?: string | null
           policy_number?: string | null
           purpose?: string
           status?: string | null
+          total_installments?: number | null
           total_received?: number | null
         }
         Relationships: []

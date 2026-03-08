@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FaPlus, FaChevronDown, FaChevronRight, FaFileImport } from 'react-icons/fa';
-import { actionGetBankTransfers } from '@/app/(app)/checks/actions';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FaPlus, FaChevronDown, FaChevronRight, FaFileImport, FaBan, FaTag, FaLock, FaLockOpen, FaEllipsisV } from 'react-icons/fa';
+import { actionGetBankTransfers, actionToggleBlockTransfer, actionCategorizeTransfer } from '@/app/(app)/checks/actions';
 import ImportBankHistoryModal from './ImportBankHistoryModal';
 import { toast } from 'sonner';
 
@@ -17,8 +17,26 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
   const [showImportModal, setShowImportModal] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [blockingId, setBlockingId] = useState<string | null>(null);
+  const [categorizingId, setCategorizingId] = useState<string | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close action menu on outside click
+  useEffect(() => {
+    if (!actionMenuId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target as Node)) {
+        setActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionMenuId]);
+
   const [filters, setFilters] = useState({
     status: 'all',
+    category: 'all',
     startDate: '',
     endDate: '',
     search: ''
@@ -45,8 +63,13 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
     }
   };
 
-  // Filtrar transfers por búsqueda
+  // Filtrar transfers por búsqueda y categoría
   const filteredTransfers = transfers.filter(transfer => {
+    // Category filter
+    if (filters.category !== 'all' && (transfer.category || 'uncategorized') !== filters.category) {
+      return false;
+    }
+    // Search filter
     if (!filters.search) return true;
     const searchLower = filters.search.toLowerCase();
     return (
@@ -60,6 +83,85 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
       )
     );
   });
+
+  const blockedCount = filteredTransfers.filter(t => t.is_blocked).length;
+
+  const handleToggleBlock = async (transferId: string, currentlyBlocked: boolean) => {
+    if (!currentlyBlocked) {
+      const reason = prompt('Razón del bloqueo (opcional):');
+      if (reason === null) {
+        // User cancelled the prompt — abort
+        setActionMenuId(null);
+        return;
+      }
+      setBlockingId(transferId);
+      try {
+        const result = await actionToggleBlockTransfer(transferId, true, reason || undefined);
+        if (result.ok) {
+          toast.success(result.message);
+          loadTransfers();
+        } else {
+          toast.error(result.error || 'Error al bloquear');
+        }
+      } catch {
+        toast.error('Error inesperado');
+      } finally {
+        setBlockingId(null);
+        setActionMenuId(null);
+      }
+    } else {
+      setBlockingId(transferId);
+      try {
+        const result = await actionToggleBlockTransfer(transferId, false);
+        if (result.ok) {
+          toast.success(result.message);
+          loadTransfers();
+        } else {
+          toast.error(result.error || 'Error al desbloquear');
+        }
+      } catch {
+        toast.error('Error inesperado');
+      } finally {
+        setBlockingId(null);
+        setActionMenuId(null);
+      }
+    }
+  };
+
+  const handleCategorize = async (transferId: string, category: string) => {
+    setCategorizingId(transferId);
+    try {
+      const result = await actionCategorizeTransfer(transferId, category as any);
+      if (result.ok) {
+        toast.success(result.message);
+        loadTransfers();
+      } else {
+        toast.error(result.error || 'Error al categorizar');
+      }
+    } catch {
+      toast.error('Error inesperado');
+    } finally {
+      setCategorizingId(null);
+      setActionMenuId(null);
+    }
+  };
+
+  const getCategoryBadge = (category: string | null) => {
+    const cats: Record<string, { label: string; color: string }> = {
+      prima: { label: 'Prima', color: 'bg-blue-100 text-blue-800' },
+      devolucion: { label: 'Devolución', color: 'bg-orange-100 text-orange-800' },
+      comision: { label: 'Comisión', color: 'bg-purple-100 text-purple-800' },
+      adelanto: { label: 'Adelanto', color: 'bg-cyan-100 text-cyan-800' },
+      otro: { label: 'Otro', color: 'bg-gray-100 text-gray-800' },
+      uncategorized: { label: 'Sin cat.', color: 'bg-gray-50 text-gray-500' },
+    };
+    const cat = cats[category || 'uncategorized'] ?? cats['uncategorized']!;
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${cat!.color}`}>
+        {cat!.label}
+      </span>
+    );
+  };
 
   useEffect(() => {
     loadTransfers();
@@ -76,7 +178,14 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
     setExpandedRows(newExpanded);
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, isBlocked?: boolean) => {
+    if (isBlocked) {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold border-2 bg-red-100 text-red-800 border-red-300 inline-flex items-center gap-1">
+          <FaLock className="text-[10px]" /> Bloqueado
+        </span>
+      );
+    }
     const badges = {
       available: { label: 'Disponible', color: 'bg-green-100 text-green-800 border-green-300' },
       partial: { label: 'Parcial', color: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
@@ -110,7 +219,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
 
       {/* Filtros */}
       <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="w-full max-w-full overflow-hidden">
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Buscar</label>
             <input
@@ -133,6 +242,23 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
               <option value="available">DISPONIBLE</option>
               <option value="partial">PARCIAL</option>
               <option value="exhausted">AGOTADO</option>
+            </select>
+          </div>
+
+          <div className="w-full max-w-full overflow-hidden">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Categoría</label>
+            <select
+              value={filters.category}
+              onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+              className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+            >
+              <option value="all">TODAS</option>
+              <option value="prima">PRIMA</option>
+              <option value="devolucion">DEVOLUCIÓN</option>
+              <option value="comision">COMISIÓN</option>
+              <option value="adelanto">ADELANTO</option>
+              <option value="otro">OTRO</option>
+              <option value="uncategorized">SIN CATEGORÍA</option>
             </select>
           </div>
           
@@ -162,24 +288,31 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
 
       {/* Resumen */}
       {!loading && filteredTransfers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Usado</h3>
-            <p className="text-3xl font-bold text-red-600 font-mono">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-l-4 border-red-500">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-2">Total Usado</h3>
+            <p className="text-xl sm:text-3xl font-bold text-red-600 font-mono">
               ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.used_amount || 0), 0).toFixed(2)}
             </p>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#8AAA19]">
-            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Recibido</h3>
-            <p className="text-3xl font-bold text-[#8AAA19] font-mono">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-l-4 border-[#8AAA19]">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-2">Total Recibido</h3>
+            <p className="text-xl sm:text-3xl font-bold text-[#8AAA19] font-mono">
               ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)}
             </p>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#010139]">
-            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Disponible</h3>
-            <p className="text-3xl font-bold text-[#010139] font-mono">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-l-4 border-[#010139]">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-2">Total Disponible</h3>
+            <p className="text-xl sm:text-3xl font-bold text-[#010139] font-mono">
               ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.remaining_amount || 0), 0).toFixed(2)}
             </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-l-4 border-amber-500">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-2">Bloqueadas</h3>
+            <p className="text-xl sm:text-3xl font-bold text-amber-600 font-mono">
+              {blockedCount}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">{filteredTransfers.length} transferencias</p>
           </div>
         </div>
       )}
@@ -212,7 +345,8 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                   <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Monto</th>
                   <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Usado</th>
                   <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Disponible</th>
-                  <th className="w-[12%] px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Estado</th>
+                  <th className="w-[8%] px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Cat.</th>
+                  <th className="w-[10%] px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Estado</th>
                   <th className="w-[5%] px-2 py-4"></th>
                 </tr>
               </thead>
@@ -260,11 +394,49 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                           </span>
                         </td>
                         <td className="px-3 py-4 text-center whitespace-nowrap">
-                          {getStatusBadge(transfer.status)}
+                          {getCategoryBadge(transfer.category)}
                         </td>
-                        <td className="px-2 py-4 text-center">
-                          {hasDetails && (
-                            isExpanded ? <FaChevronDown className="text-gray-400" /> : <FaChevronRight className="text-gray-400" />
+                        <td className="px-3 py-4 text-center whitespace-nowrap">
+                          {getStatusBadge(transfer.status, transfer.is_blocked)}
+                        </td>
+                        <td className="px-2 py-4 text-center relative">
+                          <div className="flex items-center gap-1">
+                            {hasDetails && (
+                              isExpanded ? <FaChevronDown className="text-gray-400" /> : <FaChevronRight className="text-gray-400" />
+                            )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setActionMenuId(actionMenuId === transfer.id ? null : transfer.id); }}
+                              className="p-1 hover:bg-gray-200 rounded transition-colors"
+                              title="Acciones"
+                            >
+                              <FaEllipsisV className="text-gray-400 text-xs" />
+                            </button>
+                          </div>
+                          {actionMenuId === transfer.id && (
+                            <div ref={actionMenuRef} className="absolute right-0 top-full z-50 w-48 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-1 text-left" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => handleToggleBlock(transfer.id, !!transfer.is_blocked)}
+                                disabled={blockingId === transfer.id}
+                                className="w-full px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-left"
+                              >
+                                {transfer.is_blocked ? <FaLockOpen className="text-green-600" /> : <FaLock className="text-red-600" />}
+                                {transfer.is_blocked ? 'Desbloquear' : 'Bloquear'}
+                              </button>
+                              <div className="border-t border-gray-100 my-1" />
+                              <div className="px-3 py-1 text-[10px] font-semibold text-gray-500 uppercase">Categorizar</div>
+                              {['prima', 'devolucion', 'comision', 'adelanto', 'otro', 'uncategorized'].map(cat => (
+                                <button
+                                  key={cat}
+                                  onClick={() => handleCategorize(transfer.id, cat)}
+                                  disabled={categorizingId === transfer.id}
+                                  className={`w-full px-3 py-1.5 text-sm hover:bg-gray-50 text-left ${
+                                    (transfer.category || 'uncategorized') === cat ? 'font-bold text-[#010139]' : 'text-gray-700'
+                                  }`}
+                                >
+                                  {getCategoryBadge(cat)}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -272,7 +444,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                       {/* Detalles expandidos */}
                       {isExpanded && hasDetails && (
                         <tr>
-                          <td colSpan={8} className="px-6 py-4 bg-blue-50">
+                          <td colSpan={9} className="px-6 py-4 bg-blue-50">
                             <div className="space-y-2">
                               <h4 className="font-semibold text-sm text-[#010139] mb-3">💳 Pagos Aplicados:</h4>
                               {paymentDetails.map((detail: any) => (
