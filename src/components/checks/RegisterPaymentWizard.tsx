@@ -2383,6 +2383,33 @@ export default function RegisterPaymentWizardNew({
                   <p className="text-2xl font-bold text-[#8AAA19]">${amountToPay.toFixed(2)}</p>
                 </div>
 
+                {isDeductFromBroker && selectedBrokerId && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-sm text-gray-600 mb-2">Método de Pago</h4>
+                    <div className="bg-[#8AAA19]/10 border-2 border-[#8AAA19]/30 rounded-lg p-4">
+                      <p className="font-bold text-[#010139] text-base">💰 Descuento a Corredor</p>
+                      <p className="text-sm text-gray-700 mt-1">
+                        Corredor: <strong>{brokers.find(b => b.id === selectedBrokerId)?.name || 'N/A'}</strong>
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        Tipo: <strong>{deductMode === 'full' ? '100% Descuento' : 'Descuento Parcial'}</strong>
+                      </p>
+                      {deductMode === 'partial' && (
+                        <p className="text-sm text-gray-700">
+                          Monto descontado: <strong>${(parseFloat(partialDeductAmount || '0') || 0).toFixed(2)}</strong>
+                          {' '} — Restante por banco: <strong>${Math.max(0, amountToPay - (parseFloat(partialDeductAmount || '0') || 0)).toFixed(2)}</strong>
+                        </p>
+                      )}
+                      {selectedOrphanAdvance && (
+                        <p className="text-sm text-orange-700 mt-1">🔄 Recuperando adelanto huérfano existente</p>
+                      )}
+                      <p className="text-xs text-[#8AAA19] mt-2 font-medium">
+                        Se creará un adelanto automático que se descontará en la próxima quincena
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {divideSingle && divisions.length > 0 && (
                   <div className="border-t pt-4">
                     <h4 className="font-semibold text-sm text-gray-600 mb-2">Divisiones Realizadas ({divisions.length})</h4>
@@ -2419,31 +2446,34 @@ export default function RegisterPaymentWizardNew({
                   </div>
                 )}
 
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold text-sm text-gray-600 mb-2">Referencias ({references.length})</h4>
-                  {references.map((ref, idx) => (
-                    <div key={idx} className="py-2 border-b last:border-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {ref.exists_in_bank ? (
-                            <FaCheckCircle className="text-green-600" />
-                          ) : (
-                            <FaExclamationTriangle className="text-red-600" />
-                          )}
-                          <span className="font-mono text-sm">{ref.reference_number}</span>
+                {/* Solo mostrar referencias si NO es descuento completo a corredor */}
+                {!(isDeductFromBroker && deductMode === 'full') && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-sm text-gray-600 mb-2">Referencias ({references.length})</h4>
+                    {references.map((ref, idx) => (
+                      <div key={idx} className="py-2 border-b last:border-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {ref.exists_in_bank ? (
+                              <FaCheckCircle className="text-green-600" />
+                            ) : (
+                              <FaExclamationTriangle className="text-red-600" />
+                            )}
+                            <span className="font-mono text-sm">{ref.reference_number}</span>
+                          </div>
+                          <span className="font-semibold">${parseFloat(ref.amount_to_use || '0').toFixed(2)}</span>
                         </div>
-                        <span className="font-semibold">${parseFloat(ref.amount_to_use || '0').toFixed(2)}</span>
+                        {ref.status === 'partial' && (
+                          <p className="text-xs text-amber-600 ml-6 mt-1">
+                            Parcial: ${parseFloat(ref.amount_to_use || '0').toFixed(2)} de ${parseFloat(ref.amount || '0').toFixed(2)}
+                          </p>
+                        )}
                       </div>
-                      {ref.status === 'partial' && (
-                        <p className="text-xs text-amber-600 ml-6 mt-1">
-                          Parcial: ${parseFloat(ref.amount_to_use || '0').toFixed(2)} de ${parseFloat(ref.amount || '0').toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
 
-                {!references.every(r => r.exists_in_bank) && (
+                {!(isDeductFromBroker && deductMode === 'full') && !references.every(r => r.exists_in_bank) && (
                   <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
                     <div className="flex gap-2">
                       <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" />
