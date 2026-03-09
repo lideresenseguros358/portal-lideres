@@ -52,7 +52,10 @@ async function getRegionalMarcasCached(): Promise<RegionalMarca[]> {
   try {
     cachedMarcas = await getMarcas();
     cachedMarcasTimestamp = Date.now();
-    console.log(`[REGIONAL Vehicle Mapper] Cached ${cachedMarcas.length} marcas`);
+    // Diagnostic: log first 3 entries to verify field names
+    const sample = cachedMarcas.slice(0, 3).map(m => ({ codmarca: m.codmarca, descripcion: m.descripcion, keys: Object.keys(m) }));
+    const withoutDesc = cachedMarcas.filter(m => !m.descripcion).length;
+    console.log(`[REGIONAL Vehicle Mapper] Cached ${cachedMarcas.length} marcas (${withoutDesc} without descripcion). Sample:`, JSON.stringify(sample));
     return cachedMarcas;
   } catch (err) {
     console.error('[REGIONAL Vehicle Mapper] Error fetching marcas:', err);
@@ -68,7 +71,9 @@ async function getRegionalModelosCached(codMarcaRegional: number): Promise<Regio
   try {
     const modelos = await getModelos(codMarcaRegional);
     cachedModelos.set(codMarcaRegional, { data: modelos, timestamp: Date.now() });
-    console.log(`[REGIONAL Vehicle Mapper] Cached ${modelos.length} modelos for marca ${codMarcaRegional}`);
+    const sampleM = modelos.slice(0, 3).map(m => ({ codmodelo: m.codmodelo, descripcion: m.descripcion, keys: Object.keys(m) }));
+    const withoutDescM = modelos.filter(m => !m.descripcion).length;
+    console.log(`[REGIONAL Vehicle Mapper] Cached ${modelos.length} modelos for marca ${codMarcaRegional} (${withoutDescM} without descripcion). Sample:`, JSON.stringify(sampleM));
     return modelos;
   } catch (err) {
     console.error(`[REGIONAL Vehicle Mapper] Error fetching modelos for marca ${codMarcaRegional}:`, err);
@@ -84,8 +89,9 @@ async function getRegionalModelosCached(codMarcaRegional: number): Promise<Regio
  * Normalize a brand/model name for comparison.
  * Removes accents, extra spaces, hyphens, and converts to uppercase.
  */
-function normalizeName(name: string): string {
-  return name
+function normalizeName(name: string | undefined | null): string {
+  if (!name) return '';
+  return String(name)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Remove accents
     .toUpperCase()
@@ -105,26 +111,29 @@ function findBestMarcaMatch(
   const target = normalizeName(nombre);
   if (!target) return null;
 
+  // Filter out catalog entries with missing descripcion
+  const valid = marcas.filter(m => m.descripcion);
+
   // 1. Exact match
-  const exact = marcas.find(m => normalizeName(m.descripcion) === target);
+  const exact = valid.find(m => normalizeName(m.descripcion) === target);
   if (exact) return exact;
 
   // 2. Regional description starts with target
-  const startsWith = marcas.find(m => normalizeName(m.descripcion).startsWith(target));
+  const startsWith = valid.find(m => normalizeName(m.descripcion).startsWith(target));
   if (startsWith) return startsWith;
 
   // 3. Target starts with Regional description
-  const reverseStartsWith = marcas.find(m => target.startsWith(normalizeName(m.descripcion)));
+  const reverseStartsWith = valid.find(m => target.startsWith(normalizeName(m.descripcion)));
   if (reverseStartsWith) return reverseStartsWith;
 
   // 4. Contains
-  const contains = marcas.find(m => normalizeName(m.descripcion).includes(target));
+  const contains = valid.find(m => normalizeName(m.descripcion).includes(target));
   if (contains) return contains;
 
   // 5. First word match (handles "MERCEDES BENZ" → "MERCEDES-BENZ", etc.)
   const targetFirstWord = target.split(' ')[0];
   if (targetFirstWord && targetFirstWord.length >= 3) {
-    const firstWord = marcas.find(m => normalizeName(m.descripcion).split(' ')[0] === targetFirstWord);
+    const firstWord = valid.find(m => normalizeName(m.descripcion).split(' ')[0] === targetFirstWord);
     if (firstWord) return firstWord;
   }
 
@@ -142,26 +151,29 @@ function findBestModeloMatch(
   const target = normalizeName(nombre);
   if (!target) return null;
 
+  // Filter out catalog entries with missing descripcion
+  const valid = modelos.filter(m => m.descripcion);
+
   // 1. Exact match
-  const exact = modelos.find(m => normalizeName(m.descripcion) === target);
+  const exact = valid.find(m => normalizeName(m.descripcion) === target);
   if (exact) return exact;
 
   // 2. Regional description starts with target
-  const startsWith = modelos.find(m => normalizeName(m.descripcion).startsWith(target));
+  const startsWith = valid.find(m => normalizeName(m.descripcion).startsWith(target));
   if (startsWith) return startsWith;
 
   // 3. Target starts with Regional description
-  const reverseStartsWith = modelos.find(m => target.startsWith(normalizeName(m.descripcion)));
+  const reverseStartsWith = valid.find(m => target.startsWith(normalizeName(m.descripcion)));
   if (reverseStartsWith) return reverseStartsWith;
 
   // 4. Contains
-  const contains = modelos.find(m => normalizeName(m.descripcion).includes(target));
+  const contains = valid.find(m => normalizeName(m.descripcion).includes(target));
   if (contains) return contains;
 
   // 5. First word match (handles "COROLLA XLI" → "COROLLA", etc.)
   const targetFirstWord = target.split(' ')[0];
   if (targetFirstWord && targetFirstWord.length >= 3) {
-    const firstWord = modelos.find(m => normalizeName(m.descripcion).split(' ')[0] === targetFirstWord);
+    const firstWord = valid.find(m => normalizeName(m.descripcion).split(' ')[0] === targetFirstWord);
     if (firstWord) return firstWord;
   }
 

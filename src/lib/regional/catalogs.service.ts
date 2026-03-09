@@ -49,16 +49,21 @@ export async function getMarcas(): Promise<RegionalMarca[]> {
   if (cached) return cached;
 
   const res = await regionalGet<RegionalMarca[]>(REGIONAL_CATALOG_ENDPOINTS.MARCAS);
+  let raw: any[] = [];
   if (res.success && Array.isArray(res.data)) {
-    setCache('marcas', res.data);
-    return res.data;
+    raw = res.data;
+  } else {
+    raw = extractArray(res.data || res.raw) as any[];
   }
-  // Handle wrapped response
-  const arr = extractArray(res.data || res.raw);
-  if (arr.length > 0) {
-    setCache('marcas', arr);
+  // Normalize: Regional API returns 'descmarca' but our types expect 'descripcion'
+  const normalized: RegionalMarca[] = raw.map((m: any) => ({
+    codmarca: m.codmarca,
+    descripcion: m.descripcion || m.descmarca || m.nombre || '',
+  }));
+  if (normalized.length > 0) {
+    setCache('marcas', normalized);
   }
-  return arr as RegionalMarca[];
+  return normalized;
 }
 
 export async function getModelos(codMarca: number): Promise<RegionalModelo[]> {
@@ -69,15 +74,22 @@ export async function getModelos(codMarca: number): Promise<RegionalModelo[]> {
   const res = await regionalGet<RegionalModelo[]>(
     `${REGIONAL_CATALOG_ENDPOINTS.MODELOS}/${codMarca}`
   );
+  let raw: any[] = [];
   if (res.success && Array.isArray(res.data)) {
-    setCache(cacheKey, res.data);
-    return res.data;
+    raw = res.data;
+  } else {
+    raw = extractArray(res.data || res.raw) as any[];
   }
-  const arr = extractArray(res.data || res.raw);
-  if (arr.length > 0) {
-    setCache(cacheKey, arr);
+  // Normalize: Regional API returns 'descmodelo' but our types expect 'descripcion'
+  const normalized: RegionalModelo[] = raw.map((m: any) => ({
+    codmodelo: m.codmodelo,
+    descripcion: m.descripcion || m.descmodelo || m.nombre || '',
+    codmarca: m.codmarca,
+  }));
+  if (normalized.length > 0) {
+    setCache(cacheKey, normalized);
   }
-  return arr as RegionalModelo[];
+  return normalized;
 }
 
 export async function getEndosos(): Promise<RegionalEndoso[]> {
