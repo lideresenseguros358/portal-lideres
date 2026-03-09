@@ -14,6 +14,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { obtenerClienteAutenticado } from '@/lib/fedpa/auth.service';
 import { EMISOR_PLAN_ENDPOINTS } from '@/lib/fedpa/config';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
+import { normalizeText } from '@/lib/fedpa/utils';
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 export const maxDuration = 30;
 
@@ -131,10 +133,45 @@ async function fetchCaratulaPdf(
       );
     }
 
-    // POST /api/caratulaPoliza with the emission payload
+    // ── Normalize payload (same transforms that /api/fedpa/emision applies) ──
+    const rawMarca = String(emissionPayload.Marca || '');
+    const rawModelo = String(emissionPayload.Modelo || '');
+    const marcaNombre = emissionPayload.MarcaNombre || '';
+    const modeloNombre = emissionPayload.ModeloNombre || rawModelo;
+    const isNumericMarca = /^\d+$/.test(rawMarca);
+    const fedpaMarca = isNumericMarca
+      ? getFedpaMarcaFromIS(parseInt(rawMarca), marcaNombre)
+      : rawMarca;
+    const fedpaModelo = normalizarModeloFedpa(modeloNombre || rawModelo);
+
+    const normalizedPayload = {
+      ...emissionPayload,
+      PrimerNombre: normalizeText(emissionPayload.PrimerNombre),
+      PrimerApellido: normalizeText(emissionPayload.PrimerApellido),
+      SegundoNombre: emissionPayload.SegundoNombre ? normalizeText(emissionPayload.SegundoNombre) : undefined,
+      SegundoApellido: emissionPayload.SegundoApellido ? normalizeText(emissionPayload.SegundoApellido) : undefined,
+      Identificacion: normalizeText(emissionPayload.Identificacion),
+      Direccion: normalizeText(emissionPayload.Direccion),
+      Marca: normalizeText(fedpaMarca),
+      Modelo: normalizeText(fedpaModelo),
+      Placa: normalizeText(emissionPayload.Placa),
+      Vin: normalizeText(emissionPayload.Vin),
+      Motor: normalizeText(emissionPayload.Motor),
+      Color: normalizeText(emissionPayload.Color),
+      Telefono: typeof emissionPayload.Telefono === 'string' ? parseInt(emissionPayload.Telefono.replace(/\D/g, '')) : emissionPayload.Telefono,
+      Celular: typeof emissionPayload.Celular === 'string' ? parseInt(emissionPayload.Celular.replace(/\D/g, '')) : emissionPayload.Celular,
+      cantidadPago: emissionPayload.cantidadPago || 1,
+    };
+    // Remove helper fields not expected by FEDPA
+    delete normalizedPayload.MarcaNombre;
+    delete normalizedPayload.ModeloNombre;
+
+    console.log(`[API FEDPA Carátula] ${requestId} Marca: ${rawMarca} → ${normalizedPayload.Marca} | Modelo: ${rawModelo} → ${normalizedPayload.Modelo}`);
+
+    // POST /api/caratulaPoliza with the normalized emission payload
     const response = await clientResult.client.postRaw(
       EMISOR_PLAN_ENDPOINTS.CARATULA_POLIZA,
-      emissionPayload
+      normalizedPayload
     );
 
     const contentType = response.headers.get('content-type') || '';
