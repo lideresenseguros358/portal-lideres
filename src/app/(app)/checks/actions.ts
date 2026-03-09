@@ -780,7 +780,6 @@ export async function actionCreatePendingPayment(payment: {
             created_by: user.id,
             payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
             payment_mode: payment.payment_mode || 'contado',
-            due_date: payment.due_date || null,
           };
         }))
       : [{
@@ -800,7 +799,6 @@ export async function actionCreatePendingPayment(payment: {
           created_by: user.id,
           payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
           payment_mode: payment.payment_mode || 'contado',
-          due_date: payment.due_date || null,
         }];
     
     // Insert pending payments (uno o múltiples)
