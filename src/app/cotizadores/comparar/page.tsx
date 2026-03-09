@@ -848,6 +848,8 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
       edocivil: 'S',
       codMarca: quoteData.marcaCodigo || 74,
       codModelo: quoteData.modeloCodigo || 1,
+      marca: quoteData.marca || '',   // Brand name for IS→Regional normalization
+      modelo: quoteData.modelo || '', // Model name for IS→Regional normalization
       anio: quoteData.anio || new Date().getFullYear(),
       valorVeh: quoteData.valorVehiculo || 15000,
       email: quoteData.email || 'cotizacion@web.com',

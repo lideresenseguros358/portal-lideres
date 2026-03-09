@@ -800,6 +800,8 @@ export default function EmitirDanosTercerosPage() {
             // Vehículo
             codmarca: vehicleData?.marcaCodigo || selectedPlan._vcodmarca || 74,
             codmodelo: vehicleData?.modeloCodigo || selectedPlan._vcodmodelo || 1,
+            marca: vehicleData?.marca || quoteData?.marca || '',   // Brand name for IS→Regional normalization
+            modelo: vehicleData?.modelo || quoteData?.modelo || '', // Model name for IS→Regional normalization
             anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
             numplaca: vehicleData?.placa || '',
             serialcarroceria: vehicleData?.vinChasis || '',

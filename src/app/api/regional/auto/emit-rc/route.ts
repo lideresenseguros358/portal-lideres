@@ -7,8 +7,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaRC } from '@/lib/regional/emission.service';
-import { getRegionalCredentials } from '@/lib/regional/config';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
+import { getRegionalCredentials } from '@/lib/regional/config';
+import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
 import type { RegionalRCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
       tppersona, tpodoc, prov, letra, tomo, asiento, dv, pasaporte,
       // Vehículo
       codmarca, codmodelo, anio, numplaca, serialcarroceria, serialmotor, color,
+      marca, modelo, // Brand/model names for IS→Regional normalization
       // Conductor habitual
       condHabNombre, condHabApellido, condHabSexo, condHabEdocivil,
     } = body;
@@ -53,6 +55,29 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Faltan datos del vehículo' },
         { status: 400 }
       );
+    }
+
+    // ═══ Normalize IS vehicle codes → Regional codes ═══
+    let resolvedMarca = parseInt(codmarca);
+    let resolvedModelo = parseInt(codmodelo);
+
+    if (marca || modelo) {
+      try {
+        const resolved = await resolveRegionalVehicleCodes({
+          isMarcaCodigo: parseInt(codmarca),
+          isModeloCodigo: parseInt(codmodelo),
+          marcaNombre: marca || '',
+          modeloNombre: modelo || '',
+        });
+        resolvedMarca = resolved.codMarca;
+        resolvedModelo = resolved.codModelo;
+        console.log(`[REGIONAL RC Emit] Vehicle codes normalized: marca ${codmarca}→${resolvedMarca}, modelo ${codmodelo}→${resolvedModelo} (${resolved.matchMethod})`);
+        if (resolved.warning) {
+          console.warn(`[REGIONAL RC Emit] ⚠️ ${resolved.warning}`);
+        }
+      } catch (err) {
+        console.warn('[REGIONAL RC Emit] Vehicle normalization failed, using raw IS codes:', err);
+      }
     }
 
     // Convert color from free text to Regional catalog code
@@ -97,8 +122,8 @@ export async function POST(request: NextRequest) {
         },
       },
       datosveh: {
-        codmarca: parseInt(codmarca),
-        codmodelo: parseInt(codmodelo),
+        codmarca: resolvedMarca,
+        codmodelo: resolvedModelo,
         anio: parseInt(anio),
         numplaca: (numplaca || '').toUpperCase(),
         serialcarroceria: (serialcarroceria || '').toUpperCase(),

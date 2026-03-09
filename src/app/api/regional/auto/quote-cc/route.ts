@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cotizarCC } from '@/lib/regional/quotes.service';
+import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
 
 export const maxDuration = 60;
 
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
       telefono, celular, email,
       vehnuevo, codMarca, codModelo, anio, valorVeh, numPuestos,
       endoso, lesiones, danios, gastosMedicos,
+      marca, modelo, // Brand/model names for IS→Regional normalization
     } = body;
 
     // Validations
@@ -39,6 +41,29 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[REGIONAL CC Quote] Iniciando cotización CC endoso=${endoso}...`);
+
+    // ═══ Normalize IS vehicle codes → Regional codes ═══
+    let resolvedMarca = parseInt(codMarca);
+    let resolvedModelo = parseInt(codModelo);
+
+    if (marca || modelo) {
+      try {
+        const resolved = await resolveRegionalVehicleCodes({
+          isMarcaCodigo: parseInt(codMarca),
+          isModeloCodigo: parseInt(codModelo),
+          marcaNombre: marca || '',
+          modeloNombre: modelo || '',
+        });
+        resolvedMarca = resolved.codMarca;
+        resolvedModelo = resolved.codModelo;
+        console.log(`[REGIONAL CC Quote] Vehicle codes normalized: marca ${codMarca}→${resolvedMarca}, modelo ${codModelo}→${resolvedModelo} (${resolved.matchMethod})`);
+        if (resolved.warning) {
+          console.warn(`[REGIONAL CC Quote] ⚠️ ${resolved.warning}`);
+        }
+      } catch (err) {
+        console.warn('[REGIONAL CC Quote] Vehicle normalization failed, using raw IS codes:', err);
+      }
+    }
 
     const result = await cotizarCC({
       nombre,
@@ -58,8 +83,8 @@ export async function POST(request: NextRequest) {
       celular: celular || '62900000',
       email: email || 'cotizacion@web.com',
       vehnuevo,
-      codMarca: parseInt(codMarca),
-      codModelo: parseInt(codModelo),
+      codMarca: resolvedMarca,
+      codModelo: resolvedModelo,
       anio: parseInt(anio),
       valorVeh: parseFloat(valorVeh),
       numPuestos: numPuestos ? parseInt(numPuestos) : 4,
