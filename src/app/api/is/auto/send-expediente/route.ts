@@ -12,6 +12,8 @@ import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { guardarDocumentosExpediente } from '@/lib/storage/expediente-server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
+export const maxDuration = 60;
+
 // ZeptoMail REST API for sending emails with attachments
 const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
 
