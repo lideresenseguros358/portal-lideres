@@ -44,73 +44,75 @@ export default function ConfirmacionPage() {
   if (!mounted) return null;
 
   const handleDownloadCaratula = () => {
-    if (!caratulaRef.current) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) { alert('Permite ventanas emergentes para descargar'); return; }
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html><head><title>Carátula de Póliza - ${policyData?.nroPoliza || 'N/A'}</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; }
-        .header { text-align: center; border-bottom: 3px solid #8AAA19; padding-bottom: 20px; margin-bottom: 30px; }
-        .header h1 { color: #010139; font-size: 28px; margin-bottom: 5px; }
-        .header h2 { color: #8AAA19; font-size: 18px; font-weight: 600; }
-        .header .poliza-num { font-size: 24px; color: #010139; font-weight: 800; margin-top: 15px; background: #f0f4e0; padding: 10px 20px; border-radius: 8px; display: inline-block; }
-        .section { margin-bottom: 25px; }
-        .section h3 { color: #010139; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 12px; }
-        .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-        .row .label { color: #666; }
-        .row .value { font-weight: 600; color: #010139; }
-        .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
-        .prima-box { background: #010139; color: white; padding: 15px 25px; border-radius: 10px; text-align: center; margin: 20px 0; }
-        .prima-box .amount { font-size: 32px; font-weight: 800; color: #8AAA19; }
-        .prima-box .label { font-size: 12px; opacity: 0.8; }
-        ${policyData?.isDemo ? '.demo-badge { background: #ff6b6b; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-top: 10px; }' : ''}
-        @media print { body { padding: 20px; } }
-      </style></head><body>
-        <div class="header">
-          <h1>Líderes en Seguros</h1>
-          <h2>Carátula de Póliza</h2>
-          ${policyData?.nroPoliza ? `<div class="poliza-num">Póliza N° ${policyData.nroPoliza}</div>` : ''}
-          ${policyData?.isDemo ? '<div class="demo-badge">DEMOSTRACIÓN</div>' : ''}
-        </div>
-        
-        <div class="section">
-          <h3>Información General</h3>
-          <div class="row"><span class="label">Aseguradora:</span><span class="value">${policyData?.insurer || 'N/A'}</span></div>
-          <div class="row"><span class="label">Plan:</span><span class="value">${policyData?.tipoCobertura || (policyData?.planType === 'premium' ? 'Premium (Endoso Porcelana)' : 'Básico (Full Extras)')}</span></div>
-          ${policyData?.cotizacion ? `<div class="row"><span class="label">Cotización:</span><span class="value">${policyData.cotizacion}</span></div>` : ''}
-          ${policyData?.vigenciaDesde ? `<div class="row"><span class="label">Vigencia:</span><span class="value">${policyData.vigenciaDesde} al ${policyData.vigenciaHasta}</span></div>` : ''}
-        </div>
-        
-        <div class="section">
-          <h3>Datos del Asegurado</h3>
-          ${policyData?.asegurado ? `<div class="row"><span class="label">Nombre:</span><span class="value">${policyData.asegurado}</span></div>` : ''}
-          ${policyData?.cedula ? `<div class="row"><span class="label">Identificación:</span><span class="value">${policyData.cedula}</span></div>` : ''}
-        </div>
-        
-        <div class="section">
-          <h3>Datos del Vehículo</h3>
-          ${policyData?.vehiculo ? `<div class="row"><span class="label">Vehículo:</span><span class="value">${policyData.vehiculo}</span></div>` : ''}
-          ${policyData?.placa ? `<div class="row"><span class="label">Placa:</span><span class="value">${policyData.placa}</span></div>` : ''}
-        </div>
-        
-        ${policyData?.primaTotal ? `
-        <div class="prima-box">
-          <div class="label">Prima Total Anual</div>
-          <div class="amount">$${Number(policyData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-        </div>` : ''}
-        
-        <div class="footer">
-          <p>Documento generado por Líderes en Seguros — ${new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <p style="margin-top:5px;">Este documento es una carátula informativa. La póliza oficial será enviada por la aseguradora.</p>
-        </div>
-      </body></html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+    // Build HTML content for the carátula
+    const htmlContent = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Carátula de Póliza - ${policyData?.nroPoliza || 'N/A'}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; }
+  .header { text-align: center; border-bottom: 3px solid #8AAA19; padding-bottom: 20px; margin-bottom: 30px; }
+  .header h1 { color: #010139; font-size: 28px; margin-bottom: 5px; }
+  .header h2 { color: #8AAA19; font-size: 18px; font-weight: 600; }
+  .header .poliza-num { font-size: 24px; color: #010139; font-weight: 800; margin-top: 15px; background: #f0f4e0; padding: 10px 20px; border-radius: 8px; display: inline-block; }
+  .section { margin-bottom: 25px; }
+  .section h3 { color: #010139; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 12px; }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+  .row .label { color: #666; }
+  .row .value { font-weight: 600; color: #010139; }
+  .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #ddd; padding-top: 15px; }
+  .prima-box { background: #010139; color: white; padding: 15px 25px; border-radius: 10px; text-align: center; margin: 20px 0; }
+  .prima-box .amount { font-size: 32px; font-weight: 800; color: #8AAA19; }
+  .prima-box .label { font-size: 12px; opacity: 0.8; }
+  ${policyData?.isDemo ? '.demo-badge { background: #ff6b6b; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-top: 10px; }' : ''}
+  @media print { body { padding: 20px; } .no-print { display: none; } }
+</style></head><body>
+  <div class="header">
+    <h1>Líderes en Seguros</h1>
+    <h2>Carátula de Póliza</h2>
+    ${policyData?.nroPoliza ? `<div class="poliza-num">Póliza N° ${policyData.nroPoliza}</div>` : ''}
+    ${policyData?.isDemo ? '<div class="demo-badge">DEMOSTRACIÓN</div>' : ''}
+  </div>
+  <div class="section">
+    <h3>Información General</h3>
+    <div class="row"><span class="label">Aseguradora:</span><span class="value">${policyData?.insurer || 'N/A'}</span></div>
+    <div class="row"><span class="label">Plan:</span><span class="value">${policyData?.tipoCobertura || (policyData?.planType === 'premium' ? 'Premium (Endoso Porcelana)' : 'Básico (Full Extras)')}</span></div>
+    ${policyData?.cotizacion ? `<div class="row"><span class="label">Cotización:</span><span class="value">${policyData.cotizacion}</span></div>` : ''}
+    ${policyData?.vigenciaDesde ? `<div class="row"><span class="label">Vigencia:</span><span class="value">${policyData.vigenciaDesde} al ${policyData.vigenciaHasta}</span></div>` : ''}
+  </div>
+  <div class="section">
+    <h3>Datos del Asegurado</h3>
+    ${policyData?.asegurado ? `<div class="row"><span class="label">Nombre:</span><span class="value">${policyData.asegurado}</span></div>` : ''}
+    ${policyData?.cedula ? `<div class="row"><span class="label">Identificación:</span><span class="value">${policyData.cedula}</span></div>` : ''}
+  </div>
+  <div class="section">
+    <h3>Datos del Vehículo</h3>
+    ${policyData?.vehiculo ? `<div class="row"><span class="label">Vehículo:</span><span class="value">${policyData.vehiculo}</span></div>` : ''}
+    ${policyData?.placa ? `<div class="row"><span class="label">Placa:</span><span class="value">${policyData.placa}</span></div>` : ''}
+  </div>
+  ${policyData?.primaTotal ? `
+  <div class="prima-box">
+    <div class="label">Prima Total Anual</div>
+    <div class="amount">$${Number(policyData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+  </div>` : ''}
+  <div class="footer">
+    <p>Documento generado por Líderes en Seguros — ${new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    <p style="margin-top:5px;">Este documento es una carátula informativa. La póliza oficial será enviada por la aseguradora.</p>
+  </div>
+  <div class="no-print" style="text-align:center;margin-top:30px;">
+    <button onclick="window.print()" style="padding:12px 30px;background:#010139;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">Imprimir / Guardar PDF</button>
+  </div>
+</body></html>`;
+
+    // Safari-safe: use Blob + object URL + <a> download instead of window.open popup
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `caratula-poliza-${policyData?.nroPoliza || 'N-A'}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleDownloadFedpaPdf = async () => {

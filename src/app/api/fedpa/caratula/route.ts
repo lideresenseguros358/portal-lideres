@@ -154,16 +154,20 @@ async function fetchCaratulaPdf(
       });
     }
 
-    // Not a PDF — try to parse as JSON error
+    // Not a PDF — read body ONCE as text, then try to parse as JSON
     let errorMsg = `HTTP ${response.status}`;
     try {
-      const errorData = await response.json();
-      errorMsg = errorData.msg || errorData.message || errorData.error || errorMsg;
-      console.error(`[API FEDPA Carátula] ${requestId} Error JSON:`, errorData);
-    } catch {
       const textBody = await response.text();
-      errorMsg = textBody.substring(0, 300) || errorMsg;
-      console.error(`[API FEDPA Carátula] ${requestId} Error text:`, errorMsg);
+      try {
+        const errorData = JSON.parse(textBody);
+        errorMsg = errorData.msg || errorData.message || errorData.error || errorMsg;
+        console.error(`[API FEDPA Carátula] ${requestId} Error JSON:`, errorData);
+      } catch {
+        errorMsg = textBody.substring(0, 300) || errorMsg;
+        console.error(`[API FEDPA Carátula] ${requestId} Error text:`, errorMsg);
+      }
+    } catch (bodyErr: any) {
+      console.error(`[API FEDPA Carátula] ${requestId} Could not read error body:`, bodyErr.message);
     }
 
     return NextResponse.json(
