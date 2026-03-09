@@ -20,6 +20,13 @@ import {
   FaChevronUp,
   FaFilter,
   FaHourglassHalf,
+  FaLock,
+  FaUnlock,
+  FaTag,
+  FaDownload,
+  FaExclamationTriangle,
+  FaFileExport,
+  FaHandHoldingUsd,
 } from 'react-icons/fa';
 
 // ════════════════════════════════════════════
@@ -51,6 +58,9 @@ function StatusBadge({ status }: { status: string }) {
     CONFIRMED: { bg: 'bg-blue-100', text: 'text-blue-800' },
     POSTED: { bg: 'bg-green-100', text: 'text-green-800' },
     OPEN: { bg: 'bg-green-100', text: 'text-green-800' },
+    PARTIAL: { bg: 'bg-yellow-100', text: 'text-yellow-800' },
+    EXHAUSTED: { bg: 'bg-gray-200', text: 'text-gray-600' },
+    BLOCKED: { bg: 'bg-red-100', text: 'text-red-800' },
     CLOSED: { bg: 'bg-gray-200', text: 'text-gray-600' },
     ACTIVA: { bg: 'bg-green-100', text: 'text-green-800' },
     CANCELADA: { bg: 'bg-red-100', text: 'text-red-800' },
@@ -106,6 +116,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState<string | null>(null);
   const [refundForm, setRefundForm] = useState({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
+  const [showManualWizard, setShowManualWizard] = useState(false);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -158,6 +169,8 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     fetchPayments();
   };
 
+  const [showInsurers, setShowInsurers] = useState(false);
+
   // Split payments into unconfirmed recurring vs rest (groupable)
   const unconfirmedPayments = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
   const groupablePayments = payments.filter(p => p.status !== 'PENDIENTE_CONFIRMACION');
@@ -165,6 +178,19 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const selectedPayments = payments.filter(p => selected.has(p.id));
   const selectedTotal = selectedPayments.reduce((s, p) => s + Number(p.amount), 0);
   const hasActiveFilters = search || insurer || status || type;
+
+  const slaBadge = (p: any) => {
+    if (!p.sla_status || p.sla_status === 'none' || p.sla_status === 'unknown') return null;
+    const cfg: Record<string, { bg: string; text: string; label: string }> = {
+      overdue: { bg: 'bg-red-100', text: 'text-red-700', label: `Vencido (${Math.abs(p.days_until_due)}d)` },
+      urgent: { bg: 'bg-red-50', text: 'text-red-600', label: `Urgente (${p.days_until_due}d)` },
+      warning: { bg: 'bg-amber-50', text: 'text-amber-700', label: `${p.days_until_due}d` },
+      on_track: { bg: 'bg-green-50', text: 'text-green-700', label: `${p.days_until_due}d` },
+    };
+    const fallback = { bg: 'bg-green-50', text: 'text-green-700', label: `${p.days_until_due ?? '?'}d` };
+    const c = cfg[p.sla_status] ?? fallback;
+    return <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${c.bg} ${c.text}`}><FaClock className="text-[8px]" />{c.label}</span>;
+  };
 
   return (
     <div className="space-y-4">
@@ -185,6 +211,68 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
         ))}
       </div>
 
+      {/* SLA Alert Banner */}
+      {((summary.overdueCount || 0) > 0 || (summary.urgentCount || 0) > 0) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-3">
+          <FaExclamationTriangle className="text-red-500 text-lg flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-red-800">
+              {(summary.overdueCount || 0) > 0 && <span>{summary.overdueCount} pago(s) vencido(s)</span>}
+              {(summary.overdueCount || 0) > 0 && (summary.urgentCount || 0) > 0 && <span> · </span>}
+              {(summary.urgentCount || 0) > 0 && <span>{summary.urgentCount} pago(s) urgente(s) (≤3 días)</span>}
+            </p>
+            <p className="text-[10px] text-red-600 mt-0.5">Estos pagos requieren atención inmediata para evitar mora.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Insurer Breakdown */}
+      {summary.byInsurer && summary.byInsurer.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <button onClick={() => setShowInsurers(!showInsurers)}
+            className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-2">
+              <FaLayerGroup className="text-[#010139] text-xs" />
+              <span className="text-xs font-semibold text-[#010139]">Desglose por Aseguradora ({summary.byInsurer.length})</span>
+            </div>
+            {showInsurers ? <FaChevronUp className="text-gray-400 text-xs" /> : <FaChevronDown className="text-gray-400 text-xs" />}
+          </button>
+          {showInsurers && (
+            <div className="border-t border-gray-100 p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {summary.byInsurer.map((ins: any) => (
+                <div key={ins.name} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-[#010139]">{ins.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-[#8AAA19]">{fmtMoney(ins.amount)}</p>
+                      <button onClick={async () => {
+                        const res = await apiPost('get_insurer_export', { insurer: ins.name });
+                        if (!res.success || !res.data?.rows?.length) { alert('No hay datos para exportar'); return; }
+                        const header = 'Póliza,Cliente,Cédula,Ramo,Cuota,Monto,Fecha Pago,Estado';
+                        const csv = [header, ...res.data.rows.map((r: any) => `${r.poliza},${r.cliente},${r.cedula},${r.ramo},${r.cuota},${r.monto},${r.fecha_pago},${r.estado}`)].join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = `pagos_${ins.name}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                        URL.revokeObjectURL(url);
+                      }} className="p-1 text-gray-400 hover:text-[#8AAA19] cursor-pointer" title="Exportar CSV">
+                        <FaFileExport className="text-[10px]" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="text-[9px] text-gray-500">{ins.count} pagos</span>
+                    {ins.statuses.PENDIENTE > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">{ins.statuses.PENDIENTE} pend.</span>}
+                    {ins.statuses.PENDIENTE_CONFIRMACION > 0 && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded">{ins.statuses.PENDIENTE_CONFIRMACION} x conf.</span>}
+                    {ins.statuses.AGRUPADO > 0 && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">{ins.statuses.AGRUPADO} agrup.</span>}
+                    {ins.statuses.PAGADO > 0 && <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded">{ins.statuses.PAGADO} pag.</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Search + Filter toggle */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
         <div className="flex items-center gap-2">
@@ -203,6 +291,10 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
           <button onClick={fetchPayments} disabled={loading}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer flex-shrink-0" title="Refrescar">
             <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={() => setShowManualWizard(true)}
+            className="p-2 rounded-lg text-[#8AAA19] hover:bg-[#8AAA19]/10 transition-colors cursor-pointer flex-shrink-0" title="Wizard Manual">
+            <FaHandHoldingUsd className="text-sm" />
           </button>
           {hasActiveFilters && (
             <button onClick={() => { setSearch(''); setInsurer(''); setStatus(''); setType(''); }} className="p-2 text-gray-400 hover:text-red-500 cursor-pointer flex-shrink-0" title="Limpiar">
@@ -327,12 +419,13 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               </div>
             </div>
             <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span>{fmtDate(p.payment_date)}</span>
                 {p.is_refund
                   ? <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">DEV</span>
                   : <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">ASEG</span>}
                 {p.installment_num && <span>Cuota {p.installment_num}</span>}
+                {slaBadge(p)}
               </div>
               {p.status === 'PENDIENTE' && !p.is_refund && (
                 <button onClick={() => setShowRefundModal(p.id)} className="p-1.5 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
@@ -357,18 +450,19 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Tipo</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Estado</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Cuota</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">SLA</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Acción</th>
               </tr>
             </thead>
             <tbody>
               {groupablePayments.length === 0 && unconfirmedPayments.length === 0 ? (
-                <tr><td colSpan={10} className="py-16 text-center">
+                <tr><td colSpan={11} className="py-16 text-center">
                   <FaMoneyBillWave className="text-3xl text-gray-300 mx-auto mb-3" />
                   <p className="text-sm text-gray-500 font-medium">No hay pagos registrados</p>
                   <p className="text-xs text-gray-400 mt-1">Se crean automáticamente al confirmar emisión</p>
                 </td></tr>
               ) : groupablePayments.length === 0 ? (
-                <tr><td colSpan={10} className="py-8 text-center text-gray-400 text-xs">No hay pagos listos para agrupar</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-gray-400 text-xs">No hay pagos listos para agrupar</td></tr>
               ) : groupablePayments.map(p => (
                 <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${p.is_refund ? 'bg-red-50/30' : ''}`}>
                   <td className="py-2 px-2">
@@ -386,6 +480,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                   </td>
                   <td className="py-2 px-2"><StatusBadge status={p.status} /></td>
                   <td className="py-2 px-2 text-[11px] text-gray-500">{p.installment_num || '—'}</td>
+                  <td className="py-2 px-2">{slaBadge(p)}</td>
                   <td className="py-2 px-2">
                     {p.status === 'PENDIENTE' && !p.is_refund && (
                       <button onClick={() => setShowRefundModal(p.id)} className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
@@ -433,6 +528,9 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
 
       {/* Group Modal */}
       {showGroupModal && <GroupModal selectedPayments={selectedPayments} onClose={() => { setShowGroupModal(false); setSelected(new Set()); fetchPayments(); onRefresh(); }} />}
+
+      {/* Manual Wizard Modal */}
+      {showManualWizard && <ManualWizardModal onClose={() => { setShowManualWizard(false); fetchPayments(); onRefresh(); }} />}
     </div>
   );
 }
@@ -587,37 +685,146 @@ function GroupModal({ selectedPayments, onClose }: { selectedPayments: any[]; on
 }
 
 // ════════════════════════════════════════════
-// 2. HISTORIAL BANCO TAB
+// 2. HISTORIAL BANCO TAB (Enhanced: counters, categorization, blocking, 110% flex)
 // ════════════════════════════════════════════
+
+const CATEGORIES = [
+  { value: 'paguelofacil', label: 'PagueloFacil', color: 'bg-purple-100 text-purple-800' },
+  { value: 'interno', label: 'Mov. Interno', color: 'bg-blue-100 text-blue-800' },
+  { value: 'financiamiento', label: 'Financiamiento', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'comision', label: 'Comisión', color: 'bg-green-100 text-green-800' },
+  { value: 'otro', label: 'Otro', color: 'bg-gray-100 text-gray-600' },
+  { value: 'uncategorized', label: 'Sin categoría', color: 'bg-gray-50 text-gray-400' },
+];
+
+function CategoryBadge({ category }: { category: string }) {
+  const fallback = { value: 'uncategorized', label: 'Sin categoría', color: 'bg-gray-50 text-gray-400' };
+  const c = CATEGORIES.find(ct => ct.value === category) ?? fallback;
+  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${c.color}`}>{c.label}</span>;
+}
+
+function FlexBar({ t }: { t: any }) {
+  const total = Number(t.transfer_amount || 0);
+  const used = Number(t.used_amount || 0);
+  const maxAllowed = Number(t.max_allowed || 0);
+  if (total <= 0) return null;
+  const usedPct = Math.min((used / maxAllowed) * 100, 100);
+  const basePct = (total / maxAllowed) * 100;
+  const isFinancing = used > total;
+
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-center justify-between text-[9px] text-gray-500 mb-0.5">
+        <span>Usado: {fmtMoney(used)} / {fmtMoney(maxAllowed)} (110%)</span>
+        {isFinancing && <span className="text-amber-600 font-bold">+{t.flex_pct}% financ.</span>}
+      </div>
+      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden relative">
+        <div className="absolute h-full bg-gray-300 rounded-full" style={{ width: `${basePct}%` }} />
+        <div className={`absolute h-full rounded-full ${isFinancing ? 'bg-amber-500' : 'bg-[#8AAA19]'}`} style={{ width: `${usedPct}%` }} />
+      </div>
+    </div>
+  );
+}
 
 function HistorialBancoTab() {
   const [transfers, setTransfers] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>({});
   const [loading, setLoading] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [importForm, setImportForm] = useState({ bank_name: '', reference_number: '', transfer_amount: '', transfer_date: '', notes: '' });
+  const [importForm, setImportForm] = useState({ bank_name: '', reference_number: '', transfer_amount: '', transfer_date: '', notes: '', is_paguelofacil: false });
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  // Block modal
+  const [blockModal, setBlockModal] = useState<{ id: string; ref: string } | null>(null);
+  const [blockReason, setBlockReason] = useState('');
+  // Categorize modal
+  const [catModal, setCatModal] = useState<{ id: string; ref: string; current: string } | null>(null);
+  const [catForm, setCatForm] = useState({ category: '', is_paguelofacil: false, notes: '' });
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
-    const res = await api({ tab: 'transfers' });
-    if (res.success) setTransfers(res.data.transfers);
+    const params: Record<string, string> = { tab: 'transfers' };
+    if (categoryFilter !== 'all') params.category = categoryFilter;
+    const res = await api(params);
+    if (res.success) {
+      setTransfers(res.data.transfers);
+      setSummary(res.data.summary || {});
+    }
     setLoading(false);
-  }, []);
+  }, [categoryFilter]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
   const handleImport = async () => {
     if (!importForm.bank_name || !importForm.reference_number || !importForm.transfer_amount || !importForm.transfer_date) return;
-    await apiPost('import_transfer', importForm);
+    const res = await apiPost('import_transfer', importForm);
+    if (res.success && importForm.is_paguelofacil) {
+      await apiPost('categorize_transfer', { transfer_id: res.data.id, category: 'paguelofacil', is_paguelofacil: true });
+    }
     setShowImport(false);
-    setImportForm({ bank_name: '', reference_number: '', transfer_amount: '', transfer_date: '', notes: '' });
+    setImportForm({ bank_name: '', reference_number: '', transfer_amount: '', transfer_date: '', notes: '', is_paguelofacil: false });
+    fetch_();
+  };
+
+  const handleBlock = async () => {
+    if (!blockModal || !blockReason) return;
+    await apiPost('block_transfer', { transfer_id: blockModal.id, reason: blockReason });
+    setBlockModal(null); setBlockReason('');
+    fetch_();
+  };
+
+  const handleUnblock = async (id: string) => {
+    if (!confirm('¿Desbloquear esta referencia?')) return;
+    await apiPost('unblock_transfer', { transfer_id: id });
+    fetch_();
+  };
+
+  const handleCategorize = async () => {
+    if (!catModal || !catForm.category) return;
+    await apiPost('categorize_transfer', {
+      transfer_id: catModal.id,
+      category: catForm.category,
+      is_paguelofacil: catForm.is_paguelofacil,
+      category_notes: catForm.notes,
+    });
+    setCatModal(null); setCatForm({ category: '', is_paguelofacil: false, notes: '' });
     fetch_();
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] sm:text-xs text-gray-500 min-w-0">Transferencias bancarias disponibles para asignar a grupos.</p>
+      {/* ── Summary Counters ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 sm:p-3">
+          <p className="text-[10px] text-green-600 font-semibold uppercase">Total Recibido</p>
+          <p className="text-lg sm:text-xl font-bold text-[#010139]">{fmtMoney(summary.totalReceived || 0)}</p>
+          <p className="text-[11px] text-gray-500">{summary.count || 0} referencias</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 sm:p-3">
+          <p className="text-[10px] text-blue-600 font-semibold uppercase">Total Aplicado</p>
+          <p className="text-lg sm:text-xl font-bold text-[#010139]">{fmtMoney(summary.totalUsed || 0)}</p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 sm:p-3">
+          <p className="text-[10px] text-amber-600 font-semibold uppercase">Balance Disp.</p>
+          <p className="text-lg sm:text-xl font-bold text-[#010139]">{fmtMoney(summary.balance || 0)}</p>
+          {(summary.balance || 0) < 0 && <p className="text-[10px] text-red-600 font-bold flex items-center gap-1"><FaExclamationTriangle /> Inconsistencia</p>}
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-3">
+          <p className="text-[10px] text-red-600 font-semibold uppercase">Bloqueadas</p>
+          <p className="text-lg sm:text-xl font-bold text-[#010139]">{summary.blockedCount || 0}</p>
+        </div>
+      </div>
+
+      {/* ── Toolbar ── */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+            <option value="all">Todas las categorías</option>
+            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+          <p className="text-[11px] sm:text-xs text-gray-500 min-w-0">Transferencias bancarias para asignar a pagos.</p>
+        </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={fetch_} disabled={loading}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer" title="Refrescar">
@@ -633,31 +840,48 @@ function HistorialBancoTab() {
       {/* ── Mobile Card List ── */}
       <div className="md:hidden space-y-2">
         {transfers.length === 0 ? (
-          <div className="py-12 text-center">
+          <div className="py-12 text-center bg-white rounded-xl border border-gray-200">
             <FaHistory className="text-3xl text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500 font-medium">Sin transferencias</p>
           </div>
         ) : transfers.map(t => (
-          <div key={t.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div key={t.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${t.is_blocked ? 'border-red-300 bg-red-50/30' : 'border-gray-200'}`}>
             <button onClick={() => setExpanded(expanded === t.id ? null : t.id)}
               className="w-full p-3 text-left cursor-pointer">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-mono font-bold text-[#010139]">{t.reference_number}</p>
+                  <div className="flex items-center gap-1.5">
+                    {t.is_blocked && <FaLock className="text-red-500 text-[10px] flex-shrink-0" />}
+                    <p className="text-sm font-mono font-bold text-[#010139]">{t.reference_number}</p>
+                  </div>
                   <p className="text-[11px] text-gray-500">{t.bank_name} · {fmtDate(t.transfer_date)}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <CategoryBadge category={t.category} />
+                    {t.is_paguelofacil && <span className="text-[8px] bg-purple-200 text-purple-800 px-1 rounded font-bold">PF</span>}
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <p className="text-sm font-bold text-[#8AAA19]">{fmtMoney(t.remaining_amount)}</p>
-                  <StatusBadge status={t.status} />
+                  <StatusBadge status={t.is_blocked ? 'BLOCKED' : t.status} />
                 </div>
               </div>
+              <FlexBar t={t} />
               <div className="flex items-center justify-between mt-1.5">
-                <p className="text-[11px] text-gray-400">Total: {fmtMoney(t.transfer_amount)}</p>
+                <p className="text-[11px] text-gray-400">Total: {fmtMoney(t.transfer_amount)} · Máx 110%: {fmtMoney(t.max_allowed)}</p>
                 {expanded === t.id ? <FaChevronUp className="text-[10px] text-gray-400" /> : <FaChevronDown className="text-[10px] text-gray-400" />}
               </div>
             </button>
             {expanded === t.id && (
-              <div className="px-3 pb-3 text-xs border-t border-gray-100 pt-2">
+              <div className="px-3 pb-3 text-xs border-t border-gray-100 pt-2 space-y-2">
+                {/* Flex details */}
+                <div className="grid grid-cols-2 gap-1 text-[10px]">
+                  <span className="text-gray-500">Recibido:</span><span className="font-bold">{fmtMoney(t.transfer_amount)}</span>
+                  <span className="text-gray-500">Aplicado:</span><span className="font-bold">{fmtMoney(t.used_amount)}</span>
+                  <span className="text-gray-500">Financ. extra:</span><span className="font-bold text-amber-600">{fmtMoney(t.flex_used)} ({t.flex_pct}%)</span>
+                  <span className="text-gray-500">Capacidad rest.:</span><span className="font-bold text-green-600">{fmtMoney(t.capacity_remaining)}</span>
+                </div>
+                {t.blocked_reason && <p className="text-red-600 text-[10px]"><FaLock className="inline mr-1" />Bloqueada: {t.blocked_reason}</p>}
+                {/* Usages */}
                 {t.usages && t.usages.length > 0 ? (
                   <div className="space-y-1">
                     <p className="font-semibold text-gray-600">Usos:</p>
@@ -666,7 +890,19 @@ function HistorialBancoTab() {
                     ))}
                   </div>
                 ) : <p className="text-gray-400 italic">Sin usos aún</p>}
-                {t.notes && <p className="mt-1 text-gray-500">Notas: {t.notes}</p>}
+                {t.notes && <p className="text-gray-500">Notas: {t.notes}</p>}
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-1 border-t border-gray-100">
+                  <button onClick={() => { setCatModal({ id: t.id, ref: t.reference_number, current: t.category }); setCatForm({ category: t.category, is_paguelofacil: t.is_paguelofacil, notes: '' }); }}
+                    className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-[#010139] cursor-pointer"><FaTag /> Categorizar</button>
+                  {t.is_blocked ? (
+                    <button onClick={() => handleUnblock(t.id)}
+                      className="flex items-center gap-1 text-[10px] text-green-600 hover:text-green-800 cursor-pointer"><FaUnlock /> Desbloquear</button>
+                  ) : (
+                    <button onClick={() => setBlockModal({ id: t.id, ref: t.reference_number })}
+                      className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-700 cursor-pointer"><FaLock /> Bloquear</button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -682,37 +918,74 @@ function HistorialBancoTab() {
                 <th className="py-2 px-2 w-7"></th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Referencia</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Banco</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Categoría</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Monto Total</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Aplicado</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Disponible</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">110% Máx</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Financ.</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Fecha</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Estado</th>
+                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {transfers.length === 0 ? (
-                <tr><td colSpan={7} className="py-16 text-center">
+                <tr><td colSpan={12} className="py-16 text-center">
                   <FaHistory className="text-3xl text-gray-300 mx-auto mb-3" />
                   <p className="text-sm text-gray-500 font-medium">Sin transferencias</p>
                 </td></tr>
               ) : transfers.map(t => (
                 <>
-                  <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
-                    <td className="py-2 px-2">{expanded === t.id ? <FaChevronUp className="text-[10px]" /> : <FaChevronDown className="text-[10px] text-gray-400" />}</td>
+                  <tr key={t.id} className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${t.is_blocked ? 'bg-red-50/30' : ''}`} onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
+                    <td className="py-2 px-2">
+                      <div className="flex items-center gap-1">
+                        {t.is_blocked && <FaLock className="text-red-400 text-[9px]" />}
+                        {expanded === t.id ? <FaChevronUp className="text-[10px]" /> : <FaChevronDown className="text-[10px] text-gray-400" />}
+                      </div>
+                    </td>
                     <td className="py-2 px-2 text-[11px] font-mono font-bold text-[#010139]">{t.reference_number}</td>
                     <td className="py-2 px-2 text-[11px] text-gray-600">{t.bank_name}</td>
+                    <td className="py-2 px-2"><CategoryBadge category={t.category} /></td>
                     <td className="py-2 px-2 text-[11px] font-bold">{fmtMoney(t.transfer_amount)}</td>
+                    <td className="py-2 px-2 text-[11px] text-gray-600">{fmtMoney(t.used_amount)}</td>
                     <td className="py-2 px-2 text-[11px] font-bold text-[#8AAA19]">{fmtMoney(t.remaining_amount)}</td>
+                    <td className="py-2 px-2 text-[11px] text-gray-500">{fmtMoney(t.max_allowed)}</td>
+                    <td className="py-2 px-2 text-[11px]">
+                      {t.flex_used > 0 ? <span className="text-amber-600 font-bold">{t.flex_pct}%</span> : <span className="text-gray-400">0%</span>}
+                    </td>
                     <td className="py-2 px-2 text-[11px] text-gray-500">{fmtDate(t.transfer_date)}</td>
-                    <td className="py-2 px-2"><StatusBadge status={t.status} /></td>
+                    <td className="py-2 px-2"><StatusBadge status={t.is_blocked ? 'BLOCKED' : t.status} /></td>
+                    <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
+                      <div className="flex gap-1">
+                        <button onClick={() => { setCatModal({ id: t.id, ref: t.reference_number, current: t.category }); setCatForm({ category: t.category, is_paguelofacil: t.is_paguelofacil, notes: '' }); }}
+                          className="p-1 text-gray-400 hover:text-[#010139] cursor-pointer" title="Categorizar"><FaTag className="text-[10px]" /></button>
+                        {t.is_blocked ? (
+                          <button onClick={() => handleUnblock(t.id)}
+                            className="p-1 text-green-500 hover:text-green-700 cursor-pointer" title="Desbloquear"><FaUnlock className="text-[10px]" /></button>
+                        ) : (
+                          <button onClick={() => setBlockModal({ id: t.id, ref: t.reference_number })}
+                            className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Bloquear"><FaLock className="text-[10px]" /></button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                   {expanded === t.id && (
                     <tr key={t.id + '-detail'} className="bg-gray-50">
-                      <td colSpan={7} className="p-3 text-xs">
+                      <td colSpan={12} className="p-3 text-xs">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+                          <div><span className="text-gray-500">Recibido:</span> <strong>{fmtMoney(t.transfer_amount)}</strong></div>
+                          <div><span className="text-gray-500">Aplicado:</span> <strong>{fmtMoney(t.used_amount)}</strong></div>
+                          <div><span className="text-gray-500">Financ. extra:</span> <strong className="text-amber-600">{fmtMoney(t.flex_used)} ({t.flex_pct}%)</strong></div>
+                          <div><span className="text-gray-500">Capacidad rest.:</span> <strong className="text-green-600">{fmtMoney(t.capacity_remaining)}</strong></div>
+                        </div>
+                        <FlexBar t={t} />
+                        {t.blocked_reason && <p className="text-red-600 text-[10px] mt-1"><FaLock className="inline mr-1" />Bloqueada: {t.blocked_reason}</p>}
                         {t.usages && t.usages.length > 0 ? (
-                          <div><strong>Usos:</strong>
+                          <div className="mt-2"><strong>Usos:</strong>
                             {t.usages.map((u: any, i: number) => <span key={i} className="ml-2">Grupo {u.group_id?.slice(0, 8)}... — {fmtMoney(u.amount_used)}</span>)}
                           </div>
-                        ) : <p className="text-gray-400 italic">Sin usos aún</p>}
+                        ) : <p className="text-gray-400 italic mt-1">Sin usos aún</p>}
                         {t.notes && <p className="mt-1 text-gray-500">Notas: {t.notes}</p>}
                       </td>
                     </tr>
@@ -748,6 +1021,10 @@ function HistorialBancoTab() {
               <div><label className="text-xs text-gray-500">Notas</label>
                 <input type="text" value={importForm.notes} onChange={e => setImportForm(p => ({ ...p, notes: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" /></div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={importForm.is_paguelofacil} onChange={e => setImportForm(p => ({ ...p, is_paguelofacil: e.target.checked }))} />
+                <span className="text-xs text-gray-600">Origen PagueloFacil</span>
+              </label>
             </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowImport(false)} className="px-4 py-2 text-xs text-gray-500 cursor-pointer">Cancelar</button>
@@ -756,6 +1033,158 @@ function HistorialBancoTab() {
                 <span className="text-white">Importar</span></button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Block Modal */}
+      {blockModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-red-600">Bloquear Referencia</h3>
+              <button onClick={() => setBlockModal(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
+            <p className="text-xs text-gray-600">Referencia: <strong>{blockModal.ref}</strong></p>
+            <p className="text-xs text-gray-500">Al bloquear, esta referencia no podrá usarse para cubrir pagos.</p>
+            <div><label className="text-xs text-gray-500">Motivo *</label>
+              <input type="text" value={blockReason} onChange={e => setBlockReason(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" placeholder="Ej: Transferencia no identificada" /></div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setBlockModal(null)} className="px-4 py-2 text-xs text-gray-500 cursor-pointer">Cancelar</button>
+              <button onClick={handleBlock} disabled={!blockReason}
+                className="px-4 py-2 bg-red-600 text-white text-xs font-medium rounded-lg disabled:opacity-50 cursor-pointer">
+                <span className="text-white">Bloquear</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reference Usage Ledger */}
+      <ReferenceLedger />
+
+      {/* Categorize Modal */}
+      {catModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#010139]">Categorizar Referencia</h3>
+              <button onClick={() => setCatModal(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
+            <p className="text-xs text-gray-600">Referencia: <strong>{catModal.ref}</strong></p>
+            <div><label className="text-xs text-gray-500">Categoría *</label>
+              <select value={catForm.category} onChange={e => setCatForm(p => ({ ...p, category: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                <option value="">Seleccione...</option>
+                {CATEGORIES.filter(c => c.value !== 'uncategorized').map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select></div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={catForm.is_paguelofacil} onChange={e => setCatForm(p => ({ ...p, is_paguelofacil: e.target.checked }))} />
+              <span className="text-xs text-gray-600">Origen PagueloFacil</span>
+            </label>
+            <div><label className="text-xs text-gray-500">Notas</label>
+              <input type="text" value={catForm.notes} onChange={e => setCatForm(p => ({ ...p, notes: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" placeholder="Detalle opcional" /></div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setCatModal(null)} className="px-4 py-2 text-xs text-gray-500 cursor-pointer">Cancelar</button>
+              <button onClick={handleCategorize} disabled={!catForm.category}
+                className="px-4 py-2 bg-[#010139] text-white text-xs font-medium rounded-lg disabled:opacity-50 cursor-pointer">
+                <span className="text-white">Guardar</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Reference Usage Ledger sub-component ──
+function ReferenceLedger() {
+  const [open, setOpen] = useState(false);
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedRef, setExpandedRef] = useState<string | null>(null);
+
+  const loadLedger = async () => {
+    if (ledger.length > 0) { setOpen(!open); return; }
+    setLoading(true);
+    const res = await api({ tab: 'reference_ledger' });
+    if (res.success) setLedger(res.data.ledger || []);
+    setOpen(true);
+    setLoading(false);
+  };
+
+  // Group ledger entries by bank transfer
+  const byTransfer: Record<string, { transfer: any; entries: any[] }> = {};
+  ledger.forEach(entry => {
+    const tf = entry.adm_cot_bank_transfers;
+    if (!tf) return;
+    const key = tf.id;
+    if (!byTransfer[key]) byTransfer[key] = { transfer: tf, entries: [] };
+    byTransfer[key].entries.push(entry);
+  });
+  const transferGroups = Object.values(byTransfer).sort((a, b) =>
+    (b.transfer.transfer_date || '').localeCompare(a.transfer.transfer_date || ''));
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <button onClick={loadLedger}
+        className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-2">
+          <FaHistory className="text-[#010139] text-xs" />
+          <span className="text-xs font-semibold text-[#010139]">Libro de Uso de Referencias</span>
+          {loading && <FaSync className="text-gray-400 text-[10px] animate-spin" />}
+        </div>
+        {open ? <FaChevronUp className="text-gray-400 text-xs" /> : <FaChevronDown className="text-gray-400 text-xs" />}
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 max-h-[50vh] overflow-y-auto">
+          {transferGroups.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">No hay referencias utilizadas aún</p>
+          ) : transferGroups.map(({ transfer: tf, entries }) => {
+            const totalUsed = entries.reduce((s: number, e: any) => s + Number(e.amount_used || 0), 0);
+            const isExpanded = expandedRef === tf.id;
+            return (
+              <div key={tf.id} className="border-b border-gray-50 last:border-0">
+                <button onClick={() => setExpandedRef(isExpanded ? null : tf.id)}
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer text-left">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono font-bold text-[#010139]">{tf.reference_number}</span>
+                    <span className="text-[10px] text-gray-400">{tf.bank_name}</span>
+                    <StatusBadge status={tf.status} />
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-500">Usado: <strong className="text-[#010139]">{fmtMoney(totalUsed)}</strong> / {fmtMoney(tf.transfer_amount)}</p>
+                      <p className="text-[9px] text-gray-400">{entries.length} asignación(es)</p>
+                    </div>
+                    {isExpanded ? <FaChevronUp className="text-gray-300 text-[10px]" /> : <FaChevronDown className="text-gray-300 text-[10px]" />}
+                  </div>
+                </button>
+                {isExpanded && (
+                  <div className="px-3 pb-3 space-y-1.5">
+                    {entries.map((e: any, i: number) => (
+                      <div key={i} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-gray-500">Grupo #{(e.group_id || '').slice(0, 8)}… · {fmtMoney(e.amount_used)}</span>
+                          <span className="text-[10px] text-gray-400">{e.adm_cot_payment_groups?.notes || ''}</span>
+                        </div>
+                        {e.group_payments?.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {e.group_payments.map((gp: any, j: number) => (
+                              <div key={j} className="flex items-center justify-between text-[10px]">
+                                <span className="text-gray-600 truncate">{gp.client_name} · <span className="font-mono">{gp.nro_poliza || '—'}</span></span>
+                                <span className="text-gray-500 flex-shrink-0">{gp.insurer} · {fmtMoney(gp.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -947,6 +1376,181 @@ function RecurrenciaTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// 4. MANUAL WIZARD — Apply references directly to payments
+// ════════════════════════════════════════════
+
+function ManualWizardModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<'select_payments' | 'assign_refs' | 'done'>('select_payments');
+  const [payments, setPayments] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedPayments, setSelectedPayments] = useState<Set<string>>(new Set());
+  const [refAllocations, setRefAllocations] = useState<Record<string, number>>({});
+  const [searchPay, setSearchPay] = useState('');
+
+  useEffect(() => {
+    api({ tab: 'pending', status: 'PENDIENTE' }).then(res => {
+      if (res.success) setPayments(res.data.rows.filter((p: any) => !p.is_refund));
+    });
+    api({ tab: 'transfers', status: 'OPEN' }).then(res => {
+      if (res.success) {
+        const unblocked = (res.data.transfers || []).filter((t: any) => !t.is_blocked && Number(t.remaining_amount) > 0);
+        setTransfers(unblocked);
+      }
+    });
+  }, []);
+
+  const togglePayment = (id: string) => {
+    setSelectedPayments(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const chosenPayments = payments.filter(p => selectedPayments.has(p.id));
+  const totalPayments = chosenPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalRefs = Object.values(refAllocations).reduce((s, v) => s + v, 0);
+
+  const filteredPayments = searchPay
+    ? payments.filter(p => `${p.client_name} ${p.nro_poliza} ${p.insurer}`.toLowerCase().includes(searchPay.toLowerCase()))
+    : payments;
+
+  const handleApply = async () => {
+    if (selectedPayments.size === 0) { setError('Seleccione al menos un pago'); return; }
+    const allocations = Object.entries(refAllocations).filter(([, v]) => v > 0).map(([id, amount]) => ({ transfer_id: id, amount }));
+    if (allocations.length === 0) { setError('Asigne al menos una referencia'); return; }
+    if (totalRefs < totalPayments) { setError(`Total refs ($${totalRefs.toFixed(2)}) < Total pagos ($${totalPayments.toFixed(2)})`); return; }
+
+    setLoading(true); setError('');
+    try {
+      const res = await apiPost('apply_references_to_payments', {
+        payment_ids: Array.from(selectedPayments),
+        reference_allocations: allocations,
+      });
+      if (!res.success) throw new Error(res.error || 'Error al aplicar');
+      setStep('done');
+    } catch (e: any) { setError(e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#010139] flex items-center gap-2">
+            <FaHandHoldingUsd className="text-[#8AAA19]" />
+            {step === 'select_payments' && 'Wizard Manual — Seleccionar Pagos'}
+            {step === 'assign_refs' && 'Wizard Manual — Asignar Referencias'}
+            {step === 'done' && 'Wizard Manual — Completado'}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+        </div>
+
+        {step === 'select_payments' && (
+          <>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
+              <strong>Modo manual:</strong> Asigne referencias bancarias directamente a pagos seleccionados. No se deduce comisión del corredor. No se divide monto.
+            </div>
+            <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white">
+              <FaSearch className="text-gray-400 text-xs" />
+              <input type="text" value={searchPay} onChange={e => setSearchPay(e.target.value)}
+                className="flex-1 border-0 focus:outline-none text-xs bg-transparent p-0" placeholder="Buscar pagos..." />
+            </div>
+            <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+              {filteredPayments.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No hay pagos pendientes disponibles</p>
+              ) : filteredPayments.map(p => (
+                <label key={p.id} className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${selectedPayments.has(p.id) ? 'border-[#8AAA19] bg-[#8AAA19]/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <input type="checkbox" checked={selectedPayments.has(p.id)} onChange={() => togglePayment(p.id)} className="cursor-pointer flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[#010139] truncate">{p.client_name}</p>
+                      <p className="text-xs font-bold text-[#8AAA19] flex-shrink-0">{fmtMoney(p.amount)}</p>
+                    </div>
+                    <p className="text-[10px] text-gray-500">{p.insurer} · {p.nro_poliza || '—'} · {fmtDate(p.payment_date)}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            {selectedPayments.size > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800">
+                <strong>{selectedPayments.size}</strong> pagos seleccionados — Total: <strong>{fmtMoney(totalPayments)}</strong>
+              </div>
+            )}
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500 cursor-pointer">Cancelar</button>
+              <button onClick={() => { if (selectedPayments.size === 0) { setError('Seleccione al menos un pago'); return; } setError(''); setStep('assign_refs'); }}
+                disabled={selectedPayments.size === 0}
+                className="px-4 py-2 bg-[#010139] text-white text-xs font-medium rounded-lg disabled:opacity-50 cursor-pointer">
+                <span className="text-white">Siguiente →</span></button>
+            </div>
+          </>
+        )}
+
+        {step === 'assign_refs' && (
+          <>
+            <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1">
+              <p><strong>{chosenPayments.length}</strong> pagos — Total: <strong>{fmtMoney(totalPayments)}</strong></p>
+              <p className="text-gray-500">Aseguradoras: {[...new Set(chosenPayments.map(p => p.insurer))].join(', ')}</p>
+            </div>
+            <p className="text-xs text-gray-500">Asigne montos de las referencias bancarias disponibles:</p>
+            {transfers.length === 0 ? (
+              <p className="text-xs text-amber-600 py-4 text-center">No hay transferencias disponibles. Importe una primero en Historial Banco.</p>
+            ) : (
+              <div className="space-y-2 max-h-[35vh] overflow-y-auto">
+                {transfers.map(t => (
+                  <div key={t.id} className="flex items-center gap-3 border border-gray-200 rounded-lg p-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-mono font-bold text-[#010139]">{t.reference_number}</p>
+                        {t.category && t.category !== 'uncategorized' && <CategoryBadge category={t.category} />}
+                      </div>
+                      <p className="text-[10px] text-gray-500">{t.bank_name} · {fmtDate(t.transfer_date)} · Disp: <strong>{fmtMoney(t.remaining_amount)}</strong> · Máx 110%: {fmtMoney(t.max_allowed)}</p>
+                    </div>
+                    <input type="number" min={0} max={Number(t.capacity_remaining || t.remaining_amount)} step={0.01}
+                      value={refAllocations[t.id] || ''} placeholder="0.00"
+                      onChange={e => {
+                        const max = Number(t.capacity_remaining || t.remaining_amount);
+                        const v = Math.min(Number(e.target.value), max);
+                        setRefAllocations(p => ({ ...p, [t.id]: v }));
+                      }}
+                      className="w-28 px-2 py-1.5 text-xs border border-gray-300 rounded-lg text-right" />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between text-xs">
+              <span>Total asignado: <strong className={totalRefs >= totalPayments ? 'text-green-600' : 'text-red-600'}>{fmtMoney(totalRefs)}</strong> / {fmtMoney(totalPayments)}</span>
+              {totalRefs > totalPayments && <span className="text-amber-600">Excedente: {fmtMoney(totalRefs - totalPayments)}</span>}
+            </div>
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setStep('select_payments'); setError(''); }} className="px-4 py-2 text-xs text-gray-500 cursor-pointer">← Atrás</button>
+              <button onClick={handleApply} disabled={loading || totalRefs < totalPayments || transfers.length === 0}
+                className="px-4 py-2 bg-[#8AAA19] text-white text-xs font-medium rounded-lg disabled:opacity-50 cursor-pointer">
+                <span className="text-white">{loading ? 'Aplicando...' : 'Aplicar Referencias'}</span></button>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && (
+          <>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <FaCheckCircle className="text-green-600 text-3xl mx-auto mb-2" />
+              <p className="text-sm font-bold text-green-800">Referencias aplicadas exitosamente</p>
+              <p className="text-xs text-green-600 mt-1">{chosenPayments.length} pago(s) marcados como AGRUPADO con {Object.values(refAllocations).filter(v => v > 0).length} referencia(s).</p>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={onClose} className="px-4 py-2 bg-[#010139] text-white text-xs font-medium rounded-lg cursor-pointer">
+                <span className="text-white">Cerrar</span></button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -72,9 +72,27 @@ export async function GET(request: NextRequest) {
         const { data, error, count } = await q;
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+        // Enrich rows with SLA computed fields
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const enrichedRows = (data ?? []).map((r: any) => {
+          if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
+          const dueDate = r.payment_date ? new Date(r.payment_date + 'T12:00:00') : null;
+          if (!dueDate) return { ...r, sla_status: 'unknown', sla_color: 'gray', days_until_due: null };
+          const diffMs = dueDate.getTime() - today.getTime();
+          const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          let sla_status = 'on_track'; // green
+          let sla_color = 'green';
+          if (days < 0) { sla_status = 'overdue'; sla_color = 'red'; }
+          else if (days <= 3) { sla_status = 'urgent'; sla_color = 'red'; }
+          else if (days <= 7) { sla_status = 'warning'; sla_color = 'amber'; }
+          return { ...r, sla_status, sla_color, days_until_due: days };
+        });
+
         // Summary counts
-        const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund');
-        const summary = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0 };
+        const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund, insurer');
+        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, overdueCount: 0, urgentCount: 0 };
+        const insurerMap: Record<string, { count: number; amount: number; statuses: Record<string, number> }> = {};
         (summaryData ?? []).forEach((r: any) => {
           const amt = Number(r.amount) || 0;
           if (r.is_refund) { summary.refunds++; summary.refundsAmt += amt; }
@@ -82,9 +100,21 @@ export async function GET(request: NextRequest) {
           else if (r.status === 'PENDIENTE') { summary.pending++; summary.pendingAmt += amt; }
           else if (r.status === 'AGRUPADO') { summary.grouped++; summary.groupedAmt += amt; }
           else if (r.status === 'PAGADO') { summary.paid++; summary.paidAmt += amt; }
+          // Insurer grouping
+          const ins = r.insurer || 'OTROS';
+          if (!insurerMap[ins]) insurerMap[ins] = { count: 0, amount: 0, statuses: {} };
+          insurerMap[ins].count++;
+          insurerMap[ins].amount += amt;
+          insurerMap[ins].statuses[r.status] = (insurerMap[ins].statuses[r.status] || 0) + 1;
         });
+        // Count SLA urgencies from enriched rows
+        enrichedRows.forEach((r: any) => {
+          if (r.sla_status === 'overdue') summary.overdueCount++;
+          else if (r.sla_status === 'urgent') summary.urgentCount++;
+        });
+        summary.byInsurer = Object.entries(insurerMap).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.amount - a.amount);
 
-        return NextResponse.json({ success: true, data: { rows: data ?? [], total: count ?? 0, summary } });
+        return NextResponse.json({ success: true, data: { rows: enrichedRows, total: count ?? 0, summary } });
       }
 
       case 'groups': {
@@ -106,20 +136,73 @@ export async function GET(request: NextRequest) {
 
       case 'transfers': {
         const statusF = searchParams.get('status') || undefined;
+        const categoryF = searchParams.get('category') || undefined;
         let q = sb.from('adm_cot_bank_transfers').select('*')
           .order('transfer_date', { ascending: false }).limit(200);
         if (statusF) q = q.eq('status', statusF);
         const { data, error } = await q;
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-        // For each transfer, fetch which groups used it
+        // For each transfer, fetch which groups used it + compute flex fields
         const transfers = [];
         for (const t of (data ?? [])) {
           const { data: usages } = await sb.from('adm_cot_payment_group_references')
             .select('amount_used, group_id').eq('bank_transfer_id', t.id);
-          transfers.push({ ...t, usages: usages ?? [] });
+          const meta = (t.metadata as Record<string, any>) || {};
+          const totalAmt = Number(t.transfer_amount || 0);
+          const usedAmt = Number(t.transfer_amount || 0) - Number(t.remaining_amount || 0);
+          const maxAllowed = totalAmt * 1.10;
+          const flexUsed = Math.max(0, usedAmt - totalAmt);
+          const flexPct = totalAmt > 0 ? (flexUsed / totalAmt) * 100 : 0;
+
+          const enriched = {
+            ...t,
+            usages: usages ?? [],
+            // Categorization & blocking from metadata
+            category: meta.category || 'uncategorized',
+            is_blocked: !!meta.is_blocked,
+            blocked_reason: meta.blocked_reason || null,
+            blocked_at: meta.blocked_at || null,
+            blocked_by: meta.blocked_by || null,
+            is_paguelofacil: !!meta.is_paguelofacil,
+            // 110% flex computed fields
+            used_amount: usedAmt,
+            max_allowed: maxAllowed,
+            flex_used: flexUsed,
+            flex_pct: Math.round(flexPct * 100) / 100,
+            capacity_remaining: Math.max(0, maxAllowed - usedAmt),
+          };
+
+          // Apply category filter client-side (stored in metadata)
+          if (categoryF && categoryF !== 'all' && enriched.category !== categoryF) continue;
+
+          transfers.push(enriched);
         }
-        return NextResponse.json({ success: true, data: { transfers } });
+
+        // Compute summary counters
+        const allTransfers = (data ?? []);
+        let totalReceived = 0, totalUsed = 0;
+        allTransfers.forEach((t: any) => {
+          const meta = (t.metadata as Record<string, any>) || {};
+          if (!meta.is_blocked) {
+            totalReceived += Number(t.transfer_amount || 0);
+            totalUsed += Number(t.transfer_amount || 0) - Number(t.remaining_amount || 0);
+          }
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            transfers,
+            summary: {
+              totalReceived,
+              totalUsed,
+              balance: totalReceived - totalUsed,
+              count: transfers.length,
+              blockedCount: transfers.filter(t => t.is_blocked).length,
+            },
+          },
+        });
       }
 
       case 'recurrences': {
@@ -127,6 +210,36 @@ export async function GET(request: NextRequest) {
           .order('next_due_date', { ascending: true }).limit(200);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
         return NextResponse.json({ success: true, data: { recurrences: data ?? [] } });
+      }
+
+      case 'reference_ledger': {
+        // Fetch all group references with their bank transfer and group details
+        const { data: refs, error } = await sb.from('adm_cot_payment_group_references')
+          .select('*, adm_cot_bank_transfers(id, reference_number, bank_name, transfer_amount, remaining_amount, transfer_date, status, metadata), adm_cot_payment_groups(id, status, total_amount, created_at, notes)')
+          .order('created_at', { ascending: false })
+          .limit(500);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        // For each ref, also fetch which payments are in that group
+        const ledger = [];
+        for (const ref of (refs ?? [])) {
+          const groupId = ref.group_id;
+          const { data: items } = await sb.from('adm_cot_payment_group_items')
+            .select('payment_id, adm_cot_payments(client_name, nro_poliza, insurer, amount)')
+            .eq('group_id', groupId);
+          ledger.push({
+            ...ref,
+            group_payments: (items ?? []).map((i: any) => ({
+              payment_id: i.payment_id,
+              client_name: i.adm_cot_payments?.client_name || '',
+              nro_poliza: i.adm_cot_payments?.nro_poliza || '',
+              insurer: i.adm_cot_payments?.insurer || '',
+              amount: i.adm_cot_payments?.amount || 0,
+            })),
+          });
+        }
+
+        return NextResponse.json({ success: true, data: { ledger } });
       }
 
       default:
@@ -388,6 +501,191 @@ export async function POST(request: NextRequest) {
           user_id: userId, detail: { nro_poliza, insurer, total_installments, frequency },
         });
         return NextResponse.json({ success: true, data: { id: created.id } });
+      }
+
+      // ── Block a bank transfer ──
+      case 'block_transfer': {
+        const { transfer_id, reason } = data;
+        if (!transfer_id || !reason) return NextResponse.json({ error: 'Missing transfer_id or reason' }, { status: 400 });
+
+        const { data: existing } = await sb.from('adm_cot_bank_transfers').select('metadata').eq('id', transfer_id).single();
+        const meta = (existing?.metadata as Record<string, any>) || {};
+
+        const { error } = await sb.from('adm_cot_bank_transfers').update({
+          metadata: { ...meta, is_blocked: true, blocked_reason: reason, blocked_at: new Date().toISOString(), blocked_by: userId },
+        }).eq('id', transfer_id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'transfer_blocked', entity_type: 'bank_transfer', entity_id: transfer_id,
+          user_id: userId, detail: { reason },
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Unblock a bank transfer ──
+      case 'unblock_transfer': {
+        const { transfer_id } = data;
+        if (!transfer_id) return NextResponse.json({ error: 'Missing transfer_id' }, { status: 400 });
+
+        const { data: existing } = await sb.from('adm_cot_bank_transfers').select('metadata').eq('id', transfer_id).single();
+        const meta = (existing?.metadata as Record<string, any>) || {};
+        const { is_blocked, blocked_reason, blocked_at, blocked_by, ...cleanMeta } = meta;
+
+        const { error } = await sb.from('adm_cot_bank_transfers').update({
+          metadata: { ...cleanMeta, unblocked_at: new Date().toISOString(), unblocked_by: userId },
+        }).eq('id', transfer_id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'transfer_unblocked', entity_type: 'bank_transfer', entity_id: transfer_id,
+          user_id: userId, detail: {},
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Categorize a bank transfer ──
+      case 'categorize_transfer': {
+        const { transfer_id, category, is_paguelofacil, category_notes } = data;
+        if (!transfer_id || !category) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+
+        const { data: existing } = await sb.from('adm_cot_bank_transfers').select('metadata').eq('id', transfer_id).single();
+        const meta = (existing?.metadata as Record<string, any>) || {};
+
+        const { error } = await sb.from('adm_cot_bank_transfers').update({
+          metadata: {
+            ...meta,
+            category,
+            is_paguelofacil: !!is_paguelofacil,
+            category_notes: category_notes || null,
+            categorized_at: new Date().toISOString(),
+            categorized_by: userId,
+          },
+        }).eq('id', transfer_id);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'transfer_categorized', entity_type: 'bank_transfer', entity_id: transfer_id,
+          user_id: userId, detail: { category, is_paguelofacil },
+        });
+        return NextResponse.json({ success: true });
+      }
+
+      // ── Manual wizard: apply multiple references to selected pending payments ──
+      case 'apply_references_to_payments': {
+        const { payment_ids, reference_allocations } = data;
+        // reference_allocations: [{ transfer_id, amount }]
+        if (!payment_ids?.length || !reference_allocations?.length) {
+          return NextResponse.json({ error: 'Missing payment_ids or reference_allocations' }, { status: 400 });
+        }
+
+        // Validate 110% flex rule for each reference
+        for (const alloc of reference_allocations) {
+          const { data: tf } = await sb.from('adm_cot_bank_transfers').select('*').eq('id', alloc.transfer_id).single();
+          if (!tf) return NextResponse.json({ error: `Transfer ${alloc.transfer_id} not found` }, { status: 404 });
+
+          const meta = (tf.metadata as Record<string, any>) || {};
+          if (meta.is_blocked) {
+            return NextResponse.json({ error: `Referencia ${tf.reference_number} está bloqueada: ${meta.blocked_reason || 'Sin motivo'}` }, { status: 400 });
+          }
+
+          const totalAmt = Number(tf.transfer_amount || 0);
+          const usedSoFar = totalAmt - Number(tf.remaining_amount || 0);
+          const maxAllowed = totalAmt * 1.10;
+          const newTotal = usedSoFar + Number(alloc.amount || 0);
+
+          if (newTotal > maxAllowed) {
+            const pctOver = ((newTotal / totalAmt) * 100 - 100).toFixed(1);
+            return NextResponse.json({
+              error: `Referencia ${tf.reference_number}: asignación excede el 10% máximo de financiamiento. Intentando ${pctOver}% sobre el monto recibido.`,
+            }, { status: 400 });
+          }
+        }
+
+        // Create a group for this manual assignment
+        const totalPayAmount = reference_allocations.reduce((s: number, a: any) => s + Number(a.amount || 0), 0);
+        const { data: grp, error: grpErr } = await sb.from('adm_cot_payment_groups').insert({
+          status: 'CONFIRMED', total_amount: totalPayAmount, paid_amount: totalPayAmount,
+          insurers: [], created_by: userId, notes: 'Asignación manual de referencias',
+        }).select('id').single();
+        if (grpErr) return NextResponse.json({ error: grpErr.message }, { status: 500 });
+
+        // Add group items (payments)
+        for (const pid of payment_ids) {
+          await sb.from('adm_cot_payment_group_items').insert({
+            group_id: grp.id, payment_id: pid,
+          });
+        }
+
+        // Apply references & deduct remaining_amount
+        for (const alloc of reference_allocations) {
+          const allocAmount = Number(alloc.amount || 0);
+          await sb.from('adm_cot_payment_group_references').insert({
+            group_id: grp.id, bank_transfer_id: alloc.transfer_id, amount_used: allocAmount,
+          });
+
+          // Deduct from remaining
+          const { data: tf } = await sb.from('adm_cot_bank_transfers').select('remaining_amount, transfer_amount').eq('id', alloc.transfer_id).single();
+          if (tf) {
+            const newRemaining = Math.max(0, Number(tf.remaining_amount) - allocAmount);
+            const newStatus = newRemaining <= 0 ? 'EXHAUSTED' : 'PARTIAL';
+            await sb.from('adm_cot_bank_transfers').update({
+              remaining_amount: newRemaining,
+              status: newStatus,
+            }).eq('id', alloc.transfer_id);
+          }
+        }
+
+        // Mark payments as AGRUPADO
+        await sb.from('adm_cot_payments').update({ status: 'AGRUPADO' }).in('id', payment_ids);
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'manual_reference_applied', entity_type: 'payment_group', entity_id: grp.id,
+          user_id: userId, detail: { payment_ids, reference_allocations, total: totalPayAmount },
+        });
+
+        return NextResponse.json({ success: true, data: { group_id: grp.id, total_applied: totalPayAmount } });
+      }
+
+      // ── Get insurer payment detail (for export) ──
+      case 'get_insurer_export': {
+        const { insurer, dateFrom, dateTo } = data;
+        if (!insurer) return NextResponse.json({ error: 'Missing insurer' }, { status: 400 });
+
+        let q = sb.from('adm_cot_payments').select('*')
+          .eq('insurer', insurer)
+          .in('status', ['AGRUPADO', 'PAGADO'])
+          .eq('is_refund', false)
+          .order('payment_date', { ascending: true });
+        if (dateFrom) q = q.gte('payment_date', dateFrom);
+        if (dateTo) q = q.lte('payment_date', dateTo);
+
+        const { data: payments, error } = await q;
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        // Build CSV rows
+        const rows = (payments ?? []).map((p: any) => ({
+          poliza: p.nro_poliza || '',
+          cliente: p.client_name || '',
+          cedula: p.cedula || '',
+          ramo: p.ramo || '',
+          cuota: p.installment_num || 1,
+          monto: Number(p.amount || 0).toFixed(2),
+          fecha_pago: p.payment_date || '',
+          estado: p.status || '',
+        }));
+
+        const total = rows.reduce((s: number, r: any) => s + Number(r.monto), 0);
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            insurer,
+            rows,
+            total: total.toFixed(2),
+            count: rows.length,
+          },
+        });
       }
 
       default:
