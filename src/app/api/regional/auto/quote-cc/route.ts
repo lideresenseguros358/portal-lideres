@@ -43,26 +43,33 @@ export async function POST(request: NextRequest) {
     console.log(`[REGIONAL CC Quote] Iniciando cotización CC endoso=${endoso}...`);
 
     // ═══ Normalize IS vehicle codes → Regional codes ═══
-    let resolvedMarca = parseInt(codMarca);
-    let resolvedModelo = parseInt(codModelo);
+    // ALWAYS resolve via Regional catalog — NEVER send raw IS codes to Regional API
+    let resolvedMarca: number;
+    let resolvedModelo: number;
 
-    if (marca || modelo) {
-      try {
-        const resolved = await resolveRegionalVehicleCodes({
-          isMarcaCodigo: parseInt(codMarca),
-          isModeloCodigo: parseInt(codModelo),
-          marcaNombre: marca || '',
-          modeloNombre: modelo || '',
-        });
-        resolvedMarca = resolved.codMarca;
-        resolvedModelo = resolved.codModelo;
-        console.log(`[REGIONAL CC Quote] Vehicle codes normalized: marca ${codMarca}→${resolvedMarca}, modelo ${codModelo}→${resolvedModelo} (${resolved.matchMethod})`);
-        if (resolved.warning) {
-          console.warn(`[REGIONAL CC Quote] ⚠️ ${resolved.warning}`);
-        }
-      } catch (err) {
-        console.warn('[REGIONAL CC Quote] Vehicle normalization failed, using raw IS codes:', err);
-      }
+    if (!marca && !modelo) {
+      return NextResponse.json(
+        { success: false, error: 'Faltan nombres de marca/modelo del vehículo para resolver códigos Regional. Verifique los datos del vehículo.' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const resolved = await resolveRegionalVehicleCodes({
+        isMarcaCodigo: parseInt(codMarca),
+        isModeloCodigo: parseInt(codModelo),
+        marcaNombre: marca || '',
+        modeloNombre: modelo || '',
+      });
+      resolvedMarca = resolved.codMarca;
+      resolvedModelo = resolved.codModelo;
+      console.log(`[REGIONAL CC Quote] Vehicle codes normalized: marca ${codMarca}→${resolvedMarca}, modelo ${codModelo}→${resolvedModelo} (${resolved.matchMethod})`);
+    } catch (err: any) {
+      console.error('[REGIONAL CC Quote] ❌ Vehicle code resolution FAILED:', err.message);
+      return NextResponse.json(
+        { success: false, error: `No se pudo resolver el vehículo en catálogo Regional: ${err.message}` },
+        { status: 400 }
+      );
     }
 
     const result = await cotizarCC({

@@ -58,26 +58,33 @@ export async function POST(request: NextRequest) {
     }
 
     // ═══ Normalize IS vehicle codes → Regional codes ═══
-    let resolvedMarca = parseInt(codmarca);
-    let resolvedModelo = parseInt(codmodelo);
+    // ALWAYS resolve via Regional catalog — NEVER send raw IS codes to Regional API
+    let resolvedMarca: number;
+    let resolvedModelo: number;
 
-    if (marca || modelo) {
-      try {
-        const resolved = await resolveRegionalVehicleCodes({
-          isMarcaCodigo: parseInt(codmarca),
-          isModeloCodigo: parseInt(codmodelo),
-          marcaNombre: marca || '',
-          modeloNombre: modelo || '',
-        });
-        resolvedMarca = resolved.codMarca;
-        resolvedModelo = resolved.codModelo;
-        console.log(`[REGIONAL RC Emit] Vehicle codes normalized: marca ${codmarca}→${resolvedMarca}, modelo ${codmodelo}→${resolvedModelo} (${resolved.matchMethod})`);
-        if (resolved.warning) {
-          console.warn(`[REGIONAL RC Emit] ⚠️ ${resolved.warning}`);
-        }
-      } catch (err) {
-        console.warn('[REGIONAL RC Emit] Vehicle normalization failed, using raw IS codes:', err);
-      }
+    if (!marca && !modelo) {
+      return NextResponse.json(
+        { success: false, error: 'Faltan nombres de marca/modelo del vehículo para resolver códigos Regional. Verifique los datos del vehículo.' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const resolved = await resolveRegionalVehicleCodes({
+        isMarcaCodigo: parseInt(codmarca),
+        isModeloCodigo: parseInt(codmodelo),
+        marcaNombre: marca || '',
+        modeloNombre: modelo || '',
+      });
+      resolvedMarca = resolved.codMarca;
+      resolvedModelo = resolved.codModelo;
+      console.log(`[REGIONAL RC Emit] Vehicle codes normalized: marca ${codmarca}→${resolvedMarca}, modelo ${codmodelo}→${resolvedModelo} (${resolved.matchMethod})`);
+    } catch (err: any) {
+      console.error('[REGIONAL RC Emit] ❌ Vehicle code resolution FAILED:', err.message);
+      return NextResponse.json(
+        { success: false, error: `No se pudo resolver el vehículo en catálogo Regional: ${err.message}` },
+        { status: 400 }
+      );
     }
 
     // Convert color from free text to Regional catalog code

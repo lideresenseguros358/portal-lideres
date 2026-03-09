@@ -230,17 +230,11 @@ export async function resolveRegionalVehicleCodes(
     }
   }
 
-  // 1c. If still no match, return error-ish fallback
+  // 1c. If still no match, throw — NEVER send raw IS codes to Regional
   if (!codMarcaRegional) {
-    console.warn(`[REGIONAL Vehicle Mapper] ⚠️ No marca match for IS ${isMarcaCodigo} ("${marcaNombre}"). Using IS code as-is (may fail).`);
-    return {
-      codMarca: isMarcaCodigo,
-      codModelo: isModeloCodigo,
-      marcaRegionalNombre: marcaNombre,
-      modeloRegionalNombre: modeloNombre,
-      matchMethod: 'fallback_first',
-      warning: `No se encontró marca "${marcaNombre}" en catálogo Regional. Código IS ${isMarcaCodigo} enviado como fallback.`,
-    };
+    const msg = `No se encontró marca "${marcaNombre}" (IS code ${isMarcaCodigo}) en catálogo de La Regional. Verifique el nombre de la marca.`;
+    console.error(`[REGIONAL Vehicle Mapper] ❌ ${msg}`);
+    throw new Error(msg);
   }
 
   // ── Step 2: Resolve Modelo ──
@@ -266,15 +260,9 @@ export async function resolveRegionalVehicleCodes(
   }
 
   if (!codModeloRegional) {
-    console.warn(`[REGIONAL Vehicle Mapper] ⚠️ No modelo resolved for marca ${codMarcaRegional}. Using IS code ${isModeloCodigo} as-is.`);
-    return {
-      codMarca: codMarcaRegional,
-      codModelo: isModeloCodigo,
-      marcaRegionalNombre: marcaRegionalNombre || marcaNombre,
-      modeloRegionalNombre: modeloNombre,
-      matchMethod: 'fallback_first',
-      warning: `No se encontró modelo "${modeloNombre}" en catálogo Regional para marca ${codMarcaRegional}. Código IS ${isModeloCodigo} enviado como fallback.`,
-    };
+    const msg = `No se encontró modelo "${modeloNombre}" (IS code ${isModeloCodigo}) en catálogo de La Regional para marca ${marcaRegionalNombre || marcaNombre} (${codMarcaRegional}). Verifique el nombre del modelo.`;
+    console.error(`[REGIONAL Vehicle Mapper] ❌ ${msg}`);
+    throw new Error(msg);
   }
 
   return {
