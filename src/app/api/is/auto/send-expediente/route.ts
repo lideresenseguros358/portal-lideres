@@ -70,7 +70,11 @@ const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
 // Dev: everything goes to office for testing
 const IS_RECIPIENTS_DEV = [OFFICE_EMAIL];
 // Prod: IS contacts + office always gets a copy
-const IS_RECIPIENTS_PROD = [OFFICE_EMAIL, 'mprestan@iseguros.com', 'slopez@iseguros.com'];
+// TODO: Cambiar IS_LIVE_RECIPIENTS a true cuando estemos listos para enviar a IS en producción
+const IS_LIVE_RECIPIENTS = false;
+const IS_RECIPIENTS_PROD = IS_LIVE_RECIPIENTS
+  ? [OFFICE_EMAIL, 'mprestan@iseguros.com', 'slopez@iseguros.com']
+  : [OFFICE_EMAIL];
 
 export async function POST(request: NextRequest) {
   try {
