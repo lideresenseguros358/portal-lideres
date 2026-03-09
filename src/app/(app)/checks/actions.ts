@@ -776,10 +776,8 @@ export async function actionCreatePendingPayment(payment: {
             total_received: div.amount, // Cada división recibe su monto
             can_be_paid: isBrokerDeduction ? false : can_be_paid, // false para descuentos
             status: 'pending' as const,
-            notes: JSON.stringify(divMetadata),
+            notes: JSON.stringify({ ...divMetadata, payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'), payment_mode: payment.payment_mode || 'contado' }),
             created_by: user.id,
-            payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
-            payment_mode: payment.payment_mode || 'contado',
           };
         }))
       : [{
@@ -794,11 +792,15 @@ export async function actionCreatePendingPayment(payment: {
           notes: createdAdvanceId ? JSON.stringify({
             ...metadata,
             advance_id: createdAdvanceId,
-            notes: `Adelanto ID: ${createdAdvanceId}`
-          }) : JSON.stringify(metadata),
+            notes: `Adelanto ID: ${createdAdvanceId}`,
+            payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
+            payment_mode: payment.payment_mode || 'contado',
+          }) : JSON.stringify({
+            ...metadata,
+            payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
+            payment_mode: payment.payment_mode || 'contado',
+          }),
           created_by: user.id,
-          payment_source: payment.payment_source || (isBrokerDeduction ? 'broker_deduction' : 'bank'),
-          payment_mode: payment.payment_mode || 'contado',
         }];
     
     // Insert pending payments (uno o múltiples)
