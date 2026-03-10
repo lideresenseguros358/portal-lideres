@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaAuto, generarCotizacionAuto, crearClienteYPolizaIS } from '@/lib/is/quotes.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { findAcreedor } from '@/lib/constants/acreedores';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       vacreedor,
       // Endoso texto para condiciones especiales
       vendosoTexto,
-      environment = 'development',
+      environment = getISDefaultEnv(),
     } = body;
     
     const supabase = getSupabaseAdmin();

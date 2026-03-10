@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generarCotizacionAuto, obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export const maxDuration = 60;
 
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { environment = 'development', ...formData } = body;
+    const { environment = getISDefaultEnv(), ...formData } = body;
     
     // Accept both old (vcodmarca) and new (codMarca) param names
     const nroDoc = formData.nroDoc || formData.vnrodoc;

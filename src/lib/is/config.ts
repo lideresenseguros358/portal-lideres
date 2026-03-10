@@ -6,6 +6,19 @@
 export type ISEnvironment = 'development' | 'production';
 
 /**
+ * Auto-detect IS environment:
+ * - On Vercel (production/preview): use 'production' (APIRestIs — IP whitelisted)
+ * - Locally: use 'development' (APIRestIsTester — no IP restriction)
+ */
+export function getISDefaultEnv(): ISEnvironment {
+  const vercelEnv = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development' | undefined
+  if (vercelEnv === 'production' || vercelEnv === 'preview') {
+    return 'production';
+  }
+  return 'development';
+}
+
+/**
  * Obtener base URL según ambiente desde ENV vars
  * ⚠️ Debe ser URL ABSOLUTA (https://...)
  */

@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { generarCotizacionAuto, obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
+import { getISDefaultEnv } from '@/lib/is/config';
 
 export async function GET() {
   try {
@@ -26,14 +27,14 @@ export async function GET() {
       codPlanCobertura: 306, // SOBAT 5/10
       codPlanCoberturaAdic: 0,
       codGrupoTarifa: 20,  // PARTICULAR
-    }, 'development');
+    }, getISDefaultEnv());
 
     if (cotizacionResult.success && cotizacionResult.idCotizacion) {
       // Obtener coberturas para ver el precio
       const coberturasResult = await obtenerCoberturasCotizacion(
         cotizacionResult.idCotizacion,
         1, // vIdOpt = 1 para plan básico
-        'production'
+        getISDefaultEnv()
       );
 
       if (coberturasResult.success && coberturasResult.data?.Table?.length) {

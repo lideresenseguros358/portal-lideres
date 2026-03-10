@@ -5,12 +5,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generarCotizacionAuto } from '@/lib/is/quotes.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { environment = 'development', ...formData } = body;
+    const { environment = getISDefaultEnv(), ...formData } = body;
     
     // Aceptar tanto nombres viejos (vcodmarca) como nuevos (codMarca) del Swagger
     const nroDoc = formData.nroDoc || formData.vnrodoc;

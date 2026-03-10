@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { generarCotizacionAuto, obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
+import { getISDefaultEnv } from '@/lib/is/config';
 
 // ── Cache (2 hours) + in-flight dedup ──
 let cache: { data: any; timestamp: number } | null = null;
@@ -136,9 +137,11 @@ async function fetchAllPlans() {
   console.log('[API IS Third Party] Fetching plans from IS API...');
 
   // Parallel calls — IS API is slow so running both at once saves ~50% time
+  const env = getISDefaultEnv();
+  console.log(`[API IS Third Party] Usando ambiente: ${env}`);
   const [basicResult, premiumResult] = await Promise.all([
-    fetchPlan(PLAN_SOAT, 'development'),
-    fetchPlan(PLAN_INTERMEDIO, 'development'),
+    fetchPlan(PLAN_SOAT, env),
+    fetchPlan(PLAN_INTERMEDIO, env),
   ]);
 
   // If both plans failed, mark insurer as offline
