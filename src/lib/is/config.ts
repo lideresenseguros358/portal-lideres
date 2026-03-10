@@ -6,15 +6,11 @@
 export type ISEnvironment = 'development' | 'production';
 
 /**
- * Auto-detect IS environment:
- * - On Vercel (production/preview): use 'production' (APIRestIs — IP whitelisted)
- * - Locally: use 'development' (APIRestIsTester — no IP restriction)
+ * Default IS environment.
+ * Uses 'development' (APIRestIsTester) — confirmed working by IS.
+ * Production API (APIRestIs) requires IP whitelisting not yet configured.
  */
 export function getISDefaultEnv(): ISEnvironment {
-  const vercelEnv = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development' | undefined
-  if (vercelEnv === 'production' || vercelEnv === 'preview') {
-    return 'production';
-  }
   return 'development';
 }
 
