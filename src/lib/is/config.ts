@@ -14,9 +14,11 @@ export type ISEnvironment = 'development' | 'production';
  * IS Production API returns 403 from non-whitelisted IPs (local dev).
  */
 export function getISDefaultEnv(): ISEnvironment {
-  // Always use Tester API — Production API returns 403 (IP not whitelisted by IS)
-  // Tester works for tokens + catalogs + emission. generarcotizacion may return
-  // RESOP:-3 intermittently (IS server-side issue) — we use fallback prices in that case.
+  // On Vercel → use Production API (IS enabled production token 2026-03-10)
+  // Locally → use Tester API (production requires IP whitelisting)
+  if (process.env.VERCEL) {
+    return 'production';
+  }
   return 'development';
 }
 
