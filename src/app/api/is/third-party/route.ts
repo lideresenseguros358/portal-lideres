@@ -116,6 +116,8 @@ async function fetchPlan(
           prima: parseFloat(String(cob.PRIMA1).replace(/,/g, '')) || 0,
         });
       }
+    } else {
+      console.warn(`[IS Third Party] Plan ${codPlanCobertura}: coberturas vacías — cobResult.success=${cobResult.success}, Table length=${cobResult.data?.Table?.length ?? 'N/A'}`);
     }
 
     const finalPrima = primaTotal > 0

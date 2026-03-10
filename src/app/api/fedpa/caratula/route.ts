@@ -1,70 +1,41 @@
 /**
  * Endpoint: Obtener Carátula PDF de Póliza FEDPA
  * 
- * Uses EmisorPlan (2024) POST /api/caratulaPoliza — requires the SAME
- * payload that was sent to /api/emitirpoliza. Returns binary PDF.
+ * Uses Broker Integration API (2026):
+ *   GET https://api.segfedpa.com:8085/BrokerIntegration/Polizas/caratula
+ *       ?ramo=04&subramo=07&poliza=772&secuencia=0
+ *   Auth: Basic base64(usuario:clave)
+ *   Response: application/pdf (200) or { success, msg } (400)
  * 
- * POST /api/fedpa/caratula  — from frontend (sends emission payload)
- * GET  /api/fedpa/caratula?poliza=XXX — from email links (uses server-side cached payload)
+ * POST /api/fedpa/caratula  — from frontend { poliza: "04-07-772-0" }
+ * GET  /api/fedpa/caratula?poliza=04-07-772-0 — from email links
  * 
  * Returns: PDF binary (application/pdf) or JSON error
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { obtenerClienteAutenticado } from '@/lib/fedpa/auth.service';
-import { EMISOR_PLAN_ENDPOINTS } from '@/lib/fedpa/config';
+import { obtenerCaratula, parsePolizaNumber } from '@/lib/fedpa/caratula.service';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
-import { normalizeText } from '@/lib/fedpa/utils';
-import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 export const maxDuration = 30;
 
-// ── Server-side cache for emission payloads (keyed by poliza number) ──
-// Used by GET handler for email links where we can't send a POST body
-const payloadCache = new Map<string, { payload: any; timestamp: number }>();
-const PAYLOAD_CACHE_TTL = 72 * 60 * 60 * 1000; // 72 hours
-
-function cachePayload(poliza: string, payload: any) {
-  payloadCache.set(poliza, { payload, timestamp: Date.now() });
-  // Prune old entries
-  for (const [key, val] of payloadCache.entries()) {
-    if (Date.now() - val.timestamp > PAYLOAD_CACHE_TTL) payloadCache.delete(key);
-  }
-}
-
-function getCachedPayload(poliza: string): any | null {
-  const entry = payloadCache.get(poliza);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > PAYLOAD_CACHE_TTL) {
-    payloadCache.delete(poliza);
-    return null;
-  }
-  return entry.payload;
-}
-
-// ── POST: Frontend calls with emission payload ──
+// ── POST: Frontend calls with poliza number ──
 export async function POST(request: NextRequest) {
   const requestId = `car-${Date.now().toString(36)}`;
 
   try {
     const body = await request.json();
-    const { environment = 'PROD', poliza, ...emissionPayload } = body;
-    const env = environment as FedpaEnvironment;
+    const poliza = body.poliza || body.nroPoliza || '';
+    const env = (body.environment || 'PROD') as FedpaEnvironment;
 
-    // Must have the emission payload fields
-    if (!emissionPayload.Plan && !emissionPayload.idDoc && !emissionPayload.PrimerNombre) {
+    if (!poliza) {
       return NextResponse.json(
-        { success: false, error: 'Se requiere el payload de emisión (mismo que se envió a /api/emitirpoliza)', requestId },
+        { success: false, error: 'Se requiere el número de póliza (ej: "04-07-772-0")', requestId },
         { status: 400 }
       );
     }
 
-    // Cache the payload for later GET requests (email links)
-    if (poliza) {
-      cachePayload(String(poliza), emissionPayload);
-    }
-
-    return fetchCaratulaPdf(emissionPayload, env, poliza || 'unknown', requestId);
+    return fetchCaratula(String(poliza), env, requestId);
   } catch (error: any) {
     console.error(`[API FEDPA Carátula] ${requestId} POST error:`, error);
     return NextResponse.json(
@@ -83,136 +54,70 @@ export async function GET(request: NextRequest) {
 
   if (!poliza) {
     return NextResponse.json(
-      { success: false, error: 'Parámetro "poliza" es requerido', requestId },
+      { success: false, error: 'Parámetro "poliza" es requerido (ej: ?poliza=04-07-772-0)', requestId },
       { status: 400 }
     );
   }
 
-  // Try to find cached emission payload for this policy
-  const cachedPayload = getCachedPayload(poliza);
-  if (!cachedPayload) {
-    // No cached payload — show friendly message
-    return new NextResponse(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Descargar Póliza FEDPA</title></head>
-      <body style="font-family:sans-serif;text-align:center;padding:40px">
-        <h2>Póliza FEDPA: ${poliza}</h2>
-        <p>El enlace de descarga directa ha expirado.</p>
-        <p>Para descargar su carátula, ingrese al <a href="https://portal.lideresenseguros.com/cotizadores/confirmacion">portal</a> o contacte a su corredor.</p>
-      </body></html>`,
-      {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      }
-    );
-  }
-
-  return fetchCaratulaPdf(cachedPayload, env, poliza, requestId);
+  return fetchCaratula(poliza, env, requestId);
 }
 
-// ── Core: Call EmisorPlan /api/caratulaPoliza with emission payload ──
-async function fetchCaratulaPdf(
-  emissionPayload: any,
+// ── Core: Call Broker Integration GET /Polizas/caratula ──
+async function fetchCaratula(
+  nroPoliza: string,
   env: FedpaEnvironment,
-  poliza: string,
   requestId: string,
 ) {
   try {
-    console.log(`[API FEDPA Carátula] ${requestId} Solicitando carátula para póliza ${poliza} via EmisorPlan`);
-
-    const clientResult = await obtenerClienteAutenticado(env);
-    if (!clientResult.success || !clientResult.client) {
-      const status = clientResult.needsReset ? 503 : 424;
+    // Parse "04-07-772-0" → { ramo: "04", subramo: "07", poliza: "772", secuencia: "0" }
+    const parsed = parsePolizaNumber(nroPoliza);
+    if (!parsed) {
       return NextResponse.json(
         {
           success: false,
-          error: clientResult.error || 'No se pudo autenticar con FEDPA',
-          code: clientResult.needsReset ? 'NEEDS_FEDPA_TOKEN_RESET' : 'TOKEN_NOT_AVAILABLE',
+          error: `Formato de póliza inválido: "${nroPoliza}". Se espera formato "ramo-subramo-poliza-secuencia" (ej: "04-07-772-0")`,
           requestId,
         },
-        { status }
+        { status: 400 }
       );
     }
 
-    // ── Normalize payload (same transforms that /api/fedpa/emision applies) ──
-    const rawMarca = String(emissionPayload.Marca || '');
-    const rawModelo = String(emissionPayload.Modelo || '');
-    const marcaNombre = emissionPayload.MarcaNombre || '';
-    const modeloNombre = emissionPayload.ModeloNombre || rawModelo;
-    const isNumericMarca = /^\d+$/.test(rawMarca);
-    const fedpaMarca = isNumericMarca
-      ? getFedpaMarcaFromIS(parseInt(rawMarca), marcaNombre)
-      : rawMarca;
-    const fedpaModelo = normalizarModeloFedpa(modeloNombre || rawModelo);
+    console.log(`[API FEDPA Carátula] ${requestId} Solicitando carátula via Broker Integration:`, {
+      nroPoliza,
+      ...parsed,
+      env,
+    });
 
-    const normalizedPayload = {
-      ...emissionPayload,
-      PrimerNombre: normalizeText(emissionPayload.PrimerNombre),
-      PrimerApellido: normalizeText(emissionPayload.PrimerApellido),
-      SegundoNombre: emissionPayload.SegundoNombre ? normalizeText(emissionPayload.SegundoNombre) : undefined,
-      SegundoApellido: emissionPayload.SegundoApellido ? normalizeText(emissionPayload.SegundoApellido) : undefined,
-      Identificacion: normalizeText(emissionPayload.Identificacion),
-      Direccion: normalizeText(emissionPayload.Direccion),
-      Marca: normalizeText(fedpaMarca),
-      Modelo: normalizeText(fedpaModelo),
-      Placa: normalizeText(emissionPayload.Placa),
-      Vin: normalizeText(emissionPayload.Vin),
-      Motor: normalizeText(emissionPayload.Motor),
-      Color: normalizeText(emissionPayload.Color),
-      Telefono: typeof emissionPayload.Telefono === 'string' ? parseInt(emissionPayload.Telefono.replace(/\D/g, '')) : emissionPayload.Telefono,
-      Celular: typeof emissionPayload.Celular === 'string' ? parseInt(emissionPayload.Celular.replace(/\D/g, '')) : emissionPayload.Celular,
-      cantidadPago: emissionPayload.cantidadPago || 1,
-    };
-    // Remove helper fields not expected by FEDPA
-    delete normalizedPayload.MarcaNombre;
-    delete normalizedPayload.ModeloNombre;
+    const result = await obtenerCaratula(parsed, env);
 
-    console.log(`[API FEDPA Carátula] ${requestId} Marca: ${rawMarca} → ${normalizedPayload.Marca} | Modelo: ${rawModelo} → ${normalizedPayload.Modelo}`);
+    if (result.success && result.pdfBuffer) {
+      console.log(`[API FEDPA Carátula] ${requestId} ✅ PDF recibido (${result.pdfBuffer.byteLength} bytes)`);
 
-    // POST /api/caratulaPoliza with the normalized emission payload
-    const response = await clientResult.client.postRaw(
-      EMISOR_PLAN_ENDPOINTS.CARATULA_POLIZA,
-      normalizedPayload
-    );
-
-    const contentType = response.headers.get('content-type') || '';
-
-    if (response.ok && contentType.includes('application/pdf')) {
-      console.log(`[API FEDPA Carátula] ${requestId} ✅ PDF recibido (${response.headers.get('content-length') || '?'} bytes)`);
-      const pdfBuffer = await response.arrayBuffer();
-
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(result.pdfBuffer.buffer as ArrayBuffer, {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="poliza-fedpa-${poliza}.pdf"`,
-          'Content-Length': String(pdfBuffer.byteLength),
+          'Content-Disposition': `attachment; filename="poliza-fedpa-${nroPoliza}.pdf"`,
+          'Content-Length': String(result.pdfBuffer.byteLength),
           'X-Request-Id': requestId,
         },
       });
     }
 
-    // Not a PDF — read body ONCE as text, then try to parse as JSON
-    let errorMsg = `HTTP ${response.status}`;
-    try {
-      const textBody = await response.text();
-      try {
-        const errorData = JSON.parse(textBody);
-        errorMsg = errorData.msg || errorData.message || errorData.error || errorMsg;
-        console.error(`[API FEDPA Carátula] ${requestId} Error JSON:`, errorData);
-      } catch {
-        errorMsg = textBody.substring(0, 300) || errorMsg;
-        console.error(`[API FEDPA Carátula] ${requestId} Error text:`, errorMsg);
-      }
-    } catch (bodyErr: any) {
-      console.error(`[API FEDPA Carátula] ${requestId} Could not read error body:`, bodyErr.message);
-    }
-
+    // Error
+    console.error(`[API FEDPA Carátula] ${requestId} ❌ Error:`, result.error);
     return NextResponse.json(
-      { success: false, error: `Error obteniendo carátula: ${errorMsg}`, poliza, requestId },
-      { status: response.status || 400 }
+      {
+        success: false,
+        error: result.error || 'Error obteniendo carátula',
+        poliza: nroPoliza,
+        httpStatus: result.httpStatus,
+        requestId,
+      },
+      { status: result.httpStatus || 500 }
     );
   } catch (error: any) {
-    console.error(`[API FEDPA Carátula] ${requestId} Error:`, error);
+    console.error(`[API FEDPA Carátula] ${requestId} Exception:`, error);
     return NextResponse.json(
       { success: false, error: error.message || 'Error obteniendo carátula', requestId },
       { status: 500 }

@@ -121,22 +121,19 @@ export default function ConfirmacionPage() {
     setPdfError(null);
 
     try {
-      // Retrieve the emission payload saved during emission
-      const payloadRaw = sessionStorage.getItem('fedpaEmissionPayload');
-      if (!payloadRaw) {
-        console.warn('[Confirmación] No hay payload de emisión guardado — usando carátula HTML');
+      const poliza = policyData?.nroPoliza || policyData?.poliza || '';
+
+      if (!poliza) {
+        console.warn('[Confirmación] No hay número de póliza — usando carátula HTML');
         handleDownloadCaratula();
         return;
       }
 
-      const emissionPayload = JSON.parse(payloadRaw);
-      const poliza = policyData?.nroPoliza || policyData?.poliza || 'unknown';
-
+      // Call Broker Integration API — only needs the poliza number (e.g. "04-07-772-0")
       const response = await fetch('/api/fedpa/caratula', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...emissionPayload,
           poliza,
           environment: 'DEV',
         }),
@@ -161,7 +158,6 @@ export default function ConfirmacionPage() {
         if (!data.success) {
           throw new Error(data.error || 'No se pudo obtener la carátula');
         }
-        // Fallback: use the HTML print carátula
         handleDownloadCaratula();
       }
     } catch (err: any) {

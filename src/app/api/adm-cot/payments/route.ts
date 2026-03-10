@@ -73,12 +73,16 @@ export async function GET(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
         // Enrich rows with SLA computed fields
+        // SLA window: 15 days from payment_date to pay the insurer
+        const SLA_DAYS = 15;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const enrichedRows = (data ?? []).map((r: any) => {
           if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
-          const dueDate = r.payment_date ? new Date(r.payment_date + 'T12:00:00') : null;
-          if (!dueDate) return { ...r, sla_status: 'unknown', sla_color: 'gray', days_until_due: null };
+          const registered = r.payment_date ? new Date(r.payment_date + 'T12:00:00') : null;
+          if (!registered) return { ...r, sla_status: 'unknown', sla_color: 'gray', days_until_due: null };
+          const dueDate = new Date(registered);
+          dueDate.setDate(dueDate.getDate() + SLA_DAYS);
           const diffMs = dueDate.getTime() - today.getTime();
           const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
           let sla_status = 'on_track'; // green
@@ -143,11 +147,30 @@ export async function GET(request: NextRequest) {
         const { data, error } = await q;
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-        // For each transfer, fetch which groups used it + compute flex fields
+        // For each transfer, fetch which groups used it + their payment details + compute flex fields
         const transfers = [];
         for (const t of (data ?? [])) {
           const { data: usages } = await sb.from('adm_cot_payment_group_references')
             .select('amount_used, group_id').eq('bank_transfer_id', t.id);
+
+          // Fetch actual payment details for each group usage (like cheques page)
+          const paymentDetails: any[] = [];
+          for (const u of (usages ?? [])) {
+            const { data: items } = await sb.from('adm_cot_payment_group_items')
+              .select('payment_id, amount_applied, adm_cot_payments(client_name, nro_poliza, insurer, amount, cedula, ramo, payment_date, status, installment_num)')
+              .eq('group_id', u.group_id);
+            for (const item of (items ?? [])) {
+              const p = (item as any).adm_cot_payments;
+              if (p) paymentDetails.push({
+                client_name: p.client_name, nro_poliza: p.nro_poliza, insurer: p.insurer,
+                amount: p.amount, cedula: p.cedula, ramo: p.ramo,
+                payment_date: p.payment_date, status: p.status,
+                installment_num: p.installment_num,
+                amount_applied: item.amount_applied || p.amount,
+                group_id: u.group_id,
+              });
+            }
+          }
           const meta = (t.metadata as Record<string, any>) || {};
           const totalAmt = Number(t.transfer_amount || 0);
           const usedAmt = Number(t.transfer_amount || 0) - Number(t.remaining_amount || 0);
@@ -158,6 +181,7 @@ export async function GET(request: NextRequest) {
           const enriched = {
             ...t,
             usages: usages ?? [],
+            payment_details: paymentDetails,
             // Categorization & blocking from metadata
             category: meta.category || 'uncategorized',
             is_blocked: !!meta.is_blocked,

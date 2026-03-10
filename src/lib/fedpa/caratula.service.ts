@@ -1,32 +1,52 @@
 /**
  * Servicio de Carátula FEDPA — Descarga PDF de póliza emitida
  * 
- * Usa la API Emisor Externo (EmisorFedpa.Api) con Basic Auth.
+ * Usa la API Broker Integration (2026) con Basic Auth.
+ * Documentación: /public/API FEDPA/CARATULA/
  * 
- * Endpoints:
- *   TEST: POST /api/Polizas/get_nropoliza
- *   PROD: POST /api/Polizas/get_nropoliza_emitir
+ * Endpoint:
+ *   GET https://api.segfedpa.com:8085/BrokerIntegration/Polizas/caratula
+ *       ?ramo=04&subramo=07&poliza=772&secuencia=0
  * 
- * Body: { "usuario": "...", "clave": "...", "codCotizacion": "..." }
- * Auth: Authorization: Basic (usuario:clave base64)
+ * Auth: Authorization: Basic base64(usuario:clave)
+ * Response 200: application/pdf (binary)
+ * Response 400: { success, msg }
  */
 
-import { FEDPA_CONFIG, FedpaEnvironment, EMISOR_EXTERNO_ENDPOINTS } from './config';
+import { FEDPA_CONFIG, FedpaEnvironment, BROKER_INTEGRATION_ENDPOINTS } from './config';
 
 export interface CaratulaRequest {
-  codCotizacion: string;
+  ramo: string;
+  subramo: string;
+  poliza: string;
+  secuencia: string;
 }
 
 export interface CaratulaResponse {
   success: boolean;
-  data?: any;
-  pdfBase64?: string;
-  pdfUrl?: string;
+  pdfBuffer?: Uint8Array;
   error?: string;
+  httpStatus?: number;
 }
 
 /**
- * Obtener carátula (PDF) de una póliza emitida
+ * Parse a FEDPA policy number like "04-07-772-0" into its components.
+ * Returns { ramo, subramo, poliza, secuencia } or null if format is invalid.
+ */
+export function parsePolizaNumber(nroPoliza: string): CaratulaRequest | null {
+  if (!nroPoliza) return null;
+  const parts = nroPoliza.split('-');
+  if (parts.length < 3) return null;
+  const ramo = parts[0] ?? '';
+  const subramo = parts[1] ?? '';
+  const poliza = parts[2] ?? '';
+  const secuencia = parts[3] ?? '0';
+  if (!ramo || !subramo || !poliza) return null;
+  return { ramo, subramo, poliza, secuencia };
+}
+
+/**
+ * Obtener carátula (PDF) de una póliza emitida via Broker Integration API
  */
 export async function obtenerCaratula(
   request: CaratulaRequest,
@@ -38,90 +58,77 @@ export async function obtenerCaratula(
     return { success: false, error: 'Credenciales FEDPA no configuradas' };
   }
 
-  // Seleccionar endpoint según ambiente
-  const endpoint = env === 'PROD'
-    ? EMISOR_EXTERNO_ENDPOINTS.GET_CARATULA_PROD
-    : EMISOR_EXTERNO_ENDPOINTS.GET_CARATULA_TEST;
-
-  const url = `${config.emisorExternoUrl}${endpoint}`;
+  // Build URL with query params
+  const baseUrl = config.brokerIntegrationUrl;
+  const endpoint = BROKER_INTEGRATION_ENDPOINTS.CARATULA;
+  const queryParams = new URLSearchParams({
+    ramo: request.ramo,
+    subramo: request.subramo,
+    poliza: request.poliza,
+    secuencia: request.secuencia,
+  });
+  const url = `${baseUrl}${endpoint}?${queryParams.toString()}`;
 
   // Basic Auth header
   const basicAuth = Buffer.from(`${config.usuario}:${config.clave}`).toString('base64');
 
-  const body = {
-    usuario: config.usuario,
-    clave: config.clave,
-    codCotizacion: request.codCotizacion,
-  };
-
-  console.log('[FEDPA Carátula] Solicitando carátula...', {
+  console.log('[FEDPA Carátula] Solicitando carátula via Broker Integration...', {
     env,
-    endpoint,
-    codCotizacion: request.codCotizacion,
+    url,
+    ramo: request.ramo,
+    subramo: request.subramo,
+    poliza: request.poliza,
+    secuencia: request.secuencia,
   });
 
   try {
     const response = await fetch(url, {
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        'Accept': '*/*',
         'Authorization': `Basic ${basicAuth}`,
       },
-      body: JSON.stringify(body),
     });
 
-    // Check if response is PDF (binary)
     const contentType = response.headers.get('content-type') || '';
 
-    if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
-      // Response is a PDF binary — convert to base64
-      const buffer = await response.arrayBuffer();
-      const pdfBase64 = Buffer.from(buffer).toString('base64');
-      console.log('[FEDPA Carátula] PDF recibido:', {
-        size: buffer.byteLength,
-        contentType,
-      });
+    console.log('[FEDPA Carátula] Response:', {
+      status: response.status,
+      contentType,
+      contentLength: response.headers.get('content-length'),
+    });
+
+    // Success: PDF binary
+    if (response.ok && (contentType.includes('application/pdf') || contentType.includes('octet-stream'))) {
+      const arrayBuf = await response.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuf);
+      console.log('[FEDPA Carátula] PDF recibido:', buffer.byteLength, 'bytes');
       return {
         success: true,
-        pdfBase64,
+        pdfBuffer: buffer,
+        httpStatus: response.status,
       };
     }
 
-    // Otherwise parse as JSON
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('[FEDPA Carátula] Error HTTP:', response.status, data);
-      return {
-        success: false,
-        error: data?.message || data?.msg || data?.error || `HTTP ${response.status}`,
-        data,
-      };
+    // Error or unexpected response
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const data = await response.json();
+      errorMsg = data?.mensaje || data?.msg || data?.message || data?.error || errorMsg;
+      console.error('[FEDPA Carátula] Error JSON:', data);
+    } catch {
+      const text = await response.text();
+      errorMsg = text.substring(0, 500) || errorMsg;
+      console.error('[FEDPA Carátula] Error text:', text.substring(0, 500));
     }
 
-    console.log('[FEDPA Carátula] Respuesta JSON:', JSON.stringify(data).substring(0, 500));
-
-    // Response might contain PDF as base64 string, URL, or embedded data
-    // Try to extract PDF from common response shapes
-    const pdfBase64 = data?.pdf || data?.PDF || data?.pdfBase64 || data?.archivo || data?.Archivo || null;
-    const pdfUrl = data?.url || data?.URL || data?.pdfUrl || data?.urlPdf || null;
-
-    if (pdfBase64) {
-      return { success: true, pdfBase64, data };
-    }
-
-    if (pdfUrl) {
-      return { success: true, pdfUrl, data };
-    }
-
-    // If we got a successful response but can't find the PDF, return the raw data
-    // The caller can decide what to do
     return {
-      success: true,
-      data,
+      success: false,
+      error: errorMsg,
+      httpStatus: response.status,
     };
   } catch (error: any) {
-    console.error('[FEDPA Carátula] Error:', error);
+    console.error('[FEDPA Carátula] Exception:', error);
     return {
       success: false,
       error: error.message || 'Error obteniendo carátula',

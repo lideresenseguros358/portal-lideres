@@ -15,6 +15,7 @@ export const FEDPA_CONFIG = {
     // URLs Base
     emisorPlanUrl: 'https://wscanales.segfedpa.com/EmisorPlan',
     emisorExternoUrl: 'https://wscanales.segfedpa.com/EmisorFedpa.Api',
+    brokerIntegrationUrl: 'https://api.segfedpa.com:8085/BrokerIntegration',
   },
   PROD: {
     // Credenciales desde ENV vars
@@ -26,6 +27,7 @@ export const FEDPA_CONFIG = {
     // URLs Base
     emisorPlanUrl: 'https://wscanales.segfedpa.com/EmisorPlan',
     emisorExternoUrl: 'https://wscanales.segfedpa.com/EmisorFedpa.Api',
+    brokerIntegrationUrl: 'https://api.segfedpa.com:8085/BrokerIntegration',
   },
 } as const;
 
@@ -49,8 +51,21 @@ export const EMISOR_PLAN_ENDPOINTS = {
   // Emisión
   EMITIR_POLIZA: '/api/emitirpoliza',
   
-  // Carátula (genera/envía PDF de la póliza)
+  // Carátula (genera/envía PDF de la póliza) — DEPRECATED: use BROKER_INTEGRATION_ENDPOINTS
   CARATULA_POLIZA: '/api/caratulaPoliza',
+} as const;
+
+// ============================================
+// ENDPOINTS BROKER INTEGRATION (2026)
+// Documentación: /public/API FEDPA/CARATULA/
+// Base URL: https://api.segfedpa.com:8085/BrokerIntegration
+// Auth: Basic (usuario:contraseña base64)
+// ============================================
+
+export const BROKER_INTEGRATION_ENDPOINTS = {
+  // GET /Polizas/caratula?ramo=XX&subramo=XX&poliza=XXXXXX&secuencia=X
+  // Returns application/pdf (200) or { success, msg } (400)
+  CARATULA: '/Polizas/caratula',
 } as const;
 
 // ============================================
@@ -71,7 +86,7 @@ export const EMISOR_EXTERNO_ENDPOINTS = {
   GET_NRO_POLIZA: '/api/Polizas/get_nropoliza',
   CREAR_POLIZA: '/api/Polizas/crear_poliza_auto_cc_externos',
   
-  // Carátula (PDF de la póliza emitida)
+  // DEPRECATED: These only return policy numbers, not PDFs
   GET_CARATULA_TEST: '/api/Polizas/get_nropoliza',
   GET_CARATULA_PROD: '/api/Polizas/get_nropoliza_emitir',
 } as const;

@@ -117,6 +117,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [showRefundModal, setShowRefundModal] = useState<string | null>(null);
   const [refundForm, setRefundForm] = useState({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
   const [showManualWizard, setShowManualWizard] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -168,8 +169,6 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     setRefundForm({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
     fetchPayments();
   };
-
-  const [showInsurers, setShowInsurers] = useState(false);
 
   // Split payments into unconfirmed recurring vs rest (groupable)
   const unconfirmedPayments = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
@@ -226,53 +225,6 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
         </div>
       )}
 
-      {/* Insurer Breakdown */}
-      {summary.byInsurer && summary.byInsurer.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <button onClick={() => setShowInsurers(!showInsurers)}
-            className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors">
-            <div className="flex items-center gap-2">
-              <FaLayerGroup className="text-[#010139] text-xs" />
-              <span className="text-xs font-semibold text-[#010139]">Desglose por Aseguradora ({summary.byInsurer.length})</span>
-            </div>
-            {showInsurers ? <FaChevronUp className="text-gray-400 text-xs" /> : <FaChevronDown className="text-gray-400 text-xs" />}
-          </button>
-          {showInsurers && (
-            <div className="border-t border-gray-100 p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {summary.byInsurer.map((ins: any) => (
-                <div key={ins.name} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-[#010139]">{ins.name}</p>
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-bold text-[#8AAA19]">{fmtMoney(ins.amount)}</p>
-                      <button onClick={async () => {
-                        const res = await apiPost('get_insurer_export', { insurer: ins.name });
-                        if (!res.success || !res.data?.rows?.length) { alert('No hay datos para exportar'); return; }
-                        const header = 'Póliza,Cliente,Cédula,Ramo,Cuota,Monto,Fecha Pago,Estado';
-                        const csv = [header, ...res.data.rows.map((r: any) => `${r.poliza},${r.cliente},${r.cedula},${r.ramo},${r.cuota},${r.monto},${r.fecha_pago},${r.estado}`)].join('\n');
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a'); a.href = url; a.download = `pagos_${ins.name}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-                        URL.revokeObjectURL(url);
-                      }} className="p-1 text-gray-400 hover:text-[#8AAA19] cursor-pointer" title="Exportar CSV">
-                        <FaFileExport className="text-[10px]" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <span className="text-[9px] text-gray-500">{ins.count} pagos</span>
-                    {ins.statuses.PENDIENTE > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">{ins.statuses.PENDIENTE} pend.</span>}
-                    {ins.statuses.PENDIENTE_CONFIRMACION > 0 && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded">{ins.statuses.PENDIENTE_CONFIRMACION} x conf.</span>}
-                    {ins.statuses.AGRUPADO > 0 && <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded">{ins.statuses.AGRUPADO} agrup.</span>}
-                    {ins.statuses.PAGADO > 0 && <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded">{ins.statuses.PAGADO} pag.</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Search + Filter toggle */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
         <div className="flex items-center gap-2">
@@ -305,7 +257,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
         {showFilters && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-100">
             <select value={insurer} onChange={e => setInsurer(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option>
+              <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Estado</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
@@ -381,10 +333,16 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
       {selected.size > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <span className="text-xs text-blue-800 font-medium">{selected.size} seleccionados — Total: {fmtMoney(selectedTotal)}</span>
-          <button onClick={() => setShowGroupModal(true)}
-            className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
-            <FaLayerGroup className="text-white" /> <span className="text-white">Agrupar y Pagar</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowExportModal(true)}
+              className="px-3 py-1.5 bg-[#8AAA19] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer hover:bg-[#7a9916] transition-colors">
+              <FaDownload className="text-white text-[10px]" /> <span className="text-white">Descargar</span>
+            </button>
+            <button onClick={() => setShowGroupModal(true)}
+              className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
+              <FaLayerGroup className="text-white" /> <span className="text-white">Agrupar y Pagar</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -529,8 +487,112 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
       {/* Group Modal */}
       {showGroupModal && <GroupModal selectedPayments={selectedPayments} onClose={() => { setShowGroupModal(false); setSelected(new Set()); fetchPayments(); onRefresh(); }} />}
 
+      {/* Export Modal */}
+      {showExportModal && <ExportModal payments={selectedPayments} onClose={() => setShowExportModal(false)} />}
+
       {/* Manual Wizard Modal */}
       {showManualWizard && <ManualWizardModal onClose={() => { setShowManualWizard(false); fetchPayments(); onRefresh(); }} />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// EXPORT MODAL (Excel / PDF)
+// ════════════════════════════════════════════
+
+function ExportModal({ payments, onClose }: { payments: any[]; onClose: () => void }) {
+  const [exporting, setExporting] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const total = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const insurerLabel = payments.length > 0 ? (payments.every((p: any) => p.insurer === payments[0].insurer) ? payments[0].insurer : 'VARIAS') : '';
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const rows = payments.map((p: any) => ({
+        Cliente: p.client_name || '',
+        'Cédula': p.cedula || '',
+        'Póliza': p.nro_poliza || '',
+        Aseguradora: p.insurer || '',
+        Ramo: p.ramo || '',
+        Cuota: p.installment_num || 1,
+        Monto: Number(p.amount || 0),
+        'Fecha Registro': p.payment_date || '',
+        Estado: p.status || '',
+      }));
+      rows.push({ Cliente: '', 'Cédula': '', 'Póliza': '', Aseguradora: '', Ramo: '', Cuota: '' as any, Monto: total, 'Fecha Registro': 'TOTAL', Estado: '' });
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 25 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 8 }, { wch: 7 }, { wch: 12 }, { wch: 14 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws, 'Pagos');
+      XLSX.writeFile(wb, `pagos_${insurerLabel}_${today}.xlsx`);
+    } catch (e) { console.error('Export Excel error:', e); }
+    setExporting(false);
+    onClose();
+  };
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+
+      doc.setFontSize(14);
+      doc.setTextColor(1, 1, 57);
+      doc.text('Líderes en Seguros — Pagos Seleccionados', 14, 15);
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text(`Fecha: ${today}  |  ${payments.length} pagos  |  Total: $${total.toFixed(2)}${insurerLabel !== 'VARIAS' ? `  |  Aseguradora: ${insurerLabel}` : ''}`, 14, 22);
+
+      autoTable(doc, {
+        startY: 28,
+        head: [['Cliente', 'Cédula', 'Póliza', 'Aseg.', 'Ramo', 'Cuota', 'Monto', 'Fecha', 'Estado']],
+        body: [
+          ...payments.map((p: any) => [
+            p.client_name || '', p.cedula || '', p.nro_poliza || '', p.insurer || '',
+            p.ramo || '', p.installment_num || 1, `$${Number(p.amount || 0).toFixed(2)}`,
+            p.payment_date || '', p.status || '',
+          ]),
+          ['', '', '', '', '', 'TOTAL', `$${total.toFixed(2)}`, '', ''],
+        ],
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [1, 1, 57], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [250, 250, 250] },
+      });
+
+      doc.save(`pagos_${insurerLabel}_${today}.pdf`);
+    } catch (e) { console.error('Export PDF error:', e); }
+    setExporting(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#010139]">Descargar Pagos ({payments.length})</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+        </div>
+        <p className="text-xs text-gray-500">Total seleccionado: <span className="font-bold text-[#8AAA19]">{fmtMoney(total)}</span></p>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={handleExportExcel} disabled={exporting}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-xl hover:border-[#8AAA19] hover:bg-green-50/50 transition-all cursor-pointer disabled:opacity-50">
+            <FaFileExport className="text-2xl text-green-600" />
+            <span className="text-xs font-bold text-[#010139]">Excel</span>
+            <span className="text-[10px] text-gray-400">.xlsx</span>
+          </button>
+          <button onClick={handleExportPdf} disabled={exporting}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-xl hover:border-red-300 hover:bg-red-50/50 transition-all cursor-pointer disabled:opacity-50">
+            <FaDownload className="text-2xl text-red-500" />
+            <span className="text-xs font-bold text-[#010139]">PDF</span>
+            <span className="text-[10px] text-gray-400">.pdf</span>
+          </button>
+        </div>
+        {exporting && <p className="text-[10px] text-center text-gray-400">Generando archivo...</p>}
+      </div>
     </div>
   );
 }
@@ -873,24 +935,25 @@ function HistorialBancoTab() {
             </button>
             {expanded === t.id && (
               <div className="px-3 pb-3 text-xs border-t border-gray-100 pt-2 space-y-2">
-                {/* Flex details */}
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
-                  <span className="text-gray-500">Recibido:</span><span className="font-bold">{fmtMoney(t.transfer_amount)}</span>
-                  <span className="text-gray-500">Aplicado:</span><span className="font-bold">{fmtMoney(t.used_amount)}</span>
-                  <span className="text-gray-500">Financ. extra:</span><span className="font-bold text-amber-600">{fmtMoney(t.flex_used)} ({t.flex_pct}%)</span>
-                  <span className="text-gray-500">Capacidad rest.:</span><span className="font-bold text-green-600">{fmtMoney(t.capacity_remaining)}</span>
-                </div>
                 {t.blocked_reason && <p className="text-red-600 text-[10px]"><FaLock className="inline mr-1" />Bloqueada: {t.blocked_reason}</p>}
-                {/* Usages */}
-                {t.usages && t.usages.length > 0 ? (
-                  <div className="space-y-1">
-                    <p className="font-semibold text-gray-600">Usos:</p>
-                    {t.usages.map((u: any, i: number) => (
-                      <p key={i} className="text-gray-500">Grupo {u.group_id?.slice(0, 8)}... — {fmtMoney(u.amount_used)}</p>
+                {t.notes && <p className="text-[10px] text-gray-500">Notas: {t.notes}</p>}
+                {/* Payment details */}
+                {t.payment_details && t.payment_details.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="font-semibold text-gray-600 text-[10px]">Pagos Aplicados ({t.payment_details.length}):</p>
+                    {t.payment_details.map((pd: any, i: number) => (
+                      <div key={i} className="bg-blue-50 rounded-lg p-2.5 border-l-4 border-[#8AAA19]">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-[11px] text-gray-900 truncate">{pd.client_name}</p>
+                            <p className="text-[10px] text-gray-600 mt-0.5">{pd.insurer} · {pd.nro_poliza || '—'}{pd.installment_num ? ` · Cuota ${pd.installment_num}` : ''}</p>
+                          </div>
+                          <span className="font-bold text-[11px] text-[#8AAA19] flex-shrink-0">{fmtMoney(pd.amount_applied)}</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                ) : <p className="text-gray-400 italic">Sin usos aún</p>}
-                {t.notes && <p className="text-gray-500">Notas: {t.notes}</p>}
+                ) : <p className="text-gray-400 italic text-[10px]">Sin pagos aplicados aún</p>}
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1 border-t border-gray-100">
                   <button onClick={() => { setCatModal({ id: t.id, ref: t.reference_number, current: t.category }); setCatForm({ category: t.category, is_paguelofacil: t.is_paguelofacil, notes: '' }); }}
@@ -971,22 +1034,28 @@ function HistorialBancoTab() {
                     </td>
                   </tr>
                   {expanded === t.id && (
-                    <tr key={t.id + '-detail'} className="bg-gray-50">
-                      <td colSpan={12} className="p-3 text-xs">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
-                          <div><span className="text-gray-500">Recibido:</span> <strong>{fmtMoney(t.transfer_amount)}</strong></div>
-                          <div><span className="text-gray-500">Aplicado:</span> <strong>{fmtMoney(t.used_amount)}</strong></div>
-                          <div><span className="text-gray-500">Financ. extra:</span> <strong className="text-amber-600">{fmtMoney(t.flex_used)} ({t.flex_pct}%)</strong></div>
-                          <div><span className="text-gray-500">Capacidad rest.:</span> <strong className="text-green-600">{fmtMoney(t.capacity_remaining)}</strong></div>
-                        </div>
-                        <FlexBar t={t} />
-                        {t.blocked_reason && <p className="text-red-600 text-[10px] mt-1"><FaLock className="inline mr-1" />Bloqueada: {t.blocked_reason}</p>}
-                        {t.usages && t.usages.length > 0 ? (
-                          <div className="mt-2"><strong>Usos:</strong>
-                            {t.usages.map((u: any, i: number) => <span key={i} className="ml-2">Grupo {u.group_id?.slice(0, 8)}... — {fmtMoney(u.amount_used)}</span>)}
+                    <tr key={t.id + '-detail'} className="bg-blue-50/50">
+                      <td colSpan={12} className="px-4 py-3">
+                        {t.blocked_reason && <p className="text-red-600 text-[10px] mb-2"><FaLock className="inline mr-1" />Bloqueada: {t.blocked_reason}</p>}
+                        {t.notes && <p className="text-[10px] text-gray-500 mb-2">Notas: {t.notes}</p>}
+                        {t.payment_details && t.payment_details.length > 0 ? (
+                          <div className="space-y-1.5">
+                            <h4 className="font-semibold text-xs text-[#010139] mb-2">Pagos Aplicados ({t.payment_details.length}):</h4>
+                            {t.payment_details.map((pd: any, i: number) => (
+                              <div key={i} className="bg-white rounded-lg p-2.5 border-l-4 border-[#8AAA19] flex items-center justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    <span className="font-medium text-xs text-gray-900">{pd.client_name}</span>
+                                    {pd.nro_poliza && <span className="text-[11px] text-gray-600 font-mono">{pd.nro_poliza}</span>}
+                                    <span className="text-[11px] text-gray-500">{pd.insurer}</span>
+                                    {pd.installment_num && <span className="text-[10px] text-gray-400">Cuota {pd.installment_num}</span>}
+                                  </div>
+                                </div>
+                                <span className="font-bold text-xs text-[#8AAA19] flex-shrink-0 ml-3">{fmtMoney(pd.amount_applied)}</span>
+                              </div>
+                            ))}
                           </div>
-                        ) : <p className="text-gray-400 italic mt-1">Sin usos aún</p>}
-                        {t.notes && <p className="mt-1 text-gray-500">Notas: {t.notes}</p>}
+                        ) : <p className="text-gray-400 italic text-xs">Sin pagos aplicados aún</p>}
                       </td>
                     </tr>
                   )}
@@ -1059,9 +1128,6 @@ function HistorialBancoTab() {
         </div>
       )}
 
-      {/* Reference Usage Ledger */}
-      <ReferenceLedger />
-
       {/* Categorize Modal */}
       {catModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1091,100 +1157,6 @@ function HistorialBancoTab() {
                 <span className="text-white">Guardar</span></button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Reference Usage Ledger sub-component ──
-function ReferenceLedger() {
-  const [open, setOpen] = useState(false);
-  const [ledger, setLedger] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [expandedRef, setExpandedRef] = useState<string | null>(null);
-
-  const loadLedger = async () => {
-    if (ledger.length > 0) { setOpen(!open); return; }
-    setLoading(true);
-    const res = await api({ tab: 'reference_ledger' });
-    if (res.success) setLedger(res.data.ledger || []);
-    setOpen(true);
-    setLoading(false);
-  };
-
-  // Group ledger entries by bank transfer
-  const byTransfer: Record<string, { transfer: any; entries: any[] }> = {};
-  ledger.forEach(entry => {
-    const tf = entry.adm_cot_bank_transfers;
-    if (!tf) return;
-    const key = tf.id;
-    if (!byTransfer[key]) byTransfer[key] = { transfer: tf, entries: [] };
-    byTransfer[key].entries.push(entry);
-  });
-  const transferGroups = Object.values(byTransfer).sort((a, b) =>
-    (b.transfer.transfer_date || '').localeCompare(a.transfer.transfer_date || ''));
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <button onClick={loadLedger}
-        className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors">
-        <div className="flex items-center gap-2">
-          <FaHistory className="text-[#010139] text-xs" />
-          <span className="text-xs font-semibold text-[#010139]">Libro de Uso de Referencias</span>
-          {loading && <FaSync className="text-gray-400 text-[10px] animate-spin" />}
-        </div>
-        {open ? <FaChevronUp className="text-gray-400 text-xs" /> : <FaChevronDown className="text-gray-400 text-xs" />}
-      </button>
-      {open && (
-        <div className="border-t border-gray-100 max-h-[50vh] overflow-y-auto">
-          {transferGroups.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">No hay referencias utilizadas aún</p>
-          ) : transferGroups.map(({ transfer: tf, entries }) => {
-            const totalUsed = entries.reduce((s: number, e: any) => s + Number(e.amount_used || 0), 0);
-            const isExpanded = expandedRef === tf.id;
-            return (
-              <div key={tf.id} className="border-b border-gray-50 last:border-0">
-                <button onClick={() => setExpandedRef(isExpanded ? null : tf.id)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer text-left">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-mono font-bold text-[#010139]">{tf.reference_number}</span>
-                    <span className="text-[10px] text-gray-400">{tf.bank_name}</span>
-                    <StatusBadge status={tf.status} />
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-[10px] text-gray-500">Usado: <strong className="text-[#010139]">{fmtMoney(totalUsed)}</strong> / {fmtMoney(tf.transfer_amount)}</p>
-                      <p className="text-[9px] text-gray-400">{entries.length} asignación(es)</p>
-                    </div>
-                    {isExpanded ? <FaChevronUp className="text-gray-300 text-[10px]" /> : <FaChevronDown className="text-gray-300 text-[10px]" />}
-                  </div>
-                </button>
-                {isExpanded && (
-                  <div className="px-3 pb-3 space-y-1.5">
-                    {entries.map((e: any, i: number) => (
-                      <div key={i} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-gray-500">Grupo #{(e.group_id || '').slice(0, 8)}… · {fmtMoney(e.amount_used)}</span>
-                          <span className="text-[10px] text-gray-400">{e.adm_cot_payment_groups?.notes || ''}</span>
-                        </div>
-                        {e.group_payments?.length > 0 && (
-                          <div className="mt-1.5 space-y-0.5">
-                            {e.group_payments.map((gp: any, j: number) => (
-                              <div key={j} className="flex items-center justify-between text-[10px]">
-                                <span className="text-gray-600 truncate">{gp.client_name} · <span className="font-mono">{gp.nro_poliza || '—'}</span></span>
-                                <span className="text-gray-500 flex-shrink-0">{gp.insurer} · {fmtMoney(gp.amount)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
     </div>
