@@ -6,12 +6,17 @@
 export type ISEnvironment = 'development' | 'production';
 
 /**
- * Default IS environment.
- * Uses 'development' (APIRestIsTester) — confirmed working by IS.
- * Production API (APIRestIs) requires IP whitelisting not yet configured.
+ * Auto-detect IS environment:
+ * - On Vercel: use 'production' (APIRestIs) — Vercel IPs whitelisted by IS
+ * - Locally: use 'development' (APIRestIsTester) — no IP restriction but has daily quotas
+ *
+ * IS Tester API returns RESOP:-3 when daily quota is exhausted.
+ * IS Production API returns 403 from non-whitelisted IPs (local dev).
  */
 export function getISDefaultEnv(): ISEnvironment {
-  return 'development';
+  const env: ISEnvironment = process.env.VERCEL ? 'production' : 'development';
+  console.log(`[IS Config] getISDefaultEnv() → ${env} (VERCEL=${process.env.VERCEL || 'undefined'})`);
+  return env;
 }
 
 /**
