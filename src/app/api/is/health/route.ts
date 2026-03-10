@@ -23,47 +23,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   };
 
-  // Test 1: Daily token
-  try {
-    const token = await getDailyTokenWithRetry(env);
-    results.token = token ? `OK (${token.length} chars)` : 'FAILED (null)';
-  } catch (e: any) {
-    results.token = `ERROR: ${e.message}`;
-  }
-
-  // Test 2: Catalog — getmarcas
-  try {
-    const t0 = Date.now();
-    const r = await isGet('/cotizaemisorauto/getmarcas', env);
-    results.catalog = {
-      success: r.success,
-      statusCode: r.statusCode,
-      count: Array.isArray(r.data) ? r.data.length : (r.data?.Table?.length ?? 'N/A'),
-      ms: Date.now() - t0,
-    };
-  } catch (e: any) {
-    results.catalog = `ERROR: ${e.message}`;
-  }
-
-  // Test 3: DT plans (getplanes/2)
-  try {
-    const r = await isGet('/cotizaemisorauto/getplanes/2', env);
-    const plans = r.data?.Table || [];
-    results.dtPlans = { count: plans.length, plans: plans.slice(0, 5).map((p: any) => `${p.TEXTO}=${p.DATO}`) };
-  } catch (e: any) {
-    results.dtPlans = `ERROR: ${e.message}`;
-  }
-
-  // Test 4: CC plans (getplanes/1)
-  try {
-    const r = await isGet('/cotizaemisorauto/getplanes/1', env);
-    const plans = r.data?.Table || [];
-    results.ccPlans = { count: plans.length, plans: plans.slice(0, 5).map((p: any) => `${p.TEXTO}=${p.DATO}`) };
-  } catch (e: any) {
-    results.ccPlans = `ERROR: ${e.message}`;
-  }
-
-  // Test 5: DT quote (plan 306, grupo 1=LIVIANO)
+  // Test 1: DT quote (plan 306) — runs first to warm up token cache
   try {
     const { generarCotizacionAuto } = await import('@/lib/is/quotes.service');
     const t0 = Date.now();
@@ -72,7 +32,7 @@ export async function GET() {
       nombre: 'HEALTH', apellido: 'CHECK', telefono: '60000000',
       correo: 'health@check.com', codMarca: 156, codModelo: 2563,
       anioAuto: String(new Date().getFullYear()), sumaAseg: '0',
-      codPlanCobertura: 306, codPlanCoberturaAdic: 0, codGrupoTarifa: 1,
+      codPlanCobertura: 306, codPlanCoberturaAdic: 0, codGrupoTarifa: 20,
       fecNacimiento: '01/01/1990', codProvincia: 8,
     }, env);
     results.quoteDT = { success: r.success, idCotizacion: r.idCotizacion || null, primaTotal: r.primaTotal || null, error: r.error || null, ms: Date.now() - t0 };
@@ -80,7 +40,7 @@ export async function GET() {
     results.quoteDT = `ERROR: ${e.message}`;
   }
 
-  // Test 6: CC quote (plan 29, grupo 20=PARTICULAR, sumaAseg=15000)
+  // Test 2: CC quote (plan 29, grupo 20=PARTICULAR, sumaAseg=15000)
   try {
     const { generarCotizacionAuto } = await import('@/lib/is/quotes.service');
     const t0 = Date.now();
@@ -95,6 +55,46 @@ export async function GET() {
     results.quoteCC = { success: r.success, idCotizacion: r.idCotizacion || null, primaTotal: r.primaTotal || null, error: r.error || null, ms: Date.now() - t0 };
   } catch (e: any) {
     results.quoteCC = `ERROR: ${e.message}`;
+  }
+
+  // Test 3: Daily token (after quotes warmed up the cache)
+  try {
+    const token = await getDailyTokenWithRetry(env);
+    results.token = token ? `OK (${token.length} chars)` : 'FAILED (null)';
+  } catch (e: any) {
+    results.token = `ERROR: ${e.message}`;
+  }
+
+  // Test 4: Catalog — getmarcas (uses token from cache)
+  try {
+    const t0 = Date.now();
+    const r = await isGet('/cotizaemisorauto/getmarcas', env);
+    results.catalog = {
+      success: r.success,
+      statusCode: r.statusCode,
+      count: Array.isArray(r.data) ? r.data.length : (r.data?.Table?.length ?? 'N/A'),
+      ms: Date.now() - t0,
+    };
+  } catch (e: any) {
+    results.catalog = `ERROR: ${e.message}`;
+  }
+
+  // Test 5: DT plans (getplanes/2)
+  try {
+    const r = await isGet('/cotizaemisorauto/getplanes/2', env);
+    const plans = r.data?.Table || [];
+    results.dtPlans = { count: plans.length, plans: plans.slice(0, 5).map((p: any) => `${p.TEXTO}=${p.DATO}`) };
+  } catch (e: any) {
+    results.dtPlans = `ERROR: ${e.message}`;
+  }
+
+  // Test 6: CC plans (getplanes/1)
+  try {
+    const r = await isGet('/cotizaemisorauto/getplanes/1', env);
+    const plans = r.data?.Table || [];
+    results.ccPlans = { count: plans.length, plans: plans.slice(0, 5).map((p: any) => `${p.TEXTO}=${p.DATO}`) };
+  } catch (e: any) {
+    results.ccPlans = `ERROR: ${e.message}`;
   }
 
   return NextResponse.json(results);
