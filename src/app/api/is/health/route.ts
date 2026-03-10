@@ -5,17 +5,20 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getISDefaultEnv, getISBaseUrl, getISPrimaryToken } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv, getISBaseUrl } from '@/lib/is/config';
 import { getDailyTokenWithRetry } from '@/lib/is/token-manager';
 import { isGet } from '@/lib/is/http-client';
 
 export const maxDuration = 60;
 
 export async function GET() {
-  const env = getISDefaultEnv();
-  const baseUrl = getISBaseUrl(env);
+  // Force test BOTH environments to compare
+  const defaultEnv = getISDefaultEnv();
+  const testEnv: ISEnvironment = 'development'; // Always test Tester API too
+  const baseUrl = getISBaseUrl(testEnv);
   const results: Record<string, any> = {
-    env,
+    defaultEnv,
+    testEnv,
     baseUrl,
     VERCEL: process.env.VERCEL || 'undefined',
     VERCEL_ENV: process.env.VERCEL_ENV || 'undefined',
@@ -24,7 +27,7 @@ export async function GET() {
 
   // Test 1: Token
   try {
-    const token = await getDailyTokenWithRetry(env);
+    const token = await getDailyTokenWithRetry(testEnv);
     results.token = token ? `OK (${token.length} chars)` : 'FAILED (null)';
   } catch (e: any) {
     results.token = `ERROR: ${e.message}`;
@@ -33,7 +36,7 @@ export async function GET() {
   // Test 2: Simple catalog call (getmarcas — lightweight)
   try {
     const t0 = Date.now();
-    const r = await isGet('/cotizaemisorauto/getmarcas', env);
+    const r = await isGet('/cotizaemisorauto/getmarcas', testEnv);
     results.catalog = {
       success: r.success,
       statusCode: r.statusCode,
@@ -65,7 +68,7 @@ export async function GET() {
       codGrupoTarifa: 20,
       fecNacimiento: '01/01/1990',
       codProvincia: 8,
-    }, env);
+    }, testEnv);
     results.quote = {
       success: r.success,
       idCotizacion: r.idCotizacion || null,
