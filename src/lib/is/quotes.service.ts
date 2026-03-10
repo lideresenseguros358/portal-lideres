@@ -254,7 +254,7 @@ async function _callGenerarCotizacion(
     IDCOT: number;
     NROCOT: number;
     PTOTAL: number | null;
-  }> }>(IS_ENDPOINTS.GENERAR_COTIZACION, body, env);
+  }> }>(IS_ENDPOINTS.GENERAR_COTIZACION, body, env, { timeout: 45_000 });
   
   if (!response.success) {
     console.error('[IS Quotes] Error generando cotización:', response.error);

@@ -373,11 +373,13 @@ export async function isRequest<T = any>(
       
     } catch (error: any) {
       lastError = error;
-      console.error(`[IS] Error en request (attempt ${attempt + 1}):`, error.message);
+      const isTimeout = error.message?.includes('timeout') || error.name === 'TimeoutError' || error.name === 'AbortError';
+      console.error(`[IS] Error en request (attempt ${attempt + 1}):`, error.message, isTimeout ? '(TIMEOUT)' : '');
       
-      // Si es timeout o network error, reintentar solo GET
-      if (method === 'GET' && attempt < RETRY_CONFIG.maxRetries) {
+      // Reintentar en timeout/network error — tanto GET como POST (IS server es lento)
+      if (isTimeout && attempt < RETRY_CONFIG.maxRetries) {
         const delay = getBackoffDelay(attempt);
+        console.log(`[IS] ${method} timeout, reintentando en ${Math.round(delay)}ms... (attempt ${attempt + 2}/${RETRY_CONFIG.maxRetries + 1})`);
         await sleep(delay);
         continue;
       }

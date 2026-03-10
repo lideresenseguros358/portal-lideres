@@ -14,7 +14,7 @@ interface ThirdPartyComparisonProps {
 // ── Cache helpers ──
 const CACHE_KEY = 'tp_plans_cache_v3';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — plans/benefits rarely change
-const API_TIMEOUT = 15_000; // 15s max per API call — don't block UI if a provider is down
+const API_TIMEOUT = 60_000; // 60s max per API call — IS needs time for token + retries on slow server
 
 interface ApiCache {
   fedpa: any | null;
