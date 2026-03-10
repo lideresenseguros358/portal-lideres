@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FaCheck, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
+import { FaCheck, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -172,6 +172,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     return AUTO_THIRD_PARTY_INSURERS;
   });
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
+  const [offlineInsurers, setOfflineInsurers] = useState<Record<string, boolean>>({});
   const fetchingRef = useRef(false);
 
   // Silent background refresh — NEVER shows loading/skeleton/banner
@@ -197,6 +198,16 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
           writeCache(finalFedpa, finalIs, finalRegional);
           setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, finalFedpa, finalIs, finalRegional));
+
+          // Detect offline insurers from API responses
+          const offline: Record<string, boolean> = {};
+          // FEDPA: null response = fetch failed/timeout, or success:false
+          if (!finalFedpa || finalFedpa.online === false || !finalFedpa.success) offline['fedpa'] = true;
+          // IS: online flag explicitly set by backend
+          if (!finalIs || finalIs.online === false) offline['internacional'] = true;
+          // REGIONAL: online flag explicitly set by backend
+          if (!finalRegional || finalRegional.online === false) offline['regional'] = true;
+          setOfflineInsurers(offline);
         }
       } catch (error) {
         console.error('[ThirdParty] Error refrescando planes:', error);
@@ -445,47 +456,59 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         )}
 
         {/* Emit Button */}
-        <button
-          onClick={() => handlePlanClick(insurer, plan, type)}
-          disabled={generatingQuote}
-          className={`w-full px-4 sm:px-6 py-3 rounded-xl transition-all font-bold group flex items-center justify-center gap-2 text-sm sm:text-base ${
-            isPremium
-              ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-2xl text-white'
-              : 'bg-gradient-to-r from-[#010139] to-[#020270] hover:shadow-lg text-white'
-          } ${generatingQuote ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {generatingQuote ? (
-            <><FaSpinner className="animate-spin" /> Procesando...</>
-          ) : (
-            <><span>Emitir Ahora</span><FaArrowRight className="group-hover:translate-x-1 transition-transform" /></>
-          )}
-        </button>
+        {offlineInsurers[insurer.id] ? (
+          <div className="w-full px-4 sm:px-6 py-3 rounded-xl bg-gray-200 text-gray-500 font-bold flex items-center justify-center gap-2 text-sm sm:text-base cursor-not-allowed">
+            <FaExclamationTriangle className="text-red-400" />
+            <span>No disponible — servidor offline</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => handlePlanClick(insurer, plan, type)}
+            disabled={generatingQuote}
+            className={`w-full px-4 sm:px-6 py-3 rounded-xl transition-all font-bold group flex items-center justify-center gap-2 text-sm sm:text-base ${
+              isPremium
+                ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-2xl text-white'
+                : 'bg-gradient-to-r from-[#010139] to-[#020270] hover:shadow-lg text-white'
+            } ${generatingQuote ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {generatingQuote ? (
+              <><FaSpinner className="animate-spin" /> Procesando...</>
+            ) : (
+              <><span>Emitir Ahora</span><FaArrowRight className="group-hover:translate-x-1 transition-transform" /></>
+            )}
+          </button>
+        )}
       </div>
     );
   };
 
   return (
-    <>
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {insurersData.map((insurer) => (
-          <div key={insurer.id} className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl transition-all duration-300 overflow-hidden">
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      {insurersData.map((insurer) => {
+        const isOffline = !!offlineInsurers[insurer.id];
+        return (
+          <div key={insurer.id} className={`bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl'}`}>
             {/* Header */}
-            <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-6 text-white">
+            <div className={`p-6 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
               <div className="flex items-center gap-4 mb-4">
                 <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
                 <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
+                {isOffline && (
+                  <span className="inline-flex items-center gap-1.5 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
+                    <FaExclamationTriangle className="text-[10px]" /> OFFLINE
+                  </span>
+                )}
               </div>
               <div className="text-sm text-white/80 font-medium">
-                Emisión inmediata • Sin inspección
+                {isOffline ? 'Servidor no disponible' : 'Emisión inmediata • Sin inspección'}
               </div>
             </div>
 
             {renderPlanSection(insurer, insurer.basicPlan, 'basic', false)}
             {renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)}
           </div>
-        ))}
-      </div>
-
-    </>
+        );
+      })}
+    </div>
   );
 }

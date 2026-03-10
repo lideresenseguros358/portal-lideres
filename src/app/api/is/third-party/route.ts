@@ -141,9 +141,16 @@ async function fetchAllPlans() {
     fetchPlan(PLAN_INTERMEDIO, 'development'),
   ]);
 
+  // If both plans failed, mark insurer as offline
+  const isOnline = !!(basicResult || premiumResult);
+  if (!isOnline) {
+    console.warn('[API IS Third Party] ⚠️ OFFLINE — ambos planes fallaron');
+  }
+
   const result = {
     success: true,
-    source: 'IS API (generarcotizacion + getlistacoberturas)',
+    online: isOnline,
+    source: isOnline ? 'IS API (generarcotizacion + getlistacoberturas)' : 'fallback (IS offline)',
     timestamp: new Date().toISOString(),
     plans: [
       {
@@ -216,7 +223,8 @@ export async function GET() {
     // Return fallback so UI doesn't break
     return NextResponse.json({
       success: true,
-      source: 'fallback',
+      online: false,
+      source: 'fallback (error)',
       timestamp: new Date().toISOString(),
       plans: [
         {

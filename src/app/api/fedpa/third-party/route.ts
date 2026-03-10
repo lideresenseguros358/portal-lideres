@@ -148,6 +148,7 @@ export async function GET(request: NextRequest) {
 
     const result = {
       success: true,
+      online: true,
       source: 'FEDPA API (get_cotizacion plan 426 - Opción A y C)',
       idCotizacionBasic,
       idCotizacionPremium,

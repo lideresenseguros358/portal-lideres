@@ -15,7 +15,7 @@ import {
   parseEndosoBeneficiosFromAPI,
 } from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
-import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
+import { FaCar, FaCompressArrowsAlt, FaExclamationTriangle } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
@@ -1008,6 +1008,7 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
   const [quoteData, setQuoteData] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [offlineInsurers, setOfflineInsurers] = useState<string[]>([]);
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -1155,9 +1156,22 @@ export default function ComparePage() {
             toast.error('Error al obtener cotizaciones de REGIONAL');
           }
           
+          // Track offline insurers for UI
+          const offline: string[] = [];
+          const hasIS = realQuotes.some(q => q.insurerName?.includes('INTERNACIONAL'));
+          const hasFEDPA = realQuotes.some(q => q.insurerName?.includes('FEDPA'));
+          const hasREGIONAL = realQuotes.some(q => q.insurerName?.includes('Regional'));
+          if (!hasIS) offline.push('INTERNACIONAL de Seguros');
+          if (!hasFEDPA) offline.push('FEDPA Seguros');
+          if (!hasREGIONAL) offline.push('La Regional de Seguros');
+          setOfflineInsurers(offline);
+
           if (realQuotes.length > 0) {
             setQuotes(realQuotes);
-            toast.success(`${realQuotes.length} cotización(es) generada(s): IS, FEDPA y REGIONAL`);
+            if (offline.length > 0) {
+              toast.warning(`${offline.length} aseguradora(s) no disponible(s): ${offline.join(', ')}`);
+            }
+            toast.success(`${realQuotes.length} cotización(es) generada(s)`);
           } else {
             toast.error('No se pudieron generar cotizaciones. Intenta nuevamente.');
           }
@@ -1212,6 +1226,7 @@ export default function ComparePage() {
           policyType={policyType}
           quotes={quotes}
           quoteData={quoteData}
+          offlineInsurers={offlineInsurers}
         />
       </div>
     </div>

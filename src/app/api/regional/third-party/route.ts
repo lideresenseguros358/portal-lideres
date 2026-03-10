@@ -167,6 +167,11 @@ async function fetchAllPlans() {
   const basic = basicPlan || basicFallback;
   const premium = premiumPlan || premiumFallback;
 
+  const isOnline = !!(basic || premium);
+  if (!isOnline) {
+    console.warn('[API REGIONAL Third Party] ⚠️ OFFLINE — no se encontraron planes');
+  }
+
   const buildPlanResponse = (plan: any | null, planType: string, fallbackPrice: number, fallbackName: string) => {
     const fallbackCoverages = planType === 'basic' ? REGIONAL_BASIC_COVERAGES : REGIONAL_PREMIUM_COVERAGES;
     const fallbackBenefits = planType === 'basic' ? REGIONAL_BASIC_BENEFITS : REGIONAL_PREMIUM_BENEFITS;
@@ -205,7 +210,8 @@ async function fetchAllPlans() {
 
   const result = {
     success: true,
-    source: 'REGIONAL API (planesRc)',
+    online: isOnline,
+    source: isOnline ? 'REGIONAL API (planesRc)' : 'fallback (REGIONAL offline)',
     timestamp: new Date().toISOString(),
     plans: [
       buildPlanResponse(basic, 'basic', FALLBACK_BASIC_PRICE, 'Soat Basico'),
@@ -245,7 +251,8 @@ export async function GET() {
     console.error('[API REGIONAL Third Party] Error:', error);
     return NextResponse.json({
       success: true,
-      source: 'fallback',
+      online: false,
+      source: 'fallback (error)',
       timestamp: new Date().toISOString(),
       plans: [
         {
