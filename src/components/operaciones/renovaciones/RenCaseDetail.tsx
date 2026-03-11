@@ -267,6 +267,7 @@ export default function RenCaseDetail({
   onShowHistory, onSendEmail, onSendPaymentLink, masters,
 }: CaseDetailProps) {
   const [showReassign, setShowReassign] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [activeView, setActiveView] = useState<'history' | 'compose' | 'payment_link'>('history');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [emailBody, setEmailBody] = useState('');
@@ -324,10 +325,13 @@ export default function RenCaseDetail({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* ── Header ── */}
-      <div className="bg-[#010139] text-white px-4 py-3.5 flex-shrink-0">
+      {/* ── Header (clickable to toggle details) ── */}
+      <div
+        className="bg-[#010139] text-white px-4 py-3.5 flex-shrink-0 cursor-pointer select-none"
+        onClick={() => setDetailsOpen((v) => !v)}
+      >
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="lg:hidden text-white/60 hover:text-white cursor-pointer transition-colors duration-150">
+          <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="lg:hidden text-white/60 hover:text-white cursor-pointer transition-colors duration-150">
             <FaArrowLeft />
           </button>
           <div className="flex-1 min-w-0">
@@ -355,12 +359,13 @@ export default function RenCaseDetail({
             </div>
           </div>
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <button onClick={onShowHistory} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150" title="Ver Historial">
+            <button onClick={(e) => { e.stopPropagation(); onShowHistory(); }} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150" title="Ver Historial">
               <FaHistory className="text-xs" />
             </button>
-            <button onClick={onRefresh} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150">
+            <button onClick={(e) => { e.stopPropagation(); onRefresh(); }} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150">
               <FaSync className={`text-[10px] ${loading ? 'animate-spin' : ''}`} />
             </button>
+            <FaChevronDown className={`text-[10px] text-white/40 transition-transform duration-200 ${detailsOpen ? 'rotate-180' : ''}`} />
           </div>
         </div>
       </div>
@@ -430,91 +435,96 @@ export default function RenCaseDetail({
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {/* Info cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <InfoCard label="Fecha Vigencia" value={fmtDate(c.renewal_date)} icon={<FaCalendarAlt />} />
-          <InfoCard label="Aseguradora" value={c.insurer_name || '—'} icon={<FaShieldAlt />} />
-          <InfoCard label="Ramo" value={c.ramo || '—'} icon={<FaFileAlt />} />
-          <InfoCard
-            label="Primera Respuesta"
-            value={c.first_response_at ? fmtDateTime(c.first_response_at) : 'Pendiente'}
-            icon={<FaClock />}
-            critical={!c.first_response_at && !isClosed}
-          />
-        </div>
-
-        {/* Aplazado info */}
-        {c.status === 'aplazado' && c.aplazado_until && (
-          <div className={`rounded-lg p-3 flex items-center gap-3 ${
-            new Date(c.aplazado_until) < new Date() ? 'bg-orange-50 border border-orange-200' : 'bg-amber-50 border border-amber-200'
-          }`}>
-            <FaClock className={new Date(c.aplazado_until) < new Date() ? 'text-orange-500' : 'text-amber-500'} />
-            <div>
-              <p className="text-xs font-bold text-gray-800">Aplazado hasta: {fmtDate(c.aplazado_until)}</p>
-              {new Date(c.aplazado_until) < new Date() && (
-                <p className="text-[10px] text-orange-700 font-medium">⚠ Fecha de aplazamiento vencida</p>
-              )}
+        {/* ── Collapsible details section ── */}
+        {detailsOpen && (
+          <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+            {/* Info cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <InfoCard label="Fecha Vigencia" value={fmtDate(c.renewal_date)} icon={<FaCalendarAlt />} />
+              <InfoCard label="Aseguradora" value={c.insurer_name || '—'} icon={<FaShieldAlt />} />
+              <InfoCard label="Ramo" value={c.ramo || '—'} icon={<FaFileAlt />} />
+              <InfoCard
+                label="Primera Respuesta"
+                value={c.first_response_at ? fmtDateTime(c.first_response_at) : 'Pendiente'}
+                icon={<FaClock />}
+                critical={!c.first_response_at && !isClosed}
+              />
             </div>
-          </div>
-        )}
 
-        {/* Closed — Renovado */}
-        {c.status === 'cerrado_renovado' && (
-          <div className="rounded-lg p-3 bg-green-50 border border-green-200">
-            <p className="text-xs font-bold text-green-800 mb-1">✅ Renovación Confirmada</p>
-            {c.new_start_date && (
-              <p className="text-[10px] text-green-700">Nueva vigencia: {fmtDate(c.new_start_date)} → {fmtDate(c.new_end_date)}</p>
+            {/* Aplazado info */}
+            {c.status === 'aplazado' && c.aplazado_until && (
+              <div className={`rounded-lg p-3 flex items-center gap-3 ${
+                new Date(c.aplazado_until) < new Date() ? 'bg-orange-50 border border-orange-200' : 'bg-amber-50 border border-amber-200'
+              }`}>
+                <FaClock className={new Date(c.aplazado_until) < new Date() ? 'text-orange-500' : 'text-amber-500'} />
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Aplazado hasta: {fmtDate(c.aplazado_until)}</p>
+                  {new Date(c.aplazado_until) < new Date() && (
+                    <p className="text-[10px] text-orange-700 font-medium">⚠ Fecha de aplazamiento vencida</p>
+                  )}
+                </div>
+              </div>
             )}
-            <p className="text-[10px] text-green-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
-          </div>
-        )}
 
-        {/* Closed — Cancelado */}
-        {c.status === 'cerrado_cancelado' && (
-          <div className="rounded-lg p-3 bg-red-50 border border-red-200">
-            <p className="text-xs font-bold text-red-800 mb-1">❌ Cancelado</p>
-            {c.cancellation_reason && <p className="text-[10px] text-red-700">Motivo: {c.cancellation_reason}</p>}
-            <p className="text-[10px] text-red-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
-          </div>
-        )}
+            {/* Closed — Renovado */}
+            {c.status === 'cerrado_renovado' && (
+              <div className="rounded-lg p-3 bg-green-50 border border-green-200">
+                <p className="text-xs font-bold text-green-800 mb-1">✅ Renovación Confirmada</p>
+                {c.new_start_date && (
+                  <p className="text-[10px] text-green-700">Nueva vigencia: {fmtDate(c.new_start_date)} → {fmtDate(c.new_end_date)}</p>
+                )}
+                <p className="text-[10px] text-green-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
+              </div>
+            )}
 
-        {/* ── Status transition buttons ── */}
-        {!isClosed && validTransitions.length > 0 && (
-          <div className="flex flex-wrap gap-2 items-center">
-            {validTransitions.map((target) => {
-              if (target === 'cerrado_renovado') {
-                return (
-                  <button
-                    key={target}
-                    onClick={onConfirmRenewal}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 cursor-pointer transition-all duration-150"
-                  >
-                    <FaCheckCircle className="text-[10px]" /> Renovado
-                  </button>
-                );
-              }
-              if (target === 'cerrado_cancelado') {
-                return (
-                  <button
-                    key={target}
-                    onClick={onCancel}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 cursor-pointer transition-all duration-150"
-                  >
-                    <FaTimesCircle className="text-[10px]" /> Cancelado
-                  </button>
-                );
-              }
-              const colors = STATUS_COLORS[target];
-              return (
-                <button
-                  key={target}
-                  onClick={() => onStatusChange(target)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-150 border ${colors.bg} ${colors.text} hover:opacity-80`}
-                >
-                  <FaArrowRight className="text-[8px]" /> {STATUS_LABELS[target]}
-                </button>
-              );
-            })}
+            {/* Closed — Cancelado */}
+            {c.status === 'cerrado_cancelado' && (
+              <div className="rounded-lg p-3 bg-red-50 border border-red-200">
+                <p className="text-xs font-bold text-red-800 mb-1">❌ Cancelado</p>
+                {c.cancellation_reason && <p className="text-[10px] text-red-700">Motivo: {c.cancellation_reason}</p>}
+                <p className="text-[10px] text-red-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
+              </div>
+            )}
+
+            {/* ── Status transition buttons ── */}
+            {!isClosed && validTransitions.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center">
+                {validTransitions.map((target) => {
+                  if (target === 'cerrado_renovado') {
+                    return (
+                      <button
+                        key={target}
+                        onClick={onConfirmRenewal}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 cursor-pointer transition-all duration-150"
+                      >
+                        <FaCheckCircle className="text-[10px]" /> Renovado
+                      </button>
+                    );
+                  }
+                  if (target === 'cerrado_cancelado') {
+                    return (
+                      <button
+                        key={target}
+                        onClick={onCancel}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 cursor-pointer transition-all duration-150"
+                      >
+                        <FaTimesCircle className="text-[10px]" /> Cancelado
+                      </button>
+                    );
+                  }
+                  const colors = STATUS_COLORS[target];
+                  return (
+                    <button
+                      key={target}
+                      onClick={() => onStatusChange(target)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-150 border ${colors.bg} ${colors.text} hover:opacity-80`}
+                    >
+                      <FaArrowRight className="text-[8px]" /> {STATUS_LABELS[target]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

@@ -323,6 +323,7 @@ export default function UrgCaseDetail({
   onAddNote, onReEvaluate, onOpenChat, onSendEmail, onSendPaymentLink, masters,
 }: CaseDetailProps) {
   const [showReassign, setShowReassign] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [activeView, setActiveView] = useState<'history' | 'compose' | 'payment_link'>('history');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [emailBody, setEmailBody] = useState('');
@@ -390,10 +391,13 @@ export default function UrgCaseDetail({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* ── Header ── */}
-      <div className="bg-[#010139] text-white px-4 py-3.5 flex-shrink-0">
+      {/* ── Header (clickable to toggle details) ── */}
+      <div
+        className="bg-[#010139] text-white px-4 py-3.5 flex-shrink-0 cursor-pointer select-none"
+        onClick={() => setDetailsOpen((v) => !v)}
+      >
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="lg:hidden text-white/60 hover:text-white cursor-pointer transition-colors duration-150">
+          <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="lg:hidden text-white/60 hover:text-white cursor-pointer transition-colors duration-150">
             <FaArrowLeft />
           </button>
           <div className="flex-1 min-w-0">
@@ -424,19 +428,20 @@ export default function UrgCaseDetail({
           <div className="flex items-center gap-2.5 flex-shrink-0">
             {chatLink && (
               <button
-                onClick={onOpenChat}
+                onClick={(e) => { e.stopPropagation(); onOpenChat(); }}
                 className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150"
                 title="Abrir Chat ADM COT"
               >
                 <FaExternalLinkAlt className="text-xs" />
               </button>
             )}
-            <button onClick={onShowHistory} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150" title="Historial">
+            <button onClick={(e) => { e.stopPropagation(); onShowHistory(); }} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150" title="Historial">
               <FaHistory className="text-xs" />
             </button>
-            <button onClick={onRefresh} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150">
+            <button onClick={(e) => { e.stopPropagation(); onRefresh(); }} className="text-white/30 hover:text-white/80 cursor-pointer transition-colors duration-150">
               <FaSync className={`text-[10px] ${loading ? 'animate-spin' : ''}`} />
             </button>
+            <FaChevronDown className={`text-[10px] text-white/40 transition-transform duration-200 ${detailsOpen ? 'rotate-180' : ''}`} />
           </div>
         </div>
       </div>
@@ -518,107 +523,112 @@ export default function UrgCaseDetail({
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {/* Info cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <InfoCard label="Categoría" value={c.category || '—'} icon={<FaFire />} />
-          <InfoCard label="Severidad" value={c.severity === 'high' ? 'Alta' : c.severity === 'medium' ? 'Media' : 'Baja'} icon={<FaExclamationTriangle />} critical={c.severity === 'high'} />
-          <InfoCard
-            label="Primera Respuesta"
-            value={c.first_response_at ? fmtDateTime(c.first_response_at) : 'Pendiente'}
-            icon={<FaClock />}
-            critical={!c.first_response_at && !isClosed}
-          />
-          <InfoCard
-            label="SLA Hábil"
-            value={`${Math.round(businessHours)}h / 24h`}
-            icon={<FaClock />}
-            critical={slaSt === 'breached' || slaSt === 'critical'}
-          />
-        </div>
-
-        {/* ── Source-aware action block ── */}
-        {isChat && chatLink && (
-          <div className="space-y-2">
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center gap-2.5">
-              <FaCommentDots className="text-indigo-400 text-sm flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-indigo-800">Urgencia detectada desde Chat</p>
-                <p className="text-[10px] text-indigo-600 mt-0.5">Vertex AI categorizó este caso como urgente. Atiéndelo desde el módulo de Chats en ADM COT.</p>
-              </div>
+        {/* ── Collapsible details section ── */}
+        {detailsOpen && (
+          <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+            {/* Info cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <InfoCard label="Categoría" value={c.category || '—'} icon={<FaFire />} />
+              <InfoCard label="Severidad" value={c.severity === 'high' ? 'Alta' : c.severity === 'medium' ? 'Media' : 'Baja'} icon={<FaExclamationTriangle />} critical={c.severity === 'high'} />
+              <InfoCard
+                label="Primera Respuesta"
+                value={c.first_response_at ? fmtDateTime(c.first_response_at) : 'Pendiente'}
+                icon={<FaClock />}
+                critical={!c.first_response_at && !isClosed}
+              />
+              <InfoCard
+                label="SLA Hábil"
+                value={`${Math.round(businessHours)}h / 24h`}
+                icon={<FaClock />}
+                critical={slaSt === 'breached' || slaSt === 'critical'}
+              />
             </div>
-            <button
-              onClick={onOpenChat}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#010139] text-white rounded-lg text-sm font-bold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
-            >
-              <FaExternalLinkAlt className="text-xs" />
-              Ir a ADM COT — Atender Chat
-            </button>
-          </div>
-        )}
 
-        {isEmail && (
-          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">
-            <FaEnvelope className="text-teal-400 text-sm flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-teal-800">Urgencia detectada desde Correo</p>
-              <p className="text-[10px] text-teal-600 mt-0.5">Vertex AI categorizó este correo como urgente. Responde por correo desde aquí.</p>
-            </div>
-          </div>
-        )}
-
-        {/* Closed — Resuelto */}
-        {c.status === 'resuelto' && (
-          <div className="rounded-lg p-3 bg-green-50 border border-green-200">
-            <p className="text-xs font-bold text-green-800 mb-1">✅ Urgencia Resuelta</p>
-            <p className="text-[10px] text-green-600">Resuelto: {fmtDateTime(c.closed_at)}</p>
-          </div>
-        )}
-
-        {/* Closed — Cerrado */}
-        {c.status === 'cerrado' && (
-          <div className="rounded-lg p-3 bg-gray-50 border border-gray-200">
-            <p className="text-xs font-bold text-gray-800 mb-1">🔒 Urgencia Cerrada</p>
-            <p className="text-[10px] text-gray-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
-          </div>
-        )}
-
-        {/* ── Status transition buttons ── */}
-        {!isClosed && validTransitions.length > 0 && (
-          <div className="flex flex-wrap gap-2 items-center">
-            {validTransitions.map((target) => {
-              if (target === 'cerrado') {
-                return (
-                  <button
-                    key={target}
-                    onClick={() => onStatusChange(target)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 cursor-pointer transition-all duration-150"
-                  >
-                    <FaTimesCircle className="text-[10px]" /> Cerrar
-                  </button>
-                );
-              }
-              if (target === 'resuelto') {
-                return (
-                  <button
-                    key={target}
-                    onClick={() => onStatusChange(target)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 cursor-pointer transition-all duration-150"
-                  >
-                    <FaCheckCircle className="text-[10px]" /> Resuelto
-                  </button>
-                );
-              }
-              const colors = STATUS_COLORS[target] || { bg: 'bg-gray-100', text: 'text-gray-600' };
-              return (
+            {/* ── Source-aware action block ── */}
+            {isChat && chatLink && (
+              <div className="space-y-2">
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center gap-2.5">
+                  <FaCommentDots className="text-indigo-400 text-sm flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-indigo-800">Urgencia detectada desde Chat</p>
+                    <p className="text-[10px] text-indigo-600 mt-0.5">Vertex AI categorizó este caso como urgente. Atiéndelo desde el módulo de Chats en ADM COT.</p>
+                  </div>
+                </div>
                 <button
-                  key={target}
-                  onClick={() => onStatusChange(target)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-150 border ${colors.bg} ${colors.text} hover:opacity-80`}
+                  onClick={onOpenChat}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#010139] text-white rounded-lg text-sm font-bold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
                 >
-                  <FaArrowRight className="text-[8px]" /> {STATUS_LABELS[target] || target}
+                  <FaExternalLinkAlt className="text-xs" />
+                  Ir a ADM COT — Atender Chat
                 </button>
-              );
-            })}
+              </div>
+            )}
+
+            {isEmail && (
+              <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">
+                <FaEnvelope className="text-teal-400 text-sm flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-teal-800">Urgencia detectada desde Correo</p>
+                  <p className="text-[10px] text-teal-600 mt-0.5">Vertex AI categorizó este correo como urgente. Responde por correo desde aquí.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Closed — Resuelto */}
+            {c.status === 'resuelto' && (
+              <div className="rounded-lg p-3 bg-green-50 border border-green-200">
+                <p className="text-xs font-bold text-green-800 mb-1">✅ Urgencia Resuelta</p>
+                <p className="text-[10px] text-green-600">Resuelto: {fmtDateTime(c.closed_at)}</p>
+              </div>
+            )}
+
+            {/* Closed — Cerrado */}
+            {c.status === 'cerrado' && (
+              <div className="rounded-lg p-3 bg-gray-50 border border-gray-200">
+                <p className="text-xs font-bold text-gray-800 mb-1">🔒 Urgencia Cerrada</p>
+                <p className="text-[10px] text-gray-600">Cerrado: {fmtDateTime(c.closed_at)}</p>
+              </div>
+            )}
+
+            {/* ── Status transition buttons ── */}
+            {!isClosed && validTransitions.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center">
+                {validTransitions.map((target) => {
+                  if (target === 'cerrado') {
+                    return (
+                      <button
+                        key={target}
+                        onClick={() => onStatusChange(target)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 cursor-pointer transition-all duration-150"
+                      >
+                        <FaTimesCircle className="text-[10px]" /> Cerrar
+                      </button>
+                    );
+                  }
+                  if (target === 'resuelto') {
+                    return (
+                      <button
+                        key={target}
+                        onClick={() => onStatusChange(target)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 cursor-pointer transition-all duration-150"
+                      >
+                        <FaCheckCircle className="text-[10px]" /> Resuelto
+                      </button>
+                    );
+                  }
+                  const colors = STATUS_COLORS[target] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+                  return (
+                    <button
+                      key={target}
+                      onClick={() => onStatusChange(target)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-150 border ${colors.bg} ${colors.text} hover:opacity-80`}
+                    >
+                      <FaArrowRight className="text-[8px]" /> {STATUS_LABELS[target] || target}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

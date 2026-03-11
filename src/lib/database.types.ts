@@ -8764,6 +8764,7 @@ export type Database = {
           recurrence_status: string | null
           renewal_date: string | null
           total_installments: number | null
+          paid_installments: number | null
         }
         Relationships: []
       }

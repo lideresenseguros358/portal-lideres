@@ -280,6 +280,7 @@ export interface OpsMorosidadRow {
   next_due_date: string | null;
   total_installments: number | null;
   installment_amount: number | null;
+  paid_installments: number;
   morosidad_status: OpsMorosidadStatus;
   days_overdue: number;
 }

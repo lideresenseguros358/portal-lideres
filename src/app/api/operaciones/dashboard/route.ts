@@ -29,7 +29,8 @@ export async function GET() {
       sessionsToday,
       renProximas,
       urgRecientes,
-      activityToday,
+      activityForTimeline,
+      allActivityToday,
     ] = await Promise.all([
       // 1. Renovaciones pendientes (not closed)
       supabase
@@ -104,7 +105,7 @@ export async function GET() {
         .order('created_at', { ascending: false })
         .limit(6),
 
-      // 11. Activity today (for team activity section)
+      // 11. Activity today — limited for UI timeline
       supabase
         .from('ops_activity_log')
         .select('id, user_id, action_type, entity_type, created_at, metadata')
@@ -112,16 +113,52 @@ export async function GET() {
         .lte('created_at', rangeEnd)
         .order('created_at', { ascending: false })
         .limit(15),
+
+      // 12. ALL activity today — unlimited, for hours estimation
+      supabase
+        .from('ops_activity_log')
+        .select('user_id, created_at')
+        .gte('created_at', rangeStart)
+        .lte('created_at', rangeEnd)
+        .order('created_at', { ascending: true }),
     ]);
 
-    // Compute hours today
-    const totalMinutes = (sessionsToday.data || []).reduce(
+    // Compute hours today — use ops_user_sessions if available,
+    // otherwise estimate from ops_activity_log timestamps (same logic as team API)
+    const sessionMinutes = (sessionsToday.data || []).reduce(
       (s: number, r: any) => s + (r.duration_minutes || 0), 0
     );
-    const hoursTeamToday = Math.round((totalMinutes / 60) * 10) / 10;
 
-    // Resolve master names for activity
-    const masterIds = [...new Set((activityToday.data || []).map((a: any) => a.user_id).filter(Boolean))];
+    // Estimate hours from activity log timestamps grouped by user (using ALL logs, not limited)
+    let activityEstimatedMinutes = 0;
+    const activityRows = allActivityToday.data || [];
+    if (activityRows.length > 0) {
+      const byUser = new Map<string, string[]>();
+      for (const a of activityRows as any[]) {
+        if (!a.user_id || !a.created_at) continue;
+        if (!byUser.has(a.user_id)) byUser.set(a.user_id, []);
+        byUser.get(a.user_id)!.push(a.created_at);
+      }
+      for (const [, timestamps] of byUser) {
+        timestamps.sort();
+        if (timestamps.length === 1) {
+          activityEstimatedMinutes += 15; // single action = 15 min
+        } else {
+          let userMins = 0;
+          for (let i = 1; i < timestamps.length; i++) {
+            const gap = (new Date(timestamps[i]!).getTime() - new Date(timestamps[i - 1]!).getTime()) / 60000;
+            userMins += Math.min(gap, 30); // Cap gaps at 30 min (idle cutoff)
+          }
+          activityEstimatedMinutes += Math.max(userMins, 15); // Min 15 min per active user
+        }
+      }
+    }
+
+    // Use whichever is greater: session tracking or activity-based estimation
+    const hoursTeamToday = Math.round((Math.max(sessionMinutes, activityEstimatedMinutes) / 60) * 10) / 10;
+
+    // Resolve master names for activity (use all logs for complete user coverage)
+    const masterIds = [...new Set((allActivityToday.data || []).map((a: any) => a.user_id).filter(Boolean))];
     let masterNameMap: Record<string, string> = {};
     if (masterIds.length > 0) {
       const { data: profiles } = await supabase
@@ -133,7 +170,7 @@ export async function GET() {
       }
     }
 
-    const activity = (activityToday.data || []).map((a: any) => ({
+    const activity = (activityForTimeline.data || []).map((a: any) => ({
       ...a,
       user_name: masterNameMap[a.user_id] || null,
     }));

@@ -609,14 +609,18 @@ export default function MorosidadPage() {
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             row.is_recurring ? 'bg-purple-50 text-purple-600' : 'bg-gray-50 text-gray-500'
                           }`}>
-                            {row.is_recurring ? 'Recurrente' : 'Contado'}
+                            {row.is_recurring
+                              ? `${row.total_installments ?? '—'} Cuotas`
+                              : 'Al Contado'}
                           </span>
                         </td>
                         <td className="px-2 py-2.5 text-center hidden lg:table-cell">
-                          {row.payment_status === 'received' || isPagoRecibido ? (
-                            <FaCheckCircle className="text-green-400 text-xs mx-auto" />
+                          {row.is_recurring && row.total_installments ? (
+                            <span className="text-[10px] font-semibold text-purple-600">
+                              {row.total_installments - (row.paid_installments ?? 0)}/{row.total_installments}
+                            </span>
                           ) : (
-                            <span className="text-gray-200 text-[10px]">—</span>
+                            <span className="text-gray-300 text-[10px]">—</span>
                           )}
                         </td>
                         <td className="px-2 py-2.5 text-center">
