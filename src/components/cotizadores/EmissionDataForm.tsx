@@ -866,7 +866,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Nivel de ingresos <span className="text-red-500">*</span>
+                Nivel de ingresos (Anual) <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.nivelIngresos}
@@ -876,7 +876,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                 }`}
                 style={{ minHeight: '50px' }}
               >
-                <option value="">Seleccionar nivel de ingresos</option>
+                <option value="">Seleccionar nivel de ingresos (Anual)</option>
                 <option value="menos de 10mil">menos de 10mil</option>
                 <option value="10mil a 30mil">10mil a 30mil</option>
                 <option value="30mil a 50mil">30mil a 50mil</option>
