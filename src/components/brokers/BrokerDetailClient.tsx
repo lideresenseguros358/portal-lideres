@@ -622,7 +622,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   type="text"
                   value={formData.nombre_completo}
                   onChange={(e) => {
-                    const normalized = toUpperNoAccents(e.target.value);
+                    const normalized = toUpperNoAccents(e.target.value, { preserveTrailingSpace: true });
                     setFormData({ ...formData, nombre_completo: normalized.substring(0, 22) });
                   }}
                   disabled={!isEditing || useBrokerData}
@@ -646,7 +646,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   type="text"
                   value={formData.beneficiary_name}
                   onChange={(e) => {
-                    const normalized = toUpperNoAccents(e.target.value);
+                    const normalized = toUpperNoAccents(e.target.value, { preserveTrailingSpace: true });
                     setFormData({ ...formData, beneficiary_name: normalized.substring(0, 22) });
                   }}
                   disabled={!isEditing}

@@ -118,6 +118,7 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
     >
       <div 
         className="standard-modal-container max-w-[95vw]"
+        style={{ overflowX: 'visible' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -136,26 +137,26 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
           </button>
         </div>
 
-        {/* Content */}
-        <div className="standard-modal-content">
+        {/* Content — scroll both axes, no padding so sticky header is flush */}
+        <div className="standard-modal-content !overflow-auto !p-0">
           <div className="min-w-max">
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gradient-to-r from-[#010139] to-[#020270] text-white">
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Nombre</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Teléfono</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Cédula</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">F. Nacimiento</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Tipo</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Código ASSA</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Licencia</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Venc. Carnet</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">% Default</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Banco</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Tipo Cta</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Nº Cuenta</th>
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Titular</th>
-                  <th className="px-3 py-3 text-center text-xs font-semibold uppercase">Activo</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Teléfono</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Cédula</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">F. Nacimiento</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Tipo</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Código ASSA</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Licencia</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Venc. Carnet</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">% Default</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Banco</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Tipo Cta</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Nº Cuenta</th>
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Titular</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold uppercase whitespace-nowrap">Activo</th>
                 </tr>
               </thead>
               <tbody>
@@ -299,7 +300,7 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
                       <input
                         type="text"
                         value={broker.nombre_completo}
-                        onChange={(e) => updateBroker(index, 'nombre_completo', toUpperNoAccents(e.target.value).substring(0, 22))}
+                        onChange={(e) => updateBroker(index, 'nombre_completo', toUpperNoAccents(e.target.value, { preserveTrailingSpace: true }).substring(0, 22))}
                         maxLength={22}
                         className="w-48 px-2 py-1 text-sm border border-gray-300 rounded focus:border-[#8AAA19] focus:outline-none uppercase"
                       />

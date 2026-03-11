@@ -22,7 +22,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 export async function notifyFortnightPaid(fortnightId: string): Promise<void> {
   const { data: fortnight, error } = await supabase
     .from('fortnights')
-    .select('*, brokers!inner(name, email)')
+    .select('*, brokers!inner(name, email, p_id)')
     .eq('id', fortnightId)
     .single();
 
@@ -32,6 +32,25 @@ export async function notifyFortnightPaid(fortnightId: string): Promise<void> {
   }
 
   const broker = fortnight.brokers as any;
+
+  // Resolver email: brokers.email → fallback profiles.email via p_id
+  let brokerEmail = broker.email;
+  if (!brokerEmail && broker.p_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', broker.p_id)
+      .single();
+    brokerEmail = profile?.email || null;
+    if (brokerEmail) {
+      console.log(`[COMMISSIONS] Email resuelto via profiles para broker ${broker.name}: ${brokerEmail}`);
+    }
+  }
+
+  if (!brokerEmail) {
+    console.error(`[COMMISSIONS] No email found for broker ${broker.name} (fortnight: ${fortnightId})`);
+    return;
+  }
 
   // Obtener items de la quincena
   const { count: itemCount } = await supabase
@@ -53,12 +72,12 @@ export async function notifyFortnightPaid(fortnightId: string): Promise<void> {
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `💰 Quincena pagada: ${fortnight.fortnight_number}`,
     html,
     fromType: 'PORTAL',
     template: 'commissionPaid',
-    dedupeKey: generateDedupeKey(broker.email, 'commissionPaid', fortnightId),
+    dedupeKey: generateDedupeKey(brokerEmail, 'commissionPaid', fortnightId),
     metadata: { fortnightId, brokerId: fortnight.broker_id },
   });
 }
@@ -75,12 +94,31 @@ export async function notifyAdjustmentPaid(adjustmentData: {
 }): Promise<void> {
   const { data: broker } = await supabase
     .from('brokers')
-    .select('name, email')
+    .select('name, email, p_id')
     .eq('id', adjustmentData.brokerId)
     .single();
 
   if (!broker) {
     console.error('[COMMISSIONS] Broker not found:', adjustmentData.brokerId);
+    return;
+  }
+
+  // Resolver email: brokers.email → fallback profiles.email via p_id
+  let brokerEmail = broker.email;
+  if (!brokerEmail && broker.p_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', broker.p_id)
+      .single();
+    brokerEmail = profile?.email || null;
+    if (brokerEmail) {
+      console.log(`[COMMISSIONS] Email resuelto via profiles para broker ${broker.name}: ${brokerEmail}`);
+    }
+  }
+
+  if (!brokerEmail) {
+    console.error(`[COMMISSIONS] No email found for broker ${broker.name} (id: ${adjustmentData.brokerId})`);
     return;
   }
 
@@ -95,7 +133,7 @@ export async function notifyAdjustmentPaid(adjustmentData: {
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `💵 Ajuste de comisión aplicado: $${adjustmentData.amount}`,
     html,
     fromType: 'PORTAL',

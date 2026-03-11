@@ -326,7 +326,7 @@ export default function NewUserWizard() {
                     setPersonalData({ ...personalData, nombre: e.target.value });
                     // Si checkbox está marcado, actualizar también el titular
                     if (autoFillNombre) {
-                      const nombreNormalizado = toUpperNoAccents(e.target.value).substring(0, 22);
+                      const nombreNormalizado = toUpperNoAccents(e.target.value, { preserveTrailingSpace: true }).substring(0, 22);
                       setBankData({ ...bankData, nombre_completo: nombreNormalizado });
                     }
                   }}
@@ -591,7 +591,7 @@ export default function NewUserWizard() {
                   type="text"
                   value={bankData.nombre_completo}
                   onChange={(e) => {
-                    const normalized = toUpperNoAccents(e.target.value);
+                    const normalized = toUpperNoAccents(e.target.value, { preserveTrailingSpace: true });
                     setBankData({ ...bankData, nombre_completo: normalized.substring(0, 22) });
                   }}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none disabled:bg-gray-100 disabled:text-gray-600"

@@ -505,9 +505,11 @@ interface ClientsListViewProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  totalSelectableCount?: number;
+  isSelectingAll?: boolean;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode, onViewPolicy, onEditPolicy, onDeletePolicy, hasMore, isLoadingMore, onLoadMore }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode, onViewPolicy, onEditPolicy, onDeletePolicy, hasMore, isLoadingMore, onLoadMore, totalSelectableCount, isSelectingAll }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
   const [openMenuPolicy, setOpenMenuPolicy] = useState<string | null>(null);
@@ -552,22 +554,41 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
     );
   }
 
-  const allSelected = clients.length > 0 && selectedClients.size === clients.length;
+  const effectiveTotal = totalSelectableCount ?? clients.length;
+  const allSelected = effectiveTotal > 0 && selectedClients.size >= effectiveTotal;
 
   return (
     <div className={`clients-wrapper ${selectionMode ? 'with-selection' : ''}`}>
+      {/* Banner de selección total */}
+      {selectionMode && selectedClients.size > 0 && selectedClients.size > clients.length && (
+        <div className="bg-[#8AAA19]/10 border border-[#8AAA19]/30 rounded-lg px-4 py-2 mb-2 flex items-center gap-2 text-sm">
+          <CheckSquare size={16} className="text-[#8AAA19]" />
+          <span className="text-[#010139] font-medium">
+            {selectedClients.size} clientes seleccionados en total
+          </span>
+          <span className="text-gray-500">
+            (mostrando {clients.length} en esta vista)
+          </span>
+        </div>
+      )}
       {/* Vista Desktop: Tabla */}
       <table className="clients-table hidden md:table">
         <thead>
           <tr className="ct-head">
             {selectionMode && (
               <th className="ct-th" style={{ width: '50px' }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={onSelectAll}
-                  className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
-                />
+                {isSelectingAll ? (
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#8AAA19]"></div>
+                  </div>
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={onSelectAll}
+                    className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+                  />
+                )}
               </th>
             )}
             <th className="ct-th ct-th-name">Cliente</th>
@@ -889,14 +910,23 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
       <div className="md:hidden space-y-3">
         {selectionMode && (
           <div className="bg-gray-50 p-3 rounded-lg flex items-center gap-3 mb-4">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={onSelectAll}
-              className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
-            />
+            {isSelectingAll ? (
+              <div className="w-5 h-5 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#8AAA19]"></div>
+              </div>
+            ) : (
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onSelectAll}
+                className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+              />
+            )}
             <span className="text-sm font-medium text-gray-700">
-              {selectedClients.size === clients.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+              {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
+              {selectedClients.size > clients.length && (
+                <span className="text-gray-500 font-normal"> ({selectedClients.size} seleccionados)</span>
+              )}
             </span>
           </div>
         )}
@@ -1271,6 +1301,7 @@ export default function DatabaseTabs({
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
   const [preliminaryCount, setPreliminaryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
@@ -1562,12 +1593,55 @@ export default function DatabaseTabs({
     });
   };
 
-  // Seleccionar todos RESPETANDO LOS FILTROS
-  const handleSelectAll = () => {
-    if (selectedClients.size === filteredClients.length) {
+  // Seleccionar TODOS los clientes (no solo los visibles) RESPETANDO LOS FILTROS
+  const handleSelectAll = async () => {
+    const hasActiveFiltersNow = !!(filters.broker || filters.insurer || filters.ramo || filters.month !== undefined);
+    
+    // Si ya hay selección completa → deseleccionar
+    if (hasActiveFiltersNow && filteredServerClients) {
+      // Con filtros: comparar contra TODOS los filtrados del servidor
+      if (selectedClients.size >= filteredServerClients.length) {
+        setSelectedClients(new Set());
+        return;
+      }
+      // Seleccionar todos los filtrados (ya están en memoria)
+      setSelectedClients(new Set(filteredServerClients.map(c => c.id)));
+      return;
+    }
+    
+    // Sin filtros: necesitamos todos los IDs del servidor
+    // Si ya están todos seleccionados → deseleccionar
+    if (selectedClients.size >= totalCount) {
       setSelectedClients(new Set());
-    } else {
+      return;
+    }
+    
+    // Fetch todos los IDs desde el servidor
+    setIsSelectingAll(true);
+    try {
+      const response = await fetch('/api/db/select-all-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          searchQuery: searchQuery || '',
+          filters: hasActiveFiltersNow ? filters : undefined,
+        })
+      });
+      
+      if (!response.ok) throw new Error('Error al obtener IDs');
+      
+      const data = await response.json();
+      if (data.ok && data.ids) {
+        setSelectedClients(new Set(data.ids));
+        toast.success(`${data.ids.length} clientes seleccionados`);
+      }
+    } catch (error) {
+      console.error('Error en seleccionar todos:', error);
+      toast.error('Error al seleccionar todos los clientes');
+      // Fallback: seleccionar solo los visibles
       setSelectedClients(new Set(filteredClients.map(c => c.id)));
+    } finally {
+      setIsSelectingAll(false);
     }
   };
 
@@ -1736,6 +1810,12 @@ export default function DatabaseTabs({
         hasMore={hasMore}
         isLoadingMore={isLoadingMore}
         onLoadMore={handleLoadMore}
+        totalSelectableCount={
+          (filters.broker || filters.insurer || filters.ramo || filters.month !== undefined) && filteredServerClients
+            ? filteredServerClients.length
+            : totalCount
+        }
+        isSelectingAll={isSelectingAll}
       />
     );
   };

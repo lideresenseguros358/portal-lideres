@@ -17,6 +17,26 @@ const appUrl = process.env.APP_BASE_URL || 'https://portal.lideresenseguros.com'
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
+ * Resolver email del broker: brokers.email → fallback profiles.email via p_id
+ */
+async function resolveBrokerEmail(broker: { name?: string; email?: string | null; p_id?: string }): Promise<string | null> {
+  if (broker.email) return broker.email;
+  if (broker.p_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', broker.p_id)
+      .single();
+    if (profile?.email) {
+      console.log(`[PENDIENTES] Email resuelto via profiles para broker ${broker.name}: ${profile.email}`);
+      return profile.email;
+    }
+  }
+  console.error(`[PENDIENTES] No email found for broker ${broker.name}`);
+  return null;
+}
+
+/**
  * Notificar creación de caso
  */
 export async function notifyCaseCreated(caseId: string): Promise<void> {
@@ -34,7 +54,7 @@ export async function notifyCaseCreated(caseId: string): Promise<void> {
       created_at,
       broker_id,
       aseguradora_code,
-      brokers!inner(name, email),
+      brokers!inner(name, email, p_id),
       insurers(name)
     `)
     .eq('id', caseId)
@@ -47,6 +67,8 @@ export async function notifyCaseCreated(caseId: string): Promise<void> {
 
   const broker = caso.brokers as any;
   const insurer = caso.insurers as any;
+  const brokerEmail = await resolveBrokerEmail(broker);
+  if (!brokerEmail) return;
 
   const html = renderEmailTemplate('pendienteCreated', {
     brokerName: broker.name,
@@ -63,12 +85,12 @@ export async function notifyCaseCreated(caseId: string): Promise<void> {
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `📋 Nuevo caso asignado: ${caso.ticket}`,
     html,
     fromType: 'TRAMITES',
     template: 'pendienteCreated',
-    dedupeKey: generateDedupeKey(broker.email, 'pendienteCreated', caseId),
+    dedupeKey: generateDedupeKey(brokerEmail, 'pendienteCreated', caseId),
     metadata: { caseId, brokerId: caso.broker_id },
   });
 }
@@ -86,7 +108,7 @@ export async function notifyCaseUpdated(caseId: string, changes: any[]): Promise
       estado_simple,
       updated_at,
       broker_id,
-      brokers!inner(name, email)
+      brokers!inner(name, email, p_id)
     `)
     .eq('id', caseId)
     .single();
@@ -94,25 +116,27 @@ export async function notifyCaseUpdated(caseId: string, changes: any[]): Promise
   if (error || !caso) return;
 
   const broker = caso.brokers as any;
+  const brokerEmail = await resolveBrokerEmail(broker);
+  if (!brokerEmail) return;
 
   const html = renderEmailTemplate('pendienteUpdated', {
     brokerName: broker.name,
     ticket: caso.ticket,
     clientName: caso.client_name,
     newStatus: caso.estado_simple,
-    updatedBy: 'Sistema', // O pasar el usuario que actualizó
+    updatedBy: 'Sistema',
     updatedAt: caso.updated_at,
     changes,
     portalUrl: appUrl,
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `🔄 Caso actualizado: ${caso.ticket}`,
     html,
     fromType: 'TRAMITES',
     template: 'pendienteUpdated',
-    dedupeKey: generateDedupeKey(broker.email, 'pendienteUpdated', `${caseId}-${caso.updated_at}`),
+    dedupeKey: generateDedupeKey(brokerEmail, 'pendienteUpdated', `${caseId}-${caso.updated_at}`),
     metadata: { caseId, brokerId: caso.broker_id, changes },
   });
 }
@@ -132,7 +156,7 @@ export async function notifyCaseClosedApproved(caseId: string, closingData: any)
       premium,
       final_policy_number,
       broker_id,
-      brokers!inner(name, email),
+      brokers!inner(name, email, p_id),
       insurers(name)
     `)
     .eq('id', caseId)
@@ -142,6 +166,8 @@ export async function notifyCaseClosedApproved(caseId: string, closingData: any)
 
   const broker = caso.brokers as any;
   const insurer = caso.insurers as any;
+  const brokerEmail = await resolveBrokerEmail(broker);
+  if (!brokerEmail) return;
 
   const html = renderEmailTemplate('pendienteClosedApproved', {
     brokerName: broker.name,
@@ -160,12 +186,12 @@ export async function notifyCaseClosedApproved(caseId: string, closingData: any)
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `✅ Caso aprobado: ${caso.ticket}`,
     html,
     fromType: 'TRAMITES',
     template: 'pendienteClosedApproved',
-    dedupeKey: generateDedupeKey(broker.email, 'pendienteClosedApproved', caseId),
+    dedupeKey: generateDedupeKey(brokerEmail, 'pendienteClosedApproved', caseId),
     metadata: { caseId, brokerId: caso.broker_id, status: 'approved' },
   });
 }
@@ -182,7 +208,7 @@ export async function notifyCaseClosedRejected(caseId: string, closingData: any)
       client_name,
       ctype,
       broker_id,
-      brokers!inner(name, email),
+      brokers!inner(name, email, p_id),
       insurers(name)
     `)
     .eq('id', caseId)
@@ -192,6 +218,8 @@ export async function notifyCaseClosedRejected(caseId: string, closingData: any)
 
   const broker = caso.brokers as any;
   const insurer = caso.insurers as any;
+  const brokerEmail = await resolveBrokerEmail(broker);
+  if (!brokerEmail) return;
 
   const html = renderEmailTemplate('pendienteClosedRejected', {
     brokerName: broker.name,
@@ -207,12 +235,12 @@ export async function notifyCaseClosedRejected(caseId: string, closingData: any)
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `❌ Caso rechazado: ${caso.ticket}`,
     html,
     fromType: 'TRAMITES',
     template: 'pendienteClosedRejected',
-    dedupeKey: generateDedupeKey(broker.email, 'pendienteClosedRejected', caseId),
+    dedupeKey: generateDedupeKey(brokerEmail, 'pendienteClosedRejected', caseId),
     metadata: { caseId, brokerId: caso.broker_id, status: 'rejected' },
   });
 }
@@ -231,7 +259,7 @@ export async function notifyCasePostponed(caseId: string, postponeData: any): Pr
       aplazado_months,
       aplazar_reason,
       broker_id,
-      brokers!inner(name, email)
+      brokers!inner(name, email, p_id)
     `)
     .eq('id', caseId)
     .single();
@@ -239,6 +267,8 @@ export async function notifyCasePostponed(caseId: string, postponeData: any): Pr
   if (error || !caso) return;
 
   const broker = caso.brokers as any;
+  const brokerEmail = await resolveBrokerEmail(broker);
+  if (!brokerEmail) return;
 
   const html = renderEmailTemplate('pendienteAplazado', {
     brokerName: broker.name,
@@ -252,12 +282,12 @@ export async function notifyCasePostponed(caseId: string, postponeData: any): Pr
   });
 
   await sendEmail({
-    to: broker.email,
+    to: brokerEmail,
     subject: `⏸️ Caso aplazado: ${caso.ticket}`,
     html,
     fromType: 'TRAMITES',
     template: 'pendienteAplazado',
-    dedupeKey: generateDedupeKey(broker.email, 'pendienteAplazado', `${caseId}-${caso.aplazado_until}`),
+    dedupeKey: generateDedupeKey(brokerEmail, 'pendienteAplazado', `${caseId}-${caso.aplazado_until}`),
     metadata: { caseId, brokerId: caso.broker_id, aplazadoUntil: caso.aplazado_until },
   });
 }

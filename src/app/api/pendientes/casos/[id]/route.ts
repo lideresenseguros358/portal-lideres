@@ -85,6 +85,48 @@ export async function PATCH(
       after: updates,
     });
 
+    // Enviar correos de notificación según el tipo de cambio
+    try {
+      const prevStatus = currentCase?.estado_simple;
+      const newStatus = updatedCase.estado_simple;
+      const statusChanged = prevStatus !== newStatus;
+
+      if (statusChanged && newStatus === 'Cerrado aprobado') {
+        await notifyCaseClosedApproved(caseId, {
+          closedBy: profile?.full_name || 'Administrador',
+          closedAt: new Date().toISOString(),
+          notes: updates.closing_notes || updates.notes,
+        });
+        console.log(`[CASES PATCH] ✅ Email cierre aprobado enviado para caso ${caseId}`);
+      } else if (statusChanged && newStatus === 'Cerrado rechazado') {
+        await notifyCaseClosedRejected(caseId, {
+          closedBy: profile?.full_name || 'Administrador',
+          closedAt: new Date().toISOString(),
+          reason: updates.closing_reason || 'Rechazado por administración',
+          notes: updates.closing_notes || updates.notes,
+        });
+        console.log(`[CASES PATCH] ✅ Email cierre rechazado enviado para caso ${caseId}`);
+      } else if (statusChanged && newStatus === 'Aplazado') {
+        await notifyCasePostponed(caseId, {
+          aplazadoBy: profile?.full_name || 'Administrador',
+          reason: updates.aplazar_reason,
+        });
+        console.log(`[CASES PATCH] ✅ Email aplazamiento enviado para caso ${caseId}`);
+      } else if (statusChanged) {
+        // Cualquier otro cambio de estado → notificar actualización
+        const changes = Object.keys(updates).map(key => ({
+          field: key,
+          oldValue: (currentCase as any)?.[key],
+          newValue: updates[key],
+        }));
+        await notifyCaseUpdated(caseId, changes);
+        console.log(`[CASES PATCH] ✅ Email actualización enviado para caso ${caseId}`);
+      }
+    } catch (emailError) {
+      console.error('[CASES PATCH] ⚠️ Error enviando correo de notificación:', emailError);
+      // No fallar la respuesta si el correo falla
+    }
+
     return NextResponse.json(updatedCase);
   } catch (error: any) {
     return NextResponse.json(

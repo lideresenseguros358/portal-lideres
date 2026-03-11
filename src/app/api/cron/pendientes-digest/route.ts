@@ -28,11 +28,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Obtener todos los brokers activos
+    // Obtener todos los brokers activos (incluir los que no tienen email en brokers pero sí en profiles)
     const { data: brokers, error: brokersError } = await supabase
       .from('brokers')
-      .select('id, name, email, p_id')
-      .not('email', 'is', null);
+      .select('id, name, email, p_id');
 
     if (brokersError || !brokers) {
       throw brokersError;
@@ -49,6 +48,20 @@ export async function GET(request: NextRequest) {
 
     for (const broker of brokers) {
       try {
+        // Resolver email: brokers.email → fallback profiles.email via p_id
+        let brokerEmail = broker.email;
+        if (!brokerEmail && broker.p_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', broker.p_id)
+            .single();
+          brokerEmail = profile?.email || null;
+        }
+        if (!brokerEmail) {
+          result.emails_skipped++;
+          continue;
+        }
         // Obtener casos abiertos del broker
         const { data: cases, error: casesError } = await supabase
           .from('cases')
@@ -101,12 +114,12 @@ export async function GET(request: NextRequest) {
 
         // Enviar correo
         const emailResult = await sendEmail({
-          to: broker.email,
+          to: brokerEmail,
           subject: `📊 Resumen diario de Pendientes - ${cases.length} casos`,
           html,
           fromType: 'PORTAL',
           template: 'pendientesDailyDigest',
-          dedupeKey: generateDedupeKey(broker.email, 'pendientesDailyDigest', now.toFormat('yyyy-MM-dd')),
+          dedupeKey: generateDedupeKey(brokerEmail, 'pendientesDailyDigest', now.toFormat('yyyy-MM-dd')),
           metadata: {
             brokerId: broker.id,
             totalCases: cases.length,

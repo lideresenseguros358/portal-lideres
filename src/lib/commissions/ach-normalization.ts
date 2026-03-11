@@ -36,10 +36,13 @@ const ACH_INVALID_CHARS = /[.,\-%*$@#~^={}[\]()/\\:;\-|+_\x00-\x1F]/g;
  * @param text - Texto a normalizar
  * @returns Texto normalizado para ACH
  */
-export function toUpperNoAccents(text: string | null | undefined): string {
+export function toUpperNoAccents(text: string | null | undefined, { preserveTrailingSpace }: { preserveTrailingSpace?: boolean } = {}): string {
   if (!text) return '';
   
-  let normalized = text.trim();
+  let normalized = text;
+  
+  // Solo trim al inicio (nunca al final durante input en vivo)
+  normalized = normalized.replace(/^\s+/, '');
   
   // Convertir a mayúsculas primero
   normalized = normalized.toUpperCase();
@@ -58,7 +61,7 @@ export function toUpperNoAccents(text: string | null | undefined): string {
   // Comprimir espacios múltiples a uno solo
   normalized = normalized.replace(/\s+/g, ' ');
   
-  return normalized.trim();
+  return preserveTrailingSpace ? normalized.replace(/^\s+/, '') : normalized.trim();
 }
 
 /**
