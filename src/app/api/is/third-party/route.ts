@@ -1,12 +1,10 @@
 /**
- * API Endpoint: Planes de Daños a Terceros IS en Tiempo Real
+ * API Endpoint: Planes de Daños a Terceros IS
  * GET /api/is/third-party
  *
- * Follows the same pattern as cobertura completa (/cotizadores/comparar):
- * - ONE generarCotizacion call per plan (sequential to avoid rate limits)
- * - Uses PTOTAL from generarCotizacion as the REAL price
- * - Gets coverages via getlistacoberturas with correct field names
- * - Aggressive caching (2h) + in-flight dedup to prevent double-fetch
+ * Reads pre-cached reference prices from app_settings (populated by cron/is-dt-reference).
+ * Falls back to live quote ONLY on first run when app_settings is empty.
+ * This makes the endpoint near-instant (<100ms) instead of ~5s.
  *
  * Plans:
  * - Plan Básico (SOAT): codPlanCobertura=306 (SOBAT 5/10)
@@ -14,54 +12,23 @@
  */
 
 import { NextResponse } from 'next/server';
-import { generarCotizacionAuto, obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
-import { getISDefaultEnv } from '@/lib/is/config';
+import { getSetting } from '@/server/settings';
 
-// ── Cache (2 hours) + in-flight dedup ──
-let cache: { data: any; timestamp: number } | null = null;
-const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
-let inflightPromise: Promise<any> | null = null;
+// ── In-memory cache to avoid hitting DB on every request ──
+let memCache: { data: any; timestamp: number } | null = null;
+const MEM_CACHE_TTL = 30 * 60 * 1000; // 30 min — cron updates DB daily
 
-// Reference vehicle (Toyota, PARTICULAR group — same as min-price route)
-const REF_VEHICLE = {
-  codTipoDoc: 1,
-  nroDoc: '8-000-0000',
-  nroNit: '8-000-0000',
-  nombre: 'COTIZACION',
-  apellido: 'WEB',
-  telefono: '60000000',
-  correo: 'cotizacion@web.com',
-  codMarca: 156,       // Toyota
-  codModelo: 2563,     // Toyota model
-  anioAuto: String(new Date().getFullYear()),
-  sumaAseg: '0',       // DT = 0
-  codPlanCoberturaAdic: 0,
-  codGrupoTarifa: 20,  // PARTICULAR
-};
+const SETTINGS_KEY = 'is_dt_reference_prices';
 
 // IS plan codes for DT
 const PLAN_SOAT = 306;       // SOBAT 5/10 (Básico)
 const PLAN_INTERMEDIO = 307;  // DAT 10/20 (Intermedio)
 
-// Fallback prices from real API responses (logs: Prima: 154 / 183)
+// Fallback prices — used ONLY if cron has never run and DB is empty
 const FALLBACK_BASIC_PRICE = 154.00;
 const FALLBACK_PREMIUM_PRICE = 183.00;
 
-interface CoverageItem {
-  code: string;
-  name: string;
-  limit: string;
-  prima: number;
-}
-
-/**
- * Fetch a single plan: generarCotizacion → getlistacoberturas
- * Uses PTOTAL from generarCotizacion as the real price (same as CC flow).
- * Coverage field names: COD_AMPARO, COBERTURA, LIMITES, PRIMA1
- */
-// TODO: Reemplazar con datos de API cuando IS provea un endpoint de beneficios para DT.
-// Actualmente la API de IS (getlistacoberturas) solo retorna 3 coberturas para planes DT
-// y no incluye beneficios de asistencia. Estos datos provienen del condicionado de IS.
+// Benefits from IS condicionado (API doesn't expose these)
 const IS_SOAT_BENEFITS: string[] = [
   'Coordinación de envío de ambulancia por accidente de tránsito',
   'Asistencia vial: cambio de llanta, envío de combustible, pase de corriente (Conexión)',
@@ -81,147 +48,85 @@ const IS_INTERMEDIO_BENEFITS: string[] = [
   'Depósito y custodia de vehículos',
 ];
 
-async function fetchPlan(
-  codPlanCobertura: number,
-  env: 'development' | 'production' = 'development'
-): Promise<{ primaTotal: number; coverages: CoverageItem[]; idCotizacion: string } | null> {
-  try {
-    console.log(`[IS Third Party] Cotizando plan ${codPlanCobertura}...`);
-    const cotizResult = await generarCotizacionAuto(
-      { ...REF_VEHICLE, codPlanCobertura, codProvincia: 8, fecNacimiento: '01/01/1990' },
-      env
-    );
+const REF_VEHICLE_META = {
+  codGrupoTarifa: 20,
+  codMarca: 156,
+  codModelo: 2563,
+};
 
-    if (!cotizResult.success || !cotizResult.idCotizacion) {
-      console.warn(`[IS Third Party] Cotización falló plan ${codPlanCobertura}:`, cotizResult.error);
-      return null;
-    }
+/**
+ * Build the response from stored reference data.
+ * If app_settings has cached prices from the cron, use them.
+ * Otherwise fall back to hardcoded prices (should only happen on very first deploy).
+ */
+async function buildFromCache(): Promise<any> {
+  const ref = await getSetting<any>(SETTINGS_KEY);
 
-    const primaTotal = cotizResult.primaTotal ?? 0;
-    console.log(`[IS Third Party] Plan ${codPlanCobertura}: PTOTAL=${primaTotal}, idCot=${cotizResult.idCotizacion}`);
+  const basicPrice = ref?.basic?.price ?? FALLBACK_BASIC_PRICE;
+  const premiumPrice = ref?.premium?.price ?? FALLBACK_PREMIUM_PRICE;
+  const basicCoverages = ref?.basic?.coverages ?? [];
+  const premiumCoverages = ref?.premium?.coverages ?? [];
+  const fromApi = !!ref?.basic?.fromApi;
+  const source = ref
+    ? `app_settings (updated ${ref.updatedAt || 'unknown'})`
+    : 'fallback (cron has not run yet)';
 
-    // Get coverages for display
-    const cobResult = await obtenerCoberturasCotizacion(
-      cotizResult.idCotizacion,
-      1,
-      env
-    );
-
-    const coverages: CoverageItem[] = [];
-    if (cobResult.success && cobResult.data?.Table?.length) {
-      for (const cob of cobResult.data.Table) {
-        coverages.push({
-          code: String(cob.COD_AMPARO ?? ''),
-          name: cob.COBERTURA ?? '',
-          limit: cob.LIMITES ?? '',
-          prima: parseFloat(String(cob.PRIMA1).replace(/,/g, '')) || 0,
-        });
-      }
-    } else {
-      console.warn(`[IS Third Party] Plan ${codPlanCobertura}: coberturas vacías — cobResult.success=${cobResult.success}, Table length=${cobResult.data?.Table?.length ?? 'N/A'}`);
-    }
-
-    const finalPrima = primaTotal > 0
-      ? primaTotal
-      : coverages.reduce((sum, c) => sum + c.prima, 0);
-
-    return { primaTotal: finalPrima, coverages, idCotizacion: cotizResult.idCotizacion };
-  } catch (error) {
-    console.error(`[IS Third Party] Error plan ${codPlanCobertura}:`, error);
-    return null;
-  }
-}
-
-/** Core fetch logic — called once, deduped */
-async function fetchAllPlans() {
-  console.log('[API IS Third Party] Fetching plans from IS API...');
-
-  // Parallel calls — IS API is slow so running both at once saves ~50% time
-  const env = getISDefaultEnv();
-  console.log(`[API IS Third Party] Usando ambiente: ${env}`);
-  const [basicResult, premiumResult] = await Promise.all([
-    fetchPlan(PLAN_SOAT, env),
-    fetchPlan(PLAN_INTERMEDIO, env),
-  ]);
-
-  // Note: reference vehicle quote failing (RESOP:-3) does NOT mean IS is offline.
-  // The emit flow generates its own quote with the user's actual vehicle data.
-  // Only mark offline on true connectivity failures (handled in catch block).
-  const gotApiData = !!(basicResult || premiumResult);
-  if (!gotApiData) {
-    console.warn('[API IS Third Party] ⚠️ Ref vehicle quote failed — using fallback prices (IS still online)');
-  }
-
-  const result = {
+  return {
     success: true,
     online: true,
-    source: gotApiData ? 'IS API (generarcotizacion + getlistacoberturas)' : 'fallback (ref quote failed)',
+    source,
     timestamp: new Date().toISOString(),
     plans: [
       {
         planType: 'basic',
         name: 'Plan Básico (SOAT)',
         codPlanCobertura: PLAN_SOAT,
-        annualPremium: basicResult
-          ? Math.round(basicResult.primaTotal * 100) / 100
-          : FALLBACK_BASIC_PRICE,
-        coverageList: basicResult?.coverages || [],
+        annualPremium: Math.round(basicPrice * 100) / 100,
+        coverageList: basicCoverages,
         endosoBenefits: IS_SOAT_BENEFITS,
         endoso: 'Plan Básico (SOAT)',
-        fromApi: !!basicResult,
-        idCotizacion: basicResult?.idCotizacion || null,
-        vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
-        vcodmarca: REF_VEHICLE.codMarca,
-        vcodmodelo: REF_VEHICLE.codModelo,
+        fromApi,
+        idCotizacion: ref?.basic?.idCotizacion || null,
+        vcodgrupotarifa: REF_VEHICLE_META.codGrupoTarifa,
+        vcodmarca: REF_VEHICLE_META.codMarca,
+        vcodmodelo: REF_VEHICLE_META.codModelo,
         installments: { available: false, description: 'Solo al contado' },
       },
       {
         planType: 'premium',
         name: 'Plan Intermedio',
         codPlanCobertura: PLAN_INTERMEDIO,
-        annualPremium: premiumResult
-          ? Math.round(premiumResult.primaTotal * 100) / 100
-          : FALLBACK_PREMIUM_PRICE,
-        coverageList: premiumResult?.coverages || [],
+        annualPremium: Math.round(premiumPrice * 100) / 100,
+        coverageList: premiumCoverages,
         endosoBenefits: IS_INTERMEDIO_BENEFITS,
         endoso: 'Plan Intermedio (DAT 10/20)',
-        fromApi: !!premiumResult,
-        idCotizacion: premiumResult?.idCotizacion || null,
-        vcodgrupotarifa: REF_VEHICLE.codGrupoTarifa,
-        vcodmarca: REF_VEHICLE.codMarca,
-        vcodmodelo: REF_VEHICLE.codModelo,
+        fromApi,
+        idCotizacion: ref?.premium?.idCotizacion || null,
+        vcodgrupotarifa: REF_VEHICLE_META.codGrupoTarifa,
+        vcodmarca: REF_VEHICLE_META.codMarca,
+        vcodmodelo: REF_VEHICLE_META.codModelo,
         installments: { available: false, description: 'Solo al contado' },
       },
     ],
   };
-
-  // Cache for 2 hours
-  cache = { data: result, timestamp: Date.now() };
-  console.log(`[API IS Third Party] ✅ Básico: $${result.plans[0]?.annualPremium} | Intermedio: $${result.plans[1]?.annualPremium}`);
-
-  return result;
 }
 
 export async function GET() {
+  // Aggressive CDN + browser caching — data only changes when cron runs (daily)
   const cacheHeaders = { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' };
 
   try {
-    // 1. Return cache if fresh
-    if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
-      console.log('[API IS Third Party] Usando cache');
-      return NextResponse.json(cache.data, { headers: cacheHeaders });
+    // 1. Return in-memory cache if fresh (avoids DB hit on hot path)
+    if (memCache && Date.now() - memCache.timestamp < MEM_CACHE_TTL) {
+      return NextResponse.json(memCache.data, { headers: cacheHeaders });
     }
 
-    // 2. Dedup: if another request is already fetching, wait for it
-    if (inflightPromise) {
-      console.log('[API IS Third Party] Esperando request en vuelo...');
-      const data = await inflightPromise;
-      return NextResponse.json(data, { headers: cacheHeaders });
-    }
+    // 2. Read from app_settings (populated by cron/is-dt-reference)
+    const data = await buildFromCache();
 
-    // 3. Fetch and dedup
-    inflightPromise = fetchAllPlans().finally(() => { inflightPromise = null; });
-    const data = await inflightPromise;
+    // 3. Store in memory for subsequent requests in this serverless instance
+    memCache = { data, timestamp: Date.now() };
+
     return NextResponse.json(data, { headers: cacheHeaders });
   } catch (error: any) {
     console.error('[API IS Third Party] Error:', error);
