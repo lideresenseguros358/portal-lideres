@@ -374,7 +374,7 @@ export default function RenovacionesInbox() {
   useOpsKeyboard(shortcuts);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] gap-3">
+    <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-64px)] gap-3">
       {/* Tab switcher + Metrics */}
       <div className="flex flex-col gap-2.5 flex-shrink-0">
         <div className="flex items-center justify-between">
