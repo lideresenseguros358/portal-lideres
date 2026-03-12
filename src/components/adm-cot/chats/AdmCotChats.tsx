@@ -858,7 +858,7 @@ export default function AdmCotChats() {
       </div>
 
       {/* Main layout */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 260px)', minHeight: '500px' }}>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
         <div className="flex h-full">
           {/* Left: Thread List */}
           <div className={`w-full lg:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 ${
