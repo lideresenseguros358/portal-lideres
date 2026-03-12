@@ -381,7 +381,7 @@ export default function PeticionesInbox() {
   useOpsKeyboard(shortcuts);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-210px)] sm:h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] lg:h-[calc(100vh-170px)] xl:h-[calc(100vh-160px)] gap-3">
+    <div className="flex flex-col h-[calc(100vh-200px)] md:h-[calc(100vh-160px)] gap-3">
       {/* Tab switcher + Metrics */}
       <div className="flex flex-col gap-2.5 flex-shrink-0">
         <div className="flex items-center justify-between">

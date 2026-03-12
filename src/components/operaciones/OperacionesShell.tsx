@@ -92,7 +92,7 @@ export default function OperacionesShell({ children }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-shrink-0 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-sm lg:text-base ${
+              className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 lg:px-4 py-2 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-sm lg:text-base ${
                 isActive
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
                   : 'text-gray-600 hover:bg-gray-100'
