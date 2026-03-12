@@ -53,7 +53,7 @@ export async function getImportantDates(): Promise<ImportantDatesData | null> {
     year: data.year,
     vidaConCancelacionDay: data.vida_con_cancelacion_day ?? 15,
     viaRegularDay: data.via_regular_day ?? 20,
-    apadeaText: String(data.apadea_date1 ?? ''),
+    apadeaText: data.apadea_text ?? '',
     cierreMesDay: data.cierre_mes_day ?? 30,
     newsText: data.news_text ?? '',
     newsActive: data.news_active ?? true,
@@ -68,17 +68,11 @@ export async function updateImportantDates(dates: ImportantDatesData, userId: st
   
   // Normalizar campos: convertir 0 a null, string vacío a null
   const normalizeDay = (day: number): number | null => (day > 0 ? day : null);
-  const normalizeText = (text: string): number | null => {
-    if (!text || text.trim() === '') return null;
-    const parsed = parseInt(text.trim());
-    return !isNaN(parsed) ? parsed : null;
-  };
   
   const updateData: ImportantDatesUpdate = {
     vida_con_cancelacion_day: normalizeDay(dates.vidaConCancelacionDay),
     via_regular_day: normalizeDay(dates.viaRegularDay),
-    apadea_date1: normalizeText(dates.apadeaText),
-    apadea_date2: null,
+    apadea_text: dates.apadeaText?.trim() || null,
     cierre_mes_day: normalizeDay(dates.cierreMesDay),
     news_text: dates.newsText || null,
     news_active: dates.newsActive,

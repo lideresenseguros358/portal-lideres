@@ -4909,6 +4909,7 @@ export type Database = {
         Row: {
           apadea_date1: number | null
           apadea_date2: number | null
+          apadea_text: string | null
           cierre_mes_day: number | null
           created_at: string | null
           id: string
@@ -4924,6 +4925,7 @@ export type Database = {
         Insert: {
           apadea_date1?: number | null
           apadea_date2?: number | null
+          apadea_text?: string | null
           cierre_mes_day?: number | null
           created_at?: string | null
           id?: string
@@ -4939,6 +4941,7 @@ export type Database = {
         Update: {
           apadea_date1?: number | null
           apadea_date2?: number | null
+          apadea_text?: string | null
           cierre_mes_day?: number | null
           created_at?: string | null
           id?: string
