@@ -569,7 +569,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       }
 
       if (commItem) {
-        console.log('[validatePolicyNumber] ❌ PÓLIZA DUPLICADA ENCONTRADA EN COMISIONES');
+        console.log('[validatePolicyNumber] ⚠️ PÓLIZA ENCONTRADA EN COMISIONES');
         console.log('[validatePolicyNumber] Datos completos:', commItem);
         const brokerName = commItem.broker_name || 'Desconocido';
         const brokerEmail = commItem.broker_email || '';
@@ -585,8 +585,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           }
         }
         
-        // VERIFICAR SI EL CLIENTE YA EXISTE EN PRELIMINAR
-        // Buscar si existe un cliente con el nombre del asegurado y active=false
+        // VERIFICAR SI EL CLIENTE YA EXISTE EN PRELIMINAR (clients con active=false)
         console.log('[validatePolicyNumber] Verificando si cliente está en preliminar...');
         const { data: preliminaryClient } = await supabaseClient()
           .from('clients')
@@ -595,21 +594,55 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           .eq('active', false)
           .maybeSingle();
         
-        console.log('[validatePolicyNumber] Cliente preliminar:', preliminaryClient);
+        // También verificar temp_client_import
+        const { data: tempImport } = await (supabaseClient() as any)
+          .from('temp_client_import')
+          .select('id')
+          .eq('policy_number', policyNumber.toUpperCase())
+          .maybeSingle();
         
-        const isPreliminary = preliminaryClient !== null;
+        console.log('[validatePolicyNumber] Cliente preliminar:', preliminaryClient);
+        console.log('[validatePolicyNumber] Temp import:', tempImport);
+        
+        const isPreliminary = preliminaryClient !== null || tempImport !== null;
         const isUnidentified = !isPreliminary;
         
+        if (isUnidentified) {
+          // La póliza SOLO está en comm_items (comisiones pagadas) pero NO tiene
+          // registro en clients ni temp_client_import. Esto pasa cuando la
+          // identificación manual en Nueva Quincena falló al crear el preliminar.
+          // PERMITIR al usuario continuar para registrar formalmente el cliente.
+          console.log('[validatePolicyNumber] ✅ Póliza solo en comisiones sin registro de cliente — PERMITIENDO REGISTRO');
+          setDuplicatePolicyError(null);
+          
+          // Autocompletar nombre del asegurado desde comisiones
+          if (insuredName && insuredName !== 'Asegurado') {
+            setFormData(prev => ({
+              ...prev,
+              client_name: prev.client_name || insuredName,
+            }));
+          }
+          
+          toast.info('Póliza encontrada en comisiones', {
+            description: `Esta póliza de ${insuredName} (Corredor: ${brokerName}) está en comisiones pero no tiene registro de cliente. Puedes continuar para registrarla formalmente.`,
+            duration: 6000
+          });
+          
+          setCheckingPolicy(false);
+          return true; // PERMITIR continuar
+        }
+        
+        // isPreliminary = true: ya existe en preliminar, bloquear
         setDuplicatePolicyError({
           policyNumber,
           brokerName,
           isSameBroker,
-          isUnidentified,
+          isUnidentified: false,
           clientName: insuredName,
-          isPreliminary,
+          isPreliminary: true,
         });
         setCheckingPolicy(false);
-        return false; // Ya existe en comisiones sin identificar o en preliminar
+        return false; // Ya existe en preliminar
       }
 
       // 3. No existe en ninguna parte - OK para registrar

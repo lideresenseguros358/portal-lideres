@@ -5456,8 +5456,7 @@ export async function actionPayFortnight(fortnight_id: string) {
                     migrated: false,
                     status: 'ACTIVA',
                     source: 'draft_identified',
-                    notes: 'Identificado en zona de trabajo de Nueva Quincena',
-                    fortnight_id: fortnight_id
+                    notes: `Identificado en zona de trabajo de Nueva Quincena (${fortnight_id})`,
                   });
                 
                 if (prelimInsertError) {
