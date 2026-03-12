@@ -945,12 +945,15 @@ export default function AdmCotCotizaciones() {
                 <option value="">Aseguradora</option>
                 <option value="INTERNACIONAL">Internacional</option>
                 <option value="FEDPA">FEDPA</option>
+                <option value="REGIONAL">La Regional</option>
               </select>
               <select value={ramo} onChange={(e) => setRamo(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
                 <option value="">Ramo</option>
                 <option value="AUTO">Auto</option>
                 <option value="SALUD">Salud</option>
                 <option value="VIDA">Vida</option>
+                <option value="INCENDIO">Incendio</option>
+                <option value="CONTENIDO">Contenido/Hogar</option>
               </select>
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
                 <option value="">Estado</option>

@@ -11,6 +11,8 @@ export interface AbandonmentRecoveryData {
   insurer?: string;
   lastStep?: string;
   quoteRef?: string;
+  ramo?: string;   // 'AUTO' | 'VIDA' | 'INCENDIO' | 'CONTENIDO' | 'SALUD'
+  stage?: 1 | 2;   // 1 = first email (1h), 2 = second email (24h)
 }
 
 /**
@@ -30,11 +32,79 @@ function stepLabel(step: string | undefined): string {
   return map[step || ''] || step || 'el proceso de cotización';
 }
 
+function ramoConfig(ramo?: string): { emoji: string; productLabel: string; ctaLabel: string; reasons: { icon: string; bold: string; text: string }[] } {
+  const r = (ramo || 'AUTO').toUpperCase();
+  if (r === 'VIDA') return {
+    emoji: '💚', productLabel: 'seguro de vida',
+    ctaLabel: 'Completar mi Seguro de Vida',
+    reasons: [
+      { icon: '🛡', bold: 'Protege a tu familia.', text: 'Un seguro de vida garantiza tranquilidad financiera para tus seres queridos.' },
+      { icon: '📈', bold: 'Ahorro + protección.', text: 'Algunas pólizas combinan ahorro con cobertura, haciendo crecer tu dinero.' },
+      { icon: '💰', bold: 'Cuanto antes, mejor precio.', text: 'Las primas son más bajas cuando contratas joven y sano.' },
+      { icon: '⚡', bold: 'Proceso sencillo.', text: 'Completa tu solicitud en pocos minutos desde cualquier dispositivo.' },
+    ],
+  };
+  if (r === 'INCENDIO') return {
+    emoji: '🏠', productLabel: 'seguro de incendio',
+    ctaLabel: 'Completar mi Seguro de Incendio',
+    reasons: [
+      { icon: '🔥', bold: 'Los siniestros no avisan.', text: 'Un incendio puede ocurrir en cualquier momento — protege tu patrimonio.' },
+      { icon: '🏗', bold: 'Protege tu inversión.', text: 'Tu propiedad es uno de tus activos más valiosos.' },
+      { icon: '💰', bold: 'Planes accesibles.', text: 'Coberturas adaptadas al valor de tu propiedad con primas competitivas.' },
+      { icon: '⚡', bold: 'Cotización rápida.', text: 'Obtén tu póliza en minutos, sin complicaciones.' },
+    ],
+  };
+  if (r === 'CONTENIDO') return {
+    emoji: '🏡', productLabel: 'seguro de contenido/hogar',
+    ctaLabel: 'Completar mi Seguro de Hogar',
+    reasons: [
+      { icon: '🛋', bold: 'Protege tus pertenencias.', text: 'Muebles, electrónicos y artículos valiosos merecen estar asegurados.' },
+      { icon: '🔒', bold: 'Tranquilidad total.', text: 'Ante robo, incendio o daños, tu patrimonio estará cubierto.' },
+      { icon: '💰', bold: 'Coberturas flexibles.', text: 'Elige el nivel de protección que se adapte a tus necesidades.' },
+      { icon: '⚡', bold: 'Proceso 100% digital.', text: 'Sin papeleo innecesario, todo desde tu celular o computador.' },
+    ],
+  };
+  if (r === 'SALUD') return {
+    emoji: '🏥', productLabel: 'seguro de salud',
+    ctaLabel: 'Completar mi Seguro de Salud',
+    reasons: [
+      { icon: '🩺', bold: 'Tu salud es lo primero.', text: 'Accede a los mejores médicos y hospitales cuando lo necesites.' },
+      { icon: '💊', bold: 'Sin gastos inesperados.', text: 'Evita que una emergencia médica afecte tus finanzas.' },
+      { icon: '💰', bold: 'Planes a tu medida.', text: 'Coberturas individuales y familiares con deducibles flexibles.' },
+      { icon: '⚡', bold: 'Solicitud rápida.', text: 'Completa tu proceso en minutos y queda protegido de inmediato.' },
+    ],
+  };
+  // Default: AUTO
+  return {
+    emoji: '🚗', productLabel: 'seguro de auto',
+    ctaLabel: 'Completar mi Seguro',
+    reasons: [
+      { icon: '🛡', bold: 'Los accidentes no avisan.', text: 'Cada día sin seguro es un riesgo innecesario para ti y tu familia.' },
+      { icon: '⚖', bold: 'Es obligatorio por ley.', text: 'En Panamá, circular sin seguro vigente puede resultar en multas y sanciones.' },
+      { icon: '💰', bold: 'Planes de pago flexibles.', text: 'Paga en cómodas cuotas mensuales con tarjeta de crédito.' },
+      { icon: '⚡', bold: 'Emisión en minutos.', text: 'Completa tu póliza 100% en línea, sin papeleo innecesario.' },
+    ],
+  };
+}
+
 export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): string {
   const { colors, logoUrl, baseUrl } = EMAIL_CONFIG;
   const firstName = data.clientName?.split(' ')[0] || 'Estimado(a) cliente';
-  const coverageLabel = data.coverageType || 'Auto';
+  const rc = ramoConfig(data.ramo);
+  const coverageLabel = data.coverageType || rc.productLabel;
   const stepDesc = stepLabel(data.lastStep);
+  const isStage2 = data.stage === 2;
+
+  // Stage 2 uses more urgent messaging
+  const titleText = isStage2
+    ? `¡${firstName}, tu cotización está por expirar!`
+    : `¡No dejes sin protección lo que más importa!`;
+  const subtitleText = isStage2
+    ? `Última oportunidad para completar tu ${rc.productLabel}`
+    : `Tu cotización de ${rc.productLabel} está a un paso`;
+  const preheaderText = isStage2
+    ? `${firstName}, tu cotización de ${rc.productLabel} está a punto de vencer. Complétala ahora.`
+    : `${firstName}, tu cotización de ${rc.productLabel} te espera. Protégete hoy.`;
 
   return `
 <!DOCTYPE html>
@@ -43,7 +113,7 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>No olvides tu póliza de auto</title>
+  <title>No olvides tu ${rc.productLabel}</title>
   <style>
     body {
       margin: 0;
@@ -242,7 +312,7 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
   </style>
 </head>
 <body>
-  <div class="preheader">${firstName}, tu cotización de seguro de auto te espera. Los accidentes no avisan — protege tu vehículo hoy.</div>
+  <div class="preheader">${preheaderText}</div>
 
   <div class="email-wrapper">
     <div class="email-container">
@@ -254,13 +324,16 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
       <!-- Body -->
       <div class="email-body">
         <span class="brand-accent"></span>
-        <h1 class="email-title">¡No dejes tu vehículo sin protección!</h1>
-        <p class="email-subtitle">Tu cotización de seguro de auto está a un paso</p>
+        <h1 class="email-title">${titleText}</h1>
+        <p class="email-subtitle">${subtitleText}</p>
 
         <div class="email-content">
           <p>Hola <strong>${firstName}</strong>,</p>
 
-          <p>Notamos que iniciaste el proceso de cotización de tu seguro de <strong>${coverageLabel}</strong> pero no pudiste completarlo. ¡No te preocupes! Tu información está guardada y puedes retomar donde lo dejaste.</p>
+          ${isStage2
+            ? `<p>Te escribimos nuevamente porque tu cotización de <strong>${coverageLabel}</strong> sigue disponible, pero <strong>no por mucho tiempo</strong>. Sabemos que la vida es ocupada, pero asegurarte solo toma unos minutos y la tranquilidad que obtienes no tiene precio.</p>`
+            : `<p>Notamos que iniciaste el proceso de cotización de tu <strong>${coverageLabel}</strong> pero no pudiste completarlo. ¡No te preocupes! Tu información está guardada y puedes retomar donde lo dejaste.</p>`
+          }
 
           <div class="highlight-box">
             <p><strong>Tu progreso:</strong> Llegaste hasta "${stepDesc}"</p>
@@ -268,35 +341,20 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
           </div>
 
           <div class="reasons-list">
-            <h3>¿Por qué completar tu seguro hoy?</h3>
-
+            <h3>¿Por qué completar tu ${rc.productLabel} hoy?</h3>
+            ${rc.reasons.map(r => `
             <div class="reason-item">
-              <div class="reason-icon">🛡</div>
-              <div class="reason-text"><strong>Los accidentes no avisan.</strong> Cada día sin seguro es un riesgo innecesario para ti y tu familia.</div>
-            </div>
-
-            <div class="reason-item">
-              <div class="reason-icon">⚖</div>
-              <div class="reason-text"><strong>Es obligatorio por ley.</strong> En Panamá, circular sin seguro vigente puede resultar en multas y sanciones.</div>
-            </div>
-
-            <div class="reason-item">
-              <div class="reason-icon">💰</div>
-              <div class="reason-text"><strong>Planes de pago flexibles.</strong> Paga en cómodas cuotas mensuales con tarjeta de crédito.</div>
-            </div>
-
-            <div class="reason-item">
-              <div class="reason-icon">⚡</div>
-              <div class="reason-text"><strong>Emisión en minutos.</strong> Completa tu póliza 100% en línea, sin papeleo innecesario.</div>
-            </div>
+              <div class="reason-icon">${r.icon}</div>
+              <div class="reason-text"><strong>${r.bold}</strong> ${r.text}</div>
+            </div>`).join('')}
           </div>
 
           <div class="cta-section">
-            <a href="${baseUrl}/cotizadores" class="cta-button">Completar mi Seguro</a>
-            <p class="urgency-note">El proceso toma menos de 5 minutos</p>
+            <a href="${baseUrl}/cotizadores" class="cta-button">${rc.ctaLabel}</a>
+            <p class="urgency-note">${isStage2 ? '¡No dejes pasar esta oportunidad!' : 'El proceso toma menos de 5 minutos'}</p>
           </div>
 
-          <p style="font-size: 14px; color: ${colors.textLight};">Si tienes alguna duda o necesitas asesoría personalizada, no dudes en contactarnos. Nuestro equipo está listo para ayudarte a encontrar la mejor cobertura para tu vehículo.</p>
+          <p style="font-size: 14px; color: ${colors.textLight};">Si tienes alguna duda o necesitas asesoría personalizada, no dudes en contactarnos. Nuestro equipo está listo para ayudarte a encontrar la mejor cobertura.</p>
         </div>
       </div>
 
@@ -311,7 +369,7 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
       <!-- Informational Footer -->
       <div class="email-footer">
         <p class="footer-brand">Líderes en Seguros, S.A.</p>
-        <p>Tu aliado de confianza en protección vehicular</p>
+        <p>Tu aliado de confianza en protección</p>
         <p style="margin-top: 12px;">
           <a href="${baseUrl}/cotizadores">Cotizar Ahora</a> |
           <a href="https://wa.me/50760001234">WhatsApp</a>

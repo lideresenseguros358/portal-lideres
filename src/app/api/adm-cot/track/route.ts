@@ -123,8 +123,8 @@ async function resolveRegionFromIp(ip: string): Promise<string | null> {
 
 const VALID_ACTIONS = ['quote_created', 'quote_emitted', 'quote_failed', 'step_update'] as const;
 const VALID_STATUSES = ['COTIZADA', 'EMITIDA', 'FALLIDA', 'ABANDONADA'] as const;
-const VALID_INSURERS = ['INTERNACIONAL', 'FEDPA'] as const;
-const VALID_RAMOS = ['AUTO', 'SALUD', 'VIDA', 'INCENDIO', 'RC', 'FIANZA'] as const;
+const VALID_INSURERS = ['INTERNACIONAL', 'FEDPA', 'REGIONAL'] as const;
+const VALID_RAMOS = ['AUTO', 'SALUD', 'VIDA', 'INCENDIO', 'CONTENIDO', 'RC', 'FIANZA'] as const;
 const MAX_STRING_LEN = 500;
 
 function sanitizeString(val: any, maxLen = MAX_STRING_LEN): string | null {

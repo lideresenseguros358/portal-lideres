@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaUser, FaHome, FaLock, FaDollarSign, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
+import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
@@ -404,6 +405,19 @@ export default function IncendioWizard() {
           security_measures: seguridadMeta,
           valor_bien_estructura: valorNum,
         },
+      });
+
+      // Track in ADM COT cotizaciones log
+      trackQuoteCreated({
+        quoteRef: `INCENDIO-${result.ticket || Date.now()}`,
+        insurer: 'INTERNACIONAL',
+        clientName: `${data.nombre} ${data.apellido}`.trim(),
+        email: data.correo.trim(),
+        phone: data.celular.trim(),
+        ramo: 'INCENDIO',
+        coverageType: tipoViviendaLabel,
+        planName: 'Seguro de Incendio',
+        annualPremium: undefined,
       });
 
       // Save to session for confirmation page

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaUser, FaBriefcase, FaHome, FaHeartbeat, FaShieldAlt, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
+import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
@@ -517,6 +518,20 @@ export default function VidaWizard() {
           },
           tipo_propuesta: tiposPropuesta,
         },
+      });
+
+      // Track in ADM COT cotizaciones log
+      trackQuoteCreated({
+        quoteRef: `VIDA-${result.ticket || Date.now()}`,
+        insurer: 'INTERNACIONAL',
+        clientName: `${data.nombre} ${data.apellido}`.trim(),
+        cedula: undefined,
+        email: data.correo.trim(),
+        phone: data.celular.trim(),
+        ramo: 'VIDA',
+        coverageType: tiposPropuesta.join(', ') || 'Vida',
+        planName: tiposPropuesta.join(' + ') || 'Seguro de Vida',
+        annualPremium: undefined,
       });
 
       // Save to session for confirmation page

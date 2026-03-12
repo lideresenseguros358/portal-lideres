@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaExclamationTriangle, FaUser, FaHome, FaLock, FaDollarSign, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
+import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
@@ -465,6 +466,19 @@ export default function ContenidoWizard() {
           tiene_articulos_alto_valor: !!data.tieneArticulosAltoValor,
           articulos_alto_valor: articulosMeta,
         },
+      });
+
+      // Track in ADM COT cotizaciones log
+      trackQuoteCreated({
+        quoteRef: `CONTENIDO-${result.ticket || Date.now()}`,
+        insurer: 'INTERNACIONAL',
+        clientName: `${data.nombre} ${data.apellido}`.trim(),
+        email: data.correo.trim(),
+        phone: data.celular.trim(),
+        ramo: 'CONTENIDO',
+        coverageType: tipoViviendaLabel,
+        planName: 'Seguro de Contenido/Hogar',
+        annualPremium: undefined,
       });
 
       sessionStorage.setItem('contenidoQuoteSubmission', JSON.stringify({

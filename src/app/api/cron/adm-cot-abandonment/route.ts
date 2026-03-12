@@ -1,15 +1,26 @@
 /**
- * CRON: ADM COT — Abandonment Recovery Emails
- * 
- * Runs daily to:
- * 1. Find quotes with status ABANDONADA that have a valid email
- * 2. That haven't been emailed yet (abandonment_email_sent_at IS NULL)
- * 3. That were abandoned in the last 48 hours (not too old)
- * 4. Send branded recovery email via ZeptoMail
- * 5. Mark record so we don't re-send
- * 
+ * CRON: ADM COT — Abandonment Recovery Emails (2-stage)
+ *
+ * Runs every 15 minutes to:
+ *
+ * STAGE 1 (≥1 hour after abandon):
+ *   - Find quotes with status ABANDONADA + valid email
+ *   - abandonment_email_sent_at IS NULL
+ *   - updated_at ≤ now − 1 hour  (abandoned at least 1h ago)
+ *   - updated_at ≥ now − 72 hours (not too old)
+ *   - Send first recovery email
+ *   - Set abandonment_email_sent_at
+ *
+ * STAGE 2 (≥24 hours after abandon):
+ *   - Same status/email filters
+ *   - abandonment_email_sent_at IS NOT NULL (first email already sent)
+ *   - quote_payload->>abandonment_email_2_sent_at IS NULL
+ *   - updated_at ≤ now − 24 hours
+ *   - Send second (more urgent) recovery email
+ *   - Set quote_payload.abandonment_email_2_sent_at
+ *
  * Protection: CRON_SECRET header
- * Schedule: "0 15 * * *" (10am Panama = 3pm UTC)
+ * Recommended schedule: every 15 minutes
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,8 +31,20 @@ import { buildAbandonmentRecoveryHtml } from '@/lib/email/templates/AbandonmentR
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Only send to quotes abandoned within the last 48 hours
-const MAX_AGE_HOURS = 48;
+const STAGE1_MIN_HOURS = 1;   // first email ≥ 1h after abandon
+const STAGE2_MIN_HOURS = 24;  // second email ≥ 24h after abandon
+const MAX_AGE_HOURS = 72;     // ignore quotes older than 72h
+
+function ramoLabel(ramo: string | null): string {
+  const map: Record<string, string> = {
+    AUTO: 'seguro de auto',
+    VIDA: 'seguro de vida',
+    INCENDIO: 'seguro de incendio',
+    CONTENIDO: 'seguro de contenido/hogar',
+    SALUD: 'seguro de salud',
+  };
+  return map[(ramo || '').toUpperCase()] || 'seguro';
+}
 
 export async function GET(request: NextRequest) {
   // Verify cron secret
@@ -40,105 +63,154 @@ export async function GET(request: NextRequest) {
 
   const sb = createClient(supabaseUrl, supabaseServiceKey);
   const now = new Date();
-  const cutoff = new Date(now.getTime() - MAX_AGE_HOURS * 60 * 60 * 1000).toISOString();
+  const stage1Cutoff = new Date(now.getTime() - STAGE1_MIN_HOURS * 3600_000).toISOString();
+  const stage2Cutoff = new Date(now.getTime() - STAGE2_MIN_HOURS * 3600_000).toISOString();
+  const maxAgeCutoff = new Date(now.getTime() - MAX_AGE_HOURS * 3600_000).toISOString();
 
-  let sent = 0;
+  let sentStage1 = 0;
+  let sentStage2 = 0;
   let skipped = 0;
   const errors: string[] = [];
 
   try {
-    console.log(`[CRON ABANDONMENT] Running at ${now.toISOString()}, cutoff: ${cutoff}`);
+    console.log(`[CRON ABANDONMENT] Running at ${now.toISOString()}`);
 
-    // 1. Find abandoned quotes with valid email, not yet emailed, within cutoff
-    const { data: abandoned, error: fetchErr } = await sb
+    // ────────────────────────────────────────────────
+    // STAGE 1: First email (≥1h after abandon)
+    // ────────────────────────────────────────────────
+    const { data: stage1, error: err1 } = await sb
       .from('adm_cot_quotes')
-      .select('id, quote_ref, insurer, client_name, email, phone, cedula, coverage_type, last_step, status, quoted_at, abandonment_email_sent_at')
+      .select('id, quote_ref, insurer, client_name, email, ramo, coverage_type, last_step, updated_at, quote_payload')
       .eq('status', 'ABANDONADA')
       .not('email', 'is', null)
       .is('abandonment_email_sent_at', null)
-      .gte('quoted_at', cutoff)
-      .order('quoted_at', { ascending: false });
+      .lte('updated_at', stage1Cutoff)
+      .gte('updated_at', maxAgeCutoff)
+      .order('updated_at', { ascending: false })
+      .limit(50);
 
-    if (fetchErr) {
-      console.error('[CRON ABANDONMENT] Fetch error:', fetchErr.message);
-      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    if (err1) {
+      console.error('[CRON ABANDONMENT] Stage 1 fetch error:', err1.message);
     }
 
-    if (!abandoned || abandoned.length === 0) {
-      console.log('[CRON ABANDONMENT] No abandoned quotes to process');
-      return NextResponse.json({ success: true, sent: 0, skipped: 0, message: 'No abandoned quotes' });
-    }
-
-    console.log(`[CRON ABANDONMENT] Found ${abandoned.length} abandoned quote(s) to email`);
-
-    // 2. Deduplicate by email — only send one email per unique email address
-    const seenEmails = new Set<string>();
-    const toProcess: typeof abandoned = [];
-
-    for (const q of abandoned) {
+    // Deduplicate by email for stage 1
+    const seenEmails1 = new Set<string>();
+    for (const q of (stage1 || [])) {
       const email = q.email?.trim().toLowerCase();
-      if (!email || !email.includes('@')) {
+      if (!email || !email.includes('@')) { skipped++; continue; }
+      if (seenEmails1.has(email)) {
         skipped++;
+        await sb.from('adm_cot_quotes').update({ abandonment_email_sent_at: now.toISOString() }).eq('id', q.id);
         continue;
       }
-      if (seenEmails.has(email)) {
-        skipped++;
-        // Still mark as processed to avoid re-processing
-        await sb
-          .from('adm_cot_quotes')
-          .update({ abandonment_email_sent_at: now.toISOString() })
-          .eq('id', q.id);
-        continue;
-      }
-      seenEmails.add(email);
-      toProcess.push(q);
-    }
+      seenEmails1.add(email);
 
-    // 3. Send emails
-    for (const q of toProcess) {
       try {
+        const rLabel = ramoLabel(q.ramo);
         const html = buildAbandonmentRecoveryHtml({
           clientName: q.client_name || 'Cliente',
-          coverageType: q.coverage_type || undefined,
+          coverageType: q.coverage_type || rLabel,
           insurer: q.insurer || undefined,
           lastStep: q.last_step || undefined,
           quoteRef: q.quote_ref || undefined,
+          ramo: q.ramo || 'AUTO',
+          stage: 1,
         });
 
+        const firstName = q.client_name?.split(' ')[0] || 'Hola';
         const result = await emailService.send({
-          to: q.email!,
-          subject: `${q.client_name?.split(' ')[0] || 'Hola'}, tu seguro de auto te espera — ¡Complétalo hoy!`,
+          to: email,
+          subject: `${firstName}, tu ${rLabel} te espera — ¡Complétalo hoy!`,
           html,
         });
 
         if (result.success) {
-          sent++;
-          console.log(`[CRON ABANDONMENT] ✓ Email sent to ${q.email} (ref: ${q.quote_ref})`);
+          sentStage1++;
+          console.log(`[CRON ABANDONMENT] ✓ Stage1 email → ${email} (ref: ${q.quote_ref})`);
         } else {
-          errors.push(`${q.email}: ${result.error}`);
-          console.error(`[CRON ABANDONMENT] ✗ Failed for ${q.email}:`, result.error);
+          errors.push(`S1 ${email}: ${result.error}`);
         }
 
-        // Mark as sent regardless (to avoid spamming on retry)
-        await sb
-          .from('adm_cot_quotes')
-          .update({ abandonment_email_sent_at: now.toISOString() })
-          .eq('id', q.id);
-
-      } catch (emailErr: any) {
-        errors.push(`${q.email}: ${emailErr.message}`);
-        console.error(`[CRON ABANDONMENT] Exception for ${q.email}:`, emailErr);
+        await sb.from('adm_cot_quotes').update({ abandonment_email_sent_at: now.toISOString() }).eq('id', q.id);
+      } catch (e: any) {
+        errors.push(`S1 ${email}: ${e.message}`);
       }
     }
 
-    console.log(`[CRON ABANDONMENT] Done. Sent: ${sent}, Skipped: ${skipped}, Errors: ${errors.length}`);
+    // ────────────────────────────────────────────────
+    // STAGE 2: Second email (≥24h after abandon)
+    // ────────────────────────────────────────────────
+    const { data: stage2, error: err2 } = await sb
+      .from('adm_cot_quotes')
+      .select('id, quote_ref, insurer, client_name, email, ramo, coverage_type, last_step, updated_at, quote_payload')
+      .eq('status', 'ABANDONADA')
+      .not('email', 'is', null)
+      .not('abandonment_email_sent_at', 'is', null)
+      .lte('updated_at', stage2Cutoff)
+      .gte('updated_at', maxAgeCutoff)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    if (err2) {
+      console.error('[CRON ABANDONMENT] Stage 2 fetch error:', err2.message);
+    }
+
+    const seenEmails2 = new Set<string>();
+    for (const q of (stage2 || [])) {
+      // Skip if second email already sent (tracked in quote_payload)
+      const payload = (typeof q.quote_payload === 'object' && q.quote_payload) ? q.quote_payload as Record<string, any> : {};
+      if (payload.abandonment_email_2_sent_at) { skipped++; continue; }
+
+      const email = q.email?.trim().toLowerCase();
+      if (!email || !email.includes('@')) { skipped++; continue; }
+      if (seenEmails2.has(email)) { skipped++; continue; }
+      seenEmails2.add(email);
+
+      try {
+        const rLabel = ramoLabel(q.ramo);
+        const html = buildAbandonmentRecoveryHtml({
+          clientName: q.client_name || 'Cliente',
+          coverageType: q.coverage_type || rLabel,
+          insurer: q.insurer || undefined,
+          lastStep: q.last_step || undefined,
+          quoteRef: q.quote_ref || undefined,
+          ramo: q.ramo || 'AUTO',
+          stage: 2,
+        });
+
+        const firstName = q.client_name?.split(' ')[0] || 'Hola';
+        const result = await emailService.send({
+          to: email,
+          subject: `${firstName}, ¡no pierdas tu cotización! Tu ${rLabel} está a un paso`,
+          html,
+        });
+
+        if (result.success) {
+          sentStage2++;
+          console.log(`[CRON ABANDONMENT] ✓ Stage2 email → ${email} (ref: ${q.quote_ref})`);
+        } else {
+          errors.push(`S2 ${email}: ${result.error}`);
+        }
+
+        // Mark second email sent in quote_payload
+        await sb.from('adm_cot_quotes').update({
+          quote_payload: { ...payload, abandonment_email_2_sent_at: now.toISOString() },
+        }).eq('id', q.id);
+      } catch (e: any) {
+        errors.push(`S2 ${email}: ${e.message}`);
+      }
+    }
+
+    const totalSent = sentStage1 + sentStage2;
+    console.log(`[CRON ABANDONMENT] Done. Stage1: ${sentStage1}, Stage2: ${sentStage2}, Skipped: ${skipped}, Errors: ${errors.length}`);
 
     return NextResponse.json({
       success: true,
-      sent,
+      sent: totalSent,
+      sentStage1,
+      sentStage2,
       skipped,
       errors: errors.length > 0 ? errors : undefined,
-      total: abandoned.length,
     });
 
   } catch (err: any) {
