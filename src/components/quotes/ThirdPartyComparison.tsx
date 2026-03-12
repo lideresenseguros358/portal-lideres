@@ -289,7 +289,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
       // ═══ ADM COT: Track REGIONAL DT quote ═══
       trackQuoteCreated({
-        quoteRef: `REGIONAL-DT-${type === 'premium' ? 'P' : 'B'}`,
+        quoteRef: `REGIONAL-${plan.idCotizacion || 'DT'}-DT-${type === 'premium' ? 'P' : 'B'}`,
         insurer: 'REGIONAL',
         clientName: 'Anónimo',
         ramo: 'AUTO',
