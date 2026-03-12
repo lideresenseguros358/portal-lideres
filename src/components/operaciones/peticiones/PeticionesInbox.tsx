@@ -31,11 +31,11 @@ function MetricsBar({ counts }: { counts: Counts }) {
   ];
 
   return (
-    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1 sm:gap-1.5">
+    <div className="grid grid-cols-4 md:grid-cols-8 gap-1 md:gap-1.5">
       {metrics.map((m) => (
-        <div key={m.label} className="flex flex-col items-center py-1.5 px-1 rounded-lg bg-gray-50/80">
-          <span className={`text-sm sm:text-base font-bold tabular-nums ${m.color}`}>{m.value}</span>
-          <span className="text-[8px] sm:text-[9px] text-gray-400 font-medium leading-tight text-center">{m.label}</span>
+        <div key={m.label} className="flex flex-col items-center py-1.5 px-1 rounded-lg bg-gray-50/80 min-w-0">
+          <span className={`text-xs sm:text-sm md:text-base font-bold tabular-nums ${m.color}`}>{m.value}</span>
+          <span className="text-[8px] sm:text-[9px] text-gray-400 font-medium leading-tight text-center truncate w-full">{m.label}</span>
         </div>
       ))}
     </div>
@@ -381,7 +381,7 @@ export default function PeticionesInbox() {
   useOpsKeyboard(shortcuts);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] lg:h-[calc(100vh-64px)] gap-3">
+    <div className="flex flex-col h-[calc(100vh-210px)] sm:h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] lg:h-[calc(100vh-170px)] xl:h-[calc(100vh-160px)] gap-3">
       {/* Tab switcher + Metrics */}
       <div className="flex flex-col gap-2.5 flex-shrink-0">
         <div className="flex items-center justify-between">

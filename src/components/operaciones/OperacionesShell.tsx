@@ -56,14 +56,14 @@ export default function OperacionesShell({ children }: Props) {
   }, [fetchBadges]);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-2 sm:space-y-3 lg:space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2 flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#010139] mb-1 flex items-center gap-2 sm:gap-3 flex-wrap">
             ⚙️ Operaciones
           </h1>
-          <p className="text-gray-600 text-base sm:text-lg">
+          <p className="text-gray-600 text-sm sm:text-base lg:text-lg">
             Centro de operaciones y gestión integral
           </p>
         </div>
@@ -80,7 +80,7 @@ export default function OperacionesShell({ children }: Props) {
       </div>
 
       {/* Tab Navigation — Same style as ADM COT */}
-      <div className="bg-white rounded-2xl shadow-lg p-2 flex gap-2 overflow-x-auto">
+      <div className="bg-white rounded-2xl shadow-lg p-1.5 sm:p-2 flex gap-1 sm:gap-2 overflow-x-auto">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -92,18 +92,17 @@ export default function OperacionesShell({ children }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
+              className={`flex-shrink-0 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-sm lg:text-base ${
                 isActive
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Icon size={14} className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`} />
-              <Icon size={16} className={`hidden sm:block ${isActive ? 'text-white' : 'text-gray-600'}`} />
-              <span className={`hidden sm:inline ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.label}</span>
-              <span className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.shortLabel}</span>
+              <Icon className={`flex-shrink-0 text-sm sm:text-base ${isActive ? 'text-white' : 'text-gray-600'}`} />
+              <span className={`hidden lg:inline ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.label}</span>
+              <span className={`lg:hidden ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.shortLabel}</span>
               {item.badgeKey && badges[item.badgeKey] > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${
                   isActive ? 'bg-[#8AAA19]' : 'bg-red-500 text-white'
                 }`}>
                   {badges[item.badgeKey] > 99 ? '99+' : badges[item.badgeKey]}

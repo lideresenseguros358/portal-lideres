@@ -432,7 +432,7 @@ export default function UrgenciasInbox() {
   // ═══════════════════════════════════════════
 
   return (
-    <div className="flex h-[calc(100vh-120px)] lg:h-[calc(100vh-64px)] border border-gray-100 rounded-xl overflow-hidden bg-white shadow-sm">
+    <div className="flex h-[calc(100vh-210px)] sm:h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] lg:h-[calc(100vh-170px)] xl:h-[calc(100vh-160px)] border border-gray-100 rounded-xl overflow-hidden bg-white shadow-sm">
       {/* Left panel — list */}
       <div className={`w-full lg:w-[360px] xl:w-[400px] border-r border-gray-200 flex-shrink-0 ${
         selectedId ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
