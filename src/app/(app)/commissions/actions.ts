@@ -5721,7 +5721,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         .from('bank_transfer_imports')
         .select('transfer_id, cutoff_origin_id, notes, import_id')
         .in('import_id', importIds)
-        .eq('is_temporary', true);
+        .eq('is_temporary', true)
+        .limit(10000);
       
       console.log(`[actionPayFortnight] 🔍 Transfer links temporales: ${tempTransferLinks?.length || 0}`);
       if (transferLinksError) {
@@ -5747,18 +5748,26 @@ export async function actionPayFortnight(fortnight_id: string) {
           console.log('[actionPayFortnight] ✅ Transfer links confirmados como permanentes');
         }
         
-        // Actualizar transferencias a PAGADO
+        // Actualizar transferencias a PAGADO — batch en lotes de 200
         const transferIds = tempTransferLinks.map((t: any) => t.transfer_id);
-        const { error: updateTransferError } = await supabase
-          .from('bank_transfers_comm')
-          .update({ status: 'PAGADO' })
-          .in('id', transferIds);
+        const TRANSFER_BATCH = 200;
+        let transfersUpdated = 0;
         
-        if (updateTransferError) {
-          console.error('[actionPayFortnight] ❌ Error actualizando transferencias a PAGADO:', updateTransferError);
-        } else {
-          console.log(`[actionPayFortnight] ✅✅✅ ${transferIds.length} TRANSFERENCIAS INDIVIDUALES → PAGADO ✅✅✅`);
+        for (let i = 0; i < transferIds.length; i += TRANSFER_BATCH) {
+          const batch = transferIds.slice(i, i + TRANSFER_BATCH);
+          const { error: updateTransferError } = await supabase
+            .from('bank_transfers_comm')
+            .update({ status: 'PAGADO' })
+            .in('id', batch);
+          
+          if (updateTransferError) {
+            console.error(`[actionPayFortnight] ❌ Error actualizando transferencias batch ${Math.floor(i / TRANSFER_BATCH) + 1}:`, updateTransferError);
+          } else {
+            transfersUpdated += batch.length;
+          }
         }
+        
+        console.log(`[actionPayFortnight] ✅✅✅ ${transfersUpdated} TRANSFERENCIAS INDIVIDUALES → PAGADO ✅✅✅`);
       } else {
         console.log('[actionPayFortnight] ⚠️ No se encontraron transfer links temporales');
       }
@@ -5768,7 +5777,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         .from('bank_group_imports')
         .select('group_id, notes')
         .in('import_id', importIds)
-        .eq('is_temporary', true);
+        .eq('is_temporary', true)
+        .limit(10000);
       
       if (tempGroupLinks && tempGroupLinks.length > 0) {
         // Actualizar vínculos a permanentes
@@ -5800,39 +5810,40 @@ export async function actionPayFortnight(fortnight_id: string) {
           console.log(`[actionPayFortnight] ✅ ${groupIds.length} grupos actualizados a PAGADO`);
           
           // CRÍTICO: Actualizar TODAS las transferencias que pertenecen a estos grupos
-          // Usar batching para evitar límite de PostgreSQL con .in()
-          const { data: groupTransfers } = await (supabase as any)
-            .from('bank_group_transfers')
-            .select('transfer_id')
-            .in('group_id', groupIds);
+          // Procesar cada grupo INDIVIDUALMENTE para evitar el límite de 1000 filas de Supabase
+          // (el .select() por defecto solo retorna 1000 filas, lo cual silenciosamente trunca grupos grandes)
+          let totalUpdated = 0;
           
-          if (groupTransfers && groupTransfers.length > 0) {
-            const groupTransferIds = groupTransfers.map((gt: any) => gt.transfer_id);
-            console.log(`[actionPayFortnight] 🔍 Total transferencias de grupos: ${groupTransferIds.length}`);
+          for (const gId of groupIds) {
+            const { data: singleGroupTransfers } = await (supabase as any)
+              .from('bank_group_transfers')
+              .select('transfer_id')
+              .eq('group_id', gId)
+              .limit(10000);
             
-            // BATCHING: Procesar en lotes de 100 para evitar límite de PostgreSQL
-            const BATCH_SIZE = 100;
-            let totalUpdated = 0;
-            
-            for (let i = 0; i < groupTransferIds.length; i += BATCH_SIZE) {
-              const batch = groupTransferIds.slice(i, i + BATCH_SIZE);
-              console.log(`[actionPayFortnight] 📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: actualizando ${batch.length} transferencias...`);
+            if (singleGroupTransfers && singleGroupTransfers.length > 0) {
+              const singleTransferIds = singleGroupTransfers.map((gt: any) => gt.transfer_id);
+              console.log(`[actionPayFortnight] 📦 Grupo ${gId}: ${singleTransferIds.length} transferencias`);
               
-              const { error: updateGroupTransfersError } = await supabase
-                .from('bank_transfers_comm')
-                .update({ status: 'PAGADO' })
-                .in('id', batch);
-              
-              if (updateGroupTransfersError) {
-                console.error(`[actionPayFortnight] ❌ Error en batch ${Math.floor(i / BATCH_SIZE) + 1}:`, updateGroupTransfersError);
-              } else {
-                totalUpdated += batch.length;
-                console.log(`[actionPayFortnight] ✅ Batch ${Math.floor(i / BATCH_SIZE) + 1} completado`);
+              // Batch en lotes de 200 para el UPDATE
+              const BATCH_SIZE = 200;
+              for (let i = 0; i < singleTransferIds.length; i += BATCH_SIZE) {
+                const batch = singleTransferIds.slice(i, i + BATCH_SIZE);
+                const { error: updateGroupTransfersError } = await supabase
+                  .from('bank_transfers_comm')
+                  .update({ status: 'PAGADO' })
+                  .in('id', batch);
+                
+                if (updateGroupTransfersError) {
+                  console.error(`[actionPayFortnight] ❌ Error en grupo ${gId} batch ${Math.floor(i / BATCH_SIZE) + 1}:`, updateGroupTransfersError);
+                } else {
+                  totalUpdated += batch.length;
+                }
               }
             }
-            
-            console.log(`[actionPayFortnight] ✅✅✅ ${totalUpdated} transferencias de grupos → PAGADO ✅✅✅`);
           }
+          
+          console.log(`[actionPayFortnight] ✅✅✅ ${totalUpdated} transferencias de grupos → PAGADO ✅✅✅`);
         }
       }
     }

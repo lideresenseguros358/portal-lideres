@@ -120,7 +120,7 @@ export async function PATCH(
       email_confirm: true,
       user_metadata: {
         // Datos básicos
-        full_name: userRequest.nombre_completo,
+        full_name: (userRequest.nombre_completo || '').toUpperCase(),
         role: role.toLowerCase(),
         
         // Datos personales

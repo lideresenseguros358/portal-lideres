@@ -522,17 +522,14 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
   const ramoLabel = ramo === 'vida' ? 'Vida' : ramo === 'incendio' ? 'Incendio' : ramo === 'hogar' ? 'Contenido / Hogar' : ramo || '—';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-4 max-sm:p-1">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-
+    <div className="standard-modal-backdrop" style={{ zIndex: 60 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl max-sm:rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] max-h-[85dvh] max-sm:max-h-[calc(100dvh-0.5rem)] flex flex-col overflow-hidden border border-gray-200">
+      <div className="standard-modal-container max-w-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0 bg-gradient-to-r from-[#010139] to-[#020270]">
+        <div className="standard-modal-header">
           <div>
-            <h2 className="text-base font-bold text-white">Solicitud de Cotización</h2>
-            <p className="text-[11px] text-white/50 mt-0.5">
+            <h2 className="standard-modal-title">Solicitud de Cotización</h2>
+            <p className="standard-modal-subtitle">
               {clientName} · {ramoLabel}
             </p>
           </div>
@@ -566,15 +563,15 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
             )}
             <button
               onClick={onClose}
-              className="text-white/40 hover:text-white cursor-pointer transition-colors ml-1"
+              className="standard-modal-close"
             >
-              <FaTimes className="text-base" />
+              <FaTimes size={20} />
             </button>
           </div>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        <div className="standard-modal-content space-y-3">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16">
               <FaSpinner className="animate-spin text-gray-300 text-xl mb-3" />
@@ -597,16 +594,6 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
             </div>
           ) : (
             <>
-              {/* Body text summary if present */}
-              {details.body_text && !editing && (
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1.5">Resumen</p>
-                  <pre className="text-[11px] text-gray-600 whitespace-pre-wrap font-sans leading-relaxed max-h-40 overflow-auto">
-                    {details.body_text}
-                  </pre>
-                </div>
-              )}
-
               {/* Sections */}
               {sections.map((section, i) => (
                 editing

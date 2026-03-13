@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
         fecha_nacimiento: personalData.fecha_nacimiento,
         telefono: personalData.telefono,
         licencia: personalData.licencia || null,
-        nombre_completo: personalData.nombre || bankData.nombre_completo, // Nombre del solicitante
+        nombre_completo: (personalData.nombre || bankData.nombre_completo || '').toUpperCase(), // Nombre del solicitante (MAYÚSCULAS)
         // Campos ACH (estructura actualizada después de migración)
         bank_route: bankData.bank_route, // Código de ruta bancaria
         bank_account_no: bankData.account_number, // Número de cuenta (limpio)

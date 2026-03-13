@@ -129,7 +129,7 @@ export default function MarkAsPaidModal({
           )}
 
           {/* Fecha de Pago */}
-          <div className="space-y-2">
+          <div className="w-full max-w-full overflow-hidden space-y-2">
             <label className="block text-sm font-semibold text-gray-700">
               Fecha de Pago <span className="text-red-600">*</span>
             </label>
@@ -137,7 +137,8 @@ export default function MarkAsPaidModal({
               type="date"
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+              className="w-full max-w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+              style={{ WebkitAppearance: 'none' }}
               required
             />
             <p className="text-xs text-gray-500">

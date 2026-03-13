@@ -121,6 +121,12 @@ export async function POST(request: NextRequest) {
     const licenciaFile = formData.get('licenciaFile') as File | null;
     const registroVehicularFile = formData.get('registroVehicularFile') as File | null;
     
+    console.log('[IS EXPEDIENTE] Archivos recibidos en FormData:', {
+      cedulaFile: cedulaFile ? `${cedulaFile.name} (${cedulaFile.size} bytes)` : 'NO RECIBIDO',
+      licenciaFile: licenciaFile ? `${licenciaFile.name} (${licenciaFile.size} bytes)` : 'NO RECIBIDO',
+      registroVehicularFile: registroVehicularFile ? `${registroVehicularFile.name} (${registroVehicularFile.size} bytes)` : 'NO RECIBIDO',
+    });
+    
     let cedulaBuffer: Buffer | null = null;
     let licenciaBuffer: Buffer | null = null;
     let registroBuffer: Buffer | null = null;

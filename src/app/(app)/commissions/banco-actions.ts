@@ -912,23 +912,31 @@ export async function actionMarkGroupsAsPaid(
       return { ok: false, error: 'Error al marcar grupos como pagados' };
     }
 
-    // Obtener todas las transferencias de estos grupos
-    const { data: groupTransfers } = await supabase
-      .from('bank_group_transfers')
-      .select('transfer_id')
-      .in('group_id', groupIds);
+    // Obtener y actualizar transferencias de cada grupo INDIVIDUALMENTE
+    // (evita el límite de 1000 filas de Supabase .select() que trunca grupos grandes)
+    for (const gId of groupIds) {
+      const { data: singleGroupTransfers } = await supabase
+        .from('bank_group_transfers')
+        .select('transfer_id')
+        .eq('group_id', gId)
+        .limit(10000);
 
-    if (groupTransfers && groupTransfers.length > 0) {
-      const transferIds = groupTransfers.map(gt => gt.transfer_id);
+      if (singleGroupTransfers && singleGroupTransfers.length > 0) {
+        const transferIds = singleGroupTransfers.map(gt => gt.transfer_id);
 
-      // Actualizar transferencias a PAGADO
-      const { error: transferError } = await supabase
-        .from('bank_transfers_comm')
-        .update({ status: 'PAGADO' })
-        .in('id', transferIds);
+        // Batch en lotes de 200 para el UPDATE
+        const BATCH_SIZE = 200;
+        for (let i = 0; i < transferIds.length; i += BATCH_SIZE) {
+          const batch = transferIds.slice(i, i + BATCH_SIZE);
+          const { error: transferError } = await supabase
+            .from('bank_transfers_comm')
+            .update({ status: 'PAGADO' })
+            .in('id', batch);
 
-      if (transferError) {
-        // Error silencioso
+          if (transferError) {
+            console.error(`[actionMarkGroupsAsPaid] Error en grupo ${gId} batch ${Math.floor(i / BATCH_SIZE) + 1}:`, transferError);
+          }
+        }
       }
     }
 

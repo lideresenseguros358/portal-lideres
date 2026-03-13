@@ -323,10 +323,11 @@ export default function NewUserWizard() {
                   type="text"
                   value={personalData.nombre}
                   onChange={(e) => {
-                    setPersonalData({ ...personalData, nombre: e.target.value });
+                    const upperName = e.target.value.toUpperCase();
+                    setPersonalData({ ...personalData, nombre: upperName });
                     // Si checkbox está marcado, actualizar también el titular
                     if (autoFillNombre) {
-                      const nombreNormalizado = toUpperNoAccents(e.target.value, { preserveTrailingSpace: true }).substring(0, 22);
+                      const nombreNormalizado = toUpperNoAccents(upperName, { preserveTrailingSpace: true }).substring(0, 22);
                       setBankData({ ...bankData, nombre_completo: nombreNormalizado });
                     }
                   }}

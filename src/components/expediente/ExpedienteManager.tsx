@@ -157,7 +157,7 @@ export default function ExpedienteManager({
     try {
       const result = await uploadExpedienteDocument(
         clientId,
-        uploadDocType === 'registro_vehicular' ? policyId : null,
+        (uploadDocType === 'registro_vehicular' || uploadDocType === 'debida_diligencia') ? policyId : null,
         uploadDocType,
         uploadFile,
         {
@@ -281,7 +281,7 @@ export default function ExpedienteManager({
       if (!showClientDocs && (doc.document_type === 'cedula' || doc.document_type === 'licencia')) {
         return false;
       }
-      if (!showPolicyDocs && doc.document_type === 'registro_vehicular') {
+      if (!showPolicyDocs && (doc.document_type === 'registro_vehicular' || doc.document_type === 'debida_diligencia')) {
         return false;
       }
       if (!showOtros && doc.document_type === 'otros') {
@@ -632,6 +632,9 @@ export default function ExpedienteManager({
                   {showPolicyDocs && policyId && (
                     <option value="registro_vehicular">📄 Registro Vehicular</option>
                   )}
+                  {showPolicyDocs && policyId && (
+                    <option value="debida_diligencia">📋 Debida Diligencia</option>
+                  )}
                   {showOtros && (
                     <option value="otros">📂 Otros Documentos</option>
                   )}
@@ -640,6 +643,7 @@ export default function ExpedienteManager({
                   {uploadDocType === 'cedula' && 'ℹ️ Documento de identificación del cliente'}
                   {uploadDocType === 'licencia' && 'ℹ️ Licencia de conducir vigente'}
                   {uploadDocType === 'registro_vehicular' && 'ℹ️ Registro del vehículo asegurado'}
+                  {uploadDocType === 'debida_diligencia' && 'ℹ️ Debida diligencia y autorización de la póliza'}
                   {uploadDocType === 'otros' && 'ℹ️ Documento adicional personalizado'}
                 </p>
               </div>
