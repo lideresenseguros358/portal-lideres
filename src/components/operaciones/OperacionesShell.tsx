@@ -92,14 +92,14 @@ export default function OperacionesShell({ children }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
+              className={`flex-shrink-0 sm:flex-shrink sm:flex-1 min-w-[80px] sm:min-w-[100px] flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-base ${
                 isActive
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Icon size={14} className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`} />
-              <Icon size={16} className={`hidden sm:block ${isActive ? 'text-white' : 'text-gray-600'}`} />
+              <Icon size={16} className={`sm:hidden flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-600'}`} />
+              <Icon size={16} className={`hidden sm:block flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-600'}`} />
               <span className={`hidden sm:inline ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.label}</span>
               <span className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.shortLabel}</span>
               {item.badgeKey && badges[item.badgeKey] > 0 && (
