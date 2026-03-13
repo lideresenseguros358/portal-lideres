@@ -522,7 +522,7 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
   const ramoLabel = ramo === 'vida' ? 'Vida' : ramo === 'incendio' ? 'Incendio' : ramo === 'hogar' ? 'Contenido / Hogar' : ramo || '—';
 
   return (
-    <div className="standard-modal-backdrop" style={{ zIndex: 60 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="standard-modal-backdrop" style={{ zIndex: 9999 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Modal */}
       <div className="standard-modal-container max-w-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
