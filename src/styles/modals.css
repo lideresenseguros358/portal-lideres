@@ -251,17 +251,20 @@
    ============================================ */
 @media (max-width: 640px) {
   .standard-modal-backdrop {
+    align-items: flex-start;
     padding: 0.5rem;
-    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-top: max(0.75rem, env(safe-area-inset-top));
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    overflow-y: auto;
   }
 
   .standard-modal-container {
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
-    max-height: calc(100vh - 4rem);
-    max-height: calc(100dvh - 4rem);
+    margin-top: 0;
+    margin-bottom: 0;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
     border-radius: 0.75rem;
+    flex-shrink: 0;
   }
 
   .standard-modal-header {
