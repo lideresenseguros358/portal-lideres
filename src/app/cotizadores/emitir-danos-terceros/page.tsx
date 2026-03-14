@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes } from 'react-icons/fa';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
-import CreditCardInput from '@/components/is/CreditCardInput';
+import CreditCardInput, { type CardData } from '@/components/is/CreditCardInput';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
@@ -59,6 +59,7 @@ export default function EmitirDanosTercerosPage() {
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const [pfCardData, setPfCardData] = useState<CardData | null>(null);
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -207,6 +208,10 @@ export default function EmitirDanosTercerosPage() {
     toast.success('Tarjeta registrada. Presiona "Continuar al Resumen" para seguir.');
   };
 
+  const handleCardDataReady = (data: CardData) => {
+    setPfCardData(data);
+  };
+
   const handlePaymentError = (error: string) => {
     toast.error(error);
   };
@@ -235,6 +240,82 @@ export default function EmitirDanosTercerosPage() {
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
 
       if (!emissionData) throw new Error('Faltan datos del asegurado');
+
+      // PagueloFacil tracking vars (scoped to emission function)
+      let pfCodOper: string | undefined;
+      let pfRecCodOper: string | undefined;
+      let pfCardType: string | undefined;
+      let pfCardDisplay: string | undefined;
+
+      // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
+      if (pfCardData) {
+        setEmissionProgress(2);
+        setEmissionStep('Procesando pago con tarjeta...');
+
+        const chargeAmount = selectedPaymentMode === 'cuotas'
+          ? selectedInstallmentAmount
+          : (selectedPlan.annualPremium || 0);
+
+        const chargeRes = await fetch('/api/paguelofacil/charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: chargeAmount,
+            description: `Póliza DT - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            concept: `Prima ${selectedPaymentMode === 'cuotas' ? 'cuota 1/' + selectedInstallmentsCount : 'contado'} - Daños a Terceros`,
+            cardNumber: pfCardData.cardNumber,
+            expMonth: pfCardData.expMonth,
+            expYear: pfCardData.expYear,
+            cvv: pfCardData.cvv,
+            cardholderName: pfCardData.cardName,
+            cardType: pfCardData.brand,
+            email: emissionData.email,
+            phone: emissionData.celular || emissionData.telefono,
+          }),
+        });
+
+        const chargeData = await chargeRes.json();
+
+        if (!chargeData.success) {
+          throw new Error(chargeData.error || 'Error procesando el pago. Verifique los datos de su tarjeta.');
+        }
+
+        // Store PF data for ADM COT payment tracking
+        pfCodOper = chargeData.codOper;
+        pfCardType = pfCardData.brand;
+        pfCardDisplay = pfCardData.cardNumber ? `****${pfCardData.cardNumber.slice(-4)}` : undefined;
+
+        console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
+        toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
+
+        // ═══ PAGUELOFACIL: Registrar recurrencia si hay cuotas pendientes ═══
+        if (selectedPaymentMode === 'cuotas' && selectedInstallmentsCount > 1 && chargeData.codOper) {
+          setEmissionStep('Registrando pagos recurrentes...');
+          const recRes = await fetch('/api/paguelofacil/recurrent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              codOper: chargeData.codOper,
+              amount: chargeAmount,
+              description: `Póliza DT - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
+              concept: `Prima cuota recurrente - Daños a Terceros`,
+              email: emissionData.email,
+              phone: emissionData.celular || emissionData.telefono,
+              totalInstallments: selectedInstallmentsCount,
+            }),
+          });
+          const recData = await recRes.json();
+          if (recData.success) {
+            pfRecCodOper = recData.codOper;
+            console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper, `(${selectedInstallmentsCount - 1} cuotas restantes)`);
+            toast.success(`Pago recurrente registrado: ${selectedInstallmentsCount - 1} cuota(s) restante(s)`);
+          } else {
+            console.warn('[PAGUELOFACIL] ⚠️ Recurrencia no registrada:', recData.error);
+            toast.warning(`Pago inicial aprobado, pero no se pudo registrar la recurrencia: ${recData.error}`);
+          }
+        }
+      }
+
       setEmissionProgress(5);
       setEmissionStep('Validando información del vehículo...');
 
@@ -372,6 +453,10 @@ export default function EmitirDanosTercerosPage() {
           totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
           installments: selectedInstallmentsCount,
           ramo: 'AUTO',
+          pfCodOper,
+          pfRecCodOper,
+          pfCardType,
+          pfCardDisplay,
         });
 
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
@@ -1113,6 +1198,7 @@ export default function EmitirDanosTercerosPage() {
 
             <CreditCardInput
               onTokenReceived={handlePaymentTokenReceived}
+              onCardDataReady={handleCardDataReady}
               onError={handlePaymentError}
               environment="development"
             />

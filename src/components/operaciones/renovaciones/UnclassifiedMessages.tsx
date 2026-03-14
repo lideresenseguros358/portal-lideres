@@ -51,9 +51,20 @@ function AssignModal({
     if (!search.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/operaciones/renewals?search=${encodeURIComponent(search)}&limit=10`);
-      const json = await res.json();
-      setResults(json.data || []);
+      const q = encodeURIComponent(search);
+      const [renRes, petRes, urgRes] = await Promise.all([
+        fetch(`/api/operaciones/renewals?search=${q}&limit=10`).then(r => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/operaciones/petitions?search=${q}&limit=10`).then(r => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/operaciones/urgencies?search=${q}&limit=10`).then(r => r.json()).catch(() => ({ data: [] })),
+      ]);
+      const merged = [
+        ...(renRes.data || []),
+        ...(petRes.data || []),
+        ...(urgRes.data || []),
+      ].sort((a: OpsCase, b: OpsCase) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setResults(merged);
     } catch {
       setResults([]);
     }
@@ -111,25 +122,34 @@ function AssignModal({
             </p>
           ) : (
             <div className="space-y-1">
-              {results.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => onAssign(message.id, c.id)}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 border border-gray-100 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-[#010139]">{c.client_name || 'Sin nombre'}</span>
-                    <span className="text-[10px] text-gray-400">{c.ticket}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
-                    <span>{c.policy_number || '—'}</span>
-                    <span>·</span>
-                    <span>{c.insurer_name || '—'}</span>
-                    <span>·</span>
-                    <span>{c.status}</span>
-                  </div>
-                </button>
-              ))}
+              {results.map((c) => {
+                const typeLabelMap: Record<string, string> = { renovacion: 'REN', peticion: 'PET', urgencia: 'URG' };
+                const typeBgMap: Record<string, string> = { renovacion: 'bg-blue-50 text-blue-600', peticion: 'bg-purple-50 text-purple-600', urgencia: 'bg-red-50 text-red-600' };
+                const typeLabel = typeLabelMap[c.case_type] || '';
+                const typeBg = typeBgMap[c.case_type] || 'bg-gray-50 text-gray-600';
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => onAssign(message.id, c.id)}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 border border-gray-100 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {typeLabel && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${typeBg}`}>{typeLabel}</span>}
+                        <span className="text-xs font-semibold text-[#010139] truncate">{c.client_name || 'Sin nombre'}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 flex-shrink-0">{c.ticket}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
+                      <span>{c.policy_number || '—'}</span>
+                      <span>·</span>
+                      <span>{c.insurer_name || '—'}</span>
+                      <span>·</span>
+                      <span>{c.status}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

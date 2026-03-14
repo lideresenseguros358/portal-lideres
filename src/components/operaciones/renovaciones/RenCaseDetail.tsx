@@ -110,6 +110,20 @@ function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
         {/* Subject */}
         <p className="text-[10px] text-gray-500 mb-1 truncate">{msg.subject}</p>
 
+        {/* Payment link badge */}
+        {msg.metadata?.payment_link && (
+          <a
+            href={msg.metadata.payment_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2 py-1 mb-1.5 bg-green-50 border border-green-200 rounded-md text-[10px] text-green-700 font-medium hover:bg-green-100 transition-colors"
+          >
+            <FaLink className="text-[9px]" />
+            Enlace de pago
+            <span className="text-[9px] text-green-500 truncate max-w-[180px]">{msg.metadata.payment_link}</span>
+          </a>
+        )}
+
         {/* Body */}
         {expanded && msg.body_html ? (
           <div
@@ -257,7 +271,7 @@ interface CaseDetailProps {
   onReassign: (masterId: string) => void;
   onShowHistory: () => void;
   onSendEmail: (body: string, template: string, attachments?: File[]) => void;
-  onSendPaymentLink: (paymentLink: string) => void;
+  onSendPaymentLink: (paymentLink: string, tramite: string) => void;
   masters: MasterUser[];
 }
 
@@ -274,6 +288,8 @@ export default function RenCaseDetail({
   const [emailTemplate, setEmailTemplate] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [paymentLink, setPaymentLink] = useState('');
+  const [tramitePago, setTramitePago] = useState('');
+  const [customTramite, setCustomTramite] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -683,11 +699,53 @@ export default function RenCaseDetail({
               <p className="text-xs font-semibold text-green-800 mb-2 flex items-center gap-1.5">
                 <FaLink className="text-[10px]" /> Enviar Enlace de Pago
               </p>
-              <p className="text-[11px] text-green-700 mb-3">Pega el enlace de pago. Se enviará al cliente con la plantilla de pago corporativa.</p>
+              <p className="text-[11px] text-green-700 mb-3">Pega el enlace de pago y selecciona el tipo de trámite. Se enviará al cliente con la plantilla de pago corporativa.</p>
               <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-3">
                 <span className="font-medium">Para:</span>
                 <span>{c.client_email || 'Sin email del cliente'}</span>
               </div>
+
+              {/* Tipo de trámite selector */}
+              <div className="mb-3">
+                <label className="text-[11px] font-semibold text-gray-600 mb-1.5 block">Tipo de trámite</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {['Vida', 'Incendio', 'Contenido', 'Auto', 'Salud', 'Fianza', 'Responsabilidad Civil', 'Transporte'].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => { setTramitePago(opt); setCustomTramite(''); }}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-colors duration-100 ${
+                        tramitePago === opt
+                          ? 'bg-[#010139] text-white border-[#010139]'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => { setTramitePago('otro'); setCustomTramite(''); }}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-colors duration-100 ${
+                      tramitePago === 'otro'
+                        ? 'bg-[#010139] text-white border-[#010139]'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Otro
+                  </button>
+                </div>
+                {tramitePago === 'otro' && (
+                  <input
+                    type="text"
+                    value={customTramite}
+                    onChange={(e) => setCustomTramite(e.target.value)}
+                    placeholder="Escriba el tipo de trámite..."
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 transition-all duration-150"
+                  />
+                )}
+              </div>
+
               <input
                 type="url"
                 value={paymentLink}
@@ -697,8 +755,12 @@ export default function RenCaseDetail({
               />
               <div className="flex items-center justify-end">
                 <button
-                  onClick={() => { onSendPaymentLink(paymentLink.trim()); setPaymentLink(''); setActiveView('history'); }}
-                  disabled={!paymentLink.trim() || !c.client_email}
+                  onClick={() => {
+                    const finalTramite = tramitePago === 'otro' ? customTramite.trim() : tramitePago;
+                    onSendPaymentLink(paymentLink.trim(), finalTramite);
+                    setPaymentLink(''); setTramitePago(''); setCustomTramite(''); setActiveView('history');
+                  }}
+                  disabled={!paymentLink.trim() || !c.client_email || !tramitePago || (tramitePago === 'otro' && !customTramite.trim())}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#8AAA19] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-[#7a9916] disabled:opacity-40 transition-colors duration-150"
                 >
                   <FaLink className="text-[10px]" /> Enviar Enlace de Pago

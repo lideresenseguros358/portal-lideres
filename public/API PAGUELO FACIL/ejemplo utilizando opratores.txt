@@ -1,0 +1,2 @@
+
+https://admin.paguelofacil.com/PFManagementServices/api/v1/MerchantTransactions?field=idTransaction::COUNT

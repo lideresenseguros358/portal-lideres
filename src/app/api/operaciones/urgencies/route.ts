@@ -103,6 +103,8 @@ export async function GET(req: NextRequest) {
     const noResp = searchParams.get('no_first_response');
     const assignedTo = searchParams.get('assigned_to');
     const today = searchParams.get('today');
+    const closed = searchParams.get('closed');
+    const closedSince = searchParams.get('closed_since');
 
     // Lean columns for list view
     const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,client_email,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,urgency_flag,severity,category,chat_thread_id,source,metadata';
@@ -112,7 +114,12 @@ export async function GET(req: NextRequest) {
       .eq('case_type', CASE_TYPE)
       .order('created_at', { ascending: false });
 
-    if (status) query = query.eq('status', status);
+    if (closed === 'true') {
+      query = query.in('status', ['resuelto', 'cerrado']);
+      if (closedSince) query = query.gte('closed_at', closedSince);
+    } else if (status) {
+      query = query.eq('status', status);
+    }
     if (slaBr === 'true') query = query.eq('sla_breached', true);
     if (noResp === 'true') query = query.is('first_response_at', null);
     if (search) query = query.or(`client_name.ilike.%${search}%,ticket.ilike.%${search}%,category.ilike.%${search}%`);

@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
     const slaBreached = searchParams.get('sla_breached');
     const noFirstResponse = searchParams.get('no_first_response');
     const assignedTo = searchParams.get('assigned_to');
+    const closed = searchParams.get('closed');
+    const closedSince = searchParams.get('closed_since');
     const view = searchParams.get('view');
     const caseId = searchParams.get('case_id');
 
@@ -81,7 +83,12 @@ export async function GET(req: NextRequest) {
       .eq('case_type', CASE_TYPE)
       .order('created_at', { ascending: false });
 
-    if (status) query = query.eq('status', status);
+    if (closed === 'true') {
+      query = query.in('status', ['cerrado', 'perdido']);
+      if (closedSince) query = query.gte('closed_at', closedSince);
+    } else if (status) {
+      query = query.eq('status', status);
+    }
     if (ramo) query = query.eq('ramo', ramo);
     if (search) query = query.or(`client_name.ilike.%${search}%,ticket.ilike.%${search}%,policy_number.ilike.%${search}%,client_email.ilike.%${search}%`);
     if (slaBreached === 'true') query = query.eq('sla_breached', true);

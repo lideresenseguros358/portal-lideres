@@ -11,7 +11,7 @@ import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import VehicleInspection from '@/components/cotizadores/VehicleInspection';
-import CreditCardInput from '@/components/is/CreditCardInput';
+import CreditCardInput, { type CardData } from '@/components/is/CreditCardInput';
 import FinalQuoteSummary from '@/components/cotizadores/FinalQuoteSummary';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
@@ -45,6 +45,7 @@ export default function EmitirPage() {
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
   const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const [pfCardData, setPfCardData] = useState<CardData | null>(null);
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -233,7 +234,80 @@ export default function EmitirPage() {
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
       const isRegionalReal = selectedPlan?._isReal && (selectedPlan?._isREGIONAL || selectedPlan?.insurerName?.includes('Regional'));
-      
+
+      // PagueloFacil tracking vars (scoped to emission function)
+      let pfCodOper: string | undefined;
+      let pfRecCodOper: string | undefined;
+      let pfCardType: string | undefined;
+      let pfCardDisplay: string | undefined;
+
+      // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
+      if (pfCardData && emissionData) {
+        setEmissionProgress(2);
+        setEmissionStep('Procesando pago con tarjeta...');
+
+        const chargeAmount = installments > 1 ? monthlyPayment : (selectedPlan?.annualPremium || 0);
+
+        const chargeRes = await fetch('/api/paguelofacil/charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: chargeAmount,
+            description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            concept: `Prima ${installments > 1 ? 'cuota 1/' + installments : 'contado'} - Cobertura Completa`,
+            cardNumber: pfCardData.cardNumber,
+            expMonth: pfCardData.expMonth,
+            expYear: pfCardData.expYear,
+            cvv: pfCardData.cvv,
+            cardholderName: pfCardData.cardName,
+            cardType: pfCardData.brand,
+            email: emissionData.email,
+            phone: emissionData.celular || emissionData.telefono,
+          }),
+        });
+
+        const chargeData = await chargeRes.json();
+
+        if (!chargeData.success) {
+          throw new Error(chargeData.error || 'Error procesando el pago. Verifique los datos de su tarjeta.');
+        }
+
+        // Store PF data for ADM COT payment tracking
+        pfCodOper = chargeData.codOper;
+        pfCardType = pfCardData.brand;
+        pfCardDisplay = pfCardData.cardNumber ? `****${pfCardData.cardNumber.slice(-4)}` : undefined;
+
+        console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
+        toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
+
+        // ═══ PAGUELOFACIL: Registrar recurrencia si hay cuotas pendientes ═══
+        if (installments > 1 && chargeData.codOper) {
+          setEmissionStep('Registrando pagos recurrentes...');
+          const recRes = await fetch('/api/paguelofacil/recurrent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              codOper: chargeData.codOper,
+              amount: chargeAmount,
+              description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
+              concept: `Prima cuota recurrente - Cobertura Completa`,
+              email: emissionData.email,
+              phone: emissionData.celular || emissionData.telefono,
+              totalInstallments: installments,
+            }),
+          });
+          const recData = await recRes.json();
+          if (recData.success) {
+            pfRecCodOper = recData.codOper;
+            console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper, `(${installments - 1} cuotas restantes)`);
+            toast.success(`Pago recurrente registrado: ${installments - 1} cuota(s) restante(s)`);
+          } else {
+            console.warn('[PAGUELOFACIL] ⚠️ Recurrencia no registrada:', recData.error);
+            toast.warning(`Pago inicial aprobado, pero no se pudo registrar la recurrencia: ${recData.error}`);
+          }
+        }
+      }
+
       // EMISIÓN FEDPA
       if (isFedpaReal) {
         console.log('[EMISIÓN FEDPA] Iniciando emisión con API real...');
@@ -344,6 +418,10 @@ export default function EmitirPage() {
           totalPremium: selectedPlan?.annualPremium || 0,
           installments,
           ramo: 'AUTO',
+          pfCodOper,
+          pfRecCodOper,
+          pfCardType,
+          pfCardDisplay,
         });
         
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
@@ -577,6 +655,10 @@ export default function EmitirPage() {
           totalPremium: selectedPlan?.annualPremium || 0,
           installments,
           ramo: 'AUTO',
+          pfCodOper,
+          pfRecCodOper,
+          pfCardType,
+          pfCardDisplay,
         });
         
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
@@ -825,6 +907,10 @@ export default function EmitirPage() {
           totalPremium: selectedPlan?.annualPremium || 0,
           installments,
           ramo: 'AUTO',
+          pfCodOper,
+          pfRecCodOper,
+          pfCardType,
+          pfCardDisplay,
         });
         
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
@@ -1208,6 +1294,7 @@ export default function EmitirPage() {
               setCompletedSteps(prev => [...prev, 'payment-info']);
               toast.success(`Tarjeta ${brand} ****${last4} registrada`);
             }}
+            onCardDataReady={(data: CardData) => setPfCardData(data)}
             onError={handlePaymentError}
             environment="development"
           />

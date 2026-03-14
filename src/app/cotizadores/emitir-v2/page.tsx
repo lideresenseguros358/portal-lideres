@@ -20,7 +20,7 @@ import VehicleDataSection, { type VehicleData } from '@/components/cotizadores/e
 import ClientDocumentsSection, { type ClientDocuments } from '@/components/cotizadores/emision/ClientDocumentsSection';
 import VehicleInspectionSection, { type VehicleInspectionData } from '@/components/cotizadores/emision/VehicleInspectionSection';
 import TruthDeclarationSection from '@/components/cotizadores/emision/TruthDeclarationSection';
-import CreditCardInput from '@/components/is/CreditCardInput';
+import CreditCardInput, { type CardData } from '@/components/is/CreditCardInput';
 
 // Utilidades
 import { generateInspectionReport } from '@/lib/utils/inspectionReportGenerator';
@@ -56,6 +56,7 @@ export default function EmitirV2Page() {
   const [creditCardToken, setCreditCardToken] = useState<string | null>(null);
   const [cardLast4, setCardLast4] = useState<string | null>(null);
   const [cardBrand, setCardBrand] = useState<string | null>(null);
+  const [pfCardData, setPfCardData] = useState<CardData | null>(null);
   
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
@@ -318,7 +319,79 @@ export default function EmitirV2Page() {
       // Detectar aseguradora
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
-      
+
+      // PagueloFacil tracking vars (scoped to emission function)
+      let pfCodOper: string | undefined;
+      let pfRecCodOper: string | undefined;
+      let pfCardType: string | undefined;
+      let pfCardDisplay: string | undefined;
+
+      // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
+      if (pfCardData && insuredData) {
+        toast.info('Procesando pago con tarjeta...');
+
+        const chargeAmount = installments > 1 ? monthlyPayment : (selectedPlan?.annualPremium || 0);
+
+        const chargeRes = await fetch('/api/paguelofacil/charge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: chargeAmount,
+            description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${insuredData.primerNombre} ${insuredData.primerApellido}`,
+            concept: `Prima ${installments > 1 ? 'cuota 1/' + installments : 'contado'} - Cobertura Completa`,
+            cardNumber: pfCardData.cardNumber,
+            expMonth: pfCardData.expMonth,
+            expYear: pfCardData.expYear,
+            cvv: pfCardData.cvv,
+            cardholderName: pfCardData.cardName,
+            cardType: pfCardData.brand,
+            email: insuredData.email,
+            phone: insuredData.celular || insuredData.telefono,
+          }),
+        });
+
+        const chargeData = await chargeRes.json();
+
+        if (!chargeData.success) {
+          throw new Error(chargeData.error || 'Error procesando el pago. Verifique los datos de su tarjeta.');
+        }
+
+        // Store PF data for ADM COT payment tracking
+        pfCodOper = chargeData.codOper;
+        pfCardType = pfCardData.brand;
+        pfCardDisplay = pfCardData.cardNumber ? `****${pfCardData.cardNumber.slice(-4)}` : undefined;
+
+        console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
+        toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
+
+        // ═══ PAGUELOFACIL: Registrar recurrencia si hay cuotas pendientes ═══
+        if (installments > 1 && chargeData.codOper) {
+          toast.info('Registrando pagos recurrentes...');
+          const recRes = await fetch('/api/paguelofacil/recurrent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              codOper: chargeData.codOper,
+              amount: chargeAmount,
+              description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${insuredData.primerNombre} ${insuredData.primerApellido}`,
+              concept: `Prima cuota recurrente - Cobertura Completa`,
+              email: insuredData.email,
+              phone: insuredData.celular || insuredData.telefono,
+              totalInstallments: installments,
+            }),
+          });
+          const recData = await recRes.json();
+          if (recData.success) {
+            pfRecCodOper = recData.codOper;
+            console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper, `(${installments - 1} cuotas restantes)`);
+            toast.success(`Pago recurrente registrado: ${installments - 1} cuota(s) restante(s)`);
+          } else {
+            console.warn('[PAGUELOFACIL] ⚠️ Recurrencia no registrada:', recData.error);
+            toast.warning(`Pago inicial aprobado, pero no se pudo registrar la recurrencia: ${recData.error}`);
+          }
+        }
+      }
+
       if (isFedpaReal) {
         // ========== PASO 1: Subir documentos ==========
         const docsFormData = new FormData();
@@ -414,6 +487,10 @@ export default function EmitirV2Page() {
           totalPremium: selectedPlan.annualPremium || 0,
           installments,
           ramo: 'AUTO',
+          pfCodOper,
+          pfRecCodOper,
+          pfCardType,
+          pfCardDisplay,
         });
 
         // ========== PASO 4: Enviar expediente y guardar documentos ==========
@@ -749,6 +826,7 @@ export default function EmitirV2Page() {
 
                 <CreditCardInput
                   onTokenReceived={handleCreditCardComplete}
+                  onCardDataReady={(data: CardData) => setPfCardData(data)}
                   onError={handleCreditCardError}
                   environment={process.env.NODE_ENV === 'production' ? 'production' : 'development'}
                 />

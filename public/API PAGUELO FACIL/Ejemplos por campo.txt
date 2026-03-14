@@ -1,0 +1,8 @@
+
+
+///Ejemplo codOper
+https://admin.paguelofacil.com/PFManagementServices/api/v1/MerchantTransactions?filter=codOper::AUTH_CAP-TL22CD
+     
+
+//Ejemplo "customFields"
+ https://admin.paguelofacil.com/PFManagementServices/api/v1/MerchantTransactions?conditional=customFields%24lk%25tramiteId%25%7CcustomFields%24lk%25TID2345%25&limit=1

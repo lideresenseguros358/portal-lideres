@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
     const noFirstResponse = searchParams.get('no_first_response');
     const assignedTo = searchParams.get('assigned_to');
     const aplazado = searchParams.get('aplazado');
+    const closed = searchParams.get('closed');
+    const closedSince = searchParams.get('closed_since');
     const view = searchParams.get('view'); // 'history' for case history
     const caseId = searchParams.get('case_id');
 
@@ -78,9 +80,14 @@ export async function GET(req: NextRequest) {
       .from('ops_cases')
       .select(LIST_COLS, { count: 'exact' })
       .eq('case_type', CASE_TYPE)
-      .order('renewal_date', { ascending: true });
+      .order('created_at', { ascending: false });
 
-    if (status) query = query.eq('status', status);
+    if (closed === 'true') {
+      query = query.in('status', ['cerrado_renovado', 'cerrado_cancelado']);
+      if (closedSince) query = query.gte('closed_at', closedSince);
+    } else if (status) {
+      query = query.eq('status', status);
+    }
     if (search) query = query.or(`client_name.ilike.%${search}%,policy_number.ilike.%${search}%,ticket.ilike.%${search}%`);
     if (slaBreached === 'true') query = query.eq('sla_breached', true);
     if (noFirstResponse === 'true') query = query.is('first_response_at', null).not('status', 'in', '(cerrado_renovado,cerrado_cancelado)');

@@ -89,6 +89,8 @@ export function daysOverdueColor(severity: ReturnType<typeof daysOverdueSeverity
 
 // ── Build morosidad email HTML ──
 
+const PAYMENT_URL = 'https://portal.lideresenseguros.com/cotizadores?pagar=true';
+
 export function buildMorosidadEmailHtml(body: string, row: OpsMorosidadRow): string {
   const merged = mergePlaceholders(body, row);
   return `
@@ -101,6 +103,10 @@ export function buildMorosidadEmailHtml(body: string, row: OpsMorosidadRow): str
     </div>
     <div style="padding:24px;">
       ${merged.replace(/\n/g, '<br/>')}
+    </div>
+    <div style="padding:24px;text-align:center;">
+      <a href="${PAYMENT_URL}" style="display:inline-block;padding:14px 36px;background:#8AAA19;color:white;text-decoration:none;font-weight:bold;font-size:16px;border-radius:10px;letter-spacing:0.3px;">Realizar mi pago</a>
+      <p style="margin-top:10px;font-size:12px;color:#6b7280;">Haga clic en el botón para pagar sus cuotas pendientes de forma rápida y segura.</p>
     </div>
     <div style="padding:16px 24px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;">
       <p>Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>

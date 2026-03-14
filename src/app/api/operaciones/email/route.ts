@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
         const {
           to_email, client_name, policy_number, insurer_name,
           ticket, case_type, payment_link, amount, concept,
-          expires_at, sender_name, case_id, user_id,
+          expires_at, sender_name, case_id, user_id, tramite,
         } = body;
 
         if (!to_email || !payment_link || !ticket) {
@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
           concept,
           expiresAt: expires_at,
           senderName: sender_name,
+          tramite,
         });
 
         // Send via Zepto

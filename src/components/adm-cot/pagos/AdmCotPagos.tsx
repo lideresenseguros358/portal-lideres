@@ -49,8 +49,9 @@ const fmtMoney = (n: any) => `$${Number(n || 0).toFixed(2)}`;
 const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-PA') : '—';
 
 function StatusBadge({ status }: { status: string }) {
-  const m: Record<string, { bg: string; text: string }> = {
-    PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800' },
+  const m: Record<string, { bg: string; text: string; label?: string }> = {
+    CONFIRMADO_PF: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'CONFIRMADO' },
+    PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'PENDIENTE' },
     PENDIENTE: { bg: 'bg-amber-100', text: 'text-amber-800' },
     AGRUPADO: { bg: 'bg-blue-100', text: 'text-blue-800' },
     PAGADO: { bg: 'bg-green-100', text: 'text-green-800' },
@@ -67,7 +68,8 @@ function StatusBadge({ status }: { status: string }) {
     COMPLETADA: { bg: 'bg-blue-100', text: 'text-blue-800' },
   };
   const s = m[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${s.bg} ${s.text}`}>{status}</span>;
+  const label = s.label || status;
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${s.bg} ${s.text}`}>{label}</span>;
 }
 
 // ════════════════════════════════════════════
@@ -194,8 +196,9 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         {[
+          { label: 'Confirmados PF', count: summary.confirmedPf || 0, amt: summary.confirmedPfAmt || 0, bg: 'bg-emerald-50', border: 'border-emerald-200', color: 'text-emerald-600' },
           { label: 'Por Confirmar', count: summary.pendingConfirm || 0, amt: summary.pendingConfirmAmt || 0, bg: 'bg-orange-50', border: 'border-orange-200', color: 'text-orange-600' },
           { label: 'Pendientes', count: summary.pending || 0, amt: summary.pendingAmt || 0, bg: 'bg-amber-50', border: 'border-amber-200', color: 'text-amber-600' },
           { label: 'Agrupados', count: summary.grouped || 0, amt: summary.groupedAmt || 0, bg: 'bg-blue-50', border: 'border-blue-200', color: 'text-blue-600' },
@@ -260,7 +263,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Estado</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
+              <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
             </select>
             <select value={type} onChange={e => setType(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>

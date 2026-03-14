@@ -40,8 +40,8 @@ interface ParsedEmail {
   uid: number;
 }
 
-// ── Ticket regex: REN-YYMM-XXXXX ──
-const TICKET_RE = /REN-\d{4}-\d{5}/i;
+// ── Ticket regex: matches all ops ticket formats (REN/PET/URG/MOR-YYMM-XXXXX) ──
+const TICKET_RE = /(?:REN|PET|URG|MOR)-\d{4}-\d{5}/i;
 
 // ── Policy number regex: flexible alphanumeric patterns ──
 // Matches patterns like: 12345678, ABC-12345, POL-2024-001, etc.
@@ -273,7 +273,7 @@ async function parseImapMessage(msg: any): Promise<ParsedEmail | null> {
 interface ThreadingResult {
   caseId: string | null;
   unclassified: boolean;
-  method: 'ticket' | 'policy' | 'unclassified';
+  method: 'ticket' | 'policy' | 'reply_thread' | 'unclassified';
   ticket?: string;
   policyNumber?: string;
 }
@@ -281,18 +281,71 @@ interface ThreadingResult {
 async function threadMessage(supabase: any, email: ParsedEmail): Promise<ThreadingResult> {
   const searchText = `${email.subject} ${email.bodyText || ''}`;
 
-  // ── STEP A: Match by ticket (REN-YYMM-XXXXX) ──
+  // ── STEP 0: Match by In-Reply-To / References (most reliable for replies) ──
+  const refIds: string[] = [];
+  if (email.inReplyTo) refIds.push(email.inReplyTo.trim());
+  if (email.references) {
+    const refs = email.references.split(/\s+/).map(r => r.trim()).filter(Boolean);
+    for (const r of refs) {
+      if (!refIds.includes(r)) refIds.push(r);
+    }
+  }
+
+  if (refIds.length > 0) {
+    // Find any ops_case_messages with a matching message_id (outbound emails we sent)
+    const { data: parentMsg } = await (supabase as any)
+      .from('ops_case_messages')
+      .select('case_id')
+      .in('message_id', refIds)
+      .not('case_id', 'is', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (parentMsg?.case_id) {
+      // Verify the case exists
+      const { data: activeCase } = await (supabase as any)
+        .from('ops_cases')
+        .select('id, ticket')
+        .eq('id', parentMsg.case_id)
+        .maybeSingle();
+
+      if (activeCase) {
+        console.log(`[IMAP-SYNC] ✓ Classified by reply thread (In-Reply-To/References) → case ${activeCase.id}`);
+        return {
+          caseId: activeCase.id,
+          unclassified: false,
+          method: 'reply_thread',
+          ticket: activeCase.ticket,
+        };
+      }
+    }
+  }
+
+  // ── STEP A: Match by ticket (REN/PET/URG/MOR-YYMM-XXXXX) in subject + body ──
   const ticketMatch = searchText.match(TICKET_RE);
   if (ticketMatch) {
     const ticket = ticketMatch[0].toUpperCase();
     console.log(`[IMAP-SYNC] Ticket found in email: ${ticket}`);
 
-    const { data: caseRow } = await (supabase as any)
+    // Derive case_type from ticket prefix
+    const prefix = ticket.substring(0, 3);
+    const prefixToCaseType: Record<string, string> = {
+      REN: 'renovacion',
+      PET: 'peticion',
+      URG: 'urgencia',
+    };
+    const caseType = prefixToCaseType[prefix];
+
+    let caseQuery = (supabase as any)
       .from('ops_cases')
       .select('id')
-      .eq('ticket', ticket)
-      .eq('case_type', 'renovacion')
-      .single();
+      .eq('ticket', ticket);
+
+    if (caseType) {
+      caseQuery = caseQuery.eq('case_type', caseType);
+    }
+
+    const { data: caseRow } = await caseQuery.maybeSingle();
 
     if (caseRow) {
       console.log(`[IMAP-SYNC] ✓ Classified by ticket ${ticket} → case ${caseRow.id}`);
@@ -306,21 +359,22 @@ async function threadMessage(supabase: any, email: ParsedEmail): Promise<Threadi
     console.log(`[IMAP-SYNC] Ticket ${ticket} found in text but no matching case`);
   }
 
-  // ── STEP B: Match by policy_number ──
+  // ── STEP B: Match by policy_number (all open case types) ──
   const policyMatches = extractPolicyNumbers(searchText);
   if (policyMatches.length > 0) {
     console.log(`[IMAP-SYNC] Potential policy numbers: ${policyMatches.join(', ')}`);
 
-    // Try each candidate against open renovation cases
+    const CLOSED_STATUSES = ['cerrado_renovado', 'cerrado_cancelado', 'cerrado', 'perdido', 'resuelto'];
+
     for (const pn of policyMatches) {
       const { data: caseRow } = await (supabase as any)
         .from('ops_cases')
         .select('id, ticket')
-        .eq('case_type', 'renovacion')
         .eq('policy_number', pn)
-        .not('status', 'in', '("cerrado_renovado","cerrado_cancelado")')
+        .not('status', 'in', `(${CLOSED_STATUSES.join(',')})`)
+        .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (caseRow) {
         console.log(`[IMAP-SYNC] ✓ Classified by policy ${pn} → case ${caseRow.id}`);
@@ -419,6 +473,9 @@ async function logImapActivity(
 ): Promise<void> {
   let actionType: string;
   switch (threading.method) {
+    case 'reply_thread':
+      actionType = 'imap_classified_by_reply_thread';
+      break;
     case 'ticket':
       actionType = 'imap_classified_by_ticket';
       break;

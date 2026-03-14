@@ -2,14 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { OpsCase, OpsCaseStatus } from '@/types/operaciones.types';
+import { STATUS_COLORS, STATUS_LABELS } from '@/types/operaciones.types';
 import type { Counts, FilterKey, MasterUser } from './pet-helpers';
+import { fmtRelative } from './pet-helpers';
 import PetCaseList from './PetCaseList';
 import PetCaseDetail from './PetCaseDetail';
 import { LostReasonModal, ConvertToEmissionModal } from './PetModals';
 import PetHistoryDrawer from './PetHistoryDrawer';
 import PetQuoteDetailModal from './PetQuoteDetailModal';
 import UnclassifiedMessages from '../renovaciones/UnclassifiedMessages';
-import { useOpsKeyboard } from '../shared/ops-ui';
+import { useOpsKeyboard, OpsSkeletonRows, OpsEmptyState } from '../shared/ops-ui';
+import { FaFilter, FaCheck } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 
 const ClientPolicyWizard = dynamic(() => import('@/components/db/ClientPolicyWizard'), { ssr: false });
@@ -69,7 +72,17 @@ const PAGE_SIZE = 20;
 
 export default function PeticionesInbox() {
   // ── Tab state ──
-  const [activeTab, setActiveTab] = useState<'inbox' | 'unclassified'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'unclassified' | 'closed'>('inbox');
+
+  // ── Closed tab state ──
+  type ClosedRange = 'day' | 'week' | 'month' | 'year';
+  const [closedCases, setClosedCases] = useState<OpsCase[]>([]);
+  const [closedLoading, setClosedLoading] = useState(false);
+  const [closedTotal, setClosedTotal] = useState(0);
+  const [closedPage, setClosedPage] = useState(1);
+  const [closedRange, setClosedRange] = useState<ClosedRange>('month');
+  const [closedFilterOpen, setClosedFilterOpen] = useState(false);
+  const closedFilterRef = useRef<HTMLDivElement>(null);
 
   // ── Data state ──
   const [cases, setCases] = useState<OpsCase[]>([]);
@@ -153,6 +166,49 @@ export default function PeticionesInbox() {
     }
     setLoading(false);
   }, [buildParams]);
+
+  // ── Fetch closed cases ──
+  const getClosedSince = useCallback((range: ClosedRange) => {
+    const now = new Date();
+    switch (range) {
+      case 'day': now.setDate(now.getDate() - 1); break;
+      case 'week': now.setDate(now.getDate() - 7); break;
+      case 'month': now.setMonth(now.getMonth() - 1); break;
+      case 'year': now.setFullYear(now.getFullYear() - 1); break;
+    }
+    return now.toISOString();
+  }, []);
+
+  const fetchClosedCases = useCallback(async (p: number, append = false) => {
+    setClosedLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(p), limit: String(PAGE_SIZE), closed: 'true', closed_since: getClosedSince(closedRange) });
+      const res = await fetch(`/api/operaciones/petitions?${params}`);
+      const json = await res.json();
+      if (append) {
+        setClosedCases((prev) => [...prev, ...(json.data || [])]);
+      } else {
+        setClosedCases(json.data || []);
+      }
+      setClosedTotal(json.total || 0);
+    } catch { /* ignore */ }
+    setClosedLoading(false);
+  }, [closedRange, getClosedSince]);
+
+  useEffect(() => {
+    if (activeTab === 'closed') {
+      setClosedPage(1);
+      fetchClosedCases(1);
+    }
+  }, [activeTab, fetchClosedCases]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (closedFilterRef.current && !closedFilterRef.current.contains(e.target as Node)) setClosedFilterOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // ── Fetch masters ──
   const fetchMasters = useCallback(async () => {
@@ -326,30 +382,49 @@ export default function PeticionesInbox() {
     }
   };
 
-  const handleSendPaymentLink = async (paymentLinkUrl: string) => {
+  const handleSendPaymentLink = async (paymentLinkUrl: string, tramite: string) => {
     if (!selectedCase || !selectedCase.client_email) {
       setToast({ message: 'No hay email del cliente para enviar', type: 'error' });
       return;
     }
+    const c = selectedCase;
     try {
       const res = await fetch('/api/operaciones/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'send_payment_link',
-          to_email: selectedCase.client_email,
-          client_name: selectedCase.client_name || 'Cliente',
-          policy_number: selectedCase.policy_number,
-          insurer_name: selectedCase.insurer_name,
-          ticket: selectedCase.ticket,
+          to_email: c.client_email,
+          client_name: c.client_name || 'Cliente',
+          policy_number: c.policy_number,
+          insurer_name: c.insurer_name,
+          ticket: c.ticket,
           case_type: 'peticion',
           payment_link: paymentLinkUrl,
-          case_id: selectedCase.id,
+          tramite: tramite || undefined,
+          case_id: c.id,
           user_id: null,
         }),
       });
       const json = await res.json();
       if (json.email_sent) {
+        // Record in ops_case_messages so it shows in the message history
+        try {
+          await fetch('/api/operaciones/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'record_outbound',
+              case_id: c.id,
+              subject: json.subject || `[${c.ticket}] Enlace de pago — ${tramite || 'Petición'}`,
+              body_text: `Enlace de pago enviado: ${paymentLinkUrl}`,
+              to_emails: c.client_email ? [c.client_email] : [],
+              from_email: 'portal@lideresenseguros.com',
+              skip_send: true,
+              metadata_extra: { template: 'payment_link', payment_link: paymentLinkUrl, tramite: tramite || null },
+            }),
+          });
+        } catch { /* non-fatal */ }
         setToast({ message: 'Enlace de pago enviado exitosamente', type: 'success' });
         refresh();
       } else {
@@ -406,14 +481,95 @@ export default function PeticionesInbox() {
             >
               No Clasificados
             </button>
+            <button
+              onClick={() => setActiveTab('closed')}
+              className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md cursor-pointer transition-all duration-150 ${
+                activeTab === 'closed'
+                  ? 'bg-gray-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Cerrados
+            </button>
           </div>
         </div>
         <MetricsBar counts={counts} />
       </div>
 
-      {/* Inbox or Unclassified */}
+      {/* Inbox, Unclassified, or Closed */}
       {activeTab === 'unclassified' ? (
         <UnclassifiedMessages />
+      ) : activeTab === 'closed' ? (
+        <div className="flex flex-col flex-1 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden min-h-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-600">Casos cerrados <span className="text-gray-400 font-normal">({closedTotal})</span></p>
+            <div className="relative" ref={closedFilterRef}>
+              <button
+                onClick={() => setClosedFilterOpen(!closedFilterOpen)}
+                className={`p-2 rounded-lg border cursor-pointer transition-colors duration-100 ${
+                  closedFilterOpen ? 'bg-[#010139] text-white border-[#010139]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <FaFilter className="text-[10px]" />
+              </button>
+              {closedFilterOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px] py-1">
+                  {([['day', 'Hoy'], ['week', 'Esta semana'], ['month', 'Este mes'], ['year', 'Este año']] as [ClosedRange, string][]).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => { setClosedRange(val); setClosedFilterOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 cursor-pointer transition-colors duration-100 ${
+                        closedRange === val ? 'bg-gray-50 text-[#010139] font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {label}
+                      {closedRange === val && <FaCheck className="text-[8px] text-[#010139]" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {closedLoading && !closedCases.length ? (
+              <div className="p-4"><OpsSkeletonRows count={6} /></div>
+            ) : !closedCases.length ? (
+              <OpsEmptyState title="No hay casos cerrados en este periodo" />
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {closedCases.map((c) => {
+                  const colors = STATUS_COLORS[c.status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+                  return (
+                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 transition-colors duration-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-xs font-semibold text-gray-800 truncate">{c.client_name || 'Sin nombre'}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold ${colors.bg} ${colors.text}`}>
+                            {STATUS_LABELS[c.status] || c.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                          <span className="font-mono">{c.ticket}</span>
+                          {c.policy_number && <span>· {c.policy_number}</span>}
+                          {c.insurer_name && <span>· {c.insurer_name}</span>}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap">{fmtRelative(c.closed_at || c.updated_at)}</span>
+                    </div>
+                  );
+                })}
+                {closedCases.length < closedTotal && (
+                  <button
+                    onClick={() => { const p = closedPage + 1; setClosedPage(p); fetchClosedCases(p, true); }}
+                    className="w-full py-3 text-xs text-[#010139] font-semibold hover:bg-gray-50 cursor-pointer transition-colors duration-100"
+                  >
+                    Cargar más
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
       <div className="flex flex-1 gap-0 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden min-h-0">
         {/* Left panel */}

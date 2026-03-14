@@ -26,13 +26,28 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
+/** Structured card data passed to parent for server-side PagueloFacil charge */
+export interface CardData {
+  cardNumber: string;   // Raw digits, no spaces (e.g. "4111111111111111")
+  cardName: string;     // Cardholder name
+  expMonth: string;     // "01"-"12"
+  expYear: string;      // "30" (2-digit year)
+  cvv: string;          // "123"
+  brand: 'VISA' | 'MASTERCARD';
+  last4: string;        // Last 4 digits
+  bankName: string;     // Issuing bank name
+}
+
 interface CreditCardInputProps {
+  /** (Legacy) Called with mock token — kept for backward compat */
   onTokenReceived: (token: string, last4: string, brand: string) => void;
+  /** Called with structured card data for PagueloFacil direct charge */
+  onCardDataReady?: (data: CardData) => void;
   onError: (error: string) => void;
   environment?: 'development' | 'production';
 }
 
-export default function CreditCardInput({ onTokenReceived, onError, environment = 'development' }: CreditCardInputProps) {
+export default function CreditCardInput({ onTokenReceived, onCardDataReady, onError, environment = 'development' }: CreditCardInputProps) {
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [bankName, setBankName] = useState('');
@@ -217,27 +232,36 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
       return false;
     }
 
-    // Todo OK, procesar token
+    // Todo OK, procesar
     setIsProcessing(true);
 
-    /**
-     * ⚠️ MOCK TOKENIZATION — REPLACE WITH PAGUELOFACIL SDK
-     * In production, this should call the payment adapter which will
-     * forward card data directly to PagueloFacil's tokenization endpoint.
-     * Our backend must NEVER receive raw PAN or CVV.
-     *
-     * See: src/lib/payments/payment-adapter.ts
-     */
     const last4 = cleanNumber.slice(-4);
     const brandLabel = cardBrand === 'visa' ? 'Visa' : cardBrand === 'mastercard' ? 'Mastercard' : 'Amex';
 
     setTimeout(() => {
+      // Pass structured card data for PagueloFacil direct charge
+      if (onCardDataReady) {
+        const cardData: CardData = {
+          cardNumber: cleanNumber,
+          cardName: cardName.trim(),
+          expMonth: month.padStart(2, '0'),
+          expYear: year,
+          cvv,
+          brand: cardBrand === 'visa' ? 'VISA' : 'MASTERCARD',
+          last4,
+          bankName: bankName.trim(),
+        };
+        onCardDataReady(cardData);
+      }
+
+      // Legacy: still call onTokenReceived for backward compat
       const mockToken = `tok_dev_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      
-      // SECURITY: Wipe raw card data from state immediately after tokenization
-      clearSensitiveData();
-      
       onTokenReceived(mockToken, last4, brandLabel);
+
+      // NOTE: We do NOT wipe card data here anymore.
+      // The parent component holds the CardData in state and will pass it
+      // to the backend at emit time. Data is wiped on unmount (see useEffect cleanup).
+      setIsProcessing(false);
     }, 1500);
     
     return true;
@@ -458,9 +482,9 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
 
       {environment === 'development' && (
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
-          <div className="font-semibold text-yellow-800 mb-1">🧪 Modo Desarrollo</div>
+          <div className="font-semibold text-yellow-800 mb-1">🧪 Modo Desarrollo (PagueloFacil Sandbox)</div>
           <div className="text-yellow-700">
-            Tarjeta de prueba: 4242 4242 4242 4242 | CVV: 123 | Fecha: 12/25
+            Visa: 4059 3101 8175 7001 | MC: 5517 7479 5203 9692 | CVV: 123 | Fecha: 12/30
           </div>
         </div>
       )}

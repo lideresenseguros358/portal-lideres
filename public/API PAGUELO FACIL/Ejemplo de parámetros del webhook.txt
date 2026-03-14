@@ -1,0 +1,148 @@
+
+{
+  "date": "2025-07-17T11:05:14",
+  "relatedTx": "STG-7TYUHNJMKLHUAM",
+  "description": " Yo soy Alam Brito de Cobre el mejor conductor de Uber",
+  "merchantDescriptor": "PF*",
+  "type": "MC",
+  "cardToken": "1690163708596321459",
+  "userLogn": "Brito Alam",
+  "idUsr": 64,
+  "revisionLevel": null,
+  "totalPay": "38.39",
+  "binInfo": {
+    "id": "69c57914-890c-4413-a485-d3d171cb73ed",
+    "risk_score": 55.0,
+    "funds_remaining": 397.592,
+    "queries_remaining": 19879,
+    "ip_address": {
+      "risk": 22.5,
+      "city": {
+        "confidence": 10,
+        "geoname_id": 4744870,
+        "names": {
+          "de": "Ashburn",
+          "en": "Ashburn",
+          "es": "Ashburn",
+          "fr": "Ashburn",
+          "ja": "",
+          "pt-BR": "Ashburn",
+          "ru": "",
+          "zh-CN": ""
+        }
+      },
+      "continent": {
+        "code": "NA",
+        "geoname_id": 6255149,
+        "names": {
+          "de": "Nordamerika",
+          "en": "North America",
+          "es": "Norteamrica",
+          "fr": "Amrique du Nord",
+          "ja": "",
+          "pt-BR": "Amrica do Norte",
+          "ru": " ",
+          "zh-CN": ""
+        }
+      },
+      "country": {
+        "confidence": 99,
+        "geoname_id": 6252001,
+        "is_high_risk": false,
+        "iso_code": "US",
+        "names": {
+          "de": "USA",
+          "en": "United States",
+          "es": "Estados Unidos",
+          "fr": "tats Unis",
+          "ja": "",
+          "pt-BR": "EUA",
+          "ru": "",
+          "zh-CN": ""
+        }
+      },
+      "location": {
+        "accuracy_radius": 1000,
+        "average_income": 33772,
+        "latitude": 39.0469,
+        "local_time": "2025-07-17T12:05:14-04:00",
+        "longitude": -77.4903,
+        "metro_code": 511,
+        "population_density": 1443,
+        "time_zone": "America/New_York"
+      },
+      "postal": { "code": "20149", "confidence": 10 },
+      "registered_country": {
+        "geoname_id": 6252001,
+        "iso_code": "US",
+        "names": {
+          "de": "USA",
+          "en": "United States",
+          "es": "Estados Unidos",
+          "fr": "tats Unis",
+          "ja": "",
+          "pt-BR": "EUA",
+          "ru": "",
+          "zh-CN": ""
+        }
+      },
+      "subdivisions": [
+        {
+          "confidence": 40,
+          "geoname_id": 6254928,
+          "iso_code": "VA",
+          "names": {
+            "de": "Virginia",
+            "en": "Virginia",
+            "es": "Virginia",
+            "fr": "Virginie",
+            "ja": "",
+            "pt-BR": "Virgnia",
+            "ru": "",
+            "zh-CN": ""
+          }
+        }
+      ],
+      "traits": {
+        "autonomous_system_number": 14618,
+        "autonomous_system_organization": "AMAZON-AES",
+        "domain": "amazonaws.com",
+        "ip_address": "34.231.38.183",
+        "isp": "Amazon.com",
+        "organization": "Amazon.com",
+        "user_type": "hosting"
+      }
+    },
+    "credit_card": {
+      "issuer": { "name": "BANCO DEL TESORO, C.A., BANCO UNIVERSAL" },
+      "brand": "Mastercard",
+      "country": "VE",
+      "is_prepaid": false,
+      "type": "debit"
+    },
+    "email": {
+      "first_seen": "2024-02-29",
+      "is_free": false,
+      "is_high_risk": false
+    },
+    "disposition": { "action": "manual_review", "reason": "custom_rule" }
+  },
+  "displayNum": "21453",
+  "returnUrl": "https://checkout.paguelofacil.com/pf/default-receipt/AUTH_CAP-IMUXPG",
+  "requestPayAmount": 38.39,
+  "email": "alambrito@decobre.com",
+  "isExternalUrl": false,
+  "authStatus": "00",
+  "cardType": "MC",
+  "userName": "Alam Brito",
+  "idtx": 123456,
+  "inRevision": false,
+  "isTxCampaign": false,
+  "name": "Alam Brito",
+  "operationType": "AUTH_CAPTURE",
+  "txDescriptor": "PF*",
+  "revisionOptions": null,
+  "codOper": "AUTH_CAP-IMUXPG",
+  "status": 1,
+  "messageSys": "Aprobada"
+}

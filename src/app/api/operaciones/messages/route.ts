@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     // Handle record_outbound first (doesn't require message_id)
     if (action === 'record_outbound') {
-      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header, master_name, master_email } = body as any;
+      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header, master_name, master_email, skip_send, metadata_extra } = body as any;
       if (!outCaseId) {
         return NextResponse.json({ error: 'case_id required for record_outbound' }, { status: 400 });
       }
@@ -178,8 +178,8 @@ export async function POST(request: NextRequest) {
 </div>`;
       }
 
-      // ── Actually send the email via ZeptoMail ──
-      if (recipientList.length > 0 && recipientList[0]) {
+      // ── Actually send the email via ZeptoMail (skip if already sent by another API) ──
+      if (!skip_send && recipientList.length > 0 && recipientList[0]) {
         // Build body content from text or html
         const bodyContent = body_html
           || `<div style="font-family:Arial,sans-serif;font-size:14px;color:#333;white-space:pre-wrap;">${(body_text || '').replace(/\n/g, '<br/>')}</div>`;
@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
             send_error: sendError || null,
             has_attachments: attachmentNames.length > 0,
             attachment_names: attachmentNames.length > 0 ? attachmentNames : undefined,
+            ...(metadata_extra || {}),
           },
         });
 

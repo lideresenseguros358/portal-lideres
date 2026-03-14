@@ -29,14 +29,25 @@ export async function createPaymentOnEmission(params: {
   totalPremium: number;
   installments: number;
   ramo?: string;
+  // PagueloFacil data (when PF confirmed the first charge)
+  pfCodOper?: string;
+  pfRecCodOper?: string;
+  pfCardType?: string;
+  pfCardDisplay?: string;
 }) {
   try {
-    const { insurer, policyNumber, insuredName, cedula, totalPremium, installments, ramo } = params;
+    const {
+      insurer, policyNumber, insuredName, cedula, totalPremium, installments, ramo,
+      pfCodOper, pfRecCodOper, pfCardType, pfCardDisplay,
+    } = params;
     const installmentAmount = Math.round((totalPremium / installments) * 100) / 100;
     const today = new Date().toISOString().slice(0, 10);
     const paymentMode = computePaymentMode(installments);
 
-    // 1. Create first pending payment
+    // If PagueloFacil confirmed the charge, mark as CONFIRMADO_PF immediately
+    const firstPaymentStatus = pfCodOper ? 'CONFIRMADO_PF' : 'PENDIENTE';
+
+    // 1. Create first payment (CONFIRMADO_PF if PF approved, else PENDIENTE)
     await fetch('/api/adm-cot/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -56,6 +67,11 @@ export async function createPaymentOnEmission(params: {
           payment_mode: paymentMode,
           due_date: computeSLADueDate(new Date()),
           source: 'EMISSION',
+          // PagueloFacil metadata
+          status_override: firstPaymentStatus,
+          pf_cod_oper: pfCodOper || null,
+          pf_card_type: pfCardType || null,
+          pf_card_display: pfCardDisplay || null,
         },
       }),
     });
@@ -105,6 +121,8 @@ export async function createPaymentOnEmission(params: {
             end_date: endDate.toISOString().slice(0, 10),
             next_due_date: nextDue.toISOString().slice(0, 10),
             schedule,
+            pf_cod_oper: pfCodOper || null,
+            pf_rec_cod_oper: pfRecCodOper || null,
           },
         }),
       });

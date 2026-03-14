@@ -1,0 +1,32 @@
+
+//Pagos a través de anónimo tipo VISA
+{"TotalPagado":"3.21","Fecha":"27\/07\/2021","Hora":"08:59:45","Tipo":"VISA","Oper":"SANDBOX_LK-SKADZYRMUMB4","Usuario":"prueba pf","Email":"correo@prueba.com","Estado":"Aprobada","Razon":"VER UNAVAILBLE","CMTN":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.719","CCLW":"1B09E4FCE502FE86540D14AC1031BDF54B399D919A23EAC43144CB540A8466642835566D3A77D3641CABF564BFA46608F5915083E110AE3C91F231459F05C27C"}
+
+//Pagos a través de anónimo tipo PagoCash
+{"TotalPagado":"0","Fecha":"27\/07\/2021","Hora":"09:03:58","Tipo":"CASH","Oper":"SANDBOX_PP48123808","Usuario":"null","Email":"correo@prueba.com","Estado":"Pendiente","Razon":"PENDING PAYMENT","CMTN":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.720","CCLW":"1B09E4FCE502FE86540D14AC1031BDF54B399D919A23EAC43144CB540A8466642835566D3A77D3641CABF564BFA46608F5915083E110AE3C91F231459F05C27C"}
+
+//Pagos a través de anónimo tipo CLAVE
+{"TotalPagado":"3.21","Fecha":"16\/08\/2021","Hora":"16:08:28","Tipo":"CLAVE","Oper":"LK-PGRPP1BNEYDW","Usuario":"null","Email":"correo@prueba.com","Estado":"Aprobada","Razon":"Operaci\u00f3n Satisfactoria","CMTN":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.774","CCLW":"1B09E4FCE502FE86540D14AC1031BDF54B399D919A23EAC43144CB540A8466642835566D3A77D3641CABF564BFA46608F5915083E110AE3C91F231459F05C27C","RelatedTx":"LK-JHRWYP6E8WXZ"}
+
+//Pagos a través de anónimo tipo NEQUI
+{"TotalPagado":"1.07","Fecha":"16\/08\/2021","Hora":"16:41:10","Tipo":"NEQUI","Oper":"LK-GPDVOKF052OU","Usuario":"null","Email":"correo@prueba.com","Estado":"Aprobada","Razon":"PAGADO","CMTN":"1.07","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.777","CCLW":"2C7C0A86517030E7A1C96166DE612C064567D04A6C6CFEF109FDB85BAB0E4CC622EBEF2824785778A1F5179AE1FA7B1999FB9ACF71E00FEBFCA6AA8083BCEFD6"}
+
+
+//Pagos a través de PagueloFacil App (usuarios autenticados) tipo Mastercard
+{"TotalPagado":"3.21","Fecha":"27\/07\/2021","Hora":"09:09:10","Tipo":"MC","Oper":"SANDBOX_PFW-Z6BCK2TCR2R","Usuario":"prueba pf","Email":"wajih@paguelofacil.com","Estado":"Aprobada","Razon":"VER UNAVAILBLE","CMTN":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.721","CCLW":"1B09E4FCE502FE86540D14AC1031BDF54B399D919A23EAC43144CB540A8466642835566D3A77D3641CABF564BFA46608F5915083E110AE3C91F231459F05C27C","activityCode":"0000000280","txAmount":"3.21","Order":"721"}
+
+//Pagos a través de PagueloFacil App (usuarios autenticados) tipo PagoCash
+{"TotalPay":"0","Date":"2021-07-27T09:16:50","Type":"CASH","Oper":"SANDBOX_PP98057873","User":"null","Email":"wajih@paguelofacil.com","Status":"Pending","StatusCode":"PUNTOPAGO","msg":"PENDING PAYMENT","RequestPay":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.722"}
+
+//Pagos a través de PagueloFacil App (usuarios autenticados) tipo VISA
+{"TotalPagado":"15.15","Fecha":"24\/07\/2021","Hora":"09:58:03","Tipo":"VISA","Oper":"SANDBOX_PFW-EP10GCGQKDI","Usuario":"Yousset Chacon","Email":"cpag3@prueba.com","Estado":"Aprobada","Razon":"VER UNAVAILBLE","CMTN":"15.15","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.659","CCLW":"15224BE0CBB8EAAC33B53850FF71EAE732253AFC4AB224938A491D0B3E9D3F7B","activityCode":"0000000276","txAmount":"15.15","Order":"659"}
+
+//Pagos a través de PagueloFacil App (usuarios autenticados) tipo CLAVE
+{"TotalPay":"3.21","Date":"2021-08-16T16:11:36","Type":"CLAVE","Oper":"LK-EADXDQM6KILB","User":"prueba pf pf","Email":"wajih@paguelofacil.com","Status":"Approved","StatusCode":"Procesada","msg":"Operaci\u00f3n Satisfactoria","RequestPay":"3.21","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.775","RelatedTx":"LK-TWXPATXBCDXC"}
+
+//Pagos a través de PagueloFacil App (usuarios autenticados) tipo NEQUI
+{"TotalPay":"1.07","Date":"2021-08-16T16:45:07","Type":"NEQUI","Oper":"LK-ZFD3SF7FUMZD","User":"null","Email":"maryiliana@gmail.com","Status":"Approved","StatusCode":"35","msg":"PAGADO","RequestPay":"1.07","CDSC":"https:\/\/woocommerce.pfserver.net Orden Nro.778"}
+
+
+//Excepciones
+{"headerStatus":{"code":615,"description":"INVALID SERVICE GATEWAY OR DATA GATEWAY"},"serverTime":"2021-08-11T21:56:20","message":null,"requestId":null,"data":{},"success":false}

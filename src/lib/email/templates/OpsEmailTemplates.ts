@@ -100,6 +100,7 @@ export interface PaymentLinkEmailParams {
   concept?: string;
   expiresAt?: string;
   senderName?: string;
+  tramite?: string;
 }
 
 const CASE_TYPE_LABELS: Record<string, string> = {
@@ -110,7 +111,8 @@ const CASE_TYPE_LABELS: Record<string, string> = {
 
 export function buildPaymentLinkEmail(params: PaymentLinkEmailParams): { subject: string; html: string; text: string } {
   const caseLabel = CASE_TYPE_LABELS[params.caseType] || params.caseType;
-  const subject = `[${params.ticket}] Enlace de pago — ${caseLabel}${params.policyNumber ? ` — Póliza ${params.policyNumber}` : ''}`;
+  const tramiteLabel = params.tramite || caseLabel;
+  const subject = `[${params.ticket}] Enlace de pago — ${tramiteLabel}${params.policyNumber ? ` — Póliza ${params.policyNumber}` : ''}`;
 
   const amountRow = params.amount
     ? `<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;width:140px;">Monto</td><td style="padding:10px 14px;border:1px solid #e5e7eb;font-size:18px;font-weight:700;color:${BRAND_COLOR};">$${params.amount}</td></tr>`
@@ -127,12 +129,11 @@ export function buildPaymentLinkEmail(params: PaymentLinkEmailParams): { subject
       Estimado/a <strong>${params.clientName}</strong>,
     </p>
     <p style="font-size:14px;color:#374151;margin:0 0 20px;">
-      Le enviamos el enlace para realizar su pago correspondiente a su trámite de <strong>${caseLabel}</strong>.
+      Le enviamos el enlace para realizar su pago correspondiente a su trámite de <strong>${tramiteLabel}</strong>.
     </p>
 
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
-      <tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;width:140px;">Caso</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${params.ticket}</td></tr>
-      ${params.policyNumber ? `<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;">Póliza</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${params.policyNumber}</td></tr>` : ''}
+      ${params.policyNumber ? `<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;width:140px;">Póliza</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${params.policyNumber}</td></tr>` : ''}
       ${params.insurerName ? `<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;">Aseguradora</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${params.insurerName}</td></tr>` : ''}
       ${amountRow}
       ${conceptRow}
@@ -166,9 +167,8 @@ export function buildPaymentLinkEmail(params: PaymentLinkEmailParams): { subject
 
   const text = `Estimado/a ${params.clientName},
 
-Le enviamos el enlace para realizar su pago correspondiente a su trámite de ${caseLabel}.
+Le enviamos el enlace para realizar su pago correspondiente a su trámite de ${tramiteLabel}.
 
-Caso: ${params.ticket}
 ${params.policyNumber ? `Póliza: ${params.policyNumber}\n` : ''}${params.insurerName ? `Aseguradora: ${params.insurerName}\n` : ''}${params.amount ? `Monto: $${params.amount}\n` : ''}${params.concept ? `Concepto: ${params.concept}\n` : ''}
 Enlace de pago: ${params.paymentLink}
 

@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const enrichedRows = (data ?? []).map((r: any) => {
-          if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
+          if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.status === 'CONFIRMADO_PF' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
           const registered = r.payment_date ? new Date(r.payment_date + 'T12:00:00') : null;
           if (!registered) return { ...r, sla_status: 'unknown', sla_color: 'gray', days_until_due: null };
           const dueDate = new Date(registered);
@@ -95,11 +95,12 @@ export async function GET(request: NextRequest) {
 
         // Summary counts
         const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund, insurer');
-        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, overdueCount: 0, urgentCount: 0 };
+        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, confirmedPf: 0, confirmedPfAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, overdueCount: 0, urgentCount: 0 };
         const insurerMap: Record<string, { count: number; amount: number; statuses: Record<string, number> }> = {};
         (summaryData ?? []).forEach((r: any) => {
           const amt = Number(r.amount) || 0;
           if (r.is_refund) { summary.refunds++; summary.refundsAmt += amt; }
+          else if (r.status === 'CONFIRMADO_PF') { summary.confirmedPf++; summary.confirmedPfAmt += amt; }
           else if (r.status === 'PENDIENTE_CONFIRMACION') { summary.pendingConfirm++; summary.pendingConfirmAmt += amt; }
           else if (r.status === 'PENDIENTE') { summary.pending++; summary.pendingAmt += amt; }
           else if (r.status === 'AGRUPADO') { summary.grouped++; summary.groupedAmt += amt; }
@@ -291,7 +292,12 @@ export async function POST(request: NextRequest) {
 
       // ── Create pending payment (auto from emission or manual) ──
       case 'create_pending': {
-        const { insurer, policy_number, insured_name, amount_due, payment_date, type, cedula, ramo, installment_num, recurrence_id, source } = data;
+        const {
+          insurer, policy_number, insured_name, amount_due, payment_date, type, cedula, ramo,
+          installment_num, recurrence_id, source, due_date,
+          // PagueloFacil metadata
+          status_override, pf_cod_oper, pf_card_type, pf_card_display,
+        } = data;
         if (!insurer || !policy_number || !insured_name || !amount_due || !payment_date) {
           return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
@@ -306,6 +312,9 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Determine status: CONFIRMADO_PF if PF confirmed, else default PENDIENTE
+        const paymentStatus = status_override === 'CONFIRMADO_PF' ? 'CONFIRMADO_PF' : 'PENDIENTE';
+
         const { data: created, error } = await sb.from('adm_cot_payments').insert({
           client_name: insured_name,
           cedula: cedula || null,
@@ -313,7 +322,7 @@ export async function POST(request: NextRequest) {
           amount: amount_due,
           insurer,
           ramo: ramo || 'AUTO',
-          status: 'PENDIENTE',
+          status: paymentStatus,
           payment_date,
           is_refund: type === 'REFUND_TO_CLIENT',
           is_recurring: !!recurrence_id,
@@ -321,13 +330,19 @@ export async function POST(request: NextRequest) {
           installment_num: installment_num || null,
           payment_source: source || 'EMISSION',
           created_by: userId,
+          ...(due_date ? { due_date } : {}),
+          // PagueloFacil fields
+          ...(pf_cod_oper ? { pf_cod_oper } : {}),
+          ...(pf_card_type ? { pf_card_type } : {}),
+          ...(pf_card_display ? { pf_card_display } : {}),
+          ...(paymentStatus === 'CONFIRMADO_PF' ? { pf_confirmed_at: new Date().toISOString() } : {}),
         }).select('id').single();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
         await sb.from('adm_cot_audit_log').insert({
           event_type: 'payment_created', entity_type: 'payment', entity_id: created.id,
-          user_id: userId, detail: { insurer, policy_number, amount_due, type },
+          user_id: userId, detail: { insurer, policy_number, amount_due, type, pf_cod_oper: pf_cod_oper || null, status: paymentStatus },
         });
 
         return NextResponse.json({ success: true, data: { id: created.id } });
@@ -497,7 +512,11 @@ export async function POST(request: NextRequest) {
 
       // ── Create recurrence (from emission with installments) ──
       case 'create_recurrence': {
-        const { nro_poliza, client_name, cedula, insurer, total_installments, frequency, installment_amount, start_date, end_date, next_due_date, schedule } = data;
+        const {
+          nro_poliza, client_name, cedula, insurer, total_installments, frequency,
+          installment_amount, start_date, end_date, next_due_date, schedule,
+          pf_cod_oper, pf_rec_cod_oper,
+        } = data;
         if (!nro_poliza || !client_name || !insurer || !total_installments || !installment_amount || !start_date || !end_date) {
           return NextResponse.json({ error: 'Missing recurrence fields' }, { status: 400 });
         }
@@ -517,12 +536,14 @@ export async function POST(request: NextRequest) {
           start_date, end_date, next_due_date,
           schedule: schedule || [],
           created_by: userId,
+          ...(pf_cod_oper ? { pf_cod_oper } : {}),
+          ...(pf_rec_cod_oper ? { pf_rec_cod_oper } : {}),
         }).select('id').single();
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
         await sb.from('adm_cot_audit_log').insert({
           event_type: 'recurrence_created', entity_type: 'recurrence', entity_id: created.id,
-          user_id: userId, detail: { nro_poliza, insurer, total_installments, frequency },
+          user_id: userId, detail: { nro_poliza, insurer, total_installments, frequency, pf_cod_oper: pf_cod_oper || null },
         });
         return NextResponse.json({ success: true, data: { id: created.id } });
       }
