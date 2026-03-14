@@ -87,6 +87,8 @@ export async function GET(req: NextRequest) {
       if (closedSince) query = query.gte('closed_at', closedSince);
     } else if (status) {
       query = query.eq('status', status);
+    } else {
+      query = query.not('status', 'in', '(cerrado_renovado,cerrado_cancelado)');
     }
     if (search) query = query.or(`client_name.ilike.%${search}%,policy_number.ilike.%${search}%,ticket.ilike.%${search}%`);
     if (slaBreached === 'true') query = query.eq('sla_breached', true);

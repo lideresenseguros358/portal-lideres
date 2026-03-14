@@ -88,6 +88,8 @@ export async function GET(req: NextRequest) {
       if (closedSince) query = query.gte('closed_at', closedSince);
     } else if (status) {
       query = query.eq('status', status);
+    } else {
+      query = query.not('status', 'in', '(cerrado,perdido)');
     }
     if (ramo) query = query.eq('ramo', ramo);
     if (search) query = query.or(`client_name.ilike.%${search}%,ticket.ilike.%${search}%,policy_number.ilike.%${search}%,client_email.ilike.%${search}%`);

@@ -119,6 +119,8 @@ export async function GET(req: NextRequest) {
       if (closedSince) query = query.gte('closed_at', closedSince);
     } else if (status) {
       query = query.eq('status', status);
+    } else {
+      query = query.not('status', 'in', '(resuelto,cerrado)');
     }
     if (slaBr === 'true') query = query.eq('sla_breached', true);
     if (noResp === 'true') query = query.is('first_response_at', null);
