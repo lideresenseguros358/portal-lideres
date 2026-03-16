@@ -16,7 +16,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 function getSb() { return createClient(supabaseUrl, supabaseServiceKey); }
 
-async function getMasterUserId(): Promise<string | null> {
+async function getAuthenticatedUser(): Promise<{ id: string; role: string } | null> {
   try {
     const cookieStore = await cookies();
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -32,8 +32,14 @@ async function getMasterUserId(): Promise<string | null> {
       .select('role')
       .eq('id', user.id)
       .single();
-    return profile?.role === 'master' ? user.id : null;
+    if (!profile?.role) return null;
+    return { id: user.id, role: profile.role };
   } catch { return null; }
+}
+
+async function getMasterUserId(): Promise<string | null> {
+  const user = await getAuthenticatedUser();
+  return user?.role === 'master' ? user.id : null;
 }
 
 // ═══════════════════════════════════════
@@ -280,12 +286,24 @@ export async function GET(request: NextRequest) {
 // ═══════════════════════════════════════
 
 export async function POST(request: NextRequest) {
-  const userId = await getMasterUserId();
-  if (!userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
   const sb = getSb();
   const body = await request.json();
   const { action, data } = body;
+
+  // Emission-related actions (create_pending, create_recurrence) are allowed for ANY authenticated user
+  // (brokers emit policies too). All other admin actions require master role.
+  const EMISSION_ACTIONS = ['create_pending', 'create_recurrence'];
+  let userId: string;
+
+  if (EMISSION_ACTIONS.includes(action)) {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    userId = authUser.id;
+  } else {
+    const masterId = await getMasterUserId();
+    if (!masterId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    userId = masterId;
+  }
 
   try {
     switch (action) {
@@ -440,7 +458,8 @@ export async function POST(request: NextRequest) {
 
           // Recalculate all future dates in schedule
           const schedule = Array.isArray(rec.schedule) ? rec.schedule : [];
-          const freqMonths = rec.frequency === 'MENSUAL' ? 1 : 6;
+          const freqMonthsMap: Record<string, number> = { MENSUAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3, CUATRIMESTRAL: 4, SEMESTRAL: 6 };
+          const freqMonths = freqMonthsMap[rec.frequency] || 1;
           let currentDate = new Date(new_date);
           const updatedSchedule = schedule.map((s: any) => {
             if (s.status === 'PENDIENTE') {
