@@ -288,31 +288,12 @@ export default function EmitirDanosTercerosPage() {
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
 
-        // ═══ PAGUELOFACIL: Registrar recurrencia si hay cuotas pendientes ═══
-        if (selectedPaymentMode === 'cuotas' && selectedInstallmentsCount > 1 && chargeData.codOper) {
-          setEmissionStep('Registrando pagos recurrentes...');
-          const recRes = await fetch('/api/paguelofacil/recurrent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              codOper: chargeData.codOper,
-              amount: chargeAmount,
-              description: `Póliza DT - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
-              concept: `Prima cuota recurrente - Daños a Terceros`,
-              email: emissionData.email,
-              phone: emissionData.celular || emissionData.telefono,
-              totalInstallments: selectedInstallmentsCount,
-            }),
-          });
-          const recData = await recRes.json();
-          if (recData.success) {
-            pfRecCodOper = recData.codOper;
-            console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper, `(${selectedInstallmentsCount - 1} cuotas restantes)`);
-            toast.success(`Pago recurrente registrado: ${selectedInstallmentsCount - 1} cuota(s) restante(s)`);
-          } else {
-            console.warn('[PAGUELOFACIL] ⚠️ Recurrencia no registrada:', recData.error);
-            toast.warning(`Pago inicial aprobado, pero no se pudo registrar la recurrencia: ${recData.error}`);
-          }
+        // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
+        // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
+        // El codOper se guarda en adm_cot_recurrences y el cron /api/cron/process-recurrences
+        // ejecuta el cobro en cada fecha de vencimiento del schedule.
+        if (selectedPaymentMode === 'cuotas' && selectedInstallmentsCount > 1) {
+          console.log(`[PAGUELOFACIL] ℹ️ ${selectedInstallmentsCount - 1} cuota(s) restante(s) se cobrarán automáticamente en sus fechas de vencimiento.`);
         }
       }
 
@@ -453,6 +434,7 @@ export default function EmitirDanosTercerosPage() {
           totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
           installments: selectedInstallmentsCount,
           ramo: 'AUTO',
+          cobertura: 'TERCEROS',
           pfCodOper,
           pfRecCodOper,
           pfCardType,
@@ -691,6 +673,7 @@ export default function EmitirDanosTercerosPage() {
           totalPremium: selectedPlan.annualPremium || 0,
           installments: 1,
           ramo: 'AUTO',
+          cobertura: 'TERCEROS',
         });
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
@@ -935,6 +918,7 @@ export default function EmitirDanosTercerosPage() {
           totalPremium: selectedPlan.annualPremium || 0,
           installments: 1,
           ramo: 'AUTO',
+          cobertura: 'TERCEROS',
         });
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══

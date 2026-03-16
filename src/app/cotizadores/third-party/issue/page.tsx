@@ -106,6 +106,7 @@ export default function ThirdPartyIssuePage() {
           totalPremium: plan.annualPremium || 0,
           installments: 1,
           ramo: 'AUTO',
+          cobertura: 'TERCEROS',
         });
 
         toast.dismiss();
@@ -191,6 +192,7 @@ export default function ThirdPartyIssuePage() {
           totalPremium: plan.annualPremium || 0,
           installments: 1,
           ramo: 'AUTO',
+          cobertura: 'TERCEROS',
         });
 
         toast.dismiss();

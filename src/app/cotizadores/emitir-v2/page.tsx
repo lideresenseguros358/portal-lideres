@@ -364,31 +364,12 @@ export default function EmitirV2Page() {
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
 
-        // ═══ PAGUELOFACIL: Registrar recurrencia si hay cuotas pendientes ═══
-        if (installments > 1 && chargeData.codOper) {
-          toast.info('Registrando pagos recurrentes...');
-          const recRes = await fetch('/api/paguelofacil/recurrent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              codOper: chargeData.codOper,
-              amount: chargeAmount,
-              description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${insuredData.primerNombre} ${insuredData.primerApellido}`,
-              concept: `Prima cuota recurrente - Cobertura Completa`,
-              email: insuredData.email,
-              phone: insuredData.celular || insuredData.telefono,
-              totalInstallments: installments,
-            }),
-          });
-          const recData = await recRes.json();
-          if (recData.success) {
-            pfRecCodOper = recData.codOper;
-            console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper, `(${installments - 1} cuotas restantes)`);
-            toast.success(`Pago recurrente registrado: ${installments - 1} cuota(s) restante(s)`);
-          } else {
-            console.warn('[PAGUELOFACIL] ⚠️ Recurrencia no registrada:', recData.error);
-            toast.warning(`Pago inicial aprobado, pero no se pudo registrar la recurrencia: ${recData.error}`);
-          }
+        // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
+        // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
+        // El codOper se guarda en adm_cot_recurrences y el cron /api/cron/process-recurrences
+        // ejecuta el cobro en cada fecha de vencimiento del schedule.
+        if (installments > 1) {
+          console.log(`[PAGUELOFACIL] ℹ️ ${installments - 1} cuota(s) restante(s) se cobrarán automáticamente en sus fechas de vencimiento.`);
         }
       }
 
@@ -487,6 +468,7 @@ export default function EmitirV2Page() {
           totalPremium: selectedPlan.annualPremium || 0,
           installments,
           ramo: 'AUTO',
+          cobertura: 'COMPLETA',
           pfCodOper,
           pfRecCodOper,
           pfCardType,

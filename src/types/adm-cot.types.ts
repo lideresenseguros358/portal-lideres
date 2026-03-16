@@ -10,7 +10,7 @@
 export type QuoteStatus = 'COTIZADA' | 'EMITIDA' | 'FALLIDA' | 'ABANDONADA';
 export type PaymentStatus = 'PENDIENTE' | 'AGRUPADO' | 'PAGADO' | 'DEVOLUCION';
 export type PaymentGroupStatus = 'PENDIENTE' | 'PARCIAL' | 'PAGADO';
-export type RecurrenceFrequency = 'MENSUAL' | 'SEMESTRAL';
+export type RecurrenceFrequency = 'MENSUAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'CUATRIMESTRAL' | 'SEMESTRAL';
 export type RecurrenceStatus = 'ACTIVA' | 'PAUSADA' | 'CANCELADA' | 'COMPLETADA';
 export type ChatClassification = 'CONSULTA' | 'COTIZACION' | 'SOPORTE' | 'QUEJA' | 'QUEJA_COMPLEJA';
 export type ChatStatus = 'ABIERTO' | 'ESCALADO' | 'CERRADO';
@@ -193,6 +193,7 @@ export interface RecurrenceScheduleItem {
   num: number;
   due_date: string;
   status: 'PENDIENTE' | 'PAGADO' | 'VENCIDO';
+  amount?: number;
   payment_id: string | null;
 }
 

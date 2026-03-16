@@ -3,10 +3,11 @@
  * 
  * Runs daily to:
  * 1. Find active recurrences with next_due_date <= today
- * 2. Create pending payment for each (idempotent)
- * 3. Advance next_due_date by frequency
- * 4. Mark COMPLETADA if past end_date or all installments done
- * 5. Never exceeds 1 year from start_date
+ * 2. Charge the card via PF Recurrent (tokenized) using stored codOper
+ * 3. Create payment record (CONFIRMADO_PF if PF succeeds, PENDIENTE_CONFIRMACION if not)
+ * 4. Advance next_due_date by frequency
+ * 5. Mark COMPLETADA if past end_date or all installments done
+ * 6. Never exceeds 1 year from start_date
  * 
  * Protection: X-CRON-SECRET header or Vercel CRON_SECRET
  * Schedule: "0 8 * * *" (daily 3am Panama = 8am UTC)
@@ -14,6 +15,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+
+// @ts-ignore — @shoopiapp/paguelofacil has no type declarations
+import PagueloFacil from '@shoopiapp/paguelofacil';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -38,8 +42,20 @@ export async function GET(request: NextRequest) {
 
   let processed = 0;
   let created = 0;
+  let charged = 0;
+  let chargeFailed = 0;
   let completed = 0;
   const errors: string[] = [];
+
+  // PagueloFacil SDK setup
+  const pfCclw = process.env.PAGUELOFACIL_CCLW;
+  const pfToken = process.env.PAGUELOFACIL_API_TOKEN;
+  const pfEnv = process.env.PAGUELOFACIL_ENVIRONMENT || 'sandbox';
+  const pfSdkEnv = pfEnv === 'production' ? 'production' : 'development';
+  const pfConfigured = !!(pfCclw && pfToken);
+  if (!pfConfigured) {
+    console.warn('[CRON RECURRENCIA] PagueloFacil credentials not configured — payments will be created as PENDIENTE_CONFIRMACION without charging');
+  }
 
   try {
     console.log(`[CRON RECURRENCIA] Running for date: ${today}`);
@@ -60,7 +76,10 @@ export async function GET(request: NextRequest) {
       processed++;
       try {
         const schedule: any[] = Array.isArray(rec.schedule) ? rec.schedule : [];
-        const freqMonths = rec.frequency === 'MENSUAL' ? 1 : 6;
+        const freqMonthsMap: Record<string, number> = {
+          MENSUAL: 1, BIMESTRAL: 2, TRIMESTRAL: 3, CUATRIMESTRAL: 4, SEMESTRAL: 6,
+        };
+        const freqMonths = freqMonthsMap[rec.frequency] || 1;
 
         // Find the next PENDIENTE installment in schedule
         const nextInstallment = schedule.find((s: any) => s.status === 'PENDIENTE');
@@ -73,6 +92,10 @@ export async function GET(request: NextRequest) {
 
         const installmentNum = nextInstallment.num;
         const paymentDate = nextInstallment.due_date || rec.next_due_date;
+        // Use per-installment amount if present (last installment may differ for rounding)
+        const chargeAmount = typeof nextInstallment.amount === 'number'
+          ? nextInstallment.amount
+          : rec.installment_amount;
 
         // Idempotency: check if payment already exists
         const { data: existing } = await sb.from('adm_cot_payments')
@@ -85,23 +108,63 @@ export async function GET(request: NextRequest) {
 
         let paymentId = existing?.id;
 
+        // ── Attempt PF charge if codOper available ──
+        let pfChargeSuccess = false;
+        let pfChargeCodOper: string | null = null;
+        let pfChargeError: string | null = null;
+
+        const originalCodOper = rec.pf_cod_oper;
+        if (pfConfigured && originalCodOper && !existing) {
+          try {
+            const pf = new PagueloFacil(pfCclw, pfToken, pfSdkEnv);
+            const recurrentInfo = {
+              amount: Number(chargeAmount),
+              taxAmount: 0.0,
+              email: 'cobros@lideresenseguros.com',
+              phone: '60000000',
+              concept: `Cuota ${installmentNum}/${rec.total_installments} - ${rec.nro_poliza || 'Póliza'}`,
+              description: `Cobro recurrente - ${rec.client_name} - ${rec.insurer}`,
+              codOper: originalCodOper,
+            };
+            console.log(`[CRON RECURRENCIA] Charging PF Recurrent: rec=${rec.id}, amount=$${chargeAmount}, installment=${installmentNum}/${rec.total_installments}`);
+            const pfRes = await pf.Recurrent(recurrentInfo);
+
+            if (pfRes?.success && pfRes?.headerStatus?.code === 200 && pfRes?.data?.status === 1) {
+              pfChargeSuccess = true;
+              pfChargeCodOper = pfRes.data.codOper || null;
+              charged++;
+              console.log(`[CRON RECURRENCIA] ✅ PF charge OK: rec=${rec.id}, codOper=${pfChargeCodOper}`);
+            } else {
+              pfChargeError = pfRes?.message || pfRes?.headerStatus?.description || 'PF charge failed';
+              chargeFailed++;
+              console.warn(`[CRON RECURRENCIA] ⚠️ PF charge failed: rec=${rec.id}, error=${pfChargeError}`);
+            }
+          } catch (pfErr: any) {
+            pfChargeError = pfErr.message || 'PF SDK error';
+            chargeFailed++;
+            console.error(`[CRON RECURRENCIA] ❌ PF charge exception: rec=${rec.id}`, pfErr);
+          }
+        }
+
         if (!paymentId) {
-          // Create payment as PENDIENTE_CONFIRMACION — requires manual confirm before grouping
           const slaDueDate = nextInstallment.sla_due_date || null;
+          const paymentStatus = pfChargeSuccess ? 'CONFIRMADO_PF' : 'PENDIENTE_CONFIRMACION';
           const { data: newPayment, error: insertErr } = await sb.from('adm_cot_payments').insert({
             client_name: rec.client_name,
             cedula: rec.cedula || null,
             nro_poliza: rec.nro_poliza,
-            amount: rec.installment_amount,
+            amount: chargeAmount,
             insurer: rec.insurer,
             ramo: 'AUTO',
-            status: 'PENDIENTE_CONFIRMACION',
+            status: paymentStatus,
             payment_date: paymentDate,
             is_recurring: true,
             recurrence_id: rec.id,
             installment_num: installmentNum,
             payment_source: 'CRON_RECURRENCE',
             ...(slaDueDate ? { due_date: slaDueDate } : {}),
+            ...(pfChargeCodOper ? { pf_cod_oper: pfChargeCodOper } : {}),
+            ...(pfChargeSuccess ? { pf_confirmed_at: new Date().toISOString() } : {}),
           }).select('id').single();
 
           if (insertErr) {
@@ -112,9 +175,10 @@ export async function GET(request: NextRequest) {
           created++;
         }
 
-        // Update schedule: mark this installment
+        // Update schedule: mark this installment as PAGADO if PF succeeded, keep PENDIENTE otherwise
+        const newInstallmentStatus = pfChargeSuccess ? 'PAGADO' : 'PENDIENTE';
         const updatedSchedule = schedule.map((s: any) =>
-          s.num === installmentNum ? { ...s, status: 'PENDIENTE', payment_id: paymentId } : s
+          s.num === installmentNum ? { ...s, status: newInstallmentStatus, payment_id: paymentId } : s
         );
 
         // Calculate next due date
@@ -145,7 +209,15 @@ export async function GET(request: NextRequest) {
           event_type: 'cron_payment_created',
           entity_type: 'recurrence',
           entity_id: rec.id,
-          detail: { payment_id: paymentId, installment_num: installmentNum, payment_date: paymentDate },
+          detail: {
+            payment_id: paymentId,
+            installment_num: installmentNum,
+            payment_date: paymentDate,
+            amount: chargeAmount,
+            pf_charged: pfChargeSuccess,
+            pf_cod_oper: pfChargeCodOper,
+            pf_error: pfChargeError,
+          },
         });
 
       } catch (recErr: any) {
@@ -153,13 +225,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`[CRON RECURRENCIA] Done: ${processed} processed, ${created} created, ${completed} completed, ${errors.length} errors`);
+    console.log(`[CRON RECURRENCIA] Done: ${processed} processed, ${created} created, ${charged} charged, ${chargeFailed} charge failures, ${completed} completed, ${errors.length} errors`);
 
     return NextResponse.json({
       success: true,
       timestamp: today,
       processed,
       created,
+      charged,
+      chargeFailed,
       completed,
       errors: errors.length > 0 ? errors : undefined,
     });

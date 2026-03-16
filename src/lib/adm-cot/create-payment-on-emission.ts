@@ -21,6 +21,35 @@ function computeSLADueDate(baseDate: Date, slaBusinessDays: number = 15): string
   return due.toISOString().slice(0, 10);
 }
 
+/**
+ * Compute recurrence frequency based on installment count.
+ * CC (Cobertura Completa): spread over 12 months → 12/installments = months between payments
+ * DT (Daños a Terceros): always MENSUAL (2 cuotas = hoy + 1 mes)
+ *
+ * Mapping (CC):
+ *   2 cuotas → 6 meses (SEMESTRAL)
+ *   3 cuotas → 4 meses (CUATRIMESTRAL)
+ *   4 cuotas → 3 meses (TRIMESTRAL)
+ *   5-6 cuotas → 2 meses (BIMESTRAL)
+ *   7-10 cuotas → 1 mes (MENSUAL)
+ */
+function computeFrequency(installments: number, cobertura?: string): { label: string; months: number } {
+  if (installments <= 1) return { label: 'CONTADO', months: 12 };
+
+  // DT: always monthly (2 cuotas = hoy + 1 mes)
+  if (cobertura === 'TERCEROS' || cobertura === 'DT') {
+    return { label: 'MENSUAL', months: 1 };
+  }
+
+  // CC: distribute across 12-month policy period
+  const months = Math.floor(12 / installments);
+  if (months >= 6) return { label: 'SEMESTRAL', months: 6 };
+  if (months >= 4) return { label: 'CUATRIMESTRAL', months: 4 };
+  if (months >= 3) return { label: 'TRIMESTRAL', months: 3 };
+  if (months >= 2) return { label: 'BIMESTRAL', months: 2 };
+  return { label: 'MENSUAL', months: 1 };
+}
+
 export async function createPaymentOnEmission(params: {
   insurer: string;
   policyNumber: string;
@@ -29,6 +58,7 @@ export async function createPaymentOnEmission(params: {
   totalPremium: number;
   installments: number;
   ramo?: string;
+  cobertura?: string; // 'TERCEROS' | 'DT' | 'COMPLETA' | 'CC' — affects frequency calc
   // PagueloFacil data (when PF confirmed the first charge)
   pfCodOper?: string;
   pfRecCodOper?: string;
@@ -38,9 +68,12 @@ export async function createPaymentOnEmission(params: {
   try {
     const {
       insurer, policyNumber, insuredName, cedula, totalPremium, installments, ramo,
-      pfCodOper, pfRecCodOper, pfCardType, pfCardDisplay,
+      cobertura, pfCodOper, pfRecCodOper, pfCardType, pfCardDisplay,
     } = params;
-    const installmentAmount = Math.round((totalPremium / installments) * 100) / 100;
+    // Rounding: base amount truncated to 2 decimals, last installment absorbs remainder
+    const baseAmount = Math.floor((totalPremium / installments) * 100) / 100;
+    const lastAmount = Math.round((totalPremium - baseAmount * (installments - 1)) * 100) / 100;
+    const installmentAmount = baseAmount; // used for recurrence record (base per-installment)
     const today = new Date().toISOString().slice(0, 10);
     const paymentMode = computePaymentMode(installments);
 
@@ -58,7 +91,7 @@ export async function createPaymentOnEmission(params: {
           policy_number: policyNumber,
           insured_name: insuredName,
           cedula: cedula || null,
-          amount_due: installmentAmount,
+          amount_due: baseAmount,
           payment_date: today,
           type: 'PAY_TO_INSURER',
           ramo: ramo || 'AUTO',
@@ -79,19 +112,22 @@ export async function createPaymentOnEmission(params: {
     // 2. Create recurrence if installments > 1
     if (installments > 1) {
       const startDate = new Date();
-      const frequency = installments <= 2 ? 'SEMESTRAL' : 'MENSUAL';
-      const freqMonths = frequency === 'MENSUAL' ? 1 : 6;
+      const freq = computeFrequency(installments, cobertura);
+      const frequency = freq.label;
+      const freqMonths = freq.months;
 
-      // Build schedule: first installment already created, start from 2
+      // Build schedule: first installment already created, last absorbs rounding diff
       const schedule = [];
       for (let i = 1; i <= installments; i++) {
         const dueDate = new Date(startDate);
         dueDate.setMonth(dueDate.getMonth() + (i - 1) * freqMonths);
+        const amt = i === installments ? lastAmount : baseAmount;
         schedule.push({
           num: i,
           due_date: dueDate.toISOString().slice(0, 10),
           sla_due_date: computeSLADueDate(dueDate),
           status: i === 1 ? 'PAGADO' : 'PENDIENTE',
+          amount: amt,
           payment_id: null,
         });
       }
