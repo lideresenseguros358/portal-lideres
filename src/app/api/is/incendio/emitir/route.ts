@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirIncendio, crearClienteYPolizaOptiSeguro } from '@/lib/is/optiseguro.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       tiene_alarma,
       tiene_extintores,
       // Config
-      environment = 'development',
+      environment = getISDefaultEnv(),
     } = body;
     
     const supabase = getSupabaseAdmin();

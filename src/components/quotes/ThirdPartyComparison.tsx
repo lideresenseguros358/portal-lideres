@@ -12,7 +12,7 @@ interface ThirdPartyComparisonProps {
 }
 
 // ── Cache helpers ──
-const CACHE_KEY = 'tp_plans_cache_v3';
+const CACHE_KEY = 'tp_plans_cache_v4';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — plans/benefits rarely change
 const API_TIMEOUT = 60_000; // 60s max per API call — IS needs time for token + retries on slow server
 
@@ -20,6 +20,7 @@ interface ApiCache {
   fedpa: any | null;
   is: any | null;
   regional: any | null;
+  ancon: any | null;
   timestamp: number;
 }
 
@@ -36,9 +37,9 @@ function readCache(): ApiCache | null {
   } catch { return null; }
 }
 
-function writeCache(fedpa: any, is: any, regional: any) {
+function writeCache(fedpa: any, is: any, regional: any, ancon: any = null) {
   try {
-    const entry: ApiCache = { fedpa, is, regional, timestamp: Date.now() };
+    const entry: ApiCache = { fedpa, is, regional, ancon, timestamp: Date.now() };
     localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
   } catch { /* quota exceeded — ignore */ }
 }
@@ -49,6 +50,7 @@ function mergeApiData(
   fedpaData: any | null,
   isData: any | null,
   regionalData: any | null,
+  anconData: any | null = null,
 ): AutoInsurer[] {
   return baseInsurers.map(insurer => {
     // ── FEDPA ──
@@ -149,6 +151,40 @@ function mergeApiData(
       };
     }
 
+    // ── ANCON ──
+    if (insurer.id === 'ancon' && anconData?.success && anconData.plans?.length > 0) {
+      const basicApi = anconData.plans.find((p: any) => p.planType === 'basic');
+      const premiumApi = anconData.plans.find((p: any) => p.planType === 'premium');
+
+      const mapAnconPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+        if (!apiPlan) return fallback;
+        const covList: CoverageItem[] = (apiPlan.coverageList || []).map((c: any) => ({
+          code: String(c.code || ''),
+          name: c.name || '',
+          limit: c.limit || '',
+          prima: Number(c.prima) || 0,
+        }));
+        return {
+          ...fallback,
+          annualPremium: apiPlan.annualPremium || fallback.annualPremium,
+          coverageList: covList.length > 0 ? covList : fallback.coverageList,
+          endosoBenefits: apiPlan.endosoBenefits?.length > 0 ? apiPlan.endosoBenefits : fallback.endosoBenefits,
+          endoso: apiPlan.endoso || fallback.endoso,
+          idCotizacion: apiPlan.noCotizacion || fallback.idCotizacion,
+          installments: {
+            available: false,
+            description: 'Solo al contado',
+          },
+        };
+      };
+
+      return {
+        ...insurer,
+        basicPlan: mapAnconPlan(basicApi, insurer.basicPlan),
+        premiumPlan: mapAnconPlan(premiumApi, insurer.premiumPlan),
+      };
+    }
+
     return insurer;
   });
 }
@@ -167,7 +203,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     // Always start with cached data merged into base — instant render
     const cached = readCache();
     if (cached) {
-      return mergeApiData(AUTO_THIRD_PARTY_INSURERS, cached.fedpa, cached.is, cached.regional);
+      return mergeApiData(AUTO_THIRD_PARTY_INSURERS, cached.fedpa, cached.is, cached.regional, cached.ancon);
     }
     return AUTO_THIRD_PARTY_INSURERS;
   });
@@ -182,22 +218,24 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       fetchingRef.current = true;
 
       try {
-        const [fedpaData, isData, regionalData] = await Promise.all([
+        const [fedpaData, isData, regionalData, anconData] = await Promise.all([
           fetchWithTimeout('/api/fedpa/third-party'),
           fetchWithTimeout('/api/is/third-party'),
           fetchWithTimeout('/api/regional/third-party'),
+          fetchWithTimeout('/api/ancon/third-party'),
         ]);
 
         // Only update cache & UI if we got at least one valid response
-        if (fedpaData || isData || regionalData) {
+        if (fedpaData || isData || regionalData || anconData) {
           // Merge: keep previous cached data for providers that timed out
           const prev = readCache();
           const finalFedpa = fedpaData || prev?.fedpa || null;
           const finalIs = isData || prev?.is || null;
           const finalRegional = regionalData || prev?.regional || null;
+          const finalAncon = anconData || prev?.ancon || null;
 
-          writeCache(finalFedpa, finalIs, finalRegional);
-          setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, finalFedpa, finalIs, finalRegional));
+          writeCache(finalFedpa, finalIs, finalRegional, finalAncon);
+          setInsurersData(mergeApiData(AUTO_THIRD_PARTY_INSURERS, finalFedpa, finalIs, finalRegional, finalAncon));
 
           // Detect offline insurers from API responses
           const offline: Record<string, boolean> = {};
@@ -207,6 +245,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           if (!finalIs || finalIs.online === false) offline['internacional'] = true;
           // REGIONAL: online flag explicitly set by backend
           if (!finalRegional || finalRegional.online === false) offline['regional'] = true;
+          // ANCON: online flag
+          if (!finalAncon || finalAncon.online === false) offline['ancon'] = true;
           setOfflineInsurers(offline);
         }
       } catch (error) {
@@ -299,6 +339,27 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       });
     }
 
+    // ANCON: store quote data for emission flow
+    if (insurer.id === 'ancon') {
+      sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
+        insurerId: insurer.id, insurerName: insurer.name, planType: type,
+        annualPremium: plan.annualPremium, isRealAPI: true, isANCON: true,
+        idCotizacion: plan.idCotizacion,
+        installments: plan.installments,
+      }));
+
+      // ═══ ADM COT: Track ANCON DT quote ═══
+      trackQuoteCreated({
+        quoteRef: `ANCON-${plan.idCotizacion || 'DT'}-DT-${type === 'premium' ? 'P' : 'B'}`,
+        insurer: 'ANCON',
+        clientName: 'Anónimo',
+        ramo: 'AUTO',
+        coverageType: 'Daños a Terceros',
+        planName: type === 'premium' ? 'Plan Premium DT' : 'Plan Básico DT',
+        annualPremium: plan.annualPremium,
+      });
+    }
+
     // FEDPA: store quote data for emission flow
     if (insurer.id === 'fedpa') {
       sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
@@ -329,6 +390,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     fedpa: '/aseguradoras/fedpa.png',
     internacional: '/aseguradoras/internacional.png',
     regional: '/aseguradoras/regional.png',
+    ancon: '/aseguradoras/ancon.png',
   };
 
   const getLogoUrl = (insurerId: string): string | null => {

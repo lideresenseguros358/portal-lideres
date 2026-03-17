@@ -126,6 +126,27 @@ export default function ThirdPartyPage() {
         },
       }));
       router.push('/cotizadores/emitir-danos-terceros');
+    } else if (insurerId === 'ancon' && tpQuote?.isRealAPI) {
+      // ANCON: usar flujo completo con secciones (mismo wizard que FEDPA/IS/REGIONAL)
+      sessionStorage.setItem('selectedQuote', JSON.stringify({
+        insurerName: 'ANCÓN Seguros',
+        planType: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
+        annualPremium: plan.annualPremium,
+        _isReal: true,
+        isANCON: true,
+        _idCotizacion: tpQuote.idCotizacion,
+        _includedCoverages: plan.includedCoverages,
+        installments: plan.installments,
+        quoteData: {
+          cobertura: 'TERCEROS',
+          policyType: 'AUTO',
+          marca: '',
+          modelo: '',
+          ano: new Date().getFullYear(),
+          uso: '10',
+        },
+      }));
+      router.push('/cotizadores/emitir-danos-terceros');
     } else {
       // Otras aseguradoras: flujo existente (formulario simple)
       router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);

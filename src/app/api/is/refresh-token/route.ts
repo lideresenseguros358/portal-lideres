@@ -8,12 +8,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { invalidateToken, getDailyTokenWithRetry } from '@/lib/is/token-manager';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const env = (searchParams.get('env') as ISEnvironment) || 'development';
+    const env = (searchParams.get('env') as ISEnvironment) || getISDefaultEnv();
     
     console.log(`[Token API] Renovando token diario para ${env}...`);
     

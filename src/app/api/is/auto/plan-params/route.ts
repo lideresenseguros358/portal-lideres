@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { getTipoPlanes, getGruposTarifa, getPlanes } from '@/lib/is/catalogs.service';
 
 // Valores por defecto de la documentación oficial IS (Postman screenshots)
@@ -42,7 +42,7 @@ const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const tipo = searchParams.get('tipo') || 'CC';
-  const env = (searchParams.get('env') || 'development') as ISEnvironment;
+  const env = (searchParams.get('env') || getISDefaultEnv()) as ISEnvironment;
   
   const cacheKey = `${tipo}_${env}`;
   const cached = planParamsCache.get(cacheKey);

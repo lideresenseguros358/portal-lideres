@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { updateThirdPartyMinPrice } from '@/lib/services/third-party-price-updater';
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const vIdPv = searchParams.get('vIdPv');
     const vIdOpt = parseInt(searchParams.get('vIdOpt') || '1') as 1 | 2 | 3;
-    const env = (searchParams.get('env') || 'development') as ISEnvironment;
+    const env = (searchParams.get('env') || getISDefaultEnv()) as ISEnvironment;
     
     if (!vIdPv) {
       return NextResponse.json(

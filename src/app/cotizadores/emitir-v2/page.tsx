@@ -376,7 +376,7 @@ export default function EmitirV2Page() {
       if (isFedpaReal) {
         // ========== PASO 1: Subir documentos ==========
         const docsFormData = new FormData();
-        docsFormData.append('environment', 'DEV');
+        docsFormData.append('environment', 'PROD');
         if (documents?.cedulaFile) docsFormData.append('documento_identidad', documents.cedulaFile);
         if (documents?.licenciaFile) docsFormData.append('licencia_conducir', documents.licenciaFile);
         if (documents?.registroFile) docsFormData.append('registro_vehicular', documents.registroFile);
@@ -397,7 +397,7 @@ export default function EmitirV2Page() {
         // ========== PASO 2: Emitir póliza FEDPA ==========
         toast.info('Generando póliza...');
         const emisionPayload = {
-          environment: 'DEV',
+          environment: 'PROD',
           Plan: selectedPlan._planCode || parseInt(selectedPlan._idCotizacion) || 411,
           idDoc: docsResult.idDoc,
           // Cliente

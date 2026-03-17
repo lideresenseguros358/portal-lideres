@@ -14,13 +14,13 @@ import {
   getPlanes,
   getGruposTarifa,
 } from '@/lib/is/catalogs.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get('type');
-    const env = (searchParams.get('env') || 'development') as ISEnvironment;
+    const env = (searchParams.get('env') || getISDefaultEnv()) as ISEnvironment;
     
     if (!type) {
       return NextResponse.json(

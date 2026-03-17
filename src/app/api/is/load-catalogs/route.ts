@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getISDefaultEnv } from '@/lib/is/config';
 
 const MARCAS_INICIALES = [
   { vcodmarca: '156', vdescripcion: 'TOYOTA' },
@@ -38,7 +39,7 @@ export async function GET() {
       .from('is_catalogs')
       .select('catalog_type')
       .eq('catalog_type', 'marcas')
-      .eq('environment', 'development')
+      .eq('environment', getISDefaultEnv())
       .single();
     
     if (existing) {
@@ -55,7 +56,7 @@ export async function GET() {
       .upsert({
         catalog_type: 'marcas',
         catalog_data: MARCAS_INICIALES as any,
-        environment: 'development',
+        environment: getISDefaultEnv(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'catalog_type,environment',

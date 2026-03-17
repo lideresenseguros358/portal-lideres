@@ -5,15 +5,23 @@
 
 // Mapeo de marcas de vehículos a códigos de USO de FEDPA
 export const VEHICLE_MARCA_TO_FEDPA_USO: Record<number, string> = {
-  // Autos particulares (USO 10)
+  // Autos particulares (USO 10) — verified against IS production catalog
   156: '10', // Toyota
-  148: '10', // Hyundai
+  74: '10',  // Hyundai
   86: '10',  // Kia
   113: '10', // Nissan
-  74: '10',  // Suzuki
+  148: '10', // Suzuki
   217: '10', // Geely
-  204: '10', // Honda
-  // Agregar más marcas según sea necesario
+  69: '10',  // Honda
+  99: '10',  // Mazda
+  107: '10', // Mitsubishi
+  20: '10',  // Chevrolet
+  50: '10',  // Ford
+  172: '10', // Volkswagen
+  8: '10',   // BMW
+  5: '10',   // Audi
+  80: '10',  // Jeep
+  129: '10', // Renault
 };
 
 // Valor por defecto si no se encuentra la marca
@@ -24,14 +32,18 @@ export const DEFAULT_FEDPA_USO = '10'; // Auto Particular
  * IS usa números, FEDPA usa strings (abreviaciones)
  */
 export const IS_TO_FEDPA_MARCA: Record<number, string> = {
+  // Verified against IS production catalog (2025)
   156: 'TOY',  // Toyota
-  148: 'HYU',  // Hyundai
+  74: 'HYU',   // Hyundai
   86: 'KIA',   // Kia
   113: 'NIS',  // Nissan
-  74: 'SUZ',   // Suzuki
+  148: 'SUZ',  // Suzuki
   217: 'GEE',  // Geely
-  204: 'HON',  // Honda
-  // Agregar más según catálogo FEDPA
+  69: 'HON',   // Honda
+  99: 'MAZ',   // Mazda
+  107: 'MIT',  // Mitsubishi
+  20: 'CHE',   // Chevrolet
+  50: 'FOR',   // Ford
 };
 
 import { getFedpaMarcaFromIS, normalizarModeloFedpa } from './fedpa-vehicle-mapper';
@@ -200,9 +212,19 @@ export function getPlanFromCoberturaYValor(
   console.log(`[PLAN Determiner] Valor vehículo: $${valorVehiculo.toLocaleString()}`);
   
   if (tipoCobertura === 'CC') {
-    // Para Cobertura Completa, SIEMPRE usar 411 o 412 (según básico/premium)
-    // Los rangos 461-463 son variantes pero usamos 411/412 para simplificar
-    console.log('[PLAN Determiner] Plan: 411 (CC PARTICULAR)');
+    // For CC, use range-based plans (461/462/463) by vehicle value
+    // Fallback to generic 411 if value is out of range
+    if (valorVehiculo >= 60001 && valorVehiculo <= 150000) {
+      console.log('[PLAN Determiner] Plan: 463 (CC 60,001 A 150,000)');
+      return '463';
+    } else if (valorVehiculo >= 20000 && valorVehiculo <= 60000) {
+      console.log('[PLAN Determiner] Plan: 462 (CC 20,000 A 60,000)');
+      return '462';
+    } else if (valorVehiculo >= 3000 && valorVehiculo <= 19999.99) {
+      console.log('[PLAN Determiner] Plan: 461 (CC 3,000 A 19,999.99)');
+      return '461';
+    }
+    console.log('[PLAN Determiner] Plan: 411 (CC PARTICULAR - fallback)');
     return '411';
   } else {
     // Para Daños a Terceros, usar plan 426 (DT PARTICULARES)

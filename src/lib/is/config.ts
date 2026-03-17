@@ -7,19 +7,19 @@ export type ISEnvironment = 'development' | 'production';
 
 /**
  * Auto-detect IS environment:
- * - On Vercel: use 'production' (APIRestIs) — Vercel IPs whitelisted by IS
- * - Locally: use 'development' (APIRestIsTester) — no IP restriction but has daily quotas
+ * - Always use 'production' (APIRestIs) — IS enabled production token 2026-03-10
+ * - Tester API (APIRestIsTester) has strict daily token quotas and returns RESOP:-3
  *
- * IS Tester API returns RESOP:-3 when daily quota is exhausted.
- * IS Production API returns 403 from non-whitelisted IPs (local dev).
+ * Override: set IS_FORCE_ENV=development in .env.local to use tester API
  */
 export function getISDefaultEnv(): ISEnvironment {
-  // On Vercel → use Production API (IS enabled production token 2026-03-10)
-  // Locally → use Tester API (production requires IP whitelisting)
-  if (process.env.VERCEL) {
-    return 'production';
+  // Allow explicit override via env var
+  const forceEnv = process.env.IS_FORCE_ENV;
+  if (forceEnv === 'development' || forceEnv === 'production') {
+    return forceEnv;
   }
-  return 'development';
+  // Default: always use production (IS confirmed no IP restriction for our token)
+  return 'production';
 }
 
 /**

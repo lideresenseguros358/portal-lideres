@@ -9,11 +9,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { isGet } from '@/lib/is/http-client';
-import { IS_ENDPOINTS } from '@/lib/is/config';
+import { IS_ENDPOINTS, getISDefaultEnv, ISEnvironment } from '@/lib/is/config';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get('type') || 'all';
+  const env = (searchParams.get('env') || getISDefaultEnv()) as ISEnvironment;
   
   const results: any = {
     success: true,
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     // Sincronizar marcas
     if (type === 'marcas' || type === 'all') {
       console.log('[Sync] Cargando marcas desde IS API...');
-      const marcasResponse = await isGet<any>(IS_ENDPOINTS.MARCAS, 'development');
+      const marcasResponse = await isGet<any>(IS_ENDPOINTS.MARCAS, env);
       
       if (marcasResponse.success && marcasResponse.data) {
         let marcas = Array.isArray(marcasResponse.data) 
@@ -44,12 +45,12 @@ export async function GET(request: NextRequest) {
         await supabase.from('is_catalogs').upsert({
           catalog_type: 'marcas',
           catalog_data: marcas as any,
-          environment: 'development',
+          environment: env,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'catalog_type,environment' });
         
-        results.synced.push({ type: 'marcas', count: marcas.length });
-        console.log(`[Sync] ✅ Marcas: ${marcas.length}`);
+        results.synced.push({ type: 'marcas', count: marcas.length, environment: env });
+        console.log(`[Sync] ✅ Marcas: ${marcas.length} (${env})`);
       } else {
         results.errors.push({ type: 'marcas', error: marcasResponse.error });
       }
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     // Sincronizar modelos
     if (type === 'modelos' || type === 'all') {
       console.log('[Sync] Cargando TODOS los modelos desde IS API...');
-      const modelosResponse = await isGet<any>('/cotizaemisorauto/getmodelos/1/20000', 'development');
+      const modelosResponse = await isGet<any>('/cotizaemisorauto/getmodelos/1/20000', env);
       
       if (modelosResponse.success && modelosResponse.data) {
         let rawModelos = Array.isArray(modelosResponse.data)
@@ -75,12 +76,12 @@ export async function GET(request: NextRequest) {
         await supabase.from('is_catalogs').upsert({
           catalog_type: 'modelos',
           catalog_data: modelos as any,
-          environment: 'development',
+          environment: env,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'catalog_type,environment' });
         
-        results.synced.push({ type: 'modelos', count: modelos.length });
-        console.log(`[Sync] ✅ Modelos: ${modelos.length}`);
+        results.synced.push({ type: 'modelos', count: modelos.length, environment: env });
+        console.log(`[Sync] ✅ Modelos: ${modelos.length} (${env})`);
       } else {
         results.errors.push({ type: 'modelos', error: modelosResponse.error });
       }

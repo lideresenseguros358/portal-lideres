@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { isGet } from '@/lib/is/http-client';
-import { IS_ENDPOINTS, type ISEnvironment } from '@/lib/is/config';
+import { IS_ENDPOINTS, type ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { URBANIZACIONES_FALLBACK } from '@/lib/is/urbanizaciones-fallback';
 import { PROVINCIAS_FALLBACK } from '@/lib/is/provincias-fallback';
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const tipo = searchParams.get('tipo');
-    const env = (searchParams.get('env') || 'development') as ISEnvironment;
+    const env = (searchParams.get('env') || getISDefaultEnv()) as ISEnvironment;
 
     let endpoint = '';
 

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     
     // Construir request para FEDPA usando datos normalizados
     const plan = normalized.fedpa?.plan || '411';
-    const esCoberturabCompleta = plan === '411'; // Plan 411 = Cobertura Completa
+    const esCoberturaCompleta = ['411', '461', '462', '463'].includes(plan); // CC plans (generic + range-based)
     
     const cotizacionRequest: CotizacionRequest = {
       Ano: normalized.vehiculo.anio, // Int32
@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
       EndosoIncluido: body.EndosoIncluido || normalized.fedpa?.endosoIncluido || 'S',
       CodPlan: plan,
       // Para CC: usar códigos mapeados, para DT: vacíos
-      CodMarca: esCoberturabCompleta ? (normalized.fedpa?.codMarca || 'TOY') : '',
-      CodModelo: esCoberturabCompleta ? (normalized.fedpa?.codModelo || 'AUTO') : '',
+      CodMarca: esCoberturaCompleta ? (normalized.fedpa?.codMarca || 'TOY') : '',
+      CodModelo: esCoberturaCompleta ? (normalized.fedpa?.codModelo || 'AUTO') : '',
       Nombre: normalized.cliente.nombre,
       Apellido: normalized.cliente.apellido,
       Cedula: normalized.cliente.numeroDocumento,

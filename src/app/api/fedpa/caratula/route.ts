@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerCaratula, parsePolizaNumber } from '@/lib/fedpa/caratula.service';
+import { getFedpaDefaultEnv } from '@/lib/fedpa/config';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 
 export const maxDuration = 30;
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const poliza = body.poliza || body.nroPoliza || '';
-    const env = (body.environment || 'PROD') as FedpaEnvironment;
+    const env = (body.environment || getFedpaDefaultEnv()) as FedpaEnvironment;
 
     if (!poliza) {
       return NextResponse.json(
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
   const requestId = `car-${Date.now().toString(36)}`;
   const { searchParams } = new URL(request.url);
   const poliza = searchParams.get('poliza');
-  const env = (searchParams.get('env') || 'PROD') as FedpaEnvironment;
+  const env = (searchParams.get('env') || getFedpaDefaultEnv()) as FedpaEnvironment;
 
   if (!poliza) {
     return NextResponse.json(

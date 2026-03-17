@@ -26,7 +26,7 @@ export function useISCatalogs() {
       try {
         console.log('[useISCatalogs] Iniciando carga de marcas...');
         setLoading(true);
-        const response = await fetch('/api/is/catalogs?type=marcas&env=development');
+        const response = await fetch('/api/is/catalogs?type=marcas');
         console.log('[useISCatalogs] Response status:', response.status);
         
         if (response.ok) {
@@ -74,7 +74,7 @@ export function useISCatalogs() {
       try {
         console.log('[useISCatalogs] Cargando modelos para marca:', selectedMarca);
         setLoading(true);
-        const response = await fetch(`/api/is/catalogs?type=modelos&marca=${selectedMarca}&env=development`);
+        const response = await fetch(`/api/is/catalogs?type=modelos&marca=${selectedMarca}`);
         
         if (response.ok) {
           const result = await response.json();

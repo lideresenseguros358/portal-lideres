@@ -4,6 +4,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getISDefaultEnv } from '@/lib/is/config';
 
 const UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 horas
 const lastUpdateCheck: Map<string, number> = new Map();
@@ -30,7 +31,7 @@ export async function checkAndUpdateCatalogs(source: 'IS' | 'FEDPA' = 'IS') {
     .from('is_catalogs')
     .select('updated_at')
     .eq('catalog_type', 'marcas')
-    .eq('environment', 'development')
+    .eq('environment', getISDefaultEnv())
     .single();
   
   if (catalog) {

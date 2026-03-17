@@ -5,7 +5,7 @@
  * ⚠️ PLACEHOLDER - Conectar cuando se obtengan las APIs reales
  */
 
-import { ISEnvironment } from './config';
+import { ISEnvironment, getISDefaultEnv } from './config';
 import { isPost, isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
@@ -115,7 +115,7 @@ const OPTISEGURO_ENDPOINTS = {
  */
 export async function cotizarIncendio(
   request: CotizacionIncendioRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; idCotizacion?: string; primaTotal?: number; error?: string }> {
   console.log('[IS OptiSeguro] Cotizando Incendio...', {
     cliente: `${request.vnombre} ${request.vapellido}`,
@@ -169,7 +169,7 @@ export async function cotizarIncendio(
  */
 export async function cotizarContenido(
   request: CotizacionContenidoRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; idCotizacion?: string; primaTotal?: number; error?: string }> {
   console.log('[IS OptiSeguro] Cotizando Contenido...', {
     cliente: `${request.vnombre} ${request.vapellido}`,
@@ -223,7 +223,7 @@ export async function cotizarContenido(
  */
 export async function emitirIncendio(
   request: EmisionOptiSeguroRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; error?: string }> {
   console.log('[IS OptiSeguro] Emitiendo póliza de Incendio...', {
     idCotizacion: request.vIdPv,
@@ -273,7 +273,7 @@ export async function emitirIncendio(
  */
 export async function emitirContenido(
   request: EmisionContenidoRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; error?: string }> {
   console.log('[IS OptiSeguro] Emitiendo póliza de Contenido...', {
     idCotizacion: request.vIdPv,

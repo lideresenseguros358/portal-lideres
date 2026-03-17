@@ -16,9 +16,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS } from '@/lib/fedpa/config';
+import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, getFedpaDefaultEnv } from '@/lib/fedpa/config';
 import { crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
 import { normalizeText } from '@/lib/fedpa/utils';
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
@@ -91,7 +92,14 @@ export async function POST(request: NextRequest) {
     const file2 = formData.get('File2') as File | null;
     const file3 = formData.get('File3') as File | null;
 
-    console.log(`\n[EMISOR EXTERNO] ${requestId} ═══ START ═══`);
+    // Determine environment: DEV uses get_nropoliza (test), PROD uses get_nropoliza_emitir (real)
+    const defaultEnv = getFedpaDefaultEnv();
+    const environment = (body.environment || defaultEnv).toUpperCase() === 'DEV' ? 'DEV' : 'PROD';
+    const nroPolizaEndpoint = environment === 'DEV'
+      ? '/api/Polizas/get_nropoliza'
+      : '/api/Polizas/get_nropoliza_emitir';
+
+    console.log(`\n[EMISOR EXTERNO] ${requestId} ═══ START (env=${environment}) ═══`);
     console.log(`[EMISOR EXTERNO] Files: File1=${file1?.name || 'NONE'} (${file1?.size || 0}B), File2=${file2?.name || 'NONE'} (${file2?.size || 0}B), File3=${file3?.name || 'NONE'} (${file3?.size || 0}B)`);
 
     // ═══════════════════════════════════════════════════
@@ -109,8 +117,8 @@ export async function POST(request: NextRequest) {
       CodLimiteGastosMedico: String(body.CodLimiteGastosMedico || '16'),
       EndosoIncluido: body.EndosoIncluido || 'S',
       CodPlan: String(body.CodPlan || '411'),
-      CodMarca: normalizeText(body.Marca),
-      CodModelo: normalizeText(body.Modelo),
+      CodMarca: /^\d+$/.test(String(body.Marca)) ? getFedpaMarcaFromIS(parseInt(body.Marca), body.MarcaNombre) : normalizeText(body.Marca),
+      CodModelo: /^\d+$/.test(String(body.Modelo)) ? normalizarModeloFedpa(body.ModeloNombre || body.Modelo) : normalizeText(body.Modelo),
       Nombre: normalizeText(body.PrimerNombre),
       Apellido: normalizeText(body.PrimerApellido),
       Cedula: body.Identificacion || '0-0-0',
@@ -165,10 +173,16 @@ export async function POST(request: NextRequest) {
     // ═══════════════════════════════════════════════════
     console.log(`[EMISOR EXTERNO] ${requestId} PASO 2: get_nropoliza`);
 
-    const nroRes = await fetch(`${FEDPA_API}/Polizas/get_nropoliza`, {
+    const nroBody = {
+      ...creds,
+      codCotizacion: idCotizacion,
+    };
+    console.log(`[EMISOR EXTERNO] ${requestId} get_nropoliza body:`, JSON.stringify(nroBody));
+
+    const nroRes = await fetch(`${FEDPA_API}${nroPolizaEndpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(creds),
+      body: JSON.stringify(nroBody),
     });
 
     const nroText = await nroRes.text();
@@ -182,18 +196,30 @@ export async function POST(request: NextRequest) {
     let nroData: any;
     try { nroData = JSON.parse(nroText); } catch { nroData = nroText; }
 
-    // Response: [{ "NroPoliza": "XXXXXXXX" }] or similar
+    // PROD returns: [{"NUMPOL":"04-04-XXXXXXX-0","RAMO":"04","SUBRAMO":"04","POLIZA":XXXXXXX}]
+    // DEV  returns: [{"NUMPOL":"XXXXXXX","IDCOTIZACION":null}]
+    // crear_poliza_auto_cc_externos needs the numeric POLIZA value, not the formatted NUMPOL
     let nroPoliza: string = '';
+    let nroPolizaFormatted: string = '';
     if (Array.isArray(nroData) && nroData.length > 0) {
-      nroPoliza = String(nroData[0].NroPoliza || nroData[0].NROPOLIZA || nroData[0].NRO_POLIZA || nroData[0].NUMPOL || '');
+      const item = nroData[0];
+      // Prefer POLIZA (numeric) for emission, NUMPOL (formatted) for carátula
+      nroPoliza = String(item.POLIZA || item.NroPoliza || item.NROPOLIZA || item.NRO_POLIZA || item.NUMPOL || '');
+      nroPolizaFormatted = String(item.NUMPOL || '');
     } else if (typeof nroData === 'object' && nroData !== null) {
-      nroPoliza = String(nroData.NroPoliza || nroData.NROPOLIZA || nroData.NRO_POLIZA || nroData.NUMPOL || '');
+      nroPoliza = String(nroData.POLIZA || nroData.NroPoliza || nroData.NROPOLIZA || nroData.NRO_POLIZA || nroData.NUMPOL || '');
+      nroPolizaFormatted = String(nroData.NUMPOL || '');
     } else if (typeof nroData === 'string') {
       nroPoliza = nroData.trim();
     }
 
-    steps.push({ step: 2, name: 'get_nropoliza', success: !!nroPoliza, nroPoliza, rawResponse: nroText.substring(0, 200) });
-    console.log(`[EMISOR EXTERNO] ${requestId} ✅ NroPoliza=${nroPoliza}`);
+    // If formatted is not available, build it from ramo-subRamo-poliza-0
+    if (!nroPolizaFormatted && nroPoliza) {
+      nroPolizaFormatted = `${ramo.padStart(2, '0')}-${subRamo.padStart(2, '0')}-${nroPoliza}-0`;
+    }
+
+    steps.push({ step: 2, name: 'get_nropoliza', success: !!nroPoliza, nroPoliza, nroPolizaFormatted, rawResponse: nroText.substring(0, 200) });
+    console.log(`[EMISOR EXTERNO] ${requestId} ✅ NroPoliza=${nroPoliza} | Formatted=${nroPolizaFormatted}`);
 
     if (!nroPoliza) {
       return NextResponse.json({ success: false, error: 'get_nropoliza did not return a policy number', steps, requestId }, { status: 400 });
@@ -258,8 +284,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       Auto: {
-        CodMarca: normalizeText(body.Marca),
-        CodModelo: normalizeText(body.Modelo),
+        CodMarca: /^\d+$/.test(String(body.Marca)) ? getFedpaMarcaFromIS(parseInt(body.Marca), body.MarcaNombre) : normalizeText(body.Marca),
+        CodModelo: /^\d+$/.test(String(body.Modelo)) ? normalizarModeloFedpa(body.ModeloNombre || body.Modelo) : normalizeText(body.Modelo),
         Ano: String(body.Ano || new Date().getFullYear()),
         Placa: normalizeText(body.Placa || ''),
         Chasis: normalizeText(body.Vin || ''),
@@ -312,13 +338,26 @@ export async function POST(request: NextRequest) {
 
     console.log(`[EMISOR EXTERNO] ${requestId} ✅ Póliza emitida: ${nroPoliza}`);
 
+    // If the emission response contains NroPoliza, prefer it over our computed value
+    // Response format: [{"Mensaje":"","Idpoliza":"7535855","NroPoliza":"04-04-2138033-0","CodCorredor":"836"}]
+    if (Array.isArray(emisionResult) && emisionResult[0]?.NroPoliza) {
+      nroPolizaFormatted = String(emisionResult[0].NroPoliza);
+      console.log(`[EMISOR EXTERNO] ${requestId} Using NroPoliza from emission response: ${nroPolizaFormatted}`);
+    }
+
+    // Use nroPolizaFormatted from step 2 (already computed above)
+    // For PROD: comes directly from NUMPOL ("04-04-2138033-0")
+    // For DEV: built as ramo-subRamo-poliza-0
+    console.log(`[EMISOR EXTERNO] ${requestId} Formatted policy number for carátula: ${nroPolizaFormatted}`);
+
     // Build response compatible with existing frontend
     const resultado = {
       success: true,
-      amb: 'PROD',
+      amb: environment,
       cotizacion: idCotizacion,
-      poliza: nroPoliza,
-      nroPoliza: nroPoliza,
+      poliza: nroPolizaFormatted,
+      nroPoliza: nroPolizaFormatted,
+      nroPolizaRaw: nroPoliza,
       desde: fechaDesde,
       hasta: fechaHasta,
       vigenciaDesde: fechaDesde,
@@ -361,7 +400,7 @@ export async function POST(request: NextRequest) {
 
       const { clientId, policyId, error: dbError } = await crearClienteYPolizaFEDPA(
         fakeEmitirReq as any,
-        { success: true, poliza: nroPoliza, desde: fechaDesde, hasta: fechaHasta }
+        { success: true, poliza: nroPolizaFormatted, desde: fechaDesde, hasta: fechaHasta }
       );
 
       if (dbError) {

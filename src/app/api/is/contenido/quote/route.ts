@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cotizarContenido } from '@/lib/is/optiseguro.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       suma_asegurada,
       descripcion_contenido,
       // Config
-      environment = 'development',
+      environment = getISDefaultEnv(),
     } = body;
     
     // Validaciones básicas

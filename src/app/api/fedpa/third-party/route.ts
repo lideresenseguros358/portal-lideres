@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       ramo,
       subramo,
       planCode: 426,
-      emissionPlanCodes: { basic: 1000, plus: 1001, premium: 1002 },
+      emissionPlanCodes: { basic: 426, plus: 426, premium: 426 },
       timestamp: new Date().toISOString(),
       plans: [
         {
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
           },
           includedCoverages: OPCION_A_COVERAGES,
           idCotizacion: idCotizacionBasic,
-          emissionPlanCode: 1000,
+          emissionPlanCode: 426,
         },
         {
           planType: 'premium',
@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
           },
           includedCoverages: OPCION_C_COVERAGES,
           idCotizacion: idCotizacionPremium,
-          emissionPlanCode: 1002,
+          emissionPlanCode: 426,
         },
       ],
     };

@@ -3,7 +3,7 @@
  * Maneja cache en BD y memoria
  */
 
-import { ISEnvironment, IS_ENDPOINTS, CACHE_TTL } from './config';
+import { ISEnvironment, IS_ENDPOINTS, CACHE_TTL, getISDefaultEnv } from './config';
 import { isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/lib/database.types';
@@ -116,7 +116,7 @@ async function getCatalog<T>(
  * Obtener marcas de vehículos desde BD LOCAL (instantáneo)
  * NO llama a API externa - solo lee de catálogo local
  */
-export async function getMarcas(env: ISEnvironment = 'development'): Promise<Marca[]> {
+export async function getMarcas(env: ISEnvironment = getISDefaultEnv()): Promise<Marca[]> {
   const cacheKey = `marcas_${env}`;
   
   // 1. Cache en memoria (instantáneo < 5ms)
@@ -151,7 +151,7 @@ export async function getMarcas(env: ISEnvironment = 'development'): Promise<Mar
  * Obtener modelos de vehículos desde BD LOCAL (instantáneo)
  * NO llama a API externa - solo lee de catálogo local
  */
-export async function getModelos(env: ISEnvironment = 'development'): Promise<Modelo[]> {
+export async function getModelos(env: ISEnvironment = getISDefaultEnv()): Promise<Modelo[]> {
   const cacheKey = `modelos_${env}`;
   
   // 1. Cache en memoria (instantáneo < 5ms)
@@ -188,7 +188,7 @@ export async function getModelos(env: ISEnvironment = 'development'): Promise<Mo
  */
 export async function getModelosByMarca(
   vcodmarca: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<Modelo[]> {
   const cacheKey = `modelos_${env}`;
   
@@ -237,7 +237,7 @@ export async function getModelosByMarca(
 /**
  * Obtener tipos de documento
  */
-export async function getTipoDocumentos(env: ISEnvironment = 'development'): Promise<TipoDocumento[]> {
+export async function getTipoDocumentos(env: ISEnvironment = getISDefaultEnv()): Promise<TipoDocumento[]> {
   const data = await getCatalog<TipoDocumento>('tipo_documentos', IS_ENDPOINTS.TIPO_DOCUMENTOS, env);
   return data || [];
 }
@@ -245,7 +245,7 @@ export async function getTipoDocumentos(env: ISEnvironment = 'development'): Pro
 /**
  * Obtener tipos de planes
  */
-export async function getTipoPlanes(env: ISEnvironment = 'development'): Promise<TipoPlan[]> {
+export async function getTipoPlanes(env: ISEnvironment = getISDefaultEnv()): Promise<TipoPlan[]> {
   const data = await getCatalog<TipoPlan>('tipo_planes', IS_ENDPOINTS.TIPO_PLANES, env);
   return data || [];
 }
@@ -255,7 +255,7 @@ export async function getTipoPlanes(env: ISEnvironment = 'development'): Promise
  */
 export async function getGruposTarifa(
   vCodTipoPlan: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<GrupoTarifa[]> {
   const endpoint = `${IS_ENDPOINTS.GRUPO_TARIFA}/${vCodTipoPlan}`;
   const cacheKey = `grupos_tarifa_${vCodTipoPlan}_${env}`;
@@ -287,7 +287,7 @@ export async function getGruposTarifa(
  */
 export async function getPlanes(
   vCodTipoPlan: string = '1',
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<Plan[]> {
   const endpoint = `${IS_ENDPOINTS.PLANES}/${vCodTipoPlan}`;
   const cacheKey = `planes_${vCodTipoPlan}_${env}`;
@@ -319,7 +319,7 @@ export async function getPlanes(
  */
 export async function getPlanesAdicionales(
   vCodTipoPlan?: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<any[]> {
   const endpoint = vCodTipoPlan 
     ? `${IS_ENDPOINTS.PLANES_ADICIONALES}/${vCodTipoPlan}`
@@ -349,7 +349,7 @@ export async function getPlanesAdicionales(
  */
 export async function getPreciosPlanTerceros(
   vCodPlan: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<any[]> {
   const endpoint = `${IS_ENDPOINTS.PRECIOS_PLANES_TERCEROS}/${vCodPlan}`;
   const cacheKey = `precios_plan_${vCodPlan}_${env}`;
@@ -373,7 +373,7 @@ export async function getPreciosPlanTerceros(
 /**
  * Invalidar cache (útil para forzar refresh)
  */
-export async function invalidateCache(catalogType?: string, env?: ISEnvironment): Promise<void> {
+export async function invalidateCache(catalogType?: string, env?: ISEnvironment | undefined): Promise<void> {
   if (!catalogType) {
     // Invalidar todo
     memoryCache.clear();
@@ -388,7 +388,7 @@ export async function invalidateCache(catalogType?: string, env?: ISEnvironment)
 /**
  * Pre-cargar todos los catálogos (útil al iniciar app)
  */
-export async function preloadCatalogs(env: ISEnvironment = 'development'): Promise<void> {
+export async function preloadCatalogs(env: ISEnvironment = getISDefaultEnv()): Promise<void> {
   console.log('[IS Catalogs] Pre-cargando catálogos...');
   
   await Promise.allSettled([
@@ -408,7 +408,7 @@ export async function preloadCatalogs(env: ISEnvironment = 'development'): Promi
  * Retorna estructura compatible con tipos oficiales de IS
  */
 export async function obtenerTodosCatalogos(
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; data?: ISCatalogs; error?: string }> {
   console.log('[IS Catálogos] Obteniendo todos los catálogos...');
   

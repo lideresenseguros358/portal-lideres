@@ -3,7 +3,7 @@
  * Internacional de Seguros (IS)
  */
 
-import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './config';
+import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG, getISDefaultEnv } from './config';
 import { isGet, isPost } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
@@ -180,7 +180,7 @@ type QuoteResult = { success: boolean; idCotizacion?: string; primaTotal?: numbe
  */
 export async function generarCotizacionAuto(
   request: CotizacionAutoRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<QuoteResult> {
   // Trigger auto-actualización de catálogos en background (no bloquea)
   import('@/lib/is/catalog-updater').then(m => m.triggerCatalogUpdate('IS')).catch(() => {});
@@ -212,11 +212,7 @@ export async function generarCotizacionAuto(
   const cached = checkDedup(dedupKey);
   if (cached) return cached;
   
-  console.log('[IS Quotes] POST /generarcotizacion', {
-    marca: body.codMarca, modelo: body.codModelo,
-    plan: body.codPlanCobertura, grupo: body.codGrupoTarifa,
-    sumaAseg: body.sumaAseg,
-  });
+  console.log('[IS Quotes] POST /generarcotizacion FULL BODY:', JSON.stringify(body));
   
   const result = await _callGenerarCotizacion(body, env);
   
@@ -315,7 +311,7 @@ async function _callGenerarCotizacion(
 export async function obtenerCoberturasCotizacion(
   idpv: string,
   _vIdOpt: 1 | 2 | 3 = 1, // Mantenido por compatibilidad pero no se usa en Swagger
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; data?: CoberturasResponse; error?: string }> {
   console.log('[IS Quotes] GET /getlistacoberturas/', idpv);
   
@@ -347,7 +343,7 @@ export async function obtenerCoberturasCotizacion(
  */
 export async function emitirPolizaAuto(
   request: EmisionAutoRequest,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; pdfBase64?: string; error?: string }> {
   if (!request.vIdPv) {
     return { success: false, error: 'Falta ID de cotización (vIdPv) para emitir' };

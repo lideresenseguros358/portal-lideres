@@ -93,8 +93,8 @@ const IS_ENDOSOS = {
  */
 const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: any | null; premium: any | null }> => {
   try {
-    const vcodmarca = quoteData.marcaCodigo || 204;
-    const vcodmodelo = quoteData.modeloCodigo || 1234;
+    const vcodmarca = quoteData.marcaCodigo || 156;  // 156=TOYOTA (prod)
+    const vcodmodelo = quoteData.modeloCodigo || 2436; // 2436=COROLLA (prod)
     const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo');
     
     // Plan params: CC Particular defaults (cached 24h server-side, rarely change)
@@ -122,7 +122,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         vsumaaseg: quoteData.valorVehiculo || 15000,
         vcodplancobertura,
         vcodgrupotarifa,
-        environment: 'development',
+        codProvincia: quoteData.codProvincia || 8,
+        fecNacimiento: quoteData.fechaNacimiento
+          ? quoteData.fechaNacimiento.split('-').reverse().join('/')
+          : '01/01/1990',
       }),
     });
     
@@ -459,7 +462,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
  * Se hace UNA sola llamada a la API y se generan ambas tarjetas.
  */
 const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | null; basico: any | null }> => {
-  const environment = 'DEV';
+  const environment = 'PROD';
   
   // Parallelizar import dinámico + resolución de plan
   const [premiumModule, planInfo] = await Promise.all([
@@ -517,7 +520,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
         gastosMedicosAccidente: quoteData.gastosMedicosAccidente || 10000,
         deducible: quoteData.deducible || 'medio',
         EndosoIncluido: 'S',
-        environment: 'DEV',
+        environment: 'PROD',
       }),
     });
     
@@ -1003,6 +1006,134 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
   }
 };
 
+/**
+ * Genera cotización REAL con ANCÓN usando las APIs
+ * Básico = opcion1 (limits bajos), Premium = opcion3 (limits altos)
+ * Deducibles: a=bajo, b=medio, c=alto
+ */
+const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null; premium: any | null }> => {
+  try {
+    console.log('[ANCON] Cotizando CC...');
+    const t0 = performance.now();
+
+    const cotResponse = await fetch('/api/ancon/cotizacion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cod_marca: quoteData.marcaCodigo || '00122',
+        cod_modelo: quoteData.modeloCodigo || '10393',
+        ano: String(quoteData.anio || new Date().getFullYear()),
+        suma_asegurada: String(quoteData.valorVehiculo || 15000),
+        cod_producto: '00312',
+        cedula: quoteData.cedula || '8-888-9999',
+        nombre: (quoteData.nombre || quoteData.primerNombre || 'COTIZACION').toUpperCase(),
+        apellido: (quoteData.apellido || quoteData.primerApellido || 'WEB').toUpperCase(),
+        vigencia: 'A',
+        email: quoteData.email || 'cotizacion@lideresenseguros.com',
+        tipo_persona: 'N',
+        fecha_nac: quoteData.fechaNacimiento
+          ? new Date(quoteData.fechaNacimiento).toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : '16/06/1994',
+        nuevo: quoteData.vehiculoNuevo ? '1' : '0',
+      }),
+    });
+
+    const cotData = await cotResponse.json();
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    console.log(`[ANCON] CC quote completed in ${elapsed}s`);
+
+    if (!cotData.success || !cotData.options || cotData.options.length === 0) {
+      console.warn('[ANCON] No se pudieron generar cotizaciones CC:', cotData.error);
+      return { basico: null, premium: null };
+    }
+
+    const options = cotData.options;
+    // Map deducible selection to a/b/c suffix
+    const dedMap: Record<string, 'A' | 'B' | 'C'> = { bajo: 'A', medio: 'B', alto: 'C' };
+    const dedSuffix = dedMap[quoteData.deducible] || 'A';
+
+    const sharedData = {
+      insurerName: 'ANCÓN Seguros',
+      _isReal: true,
+      _isANCON: true,
+      _sumaAsegurada: quoteData.valorVehiculo || 0,
+      _deducibleOriginal: quoteData.deducible,
+      _marcaNombre: quoteData.marca,
+      _modeloNombre: quoteData.modelo,
+      _anio: quoteData.anio || new Date().getFullYear(),
+    };
+
+    const buildQuote = (option: any, planType: 'basico' | 'premium', endosoNombre: string) => {
+      if (!option) return null;
+
+      // Select the right deducible level
+      const totalKey = `total${dedSuffix}` as 'totalA' | 'totalB' | 'totalC';
+      const primaTotal = option.totals?.[totalKey] || option.totals?.totalA || 0;
+
+      // Build coverage list
+      const coverageList = (option.coverages || []).map((c: any) => {
+        const primaKey = `prima${dedSuffix}` as 'primaA' | 'primaB' | 'primaC';
+        const dedKeyFull = `deducible${dedSuffix}` as 'deducibleA' | 'deducibleB' | 'deducibleC';
+        return {
+          code: c.name?.substring(0, 3)?.toUpperCase() || '',
+          name: c.name || '',
+          limit: c.limite1 && c.limite1 !== '0.00' ? `$${c.limite1}` : 'INCLUIDO',
+          prima: c[primaKey] || 0,
+          deducible: c[dedKeyFull] || 0,
+        };
+      });
+
+      // Extract endoso benefits
+      const endosoBenefits: string[] = [];
+      const hasAutoSustituto = coverageList.some((c: any) => c.name?.includes('AUTO SUSTITUTO'));
+      const hasAsistVial = coverageList.some((c: any) => c.name?.includes('ASISTENCIA VIAL'));
+      if (hasAutoSustituto) endosoBenefits.push('Reembolso para auto sustituto ANCON Plus');
+      if (hasAsistVial) endosoBenefits.push('Asistencia vial limitada incluida');
+      endosoBenefits.push('Coordinación de envío de ambulancia');
+      endosoBenefits.push('Transmisión de mensajes urgentes');
+
+      // Build deducibles array from CC coverages
+      const deducibles = coverageList
+        .filter((c: any) => c.deducible > 0)
+        .map((c: any) => ({
+          cobertura: c.name,
+          monto: c.deducible,
+          formato: `$${Number(c.deducible).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        }));
+
+      return {
+        ...sharedData,
+        id: `ancon-${planType}`,
+        planType,
+        isRecommended: planType === 'premium',
+        annualPremium: Math.round(primaTotal * 100) / 100,
+        coverageList,
+        endosoBenefits,
+        endosoNombre,
+        deducibles,
+        _idCotizacion: option.noCotizacion || cotData.noCotizacion,
+        _optionName: option.name,
+        _opcion: dedSuffix,
+      };
+    };
+
+    // opcion1 = basic limits, opcion3 = premium limits
+    const basicOption = options.find((o: any) => o.name === 'opcion1');
+    const premiumOption = options.find((o: any) => o.name === 'opcion3') || options.find((o: any) => o.name === 'opcion2');
+
+    const basico = buildQuote(basicOption, 'basico', 'Endoso Básico ANCON');
+    const premium = buildQuote(premiumOption, 'premium', 'Endoso Premium ANCON Plus');
+
+    if (basico) console.log(`[ANCON] ✅ Básico: $${basico.annualPremium}`);
+    if (premium) console.log(`[ANCON] ✅ Premium: $${premium.annualPremium}`);
+
+    return { basico, premium };
+  } catch (error) {
+    console.error('[ANCON] Error generando cotización CC:', error);
+    return { basico: null, premium: null };
+  }
+};
+
 export default function ComparePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -1036,14 +1167,15 @@ export default function ComparePage() {
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
           
-          // ── PARALELO: IS, FEDPA y REGIONAL al mismo tiempo ──
-          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA + REGIONAL)...');
+          // ── PARALELO: IS, FEDPA, REGIONAL y ANCON al mismo tiempo ──
+          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA + REGIONAL + ANCON)...');
           const t0 = Date.now();
           
-          const [isResult, fedpaResult, regionalResult] = await Promise.allSettled([
+          const [isResult, fedpaResult, regionalResult, anconResult] = await Promise.allSettled([
             generateInternacionalQuotes(input),
             generateFedpaQuotes(input),
             generateRegionalQuotes(input),
+            generateAnconQuotes(input),
           ]);
           
           console.log(`[Comparar] Cotizaciones completadas en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
@@ -1156,14 +1288,54 @@ export default function ComparePage() {
             toast.error('Error al obtener cotizaciones de REGIONAL');
           }
           
+          // Procesar resultado ANCON
+          if (anconResult.status === 'fulfilled') {
+            const anconQuotes = anconResult.value;
+            if (anconQuotes.premium) {
+              realQuotes.push(anconQuotes.premium);
+              console.log('[ANCON] ✅ Premium:', anconQuotes.premium.annualPremium);
+            }
+            if (anconQuotes.basico) {
+              realQuotes.push(anconQuotes.basico);
+              console.log('[ANCON] ✅ Básico:', anconQuotes.basico.annualPremium);
+            }
+            if (!anconQuotes.premium && !anconQuotes.basico) {
+              console.warn('[ANCON] ⚠️ No se pudieron generar cotizaciones CC');
+            }
+            // ═══ ADM COT: Track ANCON quotes ═══
+            const anconRef = anconQuotes.premium?._idCotizacion || anconQuotes.basico?._idCotizacion;
+            if (anconRef) {
+              const trackBase = {
+                clientName: input.nombreCompleto || 'Anónimo',
+                cedula: input.cedula,
+                email: input.email,
+                phone: input.telefono,
+                ramo: 'AUTO',
+                coverageType: 'Cobertura Completa',
+                vehicleInfo: { marca: input.marca, modelo: input.modelo, anio: input.anio, valor: input.valorVehiculo },
+              };
+              if (anconQuotes.premium) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `ANCON-${anconRef}-P`, insurer: 'ANCON', planName: 'Premium (ANCON Plus)', annualPremium: anconQuotes.premium.annualPremium });
+              }
+              if (anconQuotes.basico) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `ANCON-${anconRef}-B`, insurer: 'ANCON', planName: 'Básico', annualPremium: anconQuotes.basico.annualPremium });
+              }
+            }
+          } else {
+            console.error('[ANCON] Error obteniendo cotizaciones:', anconResult.reason);
+            toast.error('Error al obtener cotizaciones de ANCON');
+          }
+
           // Track offline insurers for UI
           const offline: string[] = [];
           const hasIS = realQuotes.some(q => q.insurerName?.includes('INTERNACIONAL'));
           const hasFEDPA = realQuotes.some(q => q.insurerName?.includes('FEDPA'));
           const hasREGIONAL = realQuotes.some(q => q.insurerName?.includes('Regional'));
+          const hasANCON = realQuotes.some(q => q.insurerName?.includes('ANCÓN') || q.insurerName?.includes('Ancon'));
           if (!hasIS) offline.push('INTERNACIONAL de Seguros');
           if (!hasFEDPA) offline.push('FEDPA Seguros');
           if (!hasREGIONAL) offline.push('La Regional de Seguros');
+          if (!hasANCON) offline.push('ANCÓN Seguros');
           setOfflineInsurers(offline);
 
           if (realQuotes.length > 0) {

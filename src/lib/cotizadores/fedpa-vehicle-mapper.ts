@@ -6,124 +6,46 @@
 
 // Mapeo de códigos IS a códigos FEDPA para marcas
 export const IS_TO_FEDPA_MARCA: Record<number, string> = {
-  // Toyota
-  156: 'TOY',
-  204: 'TOY',
-  
-  // Kia
-  86: 'KIA',
-  
-  // Hyundai
-  76: 'HYU',
-  
-  // Honda
-  73: 'HON',
-  
-  // Nissan
-  113: 'NIS',
-  127: 'NIS',
-  
-  // Mazda
-  112: 'MAZ',
-  
-  // Mitsubishi
-  119: 'MIT',
-  
-  // Chevrolet
-  37: 'CHE',
-  
-  // Ford
-  59: 'FOR',
-  
-  // Suzuki
-  173: 'SUZ',
-  
-  // Volkswagen
-  196: 'VOL',
-  
-  // BMW
-  16: 'BMW',
-  
-  // Mercedes-Benz
-  115: 'MER',
-  
-  // Audi
-  11: 'AUD',
-  
-  // Jeep
-  81: 'JEP',
-  
-  // Subaru
-  170: 'SUB',
-  
-  // Isuzu
-  79: 'ISU',
-  
-  // Peugeot
-  137: 'PEU',
-  
-  // Renault
-  148: 'REN',
-  
-  // Fiat
-  58: 'FIA',
-  
-  // Dodge
-  52: 'DOD',
-  
-  // RAM
-  145: 'RAM',
-  
-  // Lexus
-  99: 'LEX',
-  
-  // Infiniti
-  77: 'INF',
-  
-  // Acura
-  2: 'ACU',
-  
-  // Volvo
-  197: 'VOL',
-  
-  // Land Rover
-  92: 'LRO',
-  
-  // Jaguar
-  80: 'JAG',
-  
-  // Porsche
-  140: 'POR',
-  
-  // Mini
-  118: 'MIN',
-  
-  // Smart
-  166: 'SMA',
-  
-  // Tesla
-  177: 'TES',
-  
-  // BYD
-  23: 'BYD',
-  
-  // Chery
-  36: 'CHE',
-  
-  // JAC
-  100: 'JAC',
-  
-  // Great Wall
-  68: 'GRW',
-  
-  // Haval
-  71: 'HAV',
-  
-  // MG
-  116: 'MG',
-  
-  // Geely
-  63: 'GEE',
+  // Verified against IS production catalog (2025)
+  156: 'TOY',  // TOYOTA
+  86: 'KIA',   // KIA
+  74: 'HYU',   // HYUNDAI
+  69: 'HON',   // HONDA
+  113: 'NIS',  // NISSAN
+  99: 'MAZ',   // MAZDA
+  107: 'MIT',  // MITSUBISHI
+  20: 'CHE',   // CHEVROLET
+  50: 'FOR',   // FORD
+  148: 'SUZ',  // SUZUKI
+  172: 'VOL',  // VOLKSWAGEN
+  8: 'BMW',    // BMW
+  1012: 'MER', // MERCEDES
+  5: 'AUD',    // AUDI
+  80: 'JEP',   // JEEP
+  146: 'SUB',  // SUBARU
+  77: 'ISU',   // ISUZU
+  119: 'PEU',  // PEUGEOT
+  129: 'REN',  // RENAULT
+  49: 'FIA',   // FIAT
+  38: 'DOD',   // DODGE
+  855: 'RAM',  // RAM
+  92: 'LEX',   // LEXUS
+  506: 'INF',  // INFINITI
+  250: 'ACU',  // ACURA
+  174: 'VOL',  // VOLVO
+  91: 'LRO',   // LAND ROVER
+  79: 'JAG',   // JAGUAR
+  124: 'POR',  // PORSCHE
+  215: 'MIN',  // MINI
+  429: 'SMA',  // SMART
+  839: 'TES',  // TESLA
+  417: 'BYD',  // BYD
+  233: 'CHR',  // CHERY
+  225: 'JAC',  // JAC
+  214: 'GRW',  // GREAT WALL
+  570: 'HAV',  // HAVAL
+  418: 'MG',   // MG
+  217: 'GEE',  // GEELY
 };
 
 /**

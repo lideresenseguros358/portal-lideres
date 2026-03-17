@@ -5,7 +5,7 @@
  * ⚠️ PLACEHOLDER - Conectar cuando se obtenga la API de pagos real
  */
 
-import { ISEnvironment, getISBaseUrl } from './config';
+import { ISEnvironment, getISBaseUrl, getISDefaultEnv } from './config';
 
 // ⚠️ PLACEHOLDER - Endpoints de pago aún no confirmados por IS
 const PAYMENT_ENDPOINTS = {
@@ -74,7 +74,7 @@ export interface ProcessPaymentResponse {
 export async function tokenizarTarjeta(
   cardData: PaymentCardData,
   amount: number,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<TokenizeResponse> {
   console.log('[IS Payment] Tokenizando tarjeta...', {
     last4: cardData.cardNumber.slice(-4),
@@ -158,7 +158,7 @@ export async function procesarPago(
   paymentToken: string,
   amount: number,
   policyNumber: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<ProcessPaymentResponse> {
   console.log('[IS Payment] Procesando pago...', {
     token: paymentToken.substring(0, 20) + '...',
@@ -247,7 +247,7 @@ export async function procesarPago(
  */
 export async function verificarPago(
   transactionId: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<{ success: boolean; status?: string; error?: string }> {
   console.log('[IS Payment] Verificando pago...', transactionId);
   
@@ -293,7 +293,7 @@ export async function procesarPagoCompleto(params: {
   token?: string;
   error?: string;
 }> {
-  const { cardData, amount, policyNumber, env = 'development' } = params;
+  const { cardData, amount, policyNumber, env = getISDefaultEnv() } = params;
   
   // 1. Tokenizar tarjeta
   const tokenResult = await tokenizarTarjeta(cardData, amount, env);

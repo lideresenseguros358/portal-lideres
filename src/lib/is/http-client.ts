@@ -3,7 +3,7 @@
  * Incluye: retry con backoff, token refresh, logging, timeout
  */
 
-import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken, IS_USER_AGENT } from './config';
+import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken, IS_USER_AGENT, getISDefaultEnv } from './config';
 import { getDailyTokenWithRetry, invalidateToken } from './token-manager';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { checkRateLimit, isCircuitOpen, recordWafFailure, recordSuccess, getBackoffDelay, type RateLimitCategory } from './rate-limiter';
@@ -119,7 +119,7 @@ function sleep(ms: number): Promise<void> {
 export async function isRequest<T = any>(
   endpoint: string,
   options: ISRequestOptions = {},
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = getISDefaultEnv()
 ): Promise<ISResponse<T>> {
   const {
     method = 'GET',
@@ -427,7 +427,7 @@ async function saveAudit(
  */
 export async function isGet<T = any>(
   endpoint: string,
-  env: ISEnvironment = 'development',
+  env: ISEnvironment = getISDefaultEnv(),
   options?: Partial<ISRequestOptions>
 ): Promise<ISResponse<T>> {
   return isRequest<T>(endpoint, { method: 'GET', ...options }, env);
@@ -439,7 +439,7 @@ export async function isGet<T = any>(
 export async function isPost<T = any>(
   endpoint: string,
   body: any,
-  env: ISEnvironment = 'development',
+  env: ISEnvironment = getISDefaultEnv(),
   options?: { timeout?: number }
 ): Promise<ISResponse<T>> {
   return isRequest<T>(endpoint, { method: 'POST', body, timeout: options?.timeout }, env);

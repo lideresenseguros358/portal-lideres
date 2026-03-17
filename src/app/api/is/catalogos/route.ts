@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerTodosCatalogos } from '@/lib/is/catalogs.service';
-import type { ISEnvironment } from '@/lib/is/config';
+import { type ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     console.log('[API IS Catálogos] Petición recibida');
 
     const { searchParams } = new URL(request.url);
-    const env = (searchParams.get('env') as ISEnvironment) || 'development';
+    const env = (searchParams.get('env') as ISEnvironment) || getISDefaultEnv();
 
     const result = await obtenerTodosCatalogos(env);
 

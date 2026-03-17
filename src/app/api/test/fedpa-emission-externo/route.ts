@@ -139,10 +139,13 @@ export async function GET(request: NextRequest) {
     console.log('[TEST EXT] STEP 2: get_nropoliza');
     console.log('══════════════════════════════════════════════');
 
+    const nroBody = { Usuario: USUARIO, Clave: CLAVE, codCotizacion: idCotizacion };
+    console.log('[TEST EXT] get_nropoliza body:', JSON.stringify(nroBody));
+
     const nroRes = await fetch(`${FEDPA_API}/Polizas/get_nropoliza`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Usuario: USUARIO, Clave: CLAVE }),
+      body: JSON.stringify(nroBody),
     });
 
     const nroText = await nroRes.text();

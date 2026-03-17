@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cotizarIncendio } from '@/lib/is/optiseguro.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       tiene_alarma,
       tiene_extintores,
       // Config
-      environment = 'development',
+      environment = getISDefaultEnv(),
     } = body;
     
     // Validaciones básicas

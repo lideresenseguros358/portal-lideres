@@ -15,6 +15,7 @@ import { useISCatalogs } from '@/hooks/useISCatalogs';
 import Autocomplete, { AutocompleteOption } from '@/components/ui/Autocomplete';
 import AutoCloseTooltip, { AutoCloseTooltipRef } from '@/components/ui/AutoCloseTooltip';
 import Breadcrumb from '@/components/ui/Breadcrumb';
+import { PROVINCIAS_FALLBACK } from '@/lib/is/provincias-fallback';
 
 // Marcas comunes con logos
 const COMMON_BRANDS = [
@@ -80,6 +81,9 @@ export default function FormAutoCoberturaCompleta() {
     
     // Deducible
     deducible: 'medio', // bajo, medio, alto
+    
+    // Ubicación (requerido para cotizar IS)
+    codProvincia: 8, // 8=Panamá por defecto
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -98,6 +102,7 @@ export default function FormAutoCoberturaCompleta() {
             nombreCompleto: parsed.nombreCompleto || '',
             fechaNacimiento: parsed.fechaNacimiento || '',
             estadoCivil: parsed.estadoCivil || 'soltero',
+            codProvincia: parsed.codProvincia || 8,
             marca: parsed.marca || '',
             marcaCodigo: parsed.marcaCodigo || 0,
             modelo: parsed.modelo || '',
@@ -234,6 +239,7 @@ export default function FormAutoCoberturaCompleta() {
       marca: formData.marca, // NOMBRE de la marca
       modeloCodigo: formData.modeloCodigo,
       modelo: formData.modelo, // NOMBRE del modelo
+      anio: formData.anno, // Alias: comparar page reads "anio"
       // Asegurar coberturas
       lesionCorporalPersona: formData.lesionCorporalPersona,
       lesionCorporalAccidente: formData.lesionCorporalAccidente,
@@ -244,7 +250,7 @@ export default function FormAutoCoberturaCompleta() {
     }));
     
     // Pre-warm IS token cache (fire-and-forget) — saves ~1-3s on compare page
-    fetch('/api/is/auto/plan-params?tipo=CC&env=development').catch(() => {});
+    fetch('/api/is/auto/plan-params?tipo=CC').catch(() => {});
     
     toast.success('Generando cotización...');
     router.push('/cotizadores/comparar');
@@ -852,6 +858,21 @@ export default function FormAutoCoberturaCompleta() {
                   <option value="casado">Casado(a)</option>
                   <option value="divorciado">Divorciado(a)</option>
                   <option value="viudo">Viudo(a)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Provincia <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.codProvincia}
+                  onChange={(e) => setFormData({ ...formData, codProvincia: parseInt(e.target.value) })}
+                  className="w-full px-3 py-3 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                >
+                  {PROVINCIAS_FALLBACK.map(p => (
+                    <option key={p.DATO} value={p.DATO}>{p.TEXTO}</option>
+                  ))}
                 </select>
               </div>
             </div>

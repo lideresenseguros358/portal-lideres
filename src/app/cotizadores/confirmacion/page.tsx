@@ -120,6 +120,8 @@ export default function ConfirmacionPage() {
     setDownloadingPdf(true);
     setPdfError(null);
 
+    const env = policyData?.amb || policyData?.environment || 'PROD';
+
     try {
       const poliza = policyData?.nroPoliza || policyData?.poliza || '';
 
@@ -135,7 +137,7 @@ export default function ConfirmacionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           poliza,
-          environment: 'DEV',
+          environment: env,
         }),
       });
 
@@ -162,7 +164,11 @@ export default function ConfirmacionPage() {
       }
     } catch (err: any) {
       console.error('[Confirmación] Error descargando PDF FEDPA:', err);
-      setPdfError(err.message || 'Error descargando póliza');
+      const isDevPolicy = env === 'DEV';
+      const errorMsg = isDevPolicy
+        ? 'Póliza de prueba (DEV) — la carátula PDF no está disponible. Se descargará una carátula informativa.'
+        : (err.message || 'Error descargando póliza');
+      setPdfError(errorMsg);
       // Fallback to HTML carátula
       handleDownloadCaratula();
     } finally {
@@ -206,6 +212,48 @@ export default function ConfirmacionPage() {
     } catch (err: any) {
       console.error('[Confirmación] Error descargando PDF REGIONAL:', err);
       setPdfError(err.message || 'Error descargando póliza');
+      handleDownloadCaratula();
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadAnconPdf = async () => {
+    const poliza = policyData?.anconPoliza || policyData?.nroPoliza;
+    if (!poliza || downloadingPdf) return;
+    setDownloadingPdf(true);
+    setPdfError(null);
+
+    try {
+      const response = await fetch('/api/ancon/caratula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poliza }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('application/pdf')) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `poliza-ancon-${poliza}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'No se pudo obtener la póliza ANCON');
+        } else {
+          handleDownloadCaratula();
+        }
+      }
+    } catch (err: any) {
+      console.error('[Confirmación] Error descargando PDF ANCON:', err);
+      setPdfError(err.message || 'Error descargando póliza ANCON');
       handleDownloadCaratula();
     } finally {
       setDownloadingPdf(false);
@@ -347,6 +395,31 @@ export default function ConfirmacionPage() {
             <div className="mb-6">
               <button
                 onClick={handleDownloadFedpaPdf}
+                disabled={downloadingPdf}
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
+              >
+                {downloadingPdf ? (
+                  <>
+                    <FaSpinner className="text-xl text-white animate-spin" />
+                    <span className="text-white">Descargando...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaDownload className="text-xl text-white" />
+                    <span className="text-white">Descargar Póliza</span>
+                  </>
+                )}
+              </button>
+              {pdfError && (
+                <p className="text-xs text-amber-600 mt-2 text-center">
+                  {pdfError} — Se generó carátula alternativa
+                </p>
+              )}
+            </div>
+          ) : (policyData?.insurer?.toUpperCase().includes('ANCON') || policyData?.insurer?.toUpperCase().includes('ANCÓN')) && policyData?.anconPoliza ? (
+            <div className="mb-6">
+              <button
+                onClick={handleDownloadAnconPdf}
                 disabled={downloadingPdf}
                 className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
               >

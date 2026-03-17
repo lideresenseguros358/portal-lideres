@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { procesarPagoCompleto } from '@/lib/is/payment.service';
-import { ISEnvironment } from '@/lib/is/config';
+import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       amount,
       policyNumber,
       // Config
-      environment = 'development',
+      environment = getISDefaultEnv(),
     } = body;
     
     // Validaciones

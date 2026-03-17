@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getISBaseUrl, getISPrimaryToken } from '@/lib/is/config';
+import { getISBaseUrl, getISPrimaryToken, getISDefaultEnv } from '@/lib/is/config';
 
 export async function GET() {
   const results: any = {
@@ -12,8 +12,8 @@ export async function GET() {
     tests: {},
   };
 
-  const baseUrl = getISBaseUrl('development');
-  const token = getISPrimaryToken('development');
+  const baseUrl = getISBaseUrl(getISDefaultEnv());
+  const token = getISPrimaryToken(getISDefaultEnv());
 
   // Test 1: Obtener marcas directamente
   try {
@@ -90,7 +90,7 @@ export async function GET() {
   // Test 3: Probar nuestra API interna
   try {
     console.log('[TEST] Probando nuestra API interna...');
-    const internalResponse = await fetch(`http://localhost:${process.env.PORT || 3000}/api/is/catalogs?type=marcas&env=development`, {
+    const internalResponse = await fetch(`http://localhost:${process.env.PORT || 3000}/api/is/catalogs?type=marcas`, {
       method: 'GET',
       signal: AbortSignal.timeout(15000),
     });

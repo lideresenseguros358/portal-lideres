@@ -33,6 +33,21 @@ export const FEDPA_CONFIG = {
 
 export type FedpaEnvironment = keyof typeof FEDPA_CONFIG;
 
+/**
+ * Auto-detect FEDPA environment:
+ * - Default: 'PROD' — real policy numbers via get_nropoliza_emitir
+ *   (only PROD policies have downloadable carátulas via Broker Integration)
+ * - Override: set FEDPA_FORCE_ENV=DEV in .env.local for test policy numbers
+ *   (DEV policies use get_nropoliza and do NOT support carátula download)
+ */
+export function getFedpaDefaultEnv(): FedpaEnvironment {
+  const forceEnv = process.env.FEDPA_FORCE_ENV?.toUpperCase();
+  if (forceEnv === 'DEV' || forceEnv === 'PROD') {
+    return forceEnv as FedpaEnvironment;
+  }
+  return 'PROD';
+}
+
 // ============================================
 // ENDPOINTS EMISOR PLAN (2024)
 // ============================================
