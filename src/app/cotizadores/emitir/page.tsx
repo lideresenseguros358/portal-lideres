@@ -89,8 +89,9 @@ export default function EmitirPage() {
     if (!refId) return null;
     const isFedpa = selectedPlan?.insurerName?.includes('FEDPA');
     const isRegional = selectedPlan?._isREGIONAL || selectedPlan?.insurerName?.includes('Regional');
-    const prefix = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'IS';
-    const insurer = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'INTERNACIONAL';
+    const isAncon = selectedPlan?._isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon');
+    const prefix = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : isAncon ? 'ANCON' : 'IS';
+    const insurer = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : isAncon ? 'ANCON' : 'INTERNACIONAL';
     const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
     return { quoteRef: `${prefix}-${refId}-${planSuffix}`, insurer };
   };
@@ -234,6 +235,7 @@ export default function EmitirPage() {
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
       const isRegionalReal = selectedPlan?._isReal && (selectedPlan?._isREGIONAL || selectedPlan?.insurerName?.includes('Regional'));
+      const isAnconReal = selectedPlan?._isReal && (selectedPlan?._isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon'));
 
       // PagueloFacil tracking vars (scoped to emission function)
       let pfCodOper: string | undefined;
@@ -507,6 +509,7 @@ export default function EmitirPage() {
           insurer: 'FEDPA Seguros',
           clientId: emisionResult.clientId,
           policyId: emisionResult.policyId,
+          amb: emisionResult.amb || 'PROD',
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
@@ -515,7 +518,7 @@ export default function EmitirPage() {
           placa: vehicleData?.placa || '',
           primaTotal: selectedPlan?.annualPremium,
           tipoCobertura: 'Cobertura Completa',
-          method: 'emisor_plan',
+          method: 'emisor_externo',
         }));
         
         setEmissionProgress(100);
@@ -586,7 +589,6 @@ export default function EmitirPage() {
             tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,
-            environment: 'development',
           }),
         });
         
@@ -1014,6 +1016,213 @@ export default function EmitirPage() {
         setEmissionProgress(100);
         setEmissionStep('¡Emisión completada!');
         
+      } else if (isAnconReal) {
+        // ═══ EMISIÓN ANCON CC ═══
+        console.log('[EMISIÓN ANCON CC] Iniciando emisión con API real...');
+        setEmissionProgress(10);
+        setEmissionStep('Validando datos de emisión...');
+
+        if (!emissionData || !vehicleData) {
+          throw new Error('Faltan datos de cliente o vehículo');
+        }
+
+        setEmissionProgress(20);
+        setEmissionStep('Conectando con ANCÓN Seguros...');
+
+        const anconEmitBody = {
+          no_cotizacion: selectedPlan._idCotizacion || '',
+          opcion: selectedPlan._opcion || 'A',
+          cod_producto: '00312',
+          nombre_producto: 'AUTO COMPLETA',
+          suma_asegurada: String(selectedPlan._sumaAsegurada || quoteData?.valorVehiculo || 15000),
+          primer_nombre: emissionData.primerNombre,
+          segundo_nombre: emissionData.segundoNombre || '',
+          primer_apellido: emissionData.primerApellido,
+          segundo_apellido: emissionData.segundoApellido || '',
+          tipo_de_cliente: 'N',
+          cedula: emissionData.cedula,
+          fecha_nacimiento: emissionData.fechaNacimiento || '',
+          sexo: emissionData.sexo || 'M',
+          telefono_celular: emissionData.celular || emissionData.telefono || '',
+          telefono_residencial: emissionData.telefono || '',
+          email: emissionData.email || '',
+          direccion: emissionData.direccion || 'PANAMA',
+          direccion_cobros: emissionData.direccion || 'PANAMA',
+          cod_marca_agt: quoteData?.marcaCodigo || '',
+          nombre_marca: quoteData?.marca || '',
+          cod_modelo_agt: quoteData?.modeloCodigo || '',
+          nombre_modelo: quoteData?.modelo || '',
+          placa: vehicleData.placa || '',
+          no_chasis: vehicleData.vinChasis || '',
+          vin: vehicleData.vinChasis || '',
+          no_motor: vehicleData.motor || '',
+          ano: String(quoteData?.anio || quoteData?.anno || new Date().getFullYear()),
+          cantidad_de_pago: String(installments || 1),
+          nacionalidad: emissionData.nacionalidad || 'PANAMA',
+          pep: '0',
+        };
+
+        setEmissionProgress(30);
+        setEmissionStep('Emitiendo póliza con ANCÓN...');
+
+        const anconEmisionResponse = await fetch('/api/ancon/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(anconEmitBody),
+        });
+
+        const anconEmisionResult = await anconEmisionResponse.json();
+
+        if (!anconEmisionResponse.ok || !anconEmisionResult.success) {
+          throw new Error(anconEmisionResult.error || 'Error emitiendo póliza con ANCON');
+        }
+
+        console.log('[EMISIÓN ANCON CC] Póliza emitida:', anconEmisionResult.poliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
+
+        // ═══ ADM COT: Track successful ANCON CC emission ═══
+        const anconRef = selectedPlan?._idCotizacion;
+        if (anconRef) {
+          const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+          trackQuoteEmitted({
+            quoteRef: `ANCON-${anconRef}-${planSuffix}`,
+            insurer: 'ANCON',
+            policyNumber: anconEmisionResult.poliza,
+            clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(),
+            cedula: emissionData.cedula,
+          });
+        }
+
+        // ═══ ADM COT: Auto-create pending payment ═══
+        createPaymentOnEmission({
+          insurer: 'ANCON',
+          policyNumber: anconEmisionResult.poliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+          installments: installments || 1,
+          ramo: 'AUTO',
+          cobertura: 'COMPLETA',
+        });
+
+        // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
+        try {
+          const expedienteForm = new FormData();
+          expedienteForm.append('tipoCobertura', 'CC');
+          expedienteForm.append('environment', 'development');
+          expedienteForm.append('nroPoliza', anconEmisionResult.poliza || '');
+          expedienteForm.append('insurerName', 'ANCÓN Seguros');
+          expedienteForm.append('firmaDataUrl', signatureRef.current || '');
+          if (anconEmisionResult.clientId) expedienteForm.append('clientId', anconEmisionResult.clientId);
+          if (anconEmisionResult.policyId) expedienteForm.append('policyId', anconEmisionResult.policyId);
+
+          expedienteForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            nacionalidad: emissionData.nacionalidad,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
+          }));
+
+          expedienteForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            tipoTransmision: vehicleData?.tipoTransmision,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
+          }));
+
+          expedienteForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
+            valorVehiculo: quoteData?.valorVehiculo || 0,
+            cobertura: 'Cobertura Completa',
+            primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+            primaContado: selectedPlan?.annualPremium || 0,
+            formaPago: installments > 1 ? 'cuotas' : 'contado',
+            cantidadCuotas: installments || 1,
+            montoCuota: installments > 1 ? monthlyPayment : undefined,
+          }));
+
+          if (emissionData.cedulaFile) {
+            expedienteForm.append('cedulaFile', emissionData.cedulaFile);
+          }
+          if (emissionData.licenciaFile) {
+            expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          if (vehicleData?.registroVehicular) {
+            expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
+          }
+          if (inspectionPhotos.length > 0) {
+            for (const photo of inspectionPhotos) {
+              if (photo.file) {
+                expedienteForm.append(`photo_${photo.id}`, photo.file);
+              }
+            }
+          }
+
+          const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: expedienteForm,
+          });
+          const expedienteResult = await expedienteResponse.json();
+          if (expedienteResult.success) {
+            console.log('[ANCON CC] ✅ Expediente enviado:', expedienteResult.messageId);
+          } else {
+            console.error('[ANCON CC] Error expediente:', expedienteResult.error);
+          }
+        } catch (expError: any) {
+          console.error('[ANCON CC] Error enviando expediente:', expError);
+          toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+        }
+
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: anconEmisionResult.poliza,
+          insurer: 'ANCÓN Seguros',
+          anconPoliza: anconEmisionResult.poliza,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca || ''} ${quoteData?.modelo || ''} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+          primaContado: selectedPlan?.annualPremium,
+          formaPago: installments > 1 ? 'cuotas' : 'contado',
+          cantidadCuotas: installments,
+          montoCuota: installments > 1 ? monthlyPayment : undefined,
+          planType: selectedPlan?.planType,
+          tipoCobertura: 'Cobertura Completa',
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+        }));
+
+        sessionStorage.removeItem('selectedQuote');
+
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
+
       } else {
         // Otras aseguradoras - Flujo simulado (futuras integraciones)
         console.log('[EMISION] Flujo simulado para:', selectedPlan?.insurerName);
@@ -1097,10 +1306,11 @@ export default function EmitirPage() {
   const policyType = quoteData.policyType || 'AUTO'; // VIDA, INCENDIO, CONTENIDO, AUTO
   const isInternacional = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
   const isRegional = !!(selectedPlan?._isReal && (selectedPlan?._isREGIONAL || selectedPlan?.insurerName?.includes('Regional')));
+  const isAncon = !!(selectedPlan?._isReal && (selectedPlan?._isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon')));
 
   // Determinar step inicial según tipo
   // IS DT still needs emission-data and vehicle steps (for documents), just no inspection
-  const needsFullWizard = isAutoCompleta || isInternacional || isRegional;
+  const needsFullWizard = isAutoCompleta || isInternacional || isRegional || isAncon;
   const initialStep = needsFullWizard ? 'payment' : 'payment-info';
   const currentStep = step || initialStep;
 

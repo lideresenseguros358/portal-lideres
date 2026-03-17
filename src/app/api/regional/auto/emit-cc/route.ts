@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { emitirPolizaCC, actualizarPlanPago, imprimirPoliza } from '@/lib/regional/emission.service';
+import { emitirPolizaCC, actualizarPlanPago } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import type { RegionalCCEmissionBody } from '@/lib/regional/types';
 
@@ -117,17 +117,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Print policy PDF if poliza number is available
-    let pdfUrl: string | null = null;
-    if (result.poliza) {
-      console.log(`[REGIONAL CC Emit] Printing policy: ${result.poliza}`);
-      const printResult = await imprimirPoliza(result.poliza);
-      if (printResult.success && printResult.pdf) {
-        pdfUrl = printResult.pdf;
-      } else {
-        console.warn('[REGIONAL CC Emit] Print failed:', printResult.message);
-      }
-    }
+    // 3. Build print URL — the frontend/confirmation page will call this to download the PDF
+    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}` : null;
 
     const elapsed = Date.now() - t0;
     console.log(`[REGIONAL CC Emit] Completed in ${elapsed}ms. Poliza: ${result.poliza}`);

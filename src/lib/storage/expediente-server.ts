@@ -27,6 +27,8 @@ async function saveDocument(params: SaveDocumentParams): Promise<{ ok: boolean; 
   const timestamp = Date.now();
   const sanitizedFileName = params.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
 
+  console.log(`[Expediente Server] saveDocument: type=${params.documentType}, clientId=${params.clientId}, policyId=${params.policyId}, fileName=${params.fileName}, size=${params.fileBuffer.length}, mime=${params.mimeType}, documentName=${params.documentName || 'null'}`);
+
   // Build storage path
   let filePath: string;
   // Policy-level document types (stored under policy folder)
@@ -36,6 +38,8 @@ async function saveDocument(params: SaveDocumentParams): Promise<{ ok: boolean; 
   } else {
     filePath = `clients/${params.clientId}/${params.documentType}/${timestamp}_${sanitizedFileName}`;
   }
+
+  console.log(`[Expediente Server] Uploading to: ${filePath}`);
 
   // Upload to storage
   const { error: uploadError } = await supabase.storage
@@ -47,33 +51,40 @@ async function saveDocument(params: SaveDocumentParams): Promise<{ ok: boolean; 
     });
 
   if (uploadError) {
-    console.error(`[Expediente Server] Error uploading ${params.documentType}:`, uploadError.message);
-    return { ok: false, error: uploadError.message };
+    console.error(`[Expediente Server] ❌ Storage upload FAILED for ${params.documentType}:`, uploadError.message, JSON.stringify(uploadError));
+    return { ok: false, error: `Storage upload: ${uploadError.message}` };
   }
 
+  console.log(`[Expediente Server] ✅ Storage upload OK for ${params.documentType}`);
+
   // Create database record
+  const insertPayload = {
+    client_id: params.clientId,
+    policy_id: params.policyId,
+    document_type: params.documentType,
+    document_name: params.documentName || null,
+    file_path: filePath,
+    file_name: params.fileName,
+    file_size: params.fileBuffer.length,
+    mime_type: params.mimeType,
+    uploaded_by: null, // Server-side upload, no user context
+    notes: params.notes || null,
+  };
+
+  console.log(`[Expediente Server] Inserting DB record:`, JSON.stringify(insertPayload));
+
   const { error: dbError } = await supabase
     .from('expediente_documents')
-    .insert({
-      client_id: params.clientId,
-      policy_id: params.policyId,
-      document_type: params.documentType,
-      document_name: params.documentName || null,
-      file_path: filePath,
-      file_name: params.fileName,
-      file_size: params.fileBuffer.length,
-      mime_type: params.mimeType,
-      uploaded_by: null, // Server-side upload, no user context
-      notes: params.notes || null,
-    });
+    .insert(insertPayload);
 
   if (dbError) {
     // Rollback: delete uploaded file
     await supabase.storage.from(BUCKET_NAME).remove([filePath]);
-    console.error(`[Expediente Server] Error inserting ${params.documentType} record:`, dbError.message);
-    return { ok: false, error: dbError.message };
+    console.error(`[Expediente Server] ❌ DB insert FAILED for ${params.documentType}:`, dbError.message, 'code:', dbError.code, 'details:', dbError.details, 'hint:', dbError.hint);
+    return { ok: false, error: `DB insert: ${dbError.message}` };
   }
 
+  console.log(`[Expediente Server] ✅ DB insert OK for ${params.documentType}`);
   return { ok: true };
 }
 
@@ -120,6 +131,13 @@ export async function guardarDocumentosExpediente(params: {
   const skipped: string[] = [];
 
   console.log('[Expediente Server] Guardando documentos para clientId:', params.clientId, 'policyId:', params.policyId);
+  console.log('[Expediente Server] Docs recibidos:', {
+    cedula: params.cedula ? `${params.cedula.fileName} (${params.cedula.buffer.length}b)` : 'NO',
+    licencia: params.licencia ? `${params.licencia.fileName} (${params.licencia.buffer.length}b)` : 'NO',
+    registroVehicular: params.registroVehicular ? `${params.registroVehicular.fileName} (${params.registroVehicular.buffer.length}b)` : 'NO',
+    cartaAutorizacion: params.cartaAutorizacion ? `${params.cartaAutorizacion.fileName} (${params.cartaAutorizacion.buffer.length}b)` : 'NO',
+    polizaPdf: params.polizaPdf ? `${params.polizaPdf.fileName} (${params.polizaPdf.buffer.length}b)` : 'NO',
+  });
 
   // ── Cédula (client-level): skip if client already has one ──
   if (params.cedula) {

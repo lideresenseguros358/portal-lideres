@@ -159,11 +159,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Build print URL for the confirmation page / expediente
+    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}` : null;
+
     return NextResponse.json({
       ...result,
       success: true,
       poliza: result.poliza,
+      nroPoliza: result.poliza,
       numcot: result.numcot,
+      pdfUrl,
       insurer: 'REGIONAL',
       // Echo back sent data for carátula verification
       cliente: {

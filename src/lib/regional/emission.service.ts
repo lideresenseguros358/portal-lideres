@@ -12,7 +12,6 @@ import type {
   RegionalCCEmissionResponse,
   RegionalPlanPagoBody,
   RegionalPlanPagoResponse,
-  RegionalImprimirBody,
   RegionalImprimirResponse,
 } from './types';
 
@@ -125,32 +124,74 @@ export async function actualizarPlanPago(
 }
 
 // ═══ Imprimir Póliza ═══
+// NOTE: This endpoint returns RAW PDF binary (not JSON), so we bypass
+// the generic regionalPost helper and call the API directly.
 
 export async function imprimirPoliza(
   poliza: string
 ): Promise<RegionalImprimirResponse> {
-  console.log('[REGIONAL Imprimir] Printing policy:', poliza);
+  // Strip trailing "-0" suffix that CC emission sometimes appends —
+  // the imprimirPoliza endpoint only recognises the base policy number.
+  const cleanPoliza = poliza.replace(/-0$/, '');
+  console.log('[REGIONAL Imprimir] Printing policy:', cleanPoliza, poliza !== cleanPoliza ? `(stripped from ${poliza})` : '');
 
-  const body: RegionalImprimirBody = { poliza };
+  const { getRegionalBaseUrl, getRegionalCredentials } = await import('./config');
+  const env = (process.env.NODE_ENV === 'production' ? 'production' : 'development') as import('./config').RegionalEnvironment;
+  const creds = getRegionalCredentials(env);
+  const baseUrl = getRegionalBaseUrl(env);
+  const url = `${baseUrl}${REGIONAL_CC_ENDPOINTS.IMPRIMIR}`;
+  const auth = `Basic ${Buffer.from(`${creds.username}:${creds.password}`).toString('base64')}`;
 
-  const res = await regionalPost<RegionalImprimirResponse>(
-    REGIONAL_CC_ENDPOINTS.IMPRIMIR,
-    body
-  );
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
 
-  if (!res.success) {
-    return {
-      success: false,
-      message: res.error || 'Error imprimiendo póliza',
-    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: auth,
+        codInter: creds.codInter,
+        token: creds.token,
+      },
+      body: JSON.stringify({ poliza: cleanPoliza }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    console.log('[REGIONAL Imprimir] Status:', res.status);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error('[REGIONAL Imprimir] HTTP error:', res.status, errText.slice(0, 300));
+      return { success: false, message: `HTTP ${res.status}: ${errText.slice(0, 200)}` };
+    }
+
+    const buf = Buffer.from(await res.arrayBuffer());
+
+    // Check if response is a PDF (starts with %PDF)
+    if (buf.length > 4 && buf.toString('utf8', 0, 5) === '%PDF-') {
+      console.log('[REGIONAL Imprimir] ✅ PDF received:', buf.length, 'bytes');
+      return {
+        success: true,
+        pdf: buf.toString('base64'),
+      };
+    }
+
+    // Not a PDF — try to parse as JSON error message
+    const text = buf.toString('utf8');
+    try {
+      const json = JSON.parse(text) as Record<string, unknown>;
+      const msg = (json.mensaje || json.message || 'Respuesta no contiene PDF') as string;
+      console.warn('[REGIONAL Imprimir] JSON response (no PDF):', msg);
+      return { success: false, message: msg };
+    } catch {
+      console.warn('[REGIONAL Imprimir] Non-PDF, non-JSON response:', text.slice(0, 200));
+      return { success: false, message: text.slice(0, 200) || 'Respuesta vacía del servidor' };
+    }
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[REGIONAL Imprimir] Fetch error:', errMsg);
+    return { success: false, message: errMsg };
   }
-
-  const data = (res.data || res.raw) as Record<string, unknown>;
-  console.log('[REGIONAL Imprimir] Response received, has data:', !!data);
-
-  return {
-    success: true,
-    pdf: (data.pdf || data.documento || data.base64) as string | undefined,
-    ...data,
-  };
 }

@@ -74,8 +74,9 @@ export default function EmitirDanosTercerosPage() {
   const getTrackingInfo = () => {
     const isFedpa = selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA');
     const isRegional = selectedPlan?.isREGIONAL || selectedPlan?.insurerName?.includes('Regional');
-    const prefix = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'IS';
-    const insurer = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : 'INTERNACIONAL';
+    const isAncon = selectedPlan?.isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon');
+    const prefix = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : isAncon ? 'ANCON' : 'IS';
+    const insurer = isFedpa ? 'FEDPA' : isRegional ? 'REGIONAL' : isAncon ? 'ANCON' : 'INTERNACIONAL';
     const tpQuoteRaw = typeof window !== 'undefined' ? sessionStorage.getItem('thirdPartyQuote') : null;
     const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
     const refId = selectedPlan?._idCotizacion || tpQuote?.idCotizacion || 'DT';
@@ -345,13 +346,12 @@ export default function EmitirDanosTercerosPage() {
         const usedMethod = 'emisor_plan';
 
         // ── EmisorPlan (2024): upload docs → emitirpoliza ──
-        // Note: Emisor Externo (2021) crear_poliza_auto_cc_externos is
-        // broken on FEDPA's server (ORA-01400 even with manual example data).
-        // EmisorPlan is the ONLY working emission path.
+        // DT uses EmisorPlan API (token-based, separate doc upload + emission).
+        // CC uses Emisor Externo API (multipart with get_cotizacion → get_nropoliza_emitir → crear_poliza).
         setEmissionProgress(15);
         setEmissionStep('Subiendo documentos a la aseguradora...');
         const docsFormData = new FormData();
-        docsFormData.append('environment', 'DEV');
+        docsFormData.append('environment', 'PROD');
         if (emissionData.cedulaFile) {
           docsFormData.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
         }
@@ -385,7 +385,7 @@ export default function EmitirDanosTercerosPage() {
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
+          body: JSON.stringify({ environment: 'PROD', ...emisionCommon, idDoc: docsResponseData.idDoc }),
         });
         const emisionResponseData = await emisionResponse.json();
 
@@ -522,6 +522,15 @@ export default function EmitirDanosTercerosPage() {
           if (signatureRef.current) {
             welcomeForm.append('firmaDataUrl', signatureRef.current);
           }
+
+          console.log('[FEDPA DT EXPEDIENTE] Docs enviados:', {
+            cedulaFile: emissionData.cedulaFile ? `${emissionData.cedulaFile.name} (${emissionData.cedulaFile.size}b)` : 'NO',
+            licenciaFile: emissionData.licenciaFile ? `${emissionData.licenciaFile.name} (${emissionData.licenciaFile.size}b)` : 'NO',
+            registroVehicular: vehicleData?.registroVehicular ? `${vehicleData.registroVehicular.name} (${vehicleData.registroVehicular.size}b)` : 'NO',
+            firmaDataUrl: signatureRef.current ? `${signatureRef.current.length} chars` : 'NO',
+            clientId: emisionResult.clientId || 'NO',
+            policyId: emisionResult.policyId || 'NO',
+          });
           
           const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
             method: 'POST',
@@ -529,7 +538,7 @@ export default function EmitirDanosTercerosPage() {
           });
           const welcomeResult = await welcomeResponse.json();
           if (welcomeResult.success) {
-            console.log('[FEDPA DT] ✅ Bienvenida enviada:', welcomeResult.messageId);
+            console.log('[FEDPA DT] ✅ Bienvenida enviada:', welcomeResult.messageId, '| Expediente:', JSON.stringify(welcomeResult.expediente));
           } else {
             console.error('[FEDPA DT] Error bienvenida:', welcomeResult.error);
           }
@@ -544,6 +553,7 @@ export default function EmitirDanosTercerosPage() {
           insurer: 'FEDPA Seguros',
           clientId: emisionResult.clientId,
           policyId: emisionResult.policyId,
+          amb: emisionResult.amb || 'PROD',
           codCotizacion: emisionResult.cotizacion,
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
@@ -616,7 +626,6 @@ export default function EmitirDanosTercerosPage() {
             cantCuotas: 1,
             vacreedor: emissionData?.acreedor || '',
             tipo_cobertura: 'Daños a Terceros',
-            environment: 'development',
           }),
         });
 
@@ -750,7 +759,11 @@ export default function EmitirDanosTercerosPage() {
             valorVehiculo: quoteData?.valorVehiculo || 0,
             tipoVehiculo: quoteData?.tipoVehiculo || 'SEDAN',
             cobertura: 'Daños a Terceros',
-            primaTotal: selectedPlan.annualPremium || 0,
+            primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+            primaContado: selectedPlan.annualPremium || 0,
+            formaPago: selectedPaymentMode,
+            cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
+            montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
           }));
           
           if (emissionData.cedulaFile) {
@@ -964,7 +977,11 @@ export default function EmitirDanosTercerosPage() {
             modelo: quoteData?.modelo || vehicleData?.modelo || '',
             anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             cobertura: 'Daños a Terceros',
-            primaTotal: selectedPlan.annualPremium || 0,
+            primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+            primaContado: selectedPlan.annualPremium || 0,
+            formaPago: selectedPaymentMode,
+            cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
+            montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
           }));
 
           if (emissionData.cedulaFile) expedienteForm.append('cedulaFile', emissionData.cedulaFile);
@@ -996,6 +1013,195 @@ export default function EmitirDanosTercerosPage() {
           vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
           placa: vehicleData?.placa || '',
           primaTotal: selectedPlan.annualPremium,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+          tipoCobertura: 'Daños a Terceros',
+        }));
+
+        sessionStorage.removeItem('selectedQuote');
+        sessionStorage.removeItem('thirdPartyQuote');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
+
+      // ═══════════════════════════════════════════════════════
+      // EMISIÓN ANCON — Daños a Terceros
+      // ═══════════════════════════════════════════════════════
+      } else if (selectedPlan?._isReal && (selectedPlan?.isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon'))) {
+        console.log('[EMISIÓN DT ANCON] Iniciando emisión con API real...');
+        setEmissionProgress(15);
+        setEmissionStep('Conectando con ANCÓN Seguros...');
+
+        const tpQuoteRaw2 = sessionStorage.getItem('thirdPartyQuote');
+        const tpQuote2 = tpQuoteRaw2 ? JSON.parse(tpQuoteRaw2) : null;
+        const noCotizacion = selectedPlan._idCotizacion || tpQuote2?.idCotizacion || '';
+
+        if (!noCotizacion) {
+          throw new Error('No se encontró número de cotización ANCON');
+        }
+
+        setEmissionProgress(25);
+        setEmissionStep('Emitiendo póliza ANCON...');
+
+        const anconEmisionResponse = await fetch('/api/ancon/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            no_cotizacion: noCotizacion,
+            opcion: 'A',
+            cod_producto: '00312',
+            nombre_producto: 'AUTO COMPLETA',
+            suma_asegurada: '15000',
+            primer_nombre: emissionData.primerNombre,
+            segundo_nombre: emissionData.segundoNombre || '',
+            primer_apellido: emissionData.primerApellido,
+            segundo_apellido: emissionData.segundoApellido || '',
+            tipo_de_cliente: 'N',
+            cedula: emissionData.cedula,
+            fecha_nacimiento: emissionData.fechaNacimiento || '',
+            sexo: emissionData.sexo || 'M',
+            telefono_celular: emissionData.celular || emissionData.telefono || '',
+            telefono_residencial: emissionData.telefono || '',
+            email: emissionData.email || '',
+            direccion: emissionData.direccion || 'PANAMA',
+            direccion_cobros: emissionData.direccion || 'PANAMA',
+            cod_marca_agt: quoteData?.vcodmarca || '',
+            nombre_marca: quoteData?.marca || '',
+            cod_modelo_agt: quoteData?.vcodmodelo || '',
+            nombre_modelo: quoteData?.modelo || '',
+            placa: vehicleData?.placa || '',
+            no_chasis: vehicleData?.vinChasis || '',
+            vin: vehicleData?.vinChasis || '',
+            no_motor: vehicleData?.motor || '',
+            ano: String(quoteData?.anio || quoteData?.anno || new Date().getFullYear()),
+            cantidad_de_pago: '1',
+            nacionalidad: emissionData.nacionalidad || 'PANAMA',
+            pep: '0',
+          }),
+        });
+
+        const anconEmisionResult = await anconEmisionResponse.json();
+        if (!anconEmisionResult.success) {
+          throw new Error(anconEmisionResult.error || 'Error al emitir póliza ANCON');
+        }
+
+        console.log('[EMISIÓN DT ANCON] Póliza emitida:', anconEmisionResult.poliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
+
+        // ═══ ADM COT: Track ANCON DT emission ═══
+        const tAncon = getTrackingInfo();
+        trackQuoteEmitted({
+          quoteRef: tAncon.quoteRef,
+          insurer: 'ANCON',
+          policyNumber: anconEmisionResult.poliza,
+          clientName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+        });
+
+        // ═══ ADM COT: Auto-create pending payment ═══
+        createPaymentOnEmission({
+          insurer: 'ANCON',
+          policyNumber: anconEmisionResult.poliza,
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+          installments: selectedInstallmentsCount,
+          ramo: 'AUTO',
+          cobertura: 'TERCEROS',
+        });
+
+        // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
+        try {
+          const expedienteForm = new FormData();
+          expedienteForm.append('tipoCobertura', 'DT');
+          expedienteForm.append('environment', 'development');
+          expedienteForm.append('nroPoliza', anconEmisionResult.poliza || '');
+          expedienteForm.append('insurerName', 'ANCÓN Seguros');
+          expedienteForm.append('firmaDataUrl', signatureRef.current || '');
+          if (anconEmisionResult.clientId) expedienteForm.append('clientId', anconEmisionResult.clientId);
+          if (anconEmisionResult.policyId) expedienteForm.append('policyId', anconEmisionResult.policyId);
+
+          expedienteForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            nacionalidad: emissionData.nacionalidad,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
+          }));
+
+          expedienteForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            tipoTransmision: vehicleData?.tipoTransmision,
+            marca: vehicleData?.marca || quoteData?.marca || '',
+            modelo: vehicleData?.modelo || quoteData?.modelo || '',
+            anio: vehicleData?.anio || quoteData?.anio || quoteData?.anno || '',
+          }));
+
+          expedienteForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca || vehicleData?.marca || '',
+            modelo: quoteData?.modelo || vehicleData?.modelo || '',
+            anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
+            cobertura: 'Daños a Terceros',
+            primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+            primaContado: selectedPlan.annualPremium || 0,
+            formaPago: selectedPaymentMode,
+            cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
+            montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
+          }));
+
+          if (emissionData.cedulaFile) expedienteForm.append('cedulaFile', emissionData.cedulaFile);
+          if (emissionData.licenciaFile) expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          if (vehicleData?.registroVehicular) expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
+
+          const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: expedienteForm,
+          });
+          const expedienteResult = await expedienteResponse.json();
+          if (expedienteResult.success) {
+            console.log('[ANCON DT] ✅ Expediente enviado:', expedienteResult.messageId);
+          } else {
+            console.warn('[ANCON DT] Error expediente:', expedienteResult.error);
+          }
+        } catch (expError: any) {
+          console.warn('[ANCON DT] Error enviando expediente:', expError);
+          toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+        }
+
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: anconEmisionResult.poliza,
+          insurer: 'ANCÓN Seguros',
+          anconPoliza: anconEmisionResult.poliza,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+          primaContado: selectedPlan.annualPremium,
+          formaPago: selectedPaymentMode,
+          cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
+          montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
           vigenciaDesde: new Date().toLocaleDateString('es-PA'),
           vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
           tipoCobertura: 'Daños a Terceros',

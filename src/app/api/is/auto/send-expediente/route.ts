@@ -70,8 +70,7 @@ const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
 // Dev: everything goes to office for testing
 const IS_RECIPIENTS_DEV = [OFFICE_EMAIL];
 // Prod: IS contacts + office always gets a copy
-// TODO: Cambiar IS_LIVE_RECIPIENTS a true cuando estemos listos para enviar a IS en producción
-const IS_LIVE_RECIPIENTS = false;
+const IS_LIVE_RECIPIENTS = true;
 const IS_RECIPIENTS_PROD = IS_LIVE_RECIPIENTS
   ? [OFFICE_EMAIL, 'mprestan@iseguros.com', 'slopez@iseguros.com']
   : [OFFICE_EMAIL];
@@ -480,12 +479,13 @@ export async function POST(request: NextRequest) {
     let resolvedClientId = clientId;
     let resolvedPolicyId = policyId;
 
-    // Fallback: look up clientId/policyId by cédula and nroPoliza if not provided
+    // Fallback: look up OR CREATE clientId/policyId if not provided by emission API
     if ((!resolvedClientId || !resolvedPolicyId) && clientData.cedula) {
       try {
         const sbAdmin = getSupabaseAdmin();
-        console.log('[IS EXPEDIENTE] clientId/policyId no proporcionados, buscando por cédula:', clientData.cedula);
+        console.log('[IS EXPEDIENTE] clientId/policyId no proporcionados, buscando/creando por cédula:', clientData.cedula, 'nroPoliza:', nroPoliza);
 
+        // ── Resolve or create client ──
         if (!resolvedClientId) {
           const { data: foundClient } = await sbAdmin
             .from('clients')
@@ -497,10 +497,44 @@ export async function POST(request: NextRequest) {
           if (foundClient) {
             resolvedClientId = foundClient.id;
             console.log('[IS EXPEDIENTE] Cliente encontrado por cédula:', resolvedClientId);
+          } else {
+            // Create client — find broker "portal" first
+            const { data: oficinaBroker } = await sbAdmin
+              .from('brokers')
+              .select('id')
+              .eq('email', 'portal@lideresenseguros.com')
+              .single();
+            if (oficinaBroker) {
+              const clientName = `${clientData.primerNombre || ''} ${clientData.segundoNombre || ''} ${clientData.primerApellido || ''} ${clientData.segundoApellido || ''}`.trim();
+              let birthDate: string | undefined;
+              if (clientData.fechaNacimiento) {
+                const parts = clientData.fechaNacimiento.split('/');
+                if (parts.length === 3) birthDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              }
+              const { data: newClient } = await sbAdmin
+                .from('clients')
+                .insert({
+                  broker_id: oficinaBroker.id,
+                  name: clientName || `Cliente ${clientData.cedula}`,
+                  national_id: clientData.cedula,
+                  email: clientData.email || null,
+                  phone: String(clientData.celular || clientData.telefono || ''),
+                  active: true,
+                  ...(birthDate ? { birth_date: birthDate } : {}),
+                })
+                .select('id')
+                .single();
+              if (newClient) {
+                resolvedClientId = newClient.id;
+                console.log('[IS EXPEDIENTE] Cliente CREADO:', resolvedClientId);
+              }
+            }
           }
         }
 
+        // ── Resolve or create policy ──
         if (resolvedClientId && !resolvedPolicyId && nroPoliza) {
+          // Try by client_id + policy_number first
           const { data: foundPolicy } = await sbAdmin
             .from('policies')
             .select('id')
@@ -511,26 +545,97 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
           if (foundPolicy) {
             resolvedPolicyId = foundPolicy.id;
-            console.log('[IS EXPEDIENTE] Póliza encontrada por nroPoliza:', resolvedPolicyId);
+            console.log('[IS EXPEDIENTE] Póliza encontrada por client+nroPoliza:', resolvedPolicyId);
+          } else {
+            // Broaden: search by policy_number alone (may be under different client record)
+            const { data: anyPolicy } = await sbAdmin
+              .from('policies')
+              .select('id')
+              .eq('policy_number', nroPoliza)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (anyPolicy) {
+              resolvedPolicyId = anyPolicy.id;
+              console.log('[IS EXPEDIENTE] Póliza encontrada solo por nroPoliza:', resolvedPolicyId);
+            }
           }
         }
 
-        // If still no policyId, try latest policy for this client
+        // If still no policyId, try latest policy for this client (created in last 5 min)
         if (resolvedClientId && !resolvedPolicyId) {
+          const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
           const { data: latestPolicy } = await sbAdmin
             .from('policies')
             .select('id')
             .eq('client_id', resolvedClientId)
+            .gte('created_at', fiveMinAgo)
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
           if (latestPolicy) {
             resolvedPolicyId = latestPolicy.id;
-            console.log('[IS EXPEDIENTE] Póliza más reciente encontrada:', resolvedPolicyId);
+            console.log('[IS EXPEDIENTE] Póliza reciente encontrada:', resolvedPolicyId);
+          }
+        }
+
+        // ── Last resort: CREATE the policy if we have clientId + nroPoliza ──
+        if (resolvedClientId && !resolvedPolicyId && nroPoliza) {
+          // Look up insurer by name
+          const inName = (insurerName || '').toUpperCase();
+          let insurerFilter = '%';
+          if (inName.includes('FEDPA')) insurerFilter = '%FEDPA%';
+          else if (inName.includes('INTERNACIONAL')) insurerFilter = '%INTERNACIONAL%';
+          else if (inName.includes('REGIONAL')) insurerFilter = '%REGIONAL%';
+          else if (inName.includes('ANCÓN') || inName.includes('ANCON')) insurerFilter = '%ANCON%';
+          else if (inName.includes('ASSA')) insurerFilter = '%ASSA%';
+
+          const { data: insurer } = await sbAdmin
+            .from('insurers')
+            .select('id')
+            .ilike('name', insurerFilter)
+            .limit(1)
+            .maybeSingle();
+
+          const { data: clientRow } = await sbAdmin
+            .from('clients')
+            .select('broker_id')
+            .eq('id', resolvedClientId)
+            .single();
+
+          if (insurer && clientRow) {
+            const cobLabel = isCC ? 'Cobertura Completa' : 'Daños a Terceros';
+            const today = new Date().toISOString().split('T')[0];
+            const nextYear = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
+            const { data: newPolicy } = await sbAdmin
+              .from('policies')
+              .insert({
+                broker_id: clientRow.broker_id,
+                client_id: resolvedClientId,
+                insurer_id: insurer.id,
+                policy_number: nroPoliza,
+                ramo: 'AUTO',
+                status: 'ACTIVA',
+                start_date: today,
+                renewal_date: nextYear,
+                notas: [
+                  quoteData.marca && quoteData.modelo ? `Vehículo: ${quoteData.marca} ${quoteData.modelo} ${quoteData.anio || quoteData.anno || ''}` : null,
+                  vehicleData.placa ? `Placa: ${vehicleData.placa}` : null,
+                  `Cobertura: ${cobLabel}`,
+                ].filter(Boolean).join('\n'),
+              })
+              .select('id')
+              .single();
+            if (newPolicy) {
+              resolvedPolicyId = newPolicy.id;
+              console.log('[IS EXPEDIENTE] Póliza CREADA como último recurso:', resolvedPolicyId, 'para', nroPoliza);
+            }
+          } else {
+            console.warn('[IS EXPEDIENTE] No se pudo crear póliza — insurer:', !!insurer, 'clientRow:', !!clientRow);
           }
         }
       } catch (lookupErr: any) {
-        console.warn('[IS EXPEDIENTE] Error buscando clientId/policyId:', lookupErr.message);
+        console.warn('[IS EXPEDIENTE] Error buscando/creando clientId/policyId:', lookupErr.message);
       }
     }
 
@@ -555,14 +660,15 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        console.log('[IS EXPEDIENTE] Docs disponibles para expediente:', {
+        console.log('[IS EXPEDIENTE] 📋 Docs disponibles para expediente:', {
           clientId: resolvedClientId,
           policyId: resolvedPolicyId,
-          cedula: !!(cedulaBuffer && cedulaFile),
-          licencia: !!(licenciaBuffer && licenciaFile),
-          registroVehicular: !!(registroBuffer && registroVehicularFile),
-          cartaAutorizacion: !!authPdfBuffer,
-          polizaPdf: !!polizaPdfBuffer,
+          cedula: cedulaBuffer ? `${cedulaBuffer.length}b` : 'NO',
+          licencia: licenciaBuffer ? `${licenciaBuffer.length}b` : 'NO',
+          registroVehicular: registroBuffer ? `${registroBuffer.length}b` : 'NO — registroVehicularFile=' + (registroVehicularFile ? `${registroVehicularFile.name} (${registroVehicularFile.size}b)` : 'NULL'),
+          cartaAutorizacion: authPdfBuffer ? `${authPdfBuffer.length}b` : 'NO — authPdfBuffer es null (generateAuthorizationPdf falló o no se ejecutó)',
+          polizaPdf: polizaPdfBuffer ? `${polizaPdfBuffer.length}b` : 'NO',
+          firmaDataUrl: firmaDataUrl ? `${firmaDataUrl.length} chars` : 'VACÍO',
         });
 
         const polizaPdfFilename = `caratula_poliza_${clientData.cedula}${nroPoliza ? `_${nroPoliza}` : ''}.pdf`;
@@ -756,18 +862,13 @@ function buildWelcomeEmail(data: {
       ${data.primaTotal ? `
       <div class="prima-box">
         ${data.formaPago === 'cuotas' && data.cantidadCuotas && data.cantidadCuotas > 1 && data.montoCuota ? `
-          <div class="lbl">Prima Total (${data.cantidadCuotas} cuotas)</div>
-          <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+          <div class="lbl">Su Plan de Pago</div>
+          <div class="amount">${data.cantidadCuotas} x $${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.2);">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:12px;opacity:0.75;">Cuota</span>
-              <span style="font-size:18px;font-weight:800;color:#8AAA19;">${data.cantidadCuotas} x $${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span style="font-size:12px;opacity:0.75;">Prima Anual</span>
+              <span style="font-size:18px;font-weight:800;color:#8AAA19;">$${Number(data.montoCuota * data.cantidadCuotas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
-            ${data.primaContado ? `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-              <span style="font-size:11px;opacity:0.6;">Precio al contado</span>
-              <span style="font-size:13px;opacity:0.7;">$${Number(data.primaContado).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>` : ''}
           </div>
         ` : `
           <div class="lbl">Prima Total Anual</div>
