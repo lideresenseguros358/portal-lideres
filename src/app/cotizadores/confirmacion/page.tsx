@@ -225,27 +225,28 @@ export default function ConfirmacionPage() {
     setPdfError(null);
 
     try {
-      const response = await fetch('/api/ancon/caratula', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poliza }),
-      });
+      // Use pdfUrl from emission response, or fallback to print endpoint
+      const url = policyData?.pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(poliza)}`;
+      const response = await fetch(url);
 
       const contentType = response.headers.get('content-type') || '';
 
       if (contentType.includes('application/pdf')) {
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = blobUrl;
         a.download = `poliza-ancon-${poliza}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(blobUrl);
       } else {
         const data = await response.json();
-        if (!data.success) {
+        if (data.enlace_poliza && data.enlace_poliza.startsWith('http')) {
+          // External link — open in new tab
+          window.open(data.enlace_poliza, '_blank');
+        } else if (!data.success) {
           throw new Error(data.error || 'No se pudo obtener la póliza ANCON');
         } else {
           handleDownloadCaratula();

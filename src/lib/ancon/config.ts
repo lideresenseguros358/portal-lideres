@@ -72,6 +72,7 @@ export const ANCON_EMISSION_METHODS = {
   GUARDAR_CLIENTE: 'GuardarCliente',
   SUBIR_DOCUMENTOS: 'SubirDocumentos',
   LISTADO_EXPEDIENTES: 'ListadoExpedientes',
+  LISTADO_INSPECCION: 'ListadoInspeccion',
   ENLAZAR_INSPECCION: 'EnlazarInspeccion',
   EMISION_SERVER: 'EmitirDatos',
   IMPRESION_POLIZA: 'ImpresionPoliza',

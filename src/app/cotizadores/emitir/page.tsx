@@ -952,7 +952,11 @@ export default function EmitirPage() {
             anio: quoteData?.anio || quoteData?.anno || vehicleData?.anio || '',
             valorVehiculo: quoteData?.valorVehiculo || 0,
             cobertura: 'Cobertura Completa',
-            primaTotal: selectedPlan?.annualPremium || 0,
+            primaTotal: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+            primaContado: selectedPlan?.annualPremium || 0,
+            formaPago: installments > 1 ? 'cuotas' : 'contado',
+            cantidadCuotas: installments || 1,
+            montoCuota: installments > 1 ? monthlyPayment : undefined,
           }));
           
           if (emissionData.cedulaFile) {
@@ -1032,8 +1036,8 @@ export default function EmitirPage() {
         const anconEmitBody = {
           no_cotizacion: selectedPlan._idCotizacion || '',
           opcion: selectedPlan._opcion || 'A',
-          cod_producto: '00312',
-          nombre_producto: 'AUTO COMPLETA',
+          cod_producto: selectedPlan?._codProducto || '00312',
+          nombre_producto: selectedPlan?._nombreProducto || 'AUTO COMPLETA',
           suma_asegurada: String(selectedPlan._sumaAsegurada || quoteData?.valorVehiculo || 15000),
           primer_nombre: emissionData.primerNombre,
           segundo_nombre: emissionData.segundoNombre || '',
@@ -1062,13 +1066,39 @@ export default function EmitirPage() {
           pep: '0',
         };
 
-        setEmissionProgress(30);
+        setEmissionProgress(25);
+        setEmissionStep('Subiendo documentos e inspección...');
+
+        // Build FormData with emission data + inspection photos + documents
+        const anconForm = new FormData();
+        anconForm.append('emissionData', JSON.stringify(anconEmitBody));
+
+        // Attach inspection photos
+        if (inspectionPhotos.length > 0) {
+          for (const photo of inspectionPhotos) {
+            if (photo.file) {
+              anconForm.append(`photo_${photo.id}`, photo.file);
+            }
+          }
+        }
+
+        // Attach document files
+        if (emissionData.cedulaFile) {
+          anconForm.append('cedulaFile', emissionData.cedulaFile);
+        }
+        if (emissionData.licenciaFile) {
+          anconForm.append('licenciaFile', emissionData.licenciaFile);
+        }
+        if (vehicleData?.registroVehicular) {
+          anconForm.append('registroVehicularFile', vehicleData.registroVehicular);
+        }
+
+        setEmissionProgress(35);
         setEmissionStep('Emitiendo póliza con ANCÓN...');
 
         const anconEmisionResponse = await fetch('/api/ancon/emision', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(anconEmitBody),
+          body: anconForm,
         });
 
         const anconEmisionResult = await anconEmisionResponse.json();
@@ -1114,6 +1144,7 @@ export default function EmitirPage() {
           expedienteForm.append('tipoCobertura', 'CC');
           expedienteForm.append('environment', 'development');
           expedienteForm.append('nroPoliza', anconEmisionResult.poliza || '');
+          expedienteForm.append('pdfUrl', anconEmisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'ANCÓN Seguros');
           expedienteForm.append('firmaDataUrl', signatureRef.current || '');
           if (anconEmisionResult.clientId) expedienteForm.append('clientId', anconEmisionResult.clientId);
@@ -1201,6 +1232,7 @@ export default function EmitirPage() {
         setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: anconEmisionResult.poliza,
+          pdfUrl: anconEmisionResult.pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(anconEmisionResult.poliza)}`,
           insurer: 'ANCÓN Seguros',
           anconPoliza: anconEmisionResult.poliza,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,

@@ -1,28 +1,67 @@
 /**
- * API Endpoint: ANCON Third-Party (DT) Plans
+ * API Endpoint: ANCON Third-Party (DT) Plans — SOBAT
  * GET /api/ancon/third-party
  *
- * Returns basic + premium DT plans with real pricing from ANCON cotización API
- * ANCON only has CC products (AUTO COMPLETA), so we extract DT-relevant coverages
+ * Returns SOBAT RC plans for particulares:
+ *   Básico  = SOBAT BASICO TALLER  (B/.145.00) — SODA / PARTICULAR
+ *   Premium = SOBAT EXPRESS PLUS    (B/.189.00) — SODA / PARTICULAR
+ *
+ * Calls ANCON cotización with product 07159 to get a valid noCotizacion
+ * for the emission flow, then maps to fixed SOBAT pricing.
  */
 
 import { NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
-import type { AnconParsedOption } from '@/lib/ancon/types';
+import { ANCON_PRODUCTS } from '@/lib/ancon/config';
 
 export const maxDuration = 30;
+
+// ═══ SOBAT fixed plans (SODA / PARTICULAR) ═══
+const SOBAT_PLANS = {
+  basic: {
+    name: 'SOBAT BASICO TALLER',
+    annualPremium: 145.00,
+    coverageList: [
+      { code: 'LC', name: 'LESIONES CORPORALES', limit: '$5,000.00', prima: 42.00 },
+      { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$5,000.00', prima: 82.00 },
+      { code: 'AM', name: 'ASISTENCIA MEDICA', limit: '$500.00', prima: 21.00 },
+    ],
+    endosoBenefits: [
+      'Reparación en taller de la red SODA',
+      'Lesiones corporales cubiertas',
+      'Daños a propiedad ajena',
+      'Asistencia médica incluida',
+    ],
+  },
+  premium: {
+    name: 'SOBAT EXPRESS PLUS',
+    annualPremium: 189.00,
+    coverageList: [
+      { code: 'LC', name: 'LESIONES CORPORALES', limit: '$10,000.00', prima: 55.00 },
+      { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$10,000.00', prima: 100.00 },
+      { code: 'AM', name: 'ASISTENCIA MEDICA', limit: '$1,000.00', prima: 34.00 },
+    ],
+    endosoBenefits: [
+      'Servicio express — atención prioritaria SODA',
+      'Límites aumentados de cobertura',
+      'Lesiones corporales cubiertas',
+      'Daños a propiedad ajena',
+      'Asistencia médica incluida',
+    ],
+  },
+} as const;
 
 export async function GET() {
   const t0 = Date.now();
 
   try {
-    // Use a generic vehicle for DT pricing (suma_asegurada must be >= 6500 for ANCON)
+    // Call ANCON to get a valid noCotizacion for the emission flow
     const result = await cotizarEstandar({
       cod_marca: '00122',   // TOYOTA
       cod_modelo: '10393',  // COROLLA
       ano: String(new Date().getFullYear()),
-      suma_asegurada: '15000',
-      cod_producto: '00312', // AUTO COMPLETA
+      suma_asegurada: '0',
+      cod_producto: ANCON_PRODUCTS.AUTO_RC, // 07159
       cedula: '8-888-9999',
       nombre: 'COTIZACION',
       apellido: 'WEB',
@@ -33,38 +72,31 @@ export async function GET() {
       nuevo: '0',
     });
 
-    if (!result.success || !result.data) {
-      console.error('[API ANCON third-party] Cotización failed:', result.error);
-      return NextResponse.json({
-        success: false,
-        online: false,
-        error: result.error,
-        plans: [],
-      });
+    // Use noCotizacion from API if available; plans use fixed SOBAT pricing
+    const noCotizacion = result.data?.noCotizacion || '';
+    const apiOnline = result.success && !!noCotizacion;
+
+    if (!apiOnline) {
+      console.warn('[API ANCON third-party] ANCON API offline, returning SOBAT plans without cotización');
     }
 
-    const { options, noCotizacion } = result.data;
+    // opcion1 = basic (for linking to ANCON emission)
+    const basicOptionName = result.data?.options?.find(o => o.name === 'opcion1')?.name || 'opcion1';
+    const premiumOptionName = result.data?.options?.find(o => o.name === 'opcion4')?.name
+      || result.data?.options?.find(o => o.name === 'opcion3')?.name || 'opcion3';
 
-    // opcion1 = basic limits (5k/10k LC, 5k DPA)
-    // opcion3 = premium limits (25k/50k LC, 25k DPA)
-    const basicOption = options.find(o => o.name === 'opcion1');
-    const premiumOption = options.find(o => o.name === 'opcion3') || options.find(o => o.name === 'opcion2');
-
-    const plans = [];
-
-    if (basicOption) {
-      plans.push(buildDTPlan(basicOption, 'basic', noCotizacion));
-    }
-    if (premiumOption) {
-      plans.push(buildDTPlan(premiumOption, 'premium', noCotizacion));
-    }
+    const plans = [
+      buildSobatPlan('basic', noCotizacion, basicOptionName),
+      buildSobatPlan('premium', noCotizacion, premiumOptionName),
+    ];
 
     const elapsed = Date.now() - t0;
-    console.log(`[API ANCON third-party] ${plans.length} plans in ${elapsed}ms`);
+    console.log(`[API ANCON third-party] SOBAT plans ready in ${elapsed}ms (cotización: ${noCotizacion || 'N/A'})`);
 
     return NextResponse.json({
       success: true,
-      online: true,
+      online: apiOnline,
+      isRealAPI: true,
       plans,
       noCotizacion,
       _timing: { totalMs: elapsed },
@@ -81,67 +113,24 @@ export async function GET() {
   }
 }
 
-function buildDTPlan(option: AnconParsedOption, planType: 'basic' | 'premium', noCotizacion: string) {
-  // Extract DT-relevant coverages only
-  const dtCoverageNames = [
-    'LESIONES CORPORALES',
-    'DAÑOS A LA PROPIEDAD AJENA',
-    'ASISTENCIA MEDICA',
-    'MUERTE ACCIDENTAL',
-    'ASISTENCIA VIAL LIMITADA',
-    'REEMBOLSO PARA AUTO SUSTITUTO ANCON PLUS',
-  ];
-
-  const dtCoverages = option.coverages.filter(c =>
-    dtCoverageNames.some(n => c.name.toUpperCase().includes(n))
-  );
-
-  const coverageList = dtCoverages.map(c => ({
-    code: c.name.substring(0, 3).toUpperCase(),
-    name: c.name,
-    limit: formatLimit(c.limite1, c.descripcion1, c.limite2, c.descripcion2),
-    prima: c.primaA,
-  }));
-
-  // DT total = sum of DT coverages only (option a = lowest deducible)
-  const dtTotal = dtCoverages.reduce((sum, c) => sum + c.primaA, 0);
-
-  // Add impuesto proportionally
-  const fullTotal = option.totals.totalA;
-  const fullNeta = option.totals.primaNetaA;
-  const taxRate = fullNeta > 0 ? (fullTotal - fullNeta) / fullNeta : 0.07;
-  const dtWithTax = Math.round(dtTotal * (1 + taxRate) * 100) / 100;
-
-  const endosoBenefits = [];
-  if (dtCoverages.some(c => c.name.includes('ASISTENCIA VIAL'))) {
-    endosoBenefits.push('Asistencia vial limitada incluida');
-  }
-  if (dtCoverages.some(c => c.name.includes('ANCON PLUS'))) {
-    endosoBenefits.push('Reembolso para auto sustituto ANCON Plus');
-  }
-  endosoBenefits.push('Coordinación de envío de ambulancia');
-  endosoBenefits.push('Transmisión de mensajes urgentes');
+function buildSobatPlan(planType: 'basic' | 'premium', noCotizacion: string, optionName: string) {
+  const sobat = SOBAT_PLANS[planType];
 
   return {
     planType,
-    name: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
-    annualPremium: Math.round(dtWithTax),
-    coverageList,
-    endosoBenefits,
-    endoso: planType === 'basic' ? 'Endoso Básico ANCON' : 'Endoso Premium ANCON Plus',
-    noCotizacion: option.noCotizacion || noCotizacion,
-    optionName: option.name,
+    name: sobat.name,
+    annualPremium: sobat.annualPremium,
+    coverageList: [...sobat.coverageList],
+    endosoBenefits: [...sobat.endosoBenefits],
+    endoso: sobat.name,
+    idCotizacion: noCotizacion,
+    noCotizacion,
+    optionName,
+    _codProducto: ANCON_PRODUCTS.AUTO_RC,
+    _nombreProducto: sobat.name,
+    _sumaAsegurada: '0',
+    installments: [
+      { count: 1, amount: sobat.annualPremium },
+    ],
   };
-}
-
-function formatLimit(l1: string, d1: string, l2: string, d2: string): string {
-  const parts = [];
-  if (l1 && l1 !== '0.00' && l1 !== '0') {
-    parts.push(`$${l1}${d1 ? ` ${d1}` : ''}`);
-  }
-  if (l2 && l2 !== '0.00' && l2 !== '0') {
-    parts.push(`$${l2}${d2 ? ` ${d2}` : ''}`);
-  }
-  if (parts.length === 0) return 'INCLUIDO';
-  return parts.join(' / ');
 }

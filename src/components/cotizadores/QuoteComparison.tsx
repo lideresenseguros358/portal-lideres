@@ -449,8 +449,8 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                           paymentMode === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'
                         }`}>
                           ${(paymentMode === 'contado' 
-                            ? quote._priceBreakdown.totalAlContado 
-                            : quote._priceBreakdown.totalConTarjeta
+                            ? (quote._priceBreakdown.totalAlContado ?? 0) 
+                            : (quote._priceBreakdown.totalConTarjeta ?? 0)
                           ).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         
@@ -473,7 +473,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                     <div className="text-center">
                       <div className="text-xs text-gray-600 mb-1 font-medium">Prima Anual</div>
                       <div className="text-3xl md:text-4xl font-bold text-[#010139] mb-2">
-                        ${quote.annualPremium.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        ${(quote.annualPremium ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                       </div>
                     </div>
                   )}
@@ -508,7 +508,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
-                      <span>Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      <span>Deducible desde ${(quote.deductible ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                       {quote._deducibleOriginal && (
                         <AutoCloseTooltip 
                           content={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')}

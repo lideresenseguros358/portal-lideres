@@ -65,7 +65,8 @@ export function invalidateAnconToken(): void {
 
 function buildSoapEnvelope(method: string, params: Record<string, string>): string {
   const paramsXml = Object.entries(params)
-    .map(([k, v]) => `<${k}>${escapeXml(v)}</${k}>`)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `<${k}>${escapeXml(String(v))}</${k}>`)
     .join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -128,9 +129,10 @@ export async function soapCall<T = unknown>(
   params: Record<string, string>,
   skipAuth = false
 ): Promise<AnconSoapResponse<T>> {
-  const body = buildSoapEnvelope(method, params);
-
+  // Build body inside loop so token refreshes produce a new envelope
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    const body = buildSoapEnvelope(method, params);
+
     try {
       console.log(
         `[ANCON] SOAP ${method}${attempt > 0 ? ` (attempt ${attempt + 1})` : ''}`
@@ -164,21 +166,20 @@ export async function soapCall<T = unknown>(
 
       const data = parseSoapResponse(text);
 
-      // Check for "Token Inactivo" error
-      if (isTokenInactive(data)) {
+      // Check for "Token Inactivo" error (check both parsed data and raw text)
+      if (isTokenInactive(data) || text.includes('Token Inactivo')) {
         if (!skipAuth) {
-          console.log('[ANCON] Token inactive, refreshing...');
+          console.log(`[ANCON] Token inactive for ${method}, refreshing...`);
           invalidateAnconToken();
           const newToken = await getAnconToken();
-          // Retry with new token
-          if (params.token) {
-            params.token = newToken;
-          }
-          if (params.par_token) {
-            params.par_token = newToken;
-          }
-          return soapCall<T>(method, params, true);
+          console.log(`[ANCON] New token: ${newToken.substring(0, 16)}...`);
+          // Update params in place so next iteration rebuilds envelope with fresh token
+          if ('token' in params) params.token = newToken;
+          if ('par_token' in params) params.par_token = newToken;
+          skipAuth = true; // only retry once
+          continue; // re-enter loop → rebuilds body with updated params
         }
+        console.error(`[ANCON] ${method} still returns Token Inactivo after refresh`);
         return { success: false, error: 'Token Inactivo' };
       }
 
@@ -201,22 +202,39 @@ export async function soapCall<T = unknown>(
 }
 
 /**
- * Convenience: SOAP call that auto-injects the current token
+ * Convenience: SOAP call that auto-injects the current token.
+ * Token refresh on "Token Inactivo" is handled by soapCall retry logic.
+ * IMPORTANT: ANCON invalidates the previous token when GenerarToken is called,
+ * so we reuse the cached token and only refresh on failure.
  */
 export async function anconCall<T = unknown>(
   method: string,
   params: Record<string, string> = {}
 ): Promise<AnconSoapResponse<T>> {
   const token = await getAnconToken();
-  return soapCall<T>(method, { token, ...params });
+  return soapCall<T>(method, { ...params, token });
+}
+
+/**
+ * SOAP call with a pre-obtained token — NO auto-refresh.
+ * Use this when orchestrating multiple SOAP calls with a single token.
+ * ANCON invalidates old tokens when GenerarToken is called, so auto-refresh
+ * would kill the shared token for subsequent steps.
+ */
+export async function anconCallWithToken<T = unknown>(
+  method: string,
+  params: Record<string, string>,
+  token: string
+): Promise<AnconSoapResponse<T>> {
+  return soapCall<T>(method, { ...params, token }, true /* skipAuth — never auto-refresh */);
 }
 
 // ═══ Helpers ═══
 
 function isTokenInactive(data: unknown): boolean {
-  if (!data || typeof data !== 'object') return false;
+  if (!data) return false;
 
-  const str = JSON.stringify(data);
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
   return str.includes('Token Inactivo') || str.includes('TOKEN INACTIVO');
 }
 

@@ -899,44 +899,73 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
       _anio: quoteData.anio || new Date().getFullYear(),
     };
 
+    // Map user deducible selection to REGIONAL opciones index
+    // REGIONAL returns 3 opciones: opcion 1 = bajo (lowest ded), opcion 2 = medio, opcion 3 = alto (highest ded)
+    const dedIndexMap: Record<string, number> = { bajo: 0, medio: 1, alto: 2 };
+    const selectedDedIndex = dedIndexMap[quoteData.deducible] ?? 0;
+
+    // Standard CC coverages — REGIONAL API returns empty coberturas[] so we provide known coverage list
+    const standardCCCoverages = [
+      { codigo: 'COMP', nombre: 'Comprensivo', descripcion: 'Cobertura contra robo, hurto, incendio, fenómenos naturales', incluida: true },
+      { codigo: 'COLV', nombre: 'Colisión y Vuelco', descripcion: 'Daños por colisión y/o vuelco del vehículo', incluida: true },
+      { codigo: 'RC', nombre: 'Responsabilidad Civil', descripcion: 'Daños a terceros: lesiones corporales y daños a propiedad', incluida: true },
+      { codigo: 'GM', nombre: 'Gastos Médicos', descripcion: 'Gastos médicos del conductor y pasajeros', incluida: true },
+      { codigo: 'AV', nombre: 'Asistencia Vial', descripcion: 'Grúa, cerrajería, paso de corriente, cambio de llanta', incluida: true },
+    ];
+
+    // Beneficios by endoso type
+    const beneficiosBasico = [
+      { nombre: 'Asistencia vial 24/7', descripcion: 'Servicio de grúa, cerrajería, paso de corriente', incluido: true },
+      { nombre: 'Cobertura de vidrios', descripcion: 'Reparación o reemplazo de parabrisas', incluido: true },
+      { nombre: 'Responsabilidad civil ampliada', descripcion: 'Cobertura de daños a terceros', incluido: true },
+    ];
+    const beneficiosPlus = [
+      ...beneficiosBasico,
+      { nombre: 'Auto sustituto', descripcion: 'Vehículo de reemplazo mientras el suyo está en reparación', incluido: true },
+      { nombre: 'Accidentes personales', descripcion: 'Cobertura de accidentes para conductor y pasajeros', incluido: true },
+      { nombre: 'Extensión territorial', descripcion: 'Cobertura extendida fuera del territorio nacional', incluido: true },
+    ];
+
     // Helper to build a quote object from REGIONAL CC response
     const buildQuote = (data: any, planType: 'basico' | 'premium', endosoNombre: string) => {
       if (!data) return null;
 
-      // REGIONAL returns pricing in opciones array — pick first option (lowest deductible)
-      const opciones = data.opciones || [];
-      const selectedOption = opciones[0] || {};
-      const primaTotal = selectedOption.primaTotal || data.primaTotal || data.prima || 0;
-      const numcot = data.numcot || data.idCotizacion || '';
-      const coberturas = (data.coberturas || []).map((c: any) => ({
-        codigo: c.codigo || c.cod || '',
-        nombre: c.descripcion || c.nombre || '',
-        descripcion: c.descripcion || c.nombre || '',
-        limite: c.limite || c.monto || 'Incluido',
-        prima: parseFloat(c.prima) || 0,
-        deducible: c.deducible || '',
-        incluida: true,
-      }));
+      // REGIONAL returns pricing in opciones array
+      const opciones: any[] = Array.isArray(data.opciones) ? data.opciones : [];
 
-      // Extract deductibles from selected option (opciones[0].dedColision / dedComprensivo)
-      const dedColision = parseFloat(selectedOption.dedColision) || 0;
-      const dedComprensivo = parseFloat(selectedOption.dedComprensivo) || 0;
+      // Select option based on user's deducible preference, fallback to first
+      const selectedOption = opciones[selectedDedIndex] || opciones[0] || null;
 
-      // Fallback: try from coberturas if opciones didn't have them
-      if (!dedColision && !dedComprensivo) {
-        const cobComprensivo = coberturas.find((c: any) =>
-          (c.nombre || '').toUpperCase().includes('COMPRENSIVO')
-        );
-        const cobColision = coberturas.find((c: any) =>
-          (c.nombre || '').toUpperCase().includes('COLISION') || (c.nombre || '').toUpperCase().includes('VUELCO')
-        );
-        // Use coberturas-based deductibles as fallback
-        const fallbackDedComprensivo = parseFloat(cobComprensivo?.deducible) || 0;
-        const fallbackDedColision = parseFloat(cobColision?.deducible) || 0;
-        if (fallbackDedColision || fallbackDedComprensivo) {
-          // These will be 0 if opciones had values, so no overwrite needed
-        }
+      if (!selectedOption) {
+        console.warn(`[REGIONAL buildQuote ${planType}] No opciones available in response`);
+        return null;
       }
+
+      const primaTotal = Number(selectedOption.primaTotal) || 0;
+      const dedColision = Number(selectedOption.dedColision) || 0;
+      const dedComprensivo = Number(selectedOption.dedComprensivo) || 0;
+      const numcot = data.numcot || data.idCotizacion || '';
+
+      console.log(`[REGIONAL buildQuote ${planType}] opcion=${selectedOption.opcion}, primaTotal=${primaTotal}, dedColision=${dedColision}, dedComprensivo=${dedComprensivo}`);
+
+      if (primaTotal <= 0) {
+        console.warn(`[REGIONAL buildQuote ${planType}] primaTotal is $0, skipping`);
+        return null;
+      }
+
+      // Use API coberturas if available, otherwise use standard CC coverages
+      const apiCoberturas = (data.coberturas || []).filter((c: any) => c.descripcion || c.nombre);
+      const coberturas = apiCoberturas.length > 0
+        ? apiCoberturas.map((c: any) => ({
+            codigo: c.codigo || c.cod || '',
+            nombre: c.descripcion || c.nombre || '',
+            descripcion: c.descripcion || c.nombre || '',
+            limite: c.limite || c.monto || 'Incluido',
+            prima: parseFloat(c.prima) || 0,
+            deducible: c.deducible || '',
+            incluida: true,
+          }))
+        : standardCCCoverages;
 
       const deducibleInfo = {
         valor: dedColision || dedComprensivo,
@@ -945,14 +974,24 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
         tooltip: `Colisión/Vuelco: $${dedColision.toFixed(2)}\nComprensivo: $${dedComprensivo.toFixed(2)}`,
       };
 
+      const planBeneficios = planType === 'premium' ? beneficiosPlus : beneficiosBasico;
+
       // Endosos for this plan
       const endosos = [{
         codigo: endosoNombre.toUpperCase().replace(/\s+/g, '_'),
         nombre: endosoNombre,
         incluido: true,
         descripcion: `Incluido en la prima`,
-        subBeneficios: (data.beneficios || []).map((b: any) => b.descripcion || b.nombre || b),
+        subBeneficios: planBeneficios.map(b => b.nombre),
       }];
+
+      // Build all 3 opciones as price options for potential display
+      const allOpciones = opciones.map((op: any) => ({
+        opcion: op.opcion,
+        primaTotal: Number(op.primaTotal) || 0,
+        dedColision: Number(op.dedColision) || 0,
+        dedComprensivo: Number(op.dedComprensivo) || 0,
+      }));
 
       return {
         ...sharedData,
@@ -971,8 +1010,8 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
         },
         _idCotizacion: numcot,
         _numcot: numcot,
-        _opciones: opciones,
-        _opcionSelec: data.opcionSelec || 1,
+        _opciones: allOpciones,
+        _opcionSelec: selectedOption.opcion || 1,
         _priceBreakdown: {
           primaBase: primaTotal,
           descuentoBuenConductor: 0,
@@ -982,11 +1021,7 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
           totalAlContado: primaTotal,
           ahorroContado: 0,
         },
-        _beneficios: (data.beneficios || []).map((b: any) => ({
-          nombre: b.descripcion || b.nombre || b,
-          descripcion: b.descripcion || b.nombre || b,
-          incluido: true,
-        })),
+        _beneficios: planBeneficios,
         _endosos: endosos,
         _endosoIncluido: endosoNombre,
         _endosoTexto: endosoNombre.toUpperCase(),
@@ -1101,19 +1136,89 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
           formato: `$${Number(c.deducible).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
         }));
 
+      const annualPremium = Math.round(primaTotal * 100) / 100;
+
+      // Extract comprensivo + colision deducibles for display
+      const dedComprensivo = coverageList.find((c: any) => c.name?.toUpperCase()?.includes('COMPRENSIV'));
+      const dedColision = coverageList.find((c: any) => c.name?.toUpperCase()?.includes('COLISI') || c.name?.toUpperCase()?.includes('VUELCO'));
+      const minDeductible = deducibles.length > 0
+        ? Math.min(...deducibles.map((d: any) => Number(d.monto) || 0))
+        : 0;
+
+      // Build beneficios list
+      const anconBeneficios = [
+        ...endosoBenefits.map((b: string) => ({ nombre: b, descripcion: b, incluido: true })),
+      ];
+
+      // Build endosos
+      const anconEndosos = [{
+        codigo: endosoNombre.toUpperCase().replace(/\s+/g, '_'),
+        nombre: endosoNombre,
+        incluido: true,
+        descripcion: 'Incluido en la prima',
+        subBeneficios: endosoBenefits,
+      }];
+
+      // Build coberturas detalladas from coverageList
+      const coberturasDetalladas = coverageList.map((c: any) => ({
+        codigo: c.code || '',
+        nombre: c.name || '',
+        descripcion: c.name || '',
+        limite: c.limit || 'Incluido',
+        prima: c.prima || 0,
+        deducible: c.deducible ? `$${Number(c.deducible).toFixed(2)}` : '',
+        incluida: true,
+      }));
+
+      const deducibleInfo = {
+        valor: minDeductible,
+        tipo: quoteData.deducible || 'bajo',
+        descripcion: dedComprensivo || dedColision
+          ? `Colisión/Vuelco: $${Number(dedColision?.deducible || 0).toFixed(2)} | Comprensivo: $${Number(dedComprensivo?.deducible || 0).toFixed(2)}`
+          : `Deducible desde $${minDeductible.toFixed(2)}`,
+        tooltip: dedComprensivo || dedColision
+          ? `Colisión/Vuelco: $${Number(dedColision?.deducible || 0).toFixed(2)}\nComprensivo: $${Number(dedComprensivo?.deducible || 0).toFixed(2)}`
+          : `Deducible: $${minDeductible.toFixed(2)}`,
+      };
+
       return {
         ...sharedData,
         id: `ancon-${planType}`,
         planType,
         isRecommended: planType === 'premium',
-        annualPremium: Math.round(primaTotal * 100) / 100,
+        annualPremium,
+        deductible: minDeductible,
+        coverages: coverageList.map((c: any) => ({ name: c.name, included: true })),
         coverageList,
         endosoBenefits,
         endosoNombre,
         deducibles,
+        _priceBreakdown: {
+          primaBase: annualPremium,
+          descuentoBuenConductor: 0,
+          descuentoPorcentaje: 0,
+          impuesto: 0,
+          totalConTarjeta: annualPremium,
+          totalAlContado: annualPremium,
+          ahorroContado: 0,
+        },
+        _deduciblesReales: {
+          comprensivo: dedComprensivo && Number(dedComprensivo.deducible) > 0
+            ? { amount: Number(dedComprensivo.deducible), label: 'Comprensivo' } : null,
+          colisionVuelco: dedColision && Number(dedColision.deducible) > 0
+            ? { amount: Number(dedColision.deducible), label: 'Colisión/Vuelco' } : null,
+        },
+        _coberturasDetalladas: coberturasDetalladas,
+        _deducibleInfo: deducibleInfo,
+        _beneficios: anconBeneficios,
+        _endosos: anconEndosos,
+        _endosoIncluido: endosoNombre,
+        _endosoTexto: endosoNombre.toUpperCase(),
         _idCotizacion: option.noCotizacion || cotData.noCotizacion,
         _optionName: option.name,
         _opcion: dedSuffix,
+        _codProducto: planType === 'premium' ? '10602' : '00312',
+        _nombreProducto: planType === 'premium' ? 'EXTRA PLUS 2024' : 'AUTO COMPLETA',
       };
     };
 

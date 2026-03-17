@@ -170,12 +170,15 @@ function mergeApiData(
           coverageList: covList.length > 0 ? covList : fallback.coverageList,
           endosoBenefits: apiPlan.endosoBenefits?.length > 0 ? apiPlan.endosoBenefits : fallback.endosoBenefits,
           endoso: apiPlan.endoso || fallback.endoso,
-          idCotizacion: apiPlan.noCotizacion || fallback.idCotizacion,
+          idCotizacion: apiPlan.idCotizacion || apiPlan.noCotizacion || fallback.idCotizacion,
+          _codProducto: apiPlan._codProducto,
+          _nombreProducto: apiPlan._nombreProducto,
+          _sumaAsegurada: apiPlan._sumaAsegurada,
           installments: {
             available: false,
             description: 'Solo al contado',
           },
-        };
+        } as AutoThirdPartyPlan;
       };
 
       return {

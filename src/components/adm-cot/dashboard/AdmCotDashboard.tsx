@@ -394,6 +394,8 @@ export default function AdmCotDashboard() {
                 <option value="">Aseguradora</option>
                 <option value="INTERNACIONAL">Internacional</option>
                 <option value="FEDPA">FEDPA</option>
+                <option value="REGIONAL">La Regional</option>
+                <option value="ANCON">ANCÓN</option>
               </select>
               <select value={selectedRamo} onChange={(e) => setSelectedRamo(e.target.value)}
                 className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">

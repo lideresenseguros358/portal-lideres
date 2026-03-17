@@ -300,6 +300,7 @@ export default function AdmCotOverdueTab() {
               <option value="FEDPA">FEDPA</option>
               <option value="INTERNACIONAL">Internacional</option>
               <option value="REGIONAL">Regional</option>
+              <option value="ANCON">ANCÓN</option>
             </select>
           </div>
         )}

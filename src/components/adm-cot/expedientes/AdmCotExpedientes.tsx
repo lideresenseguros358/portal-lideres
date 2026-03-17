@@ -279,6 +279,8 @@ export default function AdmCotExpedientes() {
             <option value="">Aseguradora</option>
             <option value="INTERNACIONAL">Internacional</option>
             <option value="FEDPA">FEDPA</option>
+            <option value="REGIONAL">La Regional</option>
+            <option value="ANCON">ANCÓN</option>
           </select>
           <select
             value={filters.ramo || ''}

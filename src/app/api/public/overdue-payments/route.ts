@@ -1,8 +1,13 @@
 /**
- * PUBLIC API — Overdue Payments (No auth required)
- * =================================================
- * GET  ?cedula=XXX  → Lookup overdue installments by cedula
- * POST              → Confirm payment after PagueloFacil charge
+ * PUBLIC API — Payment Lookup & Processing (No auth required)
+ * ============================================================
+ * GET  ?cedula=XXX  → Lookup ALL recurrences + installment status by cedula
+ * POST              → Confirm payment / cancel recurrence after PagueloFacil charge
+ *
+ * Returns three possible states:
+ *   1. no_recurrences  — client has no active recurrences (no policies found)
+ *   2. al_dia           — all installments are current (none overdue)
+ *   3. has_overdue      — some installments are overdue
  *
  * Used by the "Realiza tu pago" modal on the cotizadores page.
  */
@@ -18,7 +23,7 @@ function getSb() {
 }
 
 // ════════════════════════════════════════════
-// GET — Lookup overdue payments by cedula
+// GET — Full payment status lookup by cedula
 // ════════════════════════════════════════════
 
 export async function GET(req: NextRequest) {
@@ -31,77 +36,116 @@ export async function GET(req: NextRequest) {
     }
 
     const sb = getSb();
+    const today = new Date().toISOString().slice(0, 10);
 
-    // 1. Find overdue recurring payments for this cedula
-    //    Status PENDIENTE_CONFIRMACION means PagueloFacil couldn't charge the card
-    const { data: overduePayments, error: payErr } = await sb
-      .from('adm_cot_payments')
+    // 1. Find ALL active recurrences for this cedula
+    const { data: recurrences, error: recErr } = await sb
+      .from('adm_cot_recurrences')
       .select('*')
       .eq('cedula', cedula)
-      .eq('is_recurring', true)
-      .in('status', ['PENDIENTE_CONFIRMACION', 'PENDIENTE'])
-      .eq('is_refund', false)
-      .order('payment_date', { ascending: true });
+      .eq('status', 'ACTIVA')
+      .order('created_at', { ascending: false });
 
-    if (payErr) {
-      return NextResponse.json({ error: payErr.message }, { status: 500 });
+    if (recErr) {
+      return NextResponse.json({ error: recErr.message }, { status: 500 });
     }
 
-    if (!overduePayments || overduePayments.length === 0) {
-      return NextResponse.json({ success: true, data: [], message: 'No se encontraron pagos pendientes para esta cédula.' });
-    }
-
-    // 2. Group by policy number
-    const policyMap: Record<string, {
-      nro_poliza: string;
-      client_name: string;
-      insurer: string;
-      ramo: string;
-      cedula: string;
-      payments: any[];
-    }> = {};
-
-    for (const p of overduePayments) {
-      const key = p.nro_poliza || p.id;
-      if (!policyMap[key]) {
-        policyMap[key] = {
-          nro_poliza: p.nro_poliza || '',
-          client_name: p.client_name || '',
-          insurer: p.insurer || '',
-          ramo: p.ramo || '',
-          cedula: p.cedula || '',
-          payments: [],
-        };
-      }
-      policyMap[key].payments.push({
-        id: p.id,
-        amount: Number(p.amount),
-        installment_num: p.installment_num,
-        payment_date: p.payment_date,
-        status: p.status,
-        recurrence_id: p.recurrence_id,
+    if (!recurrences || recurrences.length === 0) {
+      return NextResponse.json({
+        success: true,
+        status: 'no_recurrences',
+        data: [],
+        message: 'No se encontraron pólizas con plan de pagos asociadas a esta cédula.',
       });
     }
 
-    const policies = Object.values(policyMap);
+    // 2. For each recurrence, build enriched installment list from schedule + payments
+    const policies: any[] = [];
 
-    // 3. For each policy, check if there's an active recurrence with more pending installments
-    for (const pol of policies) {
-      const recurrenceIds = [...new Set(pol.payments.map(p => p.recurrence_id).filter(Boolean))];
-      if (recurrenceIds.length > 0) {
-        const { data: recurrences } = await sb
-          .from('adm_cot_recurrences')
-          .select('id, total_installments, frequency, installment_amount, schedule, pf_cod_oper, pf_rec_cod_oper, status')
-          .in('id', recurrenceIds)
-          .eq('status', 'ACTIVA');
+    for (const rec of recurrences) {
+      const schedule = Array.isArray(rec.schedule) ? rec.schedule : [];
 
-        (pol as any).recurrences = recurrences || [];
-      } else {
-        (pol as any).recurrences = [];
+      // Get all payments for this recurrence
+      const { data: payments } = await sb
+        .from('adm_cot_payments')
+        .select('id, amount, installment_num, payment_date, status, is_refund, pf_cod_oper')
+        .eq('recurrence_id', rec.id)
+        .eq('is_refund', false)
+        .order('installment_num', { ascending: true });
+
+      const paymentMap = new Map<number, any>();
+      for (const p of (payments || [])) {
+        if (p.installment_num) paymentMap.set(p.installment_num, p);
       }
+
+      // Build enriched installments from schedule
+      const installments: any[] = [];
+      let hasOverdue = false;
+      let paidCount = 0;
+      let pendingCount = 0;
+
+      for (const item of schedule) {
+        const num = item.num;
+        const dueDate = item.due_date;
+        const payment = paymentMap.get(num);
+        const isPaid = item.status === 'PAGADO' ||
+          (payment && ['CONFIRMADO_PF', 'PAGADO', 'AGRUPADO'].includes(payment.status));
+
+        if (isPaid) {
+          paidCount++;
+          installments.push({
+            num,
+            due_date: dueDate,
+            amount: Number(item.amount || rec.installment_amount),
+            status: 'PAGADO',
+            payment_id: payment?.id || item.payment_id || null,
+          });
+        } else {
+          // Check if overdue: due_date < today
+          const isOverdue = dueDate < today;
+          if (isOverdue) hasOverdue = true;
+          pendingCount++;
+
+          installments.push({
+            num,
+            due_date: dueDate,
+            amount: Number(item.amount || rec.installment_amount),
+            status: isOverdue ? 'VENCIDO' : 'PENDIENTE',
+            payment_id: payment?.id || null,
+            // Include existing payment record ID for overdue ones that have PENDIENTE_CONFIRMACION
+            existing_payment_id: payment?.id || null,
+            existing_payment_status: payment?.status || null,
+          });
+        }
+      }
+
+      policies.push({
+        nro_poliza: rec.nro_poliza || '',
+        client_name: rec.client_name || '',
+        insurer: rec.insurer || '',
+        cedula: rec.cedula || '',
+        recurrence_id: rec.id,
+        total_installments: rec.total_installments,
+        frequency: rec.frequency,
+        installment_amount: Number(rec.installment_amount),
+        pf_cod_oper: rec.pf_cod_oper || null,
+        pf_rec_cod_oper: rec.pf_rec_cod_oper || null,
+        installments,
+        paidCount,
+        pendingCount,
+        hasOverdue,
+      });
     }
 
-    return NextResponse.json({ success: true, data: policies });
+    // Determine overall status
+    const anyOverdue = policies.some(p => p.hasOverdue);
+    const anyPending = policies.some(p => p.pendingCount > 0);
+
+    return NextResponse.json({
+      success: true,
+      status: anyOverdue ? 'has_overdue' : (anyPending ? 'al_dia' : 'all_paid'),
+      data: policies,
+    });
   } catch (err: any) {
     console.error('[PUBLIC overdue-payments GET]', err);
     return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 });
@@ -120,87 +164,166 @@ export async function POST(req: NextRequest) {
     const sb = getSb();
 
     switch (action) {
-      // ── Confirm overdue payment(s) ──
+      // ── Confirm payment(s) — works for overdue AND adelanto ──
       case 'confirm_payment': {
         const {
-          payment_ids,
+          installments: selectedInstallments,   // [{ recurrence_id, num, amount, existing_payment_id? }]
           pf_cod_oper,
           pf_card_type,
           pf_card_display,
           total_paid,
+          client_name,
+          cedula,
         } = body;
 
-        if (!payment_ids || !Array.isArray(payment_ids) || payment_ids.length === 0) {
-          return NextResponse.json({ error: 'payment_ids requerido' }, { status: 400 });
+        if (!selectedInstallments || !Array.isArray(selectedInstallments) || selectedInstallments.length === 0) {
+          return NextResponse.json({ error: 'installments requerido' }, { status: 400 });
         }
         if (!pf_cod_oper) {
           return NextResponse.json({ error: 'pf_cod_oper requerido' }, { status: 400 });
         }
 
-        // Mark each payment as CONFIRMADO_PF
-        const { error: updateErr } = await sb
-          .from('adm_cot_payments')
-          .update({
-            status: 'CONFIRMADO_PF',
-            pf_cod_oper,
-            pf_card_type: pf_card_type || null,
-            pf_card_display: pf_card_display || null,
-            pf_confirmed_at: new Date().toISOString(),
-            payment_source: 'CLIENT_PORTAL',
-          })
-          .in('id', payment_ids);
+        const confirmedPaymentIds: string[] = [];
+        const now = new Date().toISOString();
 
-        if (updateErr) {
-          return NextResponse.json({ error: updateErr.message }, { status: 500 });
+        // Group installments by recurrence_id for batch schedule updates
+        const byRecurrence = new Map<string, typeof selectedInstallments>();
+        for (const inst of selectedInstallments) {
+          const key = inst.recurrence_id;
+          if (!byRecurrence.has(key)) byRecurrence.set(key, []);
+          byRecurrence.get(key)!.push(inst);
         }
 
-        // Update recurrence schedule items if applicable
-        for (const pid of payment_ids) {
-          const { data: payment } = await sb
-            .from('adm_cot_payments')
-            .select('recurrence_id, installment_num')
-            .eq('id', pid)
+        for (const [recurrenceId, insts] of byRecurrence.entries()) {
+          // Get recurrence details
+          const { data: rec } = await sb
+            .from('adm_cot_recurrences')
+            .select('*')
+            .eq('id', recurrenceId)
             .single();
 
-          if (payment?.recurrence_id && payment?.installment_num) {
-            const { data: rec } = await sb
-              .from('adm_cot_recurrences')
-              .select('schedule, next_due_date')
-              .eq('id', payment.recurrence_id)
-              .single();
+          if (!rec) continue;
 
-            if (rec?.schedule) {
-              const schedule = Array.isArray(rec.schedule) ? rec.schedule : [];
-              const updated = schedule.map((s: any) => {
-                if (s.num === payment.installment_num) {
-                  return { ...s, status: 'PAGADO', payment_id: pid };
-                }
-                return s;
-              });
+          for (const inst of insts) {
+            let paymentId = inst.existing_payment_id;
 
-              // Find next pending item for next_due_date
-              const nextPending = updated.find((s: any) => s.status === 'PENDIENTE');
+            if (paymentId) {
+              // Update existing payment record (overdue)
               await sb
-                .from('adm_cot_recurrences')
+                .from('adm_cot_payments')
                 .update({
-                  schedule: updated,
-                  next_due_date: nextPending?.due_date || null,
+                  status: 'CONFIRMADO_PF',
+                  pf_cod_oper,
+                  pf_card_type: pf_card_type || null,
+                  pf_card_display: pf_card_display || null,
+                  pf_confirmed_at: now,
+                  payment_source: 'CLIENT_PORTAL',
                 })
-                .eq('id', payment.recurrence_id);
+                .eq('id', paymentId);
+            } else {
+              // Create new payment record (adelanto)
+              const { data: newPay } = await sb
+                .from('adm_cot_payments')
+                .insert({
+                  recurrence_id: recurrenceId,
+                  nro_poliza: rec.nro_poliza,
+                  client_name: client_name || rec.client_name || '',
+                  cedula: cedula || rec.cedula || '',
+                  insurer: rec.insurer,
+                  ramo: rec.ramo || 'AUTO',
+                  amount: inst.amount,
+                  installment_num: inst.num,
+                  payment_date: new Date().toISOString().slice(0, 10),
+                  status: 'CONFIRMADO_PF',
+                  is_recurring: true,
+                  is_refund: false,
+                  pf_cod_oper,
+                  pf_card_type: pf_card_type || null,
+                  pf_card_display: pf_card_display || null,
+                  pf_confirmed_at: now,
+                  payment_source: 'CLIENT_PORTAL',
+                })
+                .select('id')
+                .single();
+
+              paymentId = newPay?.id;
             }
+
+            if (paymentId) confirmedPaymentIds.push(paymentId);
+          }
+
+          // Update recurrence schedule — mark paid installments
+          const schedule = Array.isArray(rec.schedule) ? [...rec.schedule] : [];
+          const paidNums = new Set(insts.map(i => i.num));
+          const updated = schedule.map((s: any) => {
+            if (paidNums.has(s.num)) {
+              return { ...s, status: 'PAGADO', payment_id: confirmedPaymentIds[confirmedPaymentIds.length - 1] };
+            }
+            return s;
+          });
+
+          // Check if ALL installments now paid → mark recurrence COMPLETADA
+          const allPaid = updated.every((s: any) => s.status === 'PAGADO');
+          const nextPending = updated.find((s: any) => s.status !== 'PAGADO');
+
+          await sb
+            .from('adm_cot_recurrences')
+            .update({
+              schedule: updated,
+              next_due_date: nextPending?.due_date || null,
+              status: allPaid ? 'COMPLETADA' : 'ACTIVA',
+            })
+            .eq('id', recurrenceId);
+
+          // If all paid, return flag so frontend can cancel PF recurrence
+          if (allPaid) {
+            (body as any)._completedRecurrences = (body as any)._completedRecurrences || [];
+            (body as any)._completedRecurrences.push({
+              recurrence_id: recurrenceId,
+              pf_rec_cod_oper: rec.pf_rec_cod_oper,
+            });
           }
         }
 
         // Audit log
         await sb.from('adm_cot_audit_log').insert({
-          event_type: 'client_overdue_payment',
+          event_type: 'client_portal_payment',
           entity_type: 'payment',
-          entity_id: payment_ids[0],
+          entity_id: confirmedPaymentIds[0] || null,
           user_id: null,
-          detail: { payment_ids, pf_cod_oper, total_paid, source: 'CLIENT_PORTAL' },
+          detail: {
+            payment_ids: confirmedPaymentIds,
+            installment_nums: selectedInstallments.map((i: any) => i.num),
+            pf_cod_oper,
+            total_paid,
+            source: 'CLIENT_PORTAL',
+            type: selectedInstallments.some((i: any) => !i.existing_payment_id) ? 'adelanto' : 'overdue',
+          },
         });
 
-        return NextResponse.json({ success: true, data: { confirmed: payment_ids.length } });
+        // Collect completed recurrences for frontend
+        const completedRecurrences: Array<{ recurrence_id: string; pf_rec_cod_oper: string | null }> = [];
+        for (const [recurrenceId] of byRecurrence.entries()) {
+          const { data: rec } = await sb
+            .from('adm_cot_recurrences')
+            .select('id, pf_rec_cod_oper, status')
+            .eq('id', recurrenceId)
+            .single();
+          if (rec?.status === 'COMPLETADA') {
+            completedRecurrences.push({
+              recurrence_id: rec.id,
+              pf_rec_cod_oper: rec.pf_rec_cod_oper,
+            });
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            confirmed: confirmedPaymentIds.length,
+            completedRecurrences,
+          },
+        });
       }
 
       // ── Update recurrence card (register new card for future installments) ──

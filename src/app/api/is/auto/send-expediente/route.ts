@@ -735,6 +735,7 @@ function getInsurerEmergencyNumber(insurerName: string): string {
   if (name.includes('SURA'))          return '800-7872';
   if (name.includes('GENERAL'))       return '800-0155';
   if (name.includes('ANCÓN') || name.includes('ANCON')) return '800-2626';
+  if (name.includes('REGIONAL'))      return '800-0155';
   if (name.includes('MUNDIAL'))       return '800-6200';
   if (name.includes('PAN AMERICAN'))  return '800-0800';
   return '800-4600';

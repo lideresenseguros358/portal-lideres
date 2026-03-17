@@ -1039,44 +1039,63 @@ export default function EmitirDanosTercerosPage() {
           throw new Error('No se encontró número de cotización ANCON');
         }
 
-        setEmissionProgress(25);
+        setEmissionProgress(20);
+        setEmissionStep('Subiendo documentos...');
+
+        const anconEmitBody = {
+          no_cotizacion: noCotizacion,
+          opcion: 'A',
+          cod_producto: selectedPlan?._codProducto || '07159',
+          nombre_producto: selectedPlan?._nombreProducto || 'WEB - AUTORC',
+          suma_asegurada: String(selectedPlan?._sumaAsegurada || '0'),
+          primer_nombre: emissionData.primerNombre,
+          segundo_nombre: emissionData.segundoNombre || '',
+          primer_apellido: emissionData.primerApellido,
+          segundo_apellido: emissionData.segundoApellido || '',
+          tipo_de_cliente: 'N',
+          cedula: emissionData.cedula,
+          fecha_nacimiento: emissionData.fechaNacimiento || '',
+          sexo: emissionData.sexo || 'M',
+          telefono_celular: emissionData.celular || emissionData.telefono || '',
+          telefono_residencial: emissionData.telefono || '',
+          email: emissionData.email || '',
+          direccion: emissionData.direccion || 'PANAMA',
+          direccion_cobros: emissionData.direccion || 'PANAMA',
+          cod_marca_agt: quoteData?.vcodmarca || '',
+          nombre_marca: quoteData?.marca || '',
+          cod_modelo_agt: quoteData?.vcodmodelo || '',
+          nombre_modelo: quoteData?.modelo || '',
+          placa: vehicleData?.placa || '',
+          no_chasis: vehicleData?.vinChasis || '',
+          vin: vehicleData?.vinChasis || '',
+          no_motor: vehicleData?.motor || '',
+          ano: String(quoteData?.anio || quoteData?.anno || new Date().getFullYear()),
+          cantidad_de_pago: '1',
+          nacionalidad: emissionData.nacionalidad || 'PANAMA',
+          pep: '0',
+        };
+
+        // Build FormData with emission data + documents
+        const anconForm = new FormData();
+        anconForm.append('emissionData', JSON.stringify(anconEmitBody));
+
+        // Attach document files
+        if (emissionData.cedulaFile) {
+          anconForm.append('cedulaFile', emissionData.cedulaFile);
+        }
+        if (emissionData.licenciaFile) {
+          anconForm.append('licenciaFile', emissionData.licenciaFile);
+        }
+        if (vehicleData?.registroVehicular) {
+          anconForm.append('registroVehicularFile', vehicleData.registroVehicular);
+        }
+
+        setEmissionProgress(30);
         setEmissionStep('Emitiendo póliza ANCON...');
 
         const anconEmisionResponse = await fetch('/api/ancon/emision', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            no_cotizacion: noCotizacion,
-            opcion: 'A',
-            cod_producto: selectedPlan?._codProducto || '07159',
-            nombre_producto: selectedPlan?._nombreProducto || 'WEB - AUTORC',
-            suma_asegurada: String(selectedPlan?._sumaAsegurada || '0'),
-            primer_nombre: emissionData.primerNombre,
-            segundo_nombre: emissionData.segundoNombre || '',
-            primer_apellido: emissionData.primerApellido,
-            segundo_apellido: emissionData.segundoApellido || '',
-            tipo_de_cliente: 'N',
-            cedula: emissionData.cedula,
-            fecha_nacimiento: emissionData.fechaNacimiento || '',
-            sexo: emissionData.sexo || 'M',
-            telefono_celular: emissionData.celular || emissionData.telefono || '',
-            telefono_residencial: emissionData.telefono || '',
-            email: emissionData.email || '',
-            direccion: emissionData.direccion || 'PANAMA',
-            direccion_cobros: emissionData.direccion || 'PANAMA',
-            cod_marca_agt: quoteData?.vcodmarca || '',
-            nombre_marca: quoteData?.marca || '',
-            cod_modelo_agt: quoteData?.vcodmodelo || '',
-            nombre_modelo: quoteData?.modelo || '',
-            placa: vehicleData?.placa || '',
-            no_chasis: vehicleData?.vinChasis || '',
-            vin: vehicleData?.vinChasis || '',
-            no_motor: vehicleData?.motor || '',
-            ano: String(quoteData?.anio || quoteData?.anno || new Date().getFullYear()),
-            cantidad_de_pago: '1',
-            nacionalidad: emissionData.nacionalidad || 'PANAMA',
-            pep: '0',
-          }),
+          body: anconForm,
         });
 
         const anconEmisionResult = await anconEmisionResponse.json();
@@ -1118,6 +1137,7 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('tipoCobertura', 'DT');
           expedienteForm.append('environment', 'development');
           expedienteForm.append('nroPoliza', anconEmisionResult.poliza || '');
+          expedienteForm.append('pdfUrl', anconEmisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'ANCÓN Seguros');
           expedienteForm.append('firmaDataUrl', signatureRef.current || '');
           if (anconEmisionResult.clientId) expedienteForm.append('clientId', anconEmisionResult.clientId);
@@ -1191,6 +1211,7 @@ export default function EmitirDanosTercerosPage() {
         setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: anconEmisionResult.poliza,
+          pdfUrl: anconEmisionResult.pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(anconEmisionResult.poliza)}`,
           insurer: 'ANCÓN Seguros',
           anconPoliza: anconEmisionResult.poliza,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,

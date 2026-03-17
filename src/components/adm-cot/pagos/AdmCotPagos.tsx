@@ -260,7 +260,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
         {showFilters && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-100">
             <select value={insurer} onChange={e => setInsurer(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option>
+              <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option><option value="ANCON">ANCÓN</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>

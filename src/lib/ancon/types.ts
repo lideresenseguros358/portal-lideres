@@ -202,7 +202,7 @@ export interface AnconEmisionInput {
   no_cotizacion: string;
   cod_grupo: string;
   nombre_grupo: string;
-  token: string;
+  token?: string;
   nacionalidad: string;
   pep: string;
   ocupacion: string;
@@ -235,6 +235,7 @@ export interface AnconDocumentoItem {
   id_archivo: string;
   nombre: string;
   requerida: string; // "0" = no, "1" = si
+  nombre_archivo: string; // hash path for REST upload
 }
 
 export interface AnconSubirDocumentosResponse {
