@@ -17,7 +17,7 @@ export function getAnconCredentials() {
   return {
     usuario: process.env.ANCON_USUARIO || '01009',
     password: process.env.ANCON_PASSWORD || '750840840940840',
-    codAgente: process.env.ANCON_COD_AGENTE || '00099',
+    codAgente: process.env.ANCON_COD_AGENTE || '01009',
     codCompania: '001',
     codSucursal: '009',
     nroLicencia: '750',
@@ -73,14 +73,14 @@ export const ANCON_EMISSION_METHODS = {
   SUBIR_DOCUMENTOS: 'SubirDocumentos',
   LISTADO_EXPEDIENTES: 'ListadoExpedientes',
   ENLAZAR_INSPECCION: 'EnlazarInspeccion',
-  EMISION_SERVER: 'EmisionServer',
+  EMISION_SERVER: 'EmitirDatos',
   IMPRESION_POLIZA: 'ImpresionPoliza',
 } as const;
 
 // ═══ Product Codes ═══
 export const ANCON_PRODUCTS = {
   AUTO_COMPLETA: '00312',  // Cobertura Completa
-  AUTO_DT: '00041',        // Daños a Terceros (RC only) - to be confirmed via Listaproductos
+  AUTO_RC: '07159',         // WEB - AUTORC (Daños a Terceros / RC)
 } as const;
 
 // ═══ Ramo/Subramo for auto ═══

@@ -1048,9 +1048,9 @@ export default function EmitirDanosTercerosPage() {
           body: JSON.stringify({
             no_cotizacion: noCotizacion,
             opcion: 'A',
-            cod_producto: '00312',
-            nombre_producto: 'AUTO COMPLETA',
-            suma_asegurada: '15000',
+            cod_producto: selectedPlan?._codProducto || '07159',
+            nombre_producto: selectedPlan?._nombreProducto || 'WEB - AUTORC',
+            suma_asegurada: String(selectedPlan?._sumaAsegurada || '0'),
             primer_nombre: emissionData.primerNombre,
             segundo_nombre: emissionData.segundoNombre || '',
             primer_apellido: emissionData.primerApellido,
