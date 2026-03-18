@@ -116,26 +116,52 @@ export async function POST(request: NextRequest) {
     console.log(`[REGIONAL CC Emit] Field lengths: dirhab=${dirhab.length}, placa=${numplaca.length}, carroceria=${serialcarroceria.length}, motor=${serialmotor.length}, color=${colorCode.length}`);
     console.log('[REGIONAL CC Emit] Emitting...', JSON.stringify(emissionBody).slice(0, 500));
 
-    const result = await emitirPolizaCC(emissionBody);
+    // Retry logic for transient REGIONAL Oracle errors (ORA-03150 DB link, timeouts)
+    const isTransientError = (msg: string) =>
+      /ORA-03150|ORA-03113|ORA-03114|ORA-12170|ORA-02063|end-of-file|communication channel|timeout|ETIMEDOUT|ECONNRESET|socket hang up/i.test(msg);
 
-    if (!result.success) {
+    let lastResult: Awaited<ReturnType<typeof emitirPolizaCC>> | null = null;
+    const MAX_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = attempt * 3000;
+        console.log(`[REGIONAL CC Emit] Retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+      lastResult = await emitirPolizaCC(emissionBody);
+      if (lastResult.success || !isTransientError(lastResult.message || '')) break;
+      console.warn(`[REGIONAL CC Emit] Transient error (attempt ${attempt + 1}): ${lastResult.message}`);
+    }
+
+    const emitResult = lastResult!;
+
+    if (!emitResult.success) {
+      const errMsg = emitResult.message || 'Error emitiendo póliza CC';
+      const isServerDown = isTransientError(errMsg);
       return NextResponse.json(
-        { success: false, error: result.message || 'Error emitiendo póliza CC' },
-        { status: 500 }
+        {
+          success: false,
+          error: isServerDown
+            ? 'El servidor de La Regional no responde en este momento. Por favor intente nuevamente en unos minutos.'
+            : errMsg,
+          _rawError: errMsg,
+          _retryable: isServerDown,
+        },
+        { status: isServerDown ? 503 : 500 }
       );
     }
 
     // 3. Build print URL — the frontend/confirmation page will call this to download the PDF
-    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}` : null;
+    const pdfUrl = emitResult.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(emitResult.poliza)}` : null;
 
     const elapsed = Date.now() - t0;
-    console.log(`[REGIONAL CC Emit] Completed in ${elapsed}ms. Poliza: ${result.poliza}`);
+    console.log(`[REGIONAL CC Emit] Completed in ${elapsed}ms. Poliza: ${emitResult.poliza}`);
 
     return NextResponse.json({
       success: true,
-      poliza: result.poliza,
-      nroPoliza: result.poliza,
-      numcot: result.numcot,
+      poliza: emitResult.poliza,
+      nroPoliza: emitResult.poliza,
+      numcot: emitResult.numcot,
       pdfUrl,
       insurer: 'REGIONAL',
       // Echo back sent data for carátula verification

@@ -858,7 +858,19 @@ export default function EmitirPage() {
           body: JSON.stringify(regionalEmitBody),
         });
         
-        const emisionResult = await emisionResponse.json();
+        // Handle non-JSON responses (e.g. 504 gateway timeout returns plain text)
+        let emisionResult: any;
+        const responseText = await emisionResponse.text();
+        try {
+          emisionResult = JSON.parse(responseText);
+        } catch {
+          console.error('[EMISIÓN REGIONAL CC] Non-JSON response:', emisionResponse.status, responseText.slice(0, 200));
+          throw new Error(
+            emisionResponse.status === 504
+              ? 'El servidor de La Regional no respondió a tiempo. Por favor intente nuevamente.'
+              : `Error del servidor de La Regional (HTTP ${emisionResponse.status})`
+          );
+        }
         
         if (!emisionResponse.ok || !emisionResult.success) {
           throw new Error(emisionResult.error || 'Error emitiendo póliza con REGIONAL');
