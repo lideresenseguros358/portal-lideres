@@ -22,6 +22,8 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Auto-open pay modal when ?pagar=true (from morosidad email link)
+  // Optionally pre-fill cedula from ?cedula=XXX
+  const prefillCedula = searchParams.get('cedula') || '';
   useEffect(() => {
     if (searchParams.get('pagar') === 'true') {
       setShowPayModal(true);
@@ -163,7 +165,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
       <MobileBottomNav />
 
       {/* Pay Overdue Modal */}
-      <PayOverdueModal isOpen={showPayModal} onClose={() => setShowPayModal(false)} />
+      <PayOverdueModal isOpen={showPayModal} onClose={() => setShowPayModal(false)} prefillCedula={prefillCedula} />
     </div>
   );
 }

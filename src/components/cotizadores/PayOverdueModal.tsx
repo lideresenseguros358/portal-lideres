@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   FaTimes, FaSearch, FaCreditCard,
   FaFileInvoiceDollar, FaSpinner, FaExclamationTriangle,
@@ -41,7 +41,7 @@ interface PolicyData {
 type LookupStatus = 'no_recurrences' | 'al_dia' | 'has_overdue' | 'all_paid';
 type Step = 'cedula' | 'status' | 'select' | 'card' | 'summary' | 'processing' | 'receipt';
 
-interface Props { isOpen: boolean; onClose: () => void; }
+interface Props { isOpen: boolean; onClose: () => void; prefillCedula?: string; }
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -57,7 +57,7 @@ function instKey(pol: PolicyData, inst: Installment) {
   return `${pol.recurrence_id}::${inst.num}`;
 }
 
-export default function PayOverdueModal({ isOpen, onClose }: Props) {
+export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Props) {
   const [step, setStep] = useState<Step>('cedula');
   const [cedula, setCedula] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -78,6 +78,15 @@ export default function PayOverdueModal({ isOpen, onClose }: Props) {
     date: string; clientName: string; cedula: string;
     cancelledRecurrences: number;
   } | null>(null);
+
+  // ── Auto-prefill cedula from morosidad email link ──
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (isOpen && prefillCedula && prefillCedula.length >= 3 && !prefillDone.current) {
+      prefillDone.current = true;
+      setCedula(prefillCedula);
+    }
+  }, [isOpen, prefillCedula]);
 
   // ── Helpers ──
 
@@ -263,7 +272,7 @@ export default function PayOverdueModal({ isOpen, onClose }: Props) {
     setStep('cedula'); setCedula(''); setLookupError(''); setLookupStatus(null);
     setPolicies([]); setSelectedKeys(new Set()); setShowAdelanto(false); setExpandedPolicies(new Set());
     setCardData(null); setCardError(''); setProgress(0); setProgressStep('');
-    setProcessingError(null); setReceiptData(null); onClose();
+    setProcessingError(null); setReceiptData(null); prefillDone.current = false; onClose();
   };
 
   if (!isOpen) return null;
@@ -607,7 +616,7 @@ export default function PayOverdueModal({ isOpen, onClose }: Props) {
               <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-3">
                 <FaCreditCard className="text-lg text-[#010139]" />
                 <div>
-                  <p className="text-xs font-semibold text-gray-800">{cardData?.brand} {maskCard(cardData?.last4)}</p>
+                  <p className="text-xs font-semibold text-gray-800">{cardData?.brand} {maskCard(cardData?.last4 || '')}</p>
                   <p className="text-[10px] text-gray-400">{cardData?.cardName}</p>
                 </div>
               </div>

@@ -213,6 +213,7 @@ export default function AdmCotOverdueTab() {
             id: p.id,
             client_name: p.client_name,
             client_email: p.client_email,
+            cedula: p.cedula || null,
             nro_poliza: p.nro_poliza,
             insurer: p.insurer,
             amount: p.amount,
