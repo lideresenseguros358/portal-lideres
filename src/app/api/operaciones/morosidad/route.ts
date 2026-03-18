@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: notes });
     }
 
-    // ── ADM COT overdue installment payments (>15 days PENDIENTE_CONFIRMACION) ──
+    // ── ADM COT overdue installment payments (>15 days PENDIENTE_CONFIRMACION + all RECHAZADO_PF) ──
     if (view === 'adm_cot_overdue') {
       const search = searchParams.get('search') || undefined;
       const insurerF = searchParams.get('insurer') || undefined;
@@ -83,7 +83,8 @@ export async function GET(req: NextRequest) {
       cutoffDate.setDate(cutoffDate.getDate() - OVERDUE_DAYS);
       const cutoffStr = cutoffDate.toISOString().slice(0, 10);
 
-      let q = supabase
+      // Fetch PENDIENTE_CONFIRMACION (>15 days) + ALL RECHAZADO_PF (immediate visibility)
+      let qPending = supabase
         .from('adm_cot_payments')
         .select('*')
         .eq('status', 'PENDIENTE_CONFIRMACION')
@@ -91,11 +92,28 @@ export async function GET(req: NextRequest) {
         .lte('payment_date', cutoffStr)
         .order('payment_date', { ascending: true });
 
-      if (insurerF) q = q.eq('insurer', insurerF);
-      if (search) q = q.or(`client_name.ilike.%${search}%,nro_poliza.ilike.%${search}%,cedula.ilike.%${search}%`);
+      let qRejected = supabase
+        .from('adm_cot_payments')
+        .select('*')
+        .eq('status', 'RECHAZADO_PF')
+        .eq('is_recurring', true)
+        .order('payment_date', { ascending: true });
 
-      const { data: overduePayments, error: overdueErr } = await q;
-      if (overdueErr) return NextResponse.json({ error: overdueErr.message }, { status: 500 });
+      if (insurerF) {
+        qPending = qPending.eq('insurer', insurerF);
+        qRejected = qRejected.eq('insurer', insurerF);
+      }
+      if (search) {
+        const searchFilter = `client_name.ilike.%${search}%,nro_poliza.ilike.%${search}%,cedula.ilike.%${search}%`;
+        qPending = qPending.or(searchFilter);
+        qRejected = qRejected.or(searchFilter);
+      }
+
+      const [{ data: pendingPayments, error: pendingErr }, { data: rejectedPayments, error: rejectedErr }] = await Promise.all([qPending, qRejected]);
+      if (pendingErr) return NextResponse.json({ error: pendingErr.message }, { status: 500 });
+      if (rejectedErr) return NextResponse.json({ error: rejectedErr.message }, { status: 500 });
+
+      const overduePayments = [...(pendingPayments ?? []), ...(rejectedPayments ?? [])];
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);

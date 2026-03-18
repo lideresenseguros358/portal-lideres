@@ -50,6 +50,8 @@ interface OverduePayment {
   payment_date: string;
   days_overdue: number;
   cedula?: string;
+  status?: string;
+  notes?: any;
 }
 
 // ================================================================
@@ -250,9 +252,13 @@ export default function AdmCotOverdueTab() {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-          <p className="text-[10px] text-red-600 font-semibold uppercase">Cuotas Vencidas</p>
+          <p className="text-[10px] text-red-600 font-semibold uppercase">Cuotas en Mora</p>
           <p className="text-xl font-bold text-[#010139]">{payments.length}</p>
-          <p className="text-[11px] text-gray-500">+15 días sin confirmar</p>
+          <p className="text-[11px] text-gray-500">
+            {payments.filter(p => p.status === 'RECHAZADO_PF').length > 0
+              ? `${payments.filter(p => p.status === 'RECHAZADO_PF').length} rechazado(s) · ${payments.filter(p => p.status !== 'RECHAZADO_PF').length} pendiente(s)`
+              : '+15 días sin confirmar'}
+          </p>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
           <p className="text-[10px] text-amber-600 font-semibold uppercase">Monto Total</p>
@@ -339,9 +345,15 @@ export default function AdmCotOverdueTab() {
                       </div>
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <p className="text-sm font-bold text-red-600">{fmtMoney(p.amount)}</p>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${dc.bg} ${dc.text}`}>
-                          <FaClock className="text-[8px] mr-0.5" />{p.days_overdue}d
-                        </span>
+                        {p.status === 'RECHAZADO_PF' ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">
+                            <FaExclamationTriangle className="text-[8px] mr-0.5" />Rechazado
+                          </span>
+                        ) : (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${dc.bg} ${dc.text}`}>
+                            <FaClock className="text-[8px] mr-0.5" />{p.days_overdue}d
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-500">
@@ -392,9 +404,15 @@ export default function AdmCotOverdueTab() {
                         <td className="px-2 py-2.5 text-center text-gray-500">{p.installment_num || '\u2014'}</td>
                         <td className="px-2 py-2.5 text-gray-500 tabular-nums">{fmtDate(p.payment_date)}</td>
                         <td className="px-2 py-2.5 text-center">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${dc.bg} ${dc.text}`}>
-                            {p.days_overdue}d
-                          </span>
+                          {p.status === 'RECHAZADO_PF' ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white" title={p.notes?.rejection_reason || 'Rechazado por PagueloFacil'}>
+                              Rechazado
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${dc.bg} ${dc.text}`}>
+                              {p.days_overdue}d
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-center">
                           {p.client_email
