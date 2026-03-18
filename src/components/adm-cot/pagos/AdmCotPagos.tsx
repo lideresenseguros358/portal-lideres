@@ -50,8 +50,9 @@ const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDate
 
 function StatusBadge({ status }: { status: string }) {
   const m: Record<string, { bg: string; text: string; label?: string }> = {
-    CONFIRMADO_PF: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'CONFIRMADO' },
-    PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'PENDIENTE' },
+    CONFIRMADO_PF: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'CONFIRMADO PF' },
+    PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'POR CONFIRMAR' },
+    RECHAZADO_PF: { bg: 'bg-red-100', text: 'text-red-800', label: 'RECHAZADO' },
     PENDIENTE: { bg: 'bg-amber-100', text: 'text-amber-800' },
     AGRUPADO: { bg: 'bg-blue-100', text: 'text-blue-800' },
     PAGADO: { bg: 'bg-green-100', text: 'text-green-800' },
@@ -139,8 +140,8 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
   const selectAll = () => {
-    const pending = payments.filter(p => p.status === 'PENDIENTE');
-    setSelected(prev => prev.size === pending.length ? new Set() : new Set(pending.map(p => p.id)));
+    const groupable = payments.filter(p => p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF');
+    setSelected(prev => prev.size === groupable.length ? new Set() : new Set(groupable.map(p => p.id)));
   };
   const toggleSelectConfirm = (id: string) => {
     setSelectedConfirm(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -263,7 +264,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option><option value="ANCON">ANCÓN</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
+              <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option><option value="RECHAZADO_PF">Rechazado PF</option>
             </select>
             <select value={type} onChange={e => setType(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>
@@ -366,7 +367,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
           <div key={p.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm p-3 ${p.is_refund ? 'border-l-4 border-l-red-300' : ''}`}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                {p.status === 'PENDIENTE' && (
+                {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && (
                   <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer flex-shrink-0 mt-0.5" />
                 )}
                 <div className="min-w-0">
@@ -388,7 +389,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                 {p.installment_num && <span>Cuota {p.installment_num}</span>}
                 {slaBadge(p)}
               </div>
-              {p.status === 'PENDIENTE' && !p.is_refund && (
+              {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && !p.is_refund && (
                 <button onClick={() => setShowRefundModal(p.id)} className="p-1.5 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
               )}
             </div>
@@ -402,7 +403,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <th className="py-2 px-2 w-8"><input type="checkbox" onChange={selectAll} checked={selected.size > 0 && selected.size === groupablePayments.filter(p => p.status === 'PENDIENTE').length} className="cursor-pointer" /></th>
+                <th className="py-2 px-2 w-8"><input type="checkbox" onChange={selectAll} checked={selected.size > 0 && selected.size === groupablePayments.filter(p => p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF').length} className="cursor-pointer" /></th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Cliente</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Póliza</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Monto</th>
@@ -427,7 +428,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               ) : groupablePayments.map(p => (
                 <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${p.is_refund ? 'bg-red-50/30' : ''}`}>
                   <td className="py-2 px-2">
-                    {p.status === 'PENDIENTE' && <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer" />}
+                    {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer" />}
                   </td>
                   <td className="py-2 px-2 text-[11px] font-medium text-[#010139]">{p.client_name}</td>
                   <td className="py-2 px-2 text-[11px] font-mono text-gray-600">{p.nro_poliza || '—'}</td>
@@ -443,7 +444,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                   <td className="py-2 px-2 text-[11px] text-gray-500">{p.installment_num || '—'}</td>
                   <td className="py-2 px-2">{slaBadge(p)}</td>
                   <td className="py-2 px-2">
-                    {p.status === 'PENDIENTE' && !p.is_refund && (
+                    {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && !p.is_refund && (
                       <button onClick={() => setShowRefundModal(p.id)} className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
                     )}
                   </td>
@@ -1370,8 +1371,14 @@ function ManualWizardModal({ onClose }: { onClose: () => void }) {
   const [searchPay, setSearchPay] = useState('');
 
   useEffect(() => {
-    api({ tab: 'pending', status: 'PENDIENTE' }).then(res => {
-      if (res.success) setPayments(res.data.rows.filter((p: any) => !p.is_refund));
+    // Fetch both PENDIENTE and CONFIRMADO_PF payments for manual grouping
+    Promise.all([
+      api({ tab: 'pending', status: 'PENDIENTE' }),
+      api({ tab: 'pending', status: 'CONFIRMADO_PF' }),
+    ]).then(([resPend, resConf]) => {
+      const pend = resPend.success ? resPend.data.rows.filter((p: any) => !p.is_refund) : [];
+      const conf = resConf.success ? resConf.data.rows.filter((p: any) => !p.is_refund) : [];
+      setPayments([...pend, ...conf]);
     });
     api({ tab: 'transfers', status: 'OPEN' }).then(res => {
       if (res.success) {

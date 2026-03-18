@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const enrichedRows = (data ?? []).map((r: any) => {
-          if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.status === 'CONFIRMADO_PF' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
+          if (r.status === 'PAGADO' || r.status === 'AGRUPADO' || r.is_refund) return { ...r, sla_status: 'none', sla_color: 'gray', days_until_due: null };
           const registered = r.payment_date ? new Date(r.payment_date + 'T12:00:00') : null;
           if (!registered) return { ...r, sla_status: 'unknown', sla_color: 'gray', days_until_due: null };
           const dueDate = new Date(registered);
@@ -101,13 +101,14 @@ export async function GET(request: NextRequest) {
 
         // Summary counts
         const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund, insurer');
-        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, confirmedPf: 0, confirmedPfAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, overdueCount: 0, urgentCount: 0 };
+        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, confirmedPf: 0, confirmedPfAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, rejectedPf: 0, rejectedPfAmt: 0, overdueCount: 0, urgentCount: 0 };
         const insurerMap: Record<string, { count: number; amount: number; statuses: Record<string, number> }> = {};
         (summaryData ?? []).forEach((r: any) => {
           const amt = Number(r.amount) || 0;
           if (r.is_refund) { summary.refunds++; summary.refundsAmt += amt; }
           else if (r.status === 'CONFIRMADO_PF') { summary.confirmedPf++; summary.confirmedPfAmt += amt; }
           else if (r.status === 'PENDIENTE_CONFIRMACION') { summary.pendingConfirm++; summary.pendingConfirmAmt += amt; }
+          else if (r.status === 'RECHAZADO_PF') { summary.rejectedPf++; summary.rejectedPfAmt += amt; }
           else if (r.status === 'PENDIENTE') { summary.pending++; summary.pendingAmt += amt; }
           else if (r.status === 'AGRUPADO') { summary.grouped++; summary.groupedAmt += amt; }
           else if (r.status === 'PAGADO') { summary.paid++; summary.paidAmt += amt; }
@@ -674,10 +675,13 @@ export async function POST(request: NextRequest) {
         }).select('id').single();
         if (grpErr) return NextResponse.json({ error: grpErr.message }, { status: 500 });
 
-        // Add group items (payments)
+        // Add group items (payments) — fetch payment details for required columns
         for (const pid of payment_ids) {
+          const { data: payDetail } = await sb.from('adm_cot_payments').select('insurer, amount').eq('id', pid).single();
           await sb.from('adm_cot_payment_group_items').insert({
-            group_id: grp.id, payment_id: pid,
+            group_id: grp.id, pending_payment_id: pid,
+            insurer: payDetail?.insurer || 'UNKNOWN',
+            amount_applied: Number(payDetail?.amount || 0),
           });
         }
 
