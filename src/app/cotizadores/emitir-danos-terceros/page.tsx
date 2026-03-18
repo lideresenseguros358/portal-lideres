@@ -69,6 +69,7 @@ export default function EmitirDanosTercerosPage() {
   const [emissionProgress, setEmissionProgress] = useState(0);
   const [emissionStep, setEmissionStep] = useState('');
   const [emissionError, setEmissionError] = useState<string | null>(null);
+  const [paymentCharged, setPaymentCharged] = useState(false);
 
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
@@ -235,6 +236,7 @@ export default function EmitirDanosTercerosPage() {
     setEmissionProgress(0);
     setEmissionStep('Preparando datos del cliente...');
     setEmissionError(null);
+    setPaymentCharged(false);
 
     try {
       const isFedpaReal = selectedPlan?._isReal && (selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA'));
@@ -288,6 +290,7 @@ export default function EmitirDanosTercerosPage() {
 
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
+        setPaymentCharged(true);
 
         // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
         // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
@@ -1279,7 +1282,78 @@ export default function EmitirDanosTercerosPage() {
   const handleEmissionModalClose = () => {
     setShowEmissionModal(false);
     setEmissionError(null);
+    setPaymentCharged(false);
     setIsConfirming(false);
+  };
+
+  const handleEmissionReport = async () => {
+    try {
+      const tInfo = getTrackingInfo();
+      const insurerName = tInfo.insurer === 'FEDPA' ? 'FEDPA Seguros' : tInfo.insurer === 'REGIONAL' ? 'La Regional de Seguros' : (selectedPlan?.insurerName || 'Aseguradora');
+
+      const reportBody: Record<string, any> = {
+        insurerName,
+        ramo: 'AUTO',
+        cobertura: 'DT',
+        clientData: emissionData ? {
+          primerNombre: emissionData.primerNombre,
+          primerApellido: emissionData.primerApellido,
+          segundoNombre: emissionData.segundoNombre,
+          segundoApellido: emissionData.segundoApellido,
+          cedula: emissionData.cedula,
+          fechaNacimiento: emissionData.fechaNacimiento,
+          sexo: emissionData.sexo,
+          email: emissionData.email,
+          telefono: emissionData.telefono,
+          celular: emissionData.celular,
+          direccion: emissionData.direccion,
+          esPEP: emissionData.esPEP,
+        } : {},
+        vehicleData: vehicleData ? {
+          placa: vehicleData.placa,
+          vinChasis: vehicleData.vinChasis,
+          motor: vehicleData.motor,
+          color: vehicleData.color,
+          marca: vehicleData.marca || quoteData?.marca,
+          modelo: vehicleData.modelo || quoteData?.modelo,
+          anio: vehicleData.anio || quoteData?.anno || quoteData?.anio,
+        } : {},
+        quoteData: {
+          numcot: selectedPlan?._numcot || selectedPlan?._idCotizacion,
+          planType: selectedPlan?.planType,
+          annualPremium: selectedPlan?.annualPremium,
+        },
+        paymentData: {
+          pfCodOper: pfCardData ? 'charged' : undefined,
+          pfCardType: pfCardData?.brand,
+          pfCardDisplay: pfCardData?.cardNumber ? `****${pfCardData.cardNumber.slice(-4)}` : undefined,
+          amount: selectedPlan?.annualPremium || 0,
+          installments: 1,
+        },
+        emissionError: emissionError || 'Error desconocido',
+        expedienteDocs: {
+          cedula: 'requerida',
+          licencia: 'requerida',
+          registroVehicular: 'requerido',
+          debidaDiligencia: 'requerida',
+        },
+      };
+
+      const res = await fetch('/api/operaciones/emission-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportBody),
+      });
+
+      const result = await res.json();
+      if (!result.success) {
+        console.error('[EMISSION REPORT DT] Failed:', result.error);
+      } else {
+        console.log('[EMISSION REPORT DT] Caso creado:', result.ticket);
+      }
+    } catch (err) {
+      console.error('[EMISSION REPORT DT] Error:', err);
+    }
   };
 
   const handleEmissionModalComplete = () => {
@@ -1802,8 +1876,10 @@ export default function EmitirDanosTercerosPage() {
           progress={emissionProgress}
           currentStep={emissionStep}
           error={emissionError}
+          paymentCharged={paymentCharged}
           onClose={handleEmissionModalClose}
           onComplete={handleEmissionModalComplete}
+          onReport={handleEmissionReport}
         />
       </div>
     );

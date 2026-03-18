@@ -602,12 +602,12 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                         <FaExclamationTriangle className="text-[10px]" /> OFFLINE
                       </span>
                     </div>
-                    <div className="text-sm text-white/80 font-medium">Servidor no disponible</div>
+                    <div className="text-sm text-white/80 font-medium">Fuera de línea</div>
                   </div>
                   <div className="p-6 text-center">
                     <FaExclamationTriangle className="text-red-300 text-3xl mx-auto mb-3" />
-                    <p className="text-gray-500 font-semibold text-sm">No se pudo obtener cotización</p>
-                    <p className="text-gray-400 text-xs mt-1">El servidor de esta aseguradora no está respondiendo en este momento</p>
+                    <p className="text-gray-500 font-semibold text-sm">Aseguradora fuera de línea</p>
+                    <p className="text-gray-400 text-xs mt-1">Esta aseguradora se encuentra fuera de servicio por el momento. Intente más tarde.</p>
                   </div>
                 </div>
               </div>

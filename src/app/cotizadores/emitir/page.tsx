@@ -55,6 +55,7 @@ export default function EmitirPage() {
   const [emissionProgress, setEmissionProgress] = useState(0);
   const [emissionStep, setEmissionStep] = useState('');
   const [emissionError, setEmissionError] = useState<string | null>(null);
+  const [paymentCharged, setPaymentCharged] = useState(false);
 
   useEffect(() => {
     const loadData = () => {
@@ -230,6 +231,7 @@ export default function EmitirPage() {
       setEmissionProgress(0);
       setEmissionStep('Preparando datos del cliente...');
       setEmissionError(null);
+      setPaymentCharged(false);
       
       // Detectar aseguradora
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
@@ -281,6 +283,7 @@ export default function EmitirPage() {
 
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
+        setPaymentCharged(true);
 
         // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
         // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
@@ -1320,7 +1323,89 @@ export default function EmitirPage() {
   const handleEmissionModalClose = () => {
     setShowEmissionModal(false);
     setEmissionError(null);
+    setPaymentCharged(false);
     setIsConfirming(false);
+  };
+
+  const handleEmissionReport = async () => {
+    try {
+      const isRegional = selectedPlan?._isREGIONAL || selectedPlan?.insurerName?.includes('Regional');
+      const isFedpa = selectedPlan?.insurerName?.includes('FEDPA');
+      const insurerName = isRegional ? 'La Regional de Seguros' : isFedpa ? 'FEDPA Seguros' : (selectedPlan?.insurerName || 'Aseguradora');
+      const cobertura = selectedPlan?.planType ? 'CC' : 'CC';
+
+      const reportBody: Record<string, any> = {
+        insurerName,
+        ramo: 'AUTO',
+        cobertura,
+        clientData: emissionData ? {
+          primerNombre: emissionData.primerNombre,
+          primerApellido: emissionData.primerApellido,
+          segundoNombre: emissionData.segundoNombre,
+          segundoApellido: emissionData.segundoApellido,
+          cedula: emissionData.cedula,
+          fechaNacimiento: emissionData.fechaNacimiento,
+          sexo: emissionData.sexo,
+          email: emissionData.email,
+          telefono: emissionData.telefono,
+          celular: emissionData.celular,
+          direccion: emissionData.direccion,
+          esPEP: emissionData.esPEP,
+          actividadEconomica: emissionData.actividadEconomica,
+          nivelIngresos: emissionData.nivelIngresos,
+          acreedor: emissionData.acreedor,
+          codProvincia: emissionData.codProvincia,
+          codDistrito: emissionData.codDistrito,
+          codCorregimiento: emissionData.codCorregimiento,
+        } : {},
+        vehicleData: vehicleData ? {
+          placa: vehicleData.placa,
+          vinChasis: vehicleData.vinChasis,
+          motor: vehicleData.motor,
+          color: vehicleData.color,
+          marca: vehicleData.marca || quoteData?.marca,
+          modelo: vehicleData.modelo || quoteData?.modelo,
+          anio: vehicleData.anio || quoteData?.anno || quoteData?.anio,
+          pasajeros: vehicleData.pasajeros,
+          puertas: vehicleData.puertas,
+        } : {},
+        quoteData: {
+          numcot: selectedPlan?._numcot || selectedPlan?._idCotizacion,
+          planType: selectedPlan?.planType,
+          annualPremium: selectedPlan?.annualPremium,
+          deducible: quoteData?.deducible,
+          valorVehiculo: quoteData?.valorVehiculo,
+          endoso: quoteData?.endoso,
+        },
+        paymentData: {
+          pfCodOper: pfCardData ? 'charged' : undefined,
+          pfCardType: pfCardData?.brand,
+          pfCardDisplay: pfCardData?.cardNumber ? `****${pfCardData.cardNumber.slice(-4)}` : undefined,
+          amount: installments > 1 ? monthlyPayment : (selectedPlan?.annualPremium || 0),
+          installments,
+        },
+        emissionError: emissionError || 'Error desconocido',
+        expedienteDocs: {
+          photos: inspectionPhotos?.map((_: any, i: number) => `foto_inspeccion_${i + 1}`) || [],
+          firma: signatureRef.current ? 'firma_presente' : 'sin_firma',
+        },
+      };
+
+      const res = await fetch('/api/operaciones/emission-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reportBody),
+      });
+
+      const result = await res.json();
+      if (!result.success) {
+        console.error('[EMISSION REPORT] Failed:', result.error);
+      } else {
+        console.log('[EMISSION REPORT] Caso creado:', result.ticket);
+      }
+    } catch (err) {
+      console.error('[EMISSION REPORT] Error:', err);
+    }
   };
 
   const handleEmissionModalComplete = () => {
@@ -1653,8 +1738,10 @@ export default function EmitirPage() {
           progress={emissionProgress}
           currentStep={emissionStep}
           error={emissionError}
+          paymentCharged={paymentCharged}
           onClose={handleEmissionModalClose}
           onComplete={handleEmissionModalComplete}
+          onReport={handleEmissionReport}
         />
       </div>
     );

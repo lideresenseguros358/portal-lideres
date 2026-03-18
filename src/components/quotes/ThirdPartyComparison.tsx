@@ -565,7 +565,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                 )}
               </div>
               <div className="text-sm text-white/80 font-medium">
-                {isOffline ? 'Servidor no disponible' : 'Emisión inmediata • Sin inspección'}
+                {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata • Sin inspección'}
               </div>
             </div>
 

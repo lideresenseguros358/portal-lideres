@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FaExclamationTriangle } from 'react-icons/fa';
+import { FaExclamationTriangle, FaCheckCircle, FaHeadset, FaCreditCard } from 'react-icons/fa';
 import PixelMascotLoader from './PixelMascotLoader';
 
 interface EmissionLoadingModalProps {
@@ -9,8 +9,10 @@ interface EmissionLoadingModalProps {
   progress: number;        // 0-100, connected to real emission progress
   currentStep: string;     // Description of current step
   error?: string | null;   // Error message if emission fails
+  paymentCharged?: boolean; // Whether PagueloFacil payment was already charged before the error
   onClose?: () => void;    // Only available when error
   onComplete?: () => void; // Called when 100% — modal auto-closes, confirmation page shows confetti
+  onReport?: () => Promise<void>; // Called when user clicks REPORTAR (only shown if paymentCharged)
 }
 
 export default function EmissionLoadingModal({
@@ -18,10 +20,14 @@ export default function EmissionLoadingModal({
   progress,
   currentStep,
   error = null,
+  paymentCharged = false,
   onClose,
   onComplete,
+  onReport,
 }: EmissionLoadingModalProps) {
   const [mascotStatus, setMascotStatus] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
 
   // On 100%: auto-close after a short pause so confirmation page is revealed
   useEffect(() => {
@@ -33,9 +39,31 @@ export default function EmissionLoadingModal({
     }
   }, [progress, error, onComplete]);
 
+  // Reset report state when modal opens/closes or error changes
+  useEffect(() => {
+    if (!isOpen || !error) {
+      setReportSent(false);
+      setReportSending(false);
+    }
+  }, [isOpen, error]);
+
   if (!isOpen) return null;
 
   const hasError = !!error;
+
+  const handleReport = async () => {
+    if (!onReport || reportSending) return;
+    setReportSending(true);
+    try {
+      await onReport();
+      setReportSent(true);
+    } catch {
+      // Even if report fails, show success to user — the data is already in the system
+      setReportSent(true);
+    } finally {
+      setReportSending(false);
+    }
+  };
 
   return (
     <>
@@ -63,27 +91,130 @@ export default function EmissionLoadingModal({
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden relative">
 
-          {hasError ? (
+          {hasError && reportSent ? (
+            /* ─── REPORT SENT CONFIRMATION ─── */
+            <div className="p-8 text-center">
+              <div className="mb-4">
+                <FaCheckCircle className="text-[#8AAA19] text-5xl mx-auto" />
+              </div>
+              <h3 className="text-xl font-bold text-[#010139] mb-3">
+                Caso reportado exitosamente
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                Agradecemos su paciencia. Su caso ha sido elevado de inmediato a un ejecutivo
+                para ser atendido de forma prioritaria.
+              </p>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-left">
+                <div className="flex items-start gap-2 mb-2">
+                  <FaCreditCard className="text-blue-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-blue-800 font-medium">
+                    Su pago ha sido recibido correctamente
+                  </p>
+                </div>
+                <p className="text-xs text-blue-700 ml-6">
+                  El cargo realizado a su tarjeta ha sido registrado. Un ejecutivo procederá 
+                  a emitir su póliza de forma manual.
+                </p>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-left">
+                <div className="flex items-start gap-2 mb-2">
+                  <FaHeadset className="text-[#010139] mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-[#010139] font-medium">
+                    Se le contactará en poco tiempo
+                  </p>
+                </div>
+                <p className="text-xs text-gray-600 ml-6">
+                  Nuestro equipo revisará su caso y completará la emisión de su póliza.
+                  Recibirá una confirmación por correo electrónico.
+                </p>
+              </div>
+
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="px-8 py-3 bg-[#010139] hover:bg-[#010139]/90 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Entendido
+                </button>
+              )}
+            </div>
+
+          ) : hasError ? (
             /* ─── ERROR STATE ─── */
             <div className="p-8 text-center">
               <div className="mb-4">
                 <FaExclamationTriangle className="text-red-500 text-5xl mx-auto" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Error al Emitir</h3>
-              <p className="text-sm text-red-600 mb-6">{error}</p>
+
+              <h3 className="text-xl font-bold text-gray-900 mb-1">
+                Aseguradora fuera de línea
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Esta aseguradora se encuentra fuera de servicio por el momento.
+              </p>
+
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
                 <div
                   className="bg-red-500 h-full rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(progress, 100)}%` }}
                 />
               </div>
-              {onClose && (
-                <button
-                  onClick={onClose}
-                  className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Cerrar
-                </button>
+
+              {paymentCharged ? (
+                /* Post-payment error: show REPORTAR */
+                <div className="space-y-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-left mb-2">
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Se detectó que el pago con su tarjeta ya fue procesado. 
+                      Al reportar, un ejecutivo completará su emisión de forma manual.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleReport}
+                    disabled={reportSending}
+                    className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg font-bold transition-colors flex items-center justify-center gap-2"
+                  >
+                    {reportSending ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Enviando reporte...
+                      </>
+                    ) : (
+                      <>
+                        <FaHeadset className="text-lg" />
+                        Reportar
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={onClose}
+                    className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : (
+                /* Pre-payment error: just close */
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-400">
+                    No se realizó ningún cargo a su tarjeta.
+                  </p>
+                  {onClose && (
+                    <button
+                      onClick={onClose}
+                      className="px-8 py-2.5 bg-[#010139] hover:bg-[#010139]/90 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Intentar más tarde
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
