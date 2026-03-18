@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
         pfCodOper: paymentData?.pfCodOper || null,
         paymentAmount: paymentData?.amount || null,
         numcot: quoteData?.numcot || null,
+        placa: vehicleData?.placa || null,
+        cedula: clientData?.cedula || null,
       },
     };
 

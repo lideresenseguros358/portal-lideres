@@ -70,6 +70,8 @@ export default function EmitirDanosTercerosPage() {
   const [emissionStep, setEmissionStep] = useState('');
   const [emissionError, setEmissionError] = useState<string | null>(null);
   const [paymentCharged, setPaymentCharged] = useState(false);
+  const [emissionBlocked, setEmissionBlocked] = useState(false);
+  const [emissionBlockedMessage, setEmissionBlockedMessage] = useState('');
 
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
@@ -237,6 +239,8 @@ export default function EmitirDanosTercerosPage() {
     setEmissionStep('Preparando datos del cliente...');
     setEmissionError(null);
     setPaymentCharged(false);
+    setEmissionBlocked(false);
+    setEmissionBlockedMessage('');
 
     try {
       const isFedpaReal = selectedPlan?._isReal && (selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA'));
@@ -249,6 +253,36 @@ export default function EmitirDanosTercerosPage() {
       let pfRecCodOper: string | undefined;
       let pfCardType: string | undefined;
       let pfCardDisplay: string | undefined;
+
+      // ═══ IDEMPOTENCY GUARD: Check for duplicate charges BEFORE processing ═══
+      if (pfCardData && emissionData) {
+        setEmissionProgress(1);
+        setEmissionStep('Verificando estado de su solicitud...');
+
+        try {
+          const guardRes = await fetch('/api/paguelofacil/charge-guard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numcot: selectedPlan?._numcot || selectedPlan?._idCotizacion,
+              placa: vehicleData?.placa,
+              cedula: emissionData.cedula,
+              insurer: selectedPlan?.insurerName,
+            }),
+          });
+          const guardData = await guardRes.json();
+
+          if (!guardData.allowed) {
+            console.log('[CHARGE-GUARD] ⛔ Emission blocked:', guardData.reason);
+            setEmissionBlocked(true);
+            setEmissionBlockedMessage(guardData.blockedMessage || 'Su caso está siendo revisado. Por favor espere a ser contactado.');
+            setEmissionStep('Caso en revisión');
+            return; // Stop — do NOT charge
+          }
+        } catch (guardErr) {
+          console.warn('[CHARGE-GUARD] Guard check failed, proceeding anyway:', guardErr);
+        }
+      }
 
       // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
       if (pfCardData) {
@@ -1877,6 +1911,8 @@ export default function EmitirDanosTercerosPage() {
           currentStep={emissionStep}
           error={emissionError}
           paymentCharged={paymentCharged}
+          blocked={emissionBlocked}
+          blockedMessage={emissionBlockedMessage}
           onClose={handleEmissionModalClose}
           onComplete={handleEmissionModalComplete}
           onReport={handleEmissionReport}

@@ -10,6 +10,8 @@ interface EmissionLoadingModalProps {
   currentStep: string;     // Description of current step
   error?: string | null;   // Error message if emission fails
   paymentCharged?: boolean; // Whether PagueloFacil payment was already charged before the error
+  blocked?: boolean;       // Whether emission is blocked (duplicate/case in review)
+  blockedMessage?: string; // Custom message for blocked state
   onClose?: () => void;    // Only available when error
   onComplete?: () => void; // Called when 100% — modal auto-closes, confirmation page shows confetti
   onReport?: () => Promise<void>; // Called when user clicks REPORTAR (only shown if paymentCharged)
@@ -21,6 +23,8 @@ export default function EmissionLoadingModal({
   currentStep,
   error = null,
   paymentCharged = false,
+  blocked = false,
+  blockedMessage,
   onClose,
   onComplete,
   onReport,
@@ -28,6 +32,7 @@ export default function EmissionLoadingModal({
   const [mascotStatus, setMascotStatus] = useState('');
   const [reportSending, setReportSending] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const [autoReportCountdown, setAutoReportCountdown] = useState(15);
 
   // On 100%: auto-close after a short pause so confirmation page is revealed
   useEffect(() => {
@@ -44,8 +49,21 @@ export default function EmissionLoadingModal({
     if (!isOpen || !error) {
       setReportSent(false);
       setReportSending(false);
+      setAutoReportCountdown(15);
     }
   }, [isOpen, error]);
+
+  // Auto-report: if paymentCharged and error, auto-send report after 15 seconds
+  useEffect(() => {
+    if (!isOpen || !error || !paymentCharged || reportSent || reportSending || blocked) return;
+    if (autoReportCountdown <= 0) {
+      handleReport();
+      return;
+    }
+    const timer = setTimeout(() => setAutoReportCountdown(prev => prev - 1), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, error, paymentCharged, reportSent, reportSending, blocked, autoReportCountdown]);
 
   if (!isOpen) return null;
 
@@ -91,7 +109,53 @@ export default function EmissionLoadingModal({
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden relative">
 
-          {hasError && reportSent ? (
+          {blocked ? (
+            /* ─── BLOCKED STATE — Case in review ─── */
+            <div className="p-8 text-center">
+              <div className="mb-4">
+                <FaExclamationTriangle className="text-amber-500 text-5xl mx-auto" />
+              </div>
+              <h3 className="text-xl font-bold text-[#010139] mb-3">
+                Caso en revisión
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                {blockedMessage || 'Su caso está siendo revisado por nuestro equipo. Por favor espere a ser contactado.'}
+              </p>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-left">
+                <div className="flex items-start gap-2 mb-2">
+                  <FaHeadset className="text-blue-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-blue-800 font-medium">
+                    Un ejecutivo está atendiendo su solicitud
+                  </p>
+                </div>
+                <p className="text-xs text-blue-700 ml-6">
+                  Hemos detectado que ya existe un proceso de emisión registrado para este vehículo. 
+                  Nuestro equipo lo está revisando y se comunicará con usted en breve.
+                </p>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-left">
+                <div className="flex items-start gap-2">
+                  <FaCreditCard className="text-green-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-green-700">
+                    No se ha realizado ningún cargo adicional a su tarjeta. 
+                    Su pago anterior está seguro y registrado.
+                  </p>
+                </div>
+              </div>
+
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="px-8 py-3 bg-[#010139] hover:bg-[#010139]/90 text-white rounded-lg font-semibold transition-colors"
+                >
+                  Entendido
+                </button>
+              )}
+            </div>
+
+          ) : hasError && reportSent ? (
             /* ─── REPORT SENT CONFIRMATION ─── */
             <div className="p-8 text-center">
               <div className="mb-4">
@@ -163,7 +227,7 @@ export default function EmissionLoadingModal({
               </div>
 
               {paymentCharged ? (
-                /* Post-payment error: show REPORTAR */
+                /* Post-payment error: ONLY show REPORTAR — no other buttons */
                 <div className="space-y-3">
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-left mb-2">
                     <p className="text-xs text-amber-800 leading-relaxed">
@@ -193,12 +257,9 @@ export default function EmissionLoadingModal({
                     )}
                   </button>
 
-                  <button
-                    onClick={onClose}
-                    className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-medium transition-colors text-sm"
-                  >
-                    Cerrar
-                  </button>
+                  <p className="text-[10px] text-gray-400 text-center">
+                    Se enviará automáticamente en {autoReportCountdown}s
+                  </p>
                 </div>
               ) : (
                 /* Pre-payment error: just close */
