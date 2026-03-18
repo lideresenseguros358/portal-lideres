@@ -17,6 +17,12 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
 
+  // Helper: truncate and clean strings to prevent Oracle ORA-06502 buffer overflow
+  const sanitize = (val: unknown, maxLen: number): string => {
+    const s = String(val ?? '').trim();
+    return s.length > maxLen ? s.substring(0, maxLen) : s;
+  };
+
   try {
     const body = await request.json();
     const creds = getRegionalCredentials('development');
@@ -100,8 +106,8 @@ export async function POST(request: NextRequest) {
       codInter: creds.codInter,
       plan: String(plan),
       cliente: {
-        nomter: (nombre || '').toUpperCase(),
-        apeter: (apellido || '').toUpperCase(),
+        nomter: sanitize(nombre, 50).toUpperCase(),
+        apeter: sanitize(apellido, 50).toUpperCase(),
         fchnac: fechaNacimiento || '1990-01-01',
         edad: parseInt(edad) || 35,
         sexo: sexo || 'M',
@@ -115,7 +121,7 @@ export async function POST(request: NextRequest) {
           codciudad: parseInt(codciudad) || 1,
           codmunicipio: parseInt(codmunicipio) || 1,
           codurb: parseInt(codurb) || 1,
-          dirhab: dirhab || 'Ciudad de Panamá',
+          dirhab: sanitize(dirhab || 'Ciudad de Panamá', 100),
         },
         identificacion: {
           tppersona: tppersona || 'N',
@@ -132,14 +138,14 @@ export async function POST(request: NextRequest) {
         codmarca: resolvedMarca,
         codmodelo: resolvedModelo,
         anio: parseInt(anio),
-        numplaca: (numplaca || '').toUpperCase(),
-        serialcarroceria: (serialcarroceria || '').toUpperCase(),
-        serialmotor: (serialmotor || '').toUpperCase(),
+        numplaca: sanitize(numplaca, 10).toUpperCase(),
+        serialcarroceria: sanitize(serialcarroceria, 20).toUpperCase(),
+        serialmotor: sanitize(serialmotor, 20).toUpperCase(),
         color: colorCode,
       },
       condHab: {
-        nomter: (condHabNombre || nombre || '').toUpperCase(),
-        apeter: (condHabApellido || apellido || '').toUpperCase(),
+        nomter: sanitize(condHabNombre || nombre, 50).toUpperCase(),
+        apeter: sanitize(condHabApellido || apellido, 50).toUpperCase(),
         sexo: condHabSexo || sexo || 'M',
         edocivil: condHabEdocivil || edocivil || 'S',
       },

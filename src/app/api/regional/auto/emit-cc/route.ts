@@ -15,6 +15,12 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
 
+  // Helper: truncate and clean strings to prevent Oracle ORA-06502 buffer overflow
+  const sanitize = (val: unknown, maxLen: number): string => {
+    const s = String(val ?? '').trim();
+    return s.length > maxLen ? s.substring(0, maxLen) : s;
+  };
+
   try {
     const body = await request.json();
 
@@ -26,22 +32,23 @@ export async function POST(request: NextRequest) {
     const codciudad = body.codciudad || body.codDistrito;
     const codmunicipio = body.codmunicipio || body.codCorregimiento;
     const codurb = body.codurb || body.codUrbanizacion;
-    const dirhab = body.dirhab || body.direccion;
+    const dirhab = sanitize(body.dirhab || body.direccion || 'Ciudad de Panamá', 100);
     // Datos cumplimiento
     const ocupacion = body.ocupacion || body.actividad;
     const ingresoAnual = body.ingresoAnual || body.nivelIngresos;
     const paisTributa = body.paisTributa;
     const pep = body.pep || body.esPEP;
     // Vehículo — accept frontend names: placa/motor/chasis/color
+    // Oracle column limits: placa ~10, serial ~20, color ~5 (code)
     const vehnuevo = body.vehnuevo;
-    const numplaca = body.numplaca || body.placa || '';
-    const serialcarroceria = body.serialcarroceria || body.chasis || '';
-    const serialmotor = body.serialmotor || body.motor || '';
-    const rawColor = body.color || '';
+    const numplaca = sanitize(body.numplaca || body.placa, 10);
+    const serialcarroceria = sanitize(body.serialcarroceria || body.chasis, 20);
+    const serialmotor = sanitize(body.serialmotor || body.motor, 20);
+    const rawColor = sanitize(body.color, 20);
     const usoveh = body.usoveh;
     const peso = body.peso;
     // Acreedor
-    const acreedor = body.acreedor;
+    const acreedor = sanitize(body.acreedor || '81', 5);
     // Cuotas
     const cuotas = body.cuotas || body.cantCuotas;
     const opcionPrima = body.opcionPrima;
@@ -85,7 +92,7 @@ export async function POST(request: NextRequest) {
           codciudad: parseInt(String(codciudad)) || 1,
           codmunicipio: parseInt(String(codmunicipio)) || 1,
           codurb: parseInt(String(codurb)) || 1,
-          dirhab: dirhab || 'Ciudad de Panamá',
+          dirhab: dirhab,
         },
         datosCumplimiento: {
           ocupacion: parseInt(String(ocupacion)) || 1,
@@ -103,10 +110,11 @@ export async function POST(request: NextRequest) {
         usoveh: usoveh || 'P',
         peso: peso || 'L',
       },
-      acreedor: acreedor || '81',
+      acreedor: acreedor,
     };
 
-    console.log('[REGIONAL CC Emit] Emitting...', JSON.stringify(emissionBody).slice(0, 300));
+    console.log(`[REGIONAL CC Emit] Field lengths: dirhab=${dirhab.length}, placa=${numplaca.length}, carroceria=${serialcarroceria.length}, motor=${serialmotor.length}, color=${colorCode.length}`);
+    console.log('[REGIONAL CC Emit] Emitting...', JSON.stringify(emissionBody).slice(0, 500));
 
     const result = await emitirPolizaCC(emissionBody);
 
