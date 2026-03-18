@@ -204,6 +204,9 @@ export async function POST(req: NextRequest) {
 
           if (!rec) continue;
 
+          // Track which payment_id corresponds to which installment num
+          const numToPaymentId = new Map<number, string>();
+
           for (const inst of insts) {
             let paymentId = inst.existing_payment_id;
 
@@ -249,15 +252,18 @@ export async function POST(req: NextRequest) {
               paymentId = newPay?.id;
             }
 
-            if (paymentId) confirmedPaymentIds.push(paymentId);
+            if (paymentId) {
+              confirmedPaymentIds.push(paymentId);
+              numToPaymentId.set(inst.num, paymentId);
+            }
           }
 
-          // Update recurrence schedule — mark paid installments
+          // Update recurrence schedule — mark paid installments with correct payment_id per cuota
           const schedule = Array.isArray(rec.schedule) ? [...rec.schedule] : [];
           const paidNums = new Set(insts.map(i => i.num));
           const updated = schedule.map((s: any) => {
             if (paidNums.has(s.num)) {
-              return { ...s, status: 'PAGADO', payment_id: confirmedPaymentIds[confirmedPaymentIds.length - 1] };
+              return { ...s, status: 'PAGADO', payment_id: numToPaymentId.get(s.num) || null };
             }
             return s;
           });
