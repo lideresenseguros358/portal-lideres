@@ -368,6 +368,71 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, data: { id: created.id } });
       }
 
+      // ── Update payment (edit fields, switch purpose) ──
+      case 'update_payment': {
+        const {
+          payment_id, client_name, cedula, nro_poliza, amount, insurer, ramo,
+          is_refund, refund_bank, refund_account, refund_account_type, refund_reason,
+          resolve_emission_fallida,
+        } = data;
+        if (!payment_id) return NextResponse.json({ error: 'Missing payment_id' }, { status: 400 });
+
+        // Get current payment
+        const { data: current, error: fetchErr } = await sb.from('adm_cot_payments')
+          .select('id, status, is_refund, nro_poliza').eq('id', payment_id).single();
+        if (fetchErr || !current) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+
+        // Only allow editing payments in editable states
+        const editableStatuses = ['PENDIENTE', 'CONFIRMADO_PF', 'EMISION_FALLIDA'];
+        if (!editableStatuses.includes(current.status)) {
+          return NextResponse.json({ error: `No se puede editar un pago con estado ${current.status}` }, { status: 400 });
+        }
+
+        const updatePayload: Record<string, any> = {};
+        if (client_name !== undefined) updatePayload.client_name = client_name;
+        if (cedula !== undefined) updatePayload.cedula = cedula || null;
+        if (nro_poliza !== undefined) updatePayload.nro_poliza = nro_poliza;
+        if (amount !== undefined) updatePayload.amount = Number(amount);
+        if (insurer !== undefined) updatePayload.insurer = insurer;
+        if (ramo !== undefined) updatePayload.ramo = ramo;
+
+        // Switch to refund
+        if (is_refund === true) {
+          updatePayload.is_refund = true;
+          if (refund_bank) updatePayload.refund_bank = refund_bank;
+          if (refund_account) updatePayload.refund_account = refund_account;
+          if (refund_account_type) updatePayload.refund_account_type = refund_account_type;
+          if (refund_reason !== undefined) updatePayload.refund_reason = refund_reason || null;
+        } else if (is_refund === false) {
+          // Switch back to insurer payment
+          updatePayload.is_refund = false;
+          updatePayload.refund_bank = null;
+          updatePayload.refund_account = null;
+          updatePayload.refund_account_type = null;
+          updatePayload.refund_reason = null;
+        }
+
+        // Resolve EMISION_FALLIDA → CONFIRMADO_PF when nro_poliza is provided
+        if (resolve_emission_fallida && current.status === 'EMISION_FALLIDA' && nro_poliza) {
+          updatePayload.status = 'CONFIRMADO_PF';
+          updatePayload.emission_error = null;
+        }
+
+        if (Object.keys(updatePayload).length === 0) {
+          return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        }
+
+        const { error: updateErr } = await sb.from('adm_cot_payments')
+          .update(updatePayload).eq('id', payment_id);
+        if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'payment_updated', entity_type: 'payment', entity_id: payment_id,
+          user_id: userId, detail: { fields_updated: Object.keys(updatePayload), is_refund: !!is_refund, resolve_emission_fallida: !!resolve_emission_fallida },
+        });
+        return NextResponse.json({ success: true });
+      }
+
       // ── Mark payment as refund (add bank details) ──
       case 'mark_refund': {
         const { payment_id, refund_bank, refund_account, refund_account_type, refund_reason } = data;

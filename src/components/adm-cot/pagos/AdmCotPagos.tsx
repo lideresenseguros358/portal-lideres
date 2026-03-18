@@ -28,6 +28,7 @@ import {
   FaFileExport,
   FaHandHoldingUsd,
 } from 'react-icons/fa';
+import EditCotPaymentModal from './EditCotPaymentModal';
 
 // ════════════════════════════════════════════
 // HELPERS
@@ -122,6 +123,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [refundForm, setRefundForm] = useState({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
   const [showManualWizard, setShowManualWizard] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<any | null>(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -198,11 +200,12 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         {[
           { label: 'Confirmados PF', count: summary.confirmedPf || 0, amt: summary.confirmedPfAmt || 0, bg: 'bg-emerald-50', border: 'border-emerald-200', color: 'text-emerald-600' },
           { label: 'Por Confirmar', count: summary.pendingConfirm || 0, amt: summary.pendingConfirmAmt || 0, bg: 'bg-orange-50', border: 'border-orange-200', color: 'text-orange-600' },
           { label: 'Pendientes', count: summary.pending || 0, amt: summary.pendingAmt || 0, bg: 'bg-amber-50', border: 'border-amber-200', color: 'text-amber-600' },
+          { label: 'Emisión Fallida', count: summary.emisionFallida || 0, amt: summary.emisionFallidaAmt || 0, bg: 'bg-purple-50', border: 'border-purple-200', color: 'text-purple-600' },
           { label: 'Agrupados', count: summary.grouped || 0, amt: summary.groupedAmt || 0, bg: 'bg-blue-50', border: 'border-blue-200', color: 'text-blue-600' },
           { label: 'Pagados', count: summary.paid || 0, amt: summary.paidAmt || 0, bg: 'bg-green-50', border: 'border-green-200', color: 'text-green-600' },
           { label: 'Devoluciones', count: summary.refunds || 0, amt: summary.refundsAmt || 0, bg: 'bg-red-50', border: 'border-red-200', color: 'text-red-600' },
@@ -390,8 +393,13 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                 {p.installment_num && <span>Cuota {p.installment_num}</span>}
                 {slaBadge(p)}
               </div>
-              {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && !p.is_refund && (
-                <button onClick={() => setShowRefundModal(p.id)} className="p-1.5 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+              {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF' || p.status === 'EMISION_FALLIDA') && (
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEditingPayment(p)} className="p-1.5 text-blue-400 hover:text-blue-600 cursor-pointer" title="Editar pago"><FaEdit /></button>
+                  {!p.is_refund && (
+                    <button onClick={() => setShowRefundModal(p.id)} className="p-1.5 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -445,8 +453,13 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                   <td className="py-2 px-2 text-[11px] text-gray-500">{p.installment_num || '—'}</td>
                   <td className="py-2 px-2">{slaBadge(p)}</td>
                   <td className="py-2 px-2">
-                    {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF') && !p.is_refund && (
-                      <button onClick={() => setShowRefundModal(p.id)} className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+                    {(p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF' || p.status === 'EMISION_FALLIDA') && (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditingPayment(p)} className="p-1 text-blue-400 hover:text-blue-600 cursor-pointer" title="Editar pago"><FaEdit /></button>
+                        {!p.is_refund && (
+                          <button onClick={() => setShowRefundModal(p.id)} className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -497,6 +510,15 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
 
       {/* Manual Wizard Modal */}
       {showManualWizard && <ManualWizardModal onClose={() => { setShowManualWizard(false); fetchPayments(); onRefresh(); }} />}
+
+      {/* Edit Payment Modal */}
+      {editingPayment && (
+        <EditCotPaymentModal
+          payment={editingPayment}
+          onClose={() => setEditingPayment(null)}
+          onSuccess={() => { setEditingPayment(null); fetchPayments(); onRefresh(); }}
+        />
+      )}
     </div>
   );
 }
