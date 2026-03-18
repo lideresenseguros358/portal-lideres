@@ -113,7 +113,8 @@ export async function GET(req: NextRequest) {
       if (pendingErr) return NextResponse.json({ error: pendingErr.message }, { status: 500 });
       if (rejectedErr) return NextResponse.json({ error: rejectedErr.message }, { status: 500 });
 
-      const overduePayments = [...(pendingPayments ?? []), ...(rejectedPayments ?? [])];
+      const overduePayments = [...(pendingPayments ?? []), ...(rejectedPayments ?? [])]
+        .sort((a: any, b: any) => (a.payment_date || '').localeCompare(b.payment_date || '')); // oldest first
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -124,24 +125,23 @@ export async function GET(req: NextRequest) {
         return { ...p, days_overdue: daysOverdue };
       });
 
-      // Try to get client emails from recurrence records or quotes
-      const polizas = [...new Set(enriched.map((p: any) => p.nro_poliza).filter(Boolean))];
+      // Try to get client emails via cedula → clients.national_id
+      const cedulas = [...new Set(enriched.map((p: any) => p.cedula).filter(Boolean))];
       let emailMap: Record<string, string> = {};
-      if (polizas.length > 0) {
-        // Try adm_cot_quotes first (has client email from emission)
-        const { data: quoteRows } = await supabase
-          .from('adm_cot_quotes')
-          .select('client_email, policy_number')
-          .in('policy_number', polizas)
-          .not('client_email', 'is', null);
-        (quoteRows ?? []).forEach((q: any) => {
-          if (q.client_email && q.policy_number) emailMap[q.policy_number] = q.client_email;
+      if (cedulas.length > 0) {
+        const { data: clientRows } = await supabase
+          .from('clients')
+          .select('national_id, email')
+          .in('national_id', cedulas)
+          .not('email', 'is', null);
+        (clientRows ?? []).forEach((c: any) => {
+          if (c.email && c.national_id) emailMap[c.national_id] = c.email;
         });
       }
 
       const withEmails = enriched.map((p: any) => ({
         ...p,
-        client_email: emailMap[p.nro_poliza] || null,
+        client_email: emailMap[p.cedula] || null,
       }));
 
       return NextResponse.json({

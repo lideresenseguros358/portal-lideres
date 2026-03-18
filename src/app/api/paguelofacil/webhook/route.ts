@@ -20,9 +20,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { type PFWebhookPayload } from '@/lib/paguelofacil/config';
+import { sendZeptoEmail } from '@/lib/email/zepto-api';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const PAYMENT_BASE_URL = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://portal.lideresenseguros.com'}/cotizadores?pagar=true`;
 
 function getSb() {
   return createClient(supabaseUrl, supabaseServiceKey);
@@ -102,13 +104,16 @@ export async function POST(request: NextRequest) {
           console.log(`[PF WEBHOOK] ✅ Recurrent confirmed: payment=${directMatch.id}`);
 
         } else if (!isApproved) {
+          const rejNotes = { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now, pf_codOper: codOper, morosidad_emails: {} as Record<string, string> };
           await sb.from('adm_cot_payments').update({
             status: 'RECHAZADO_PF',
-            notes: { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now, pf_codOper: codOper },
+            notes: rejNotes,
           }).eq('id', directMatch.id);
 
           await logWebhookEvent(sb, 'recurrent_rejected', directMatch.id, codOper, payload);
           await notifyRejection(sb, directMatch, payload);
+          // Send immediate day-0 rejection email to client
+          await sendDay0RejectionEmail(sb, directMatch.id, directMatch, payload.messageSys || 'Pago rechazado');
           console.log(`[PF WEBHOOK] ❌ Recurrent rejected: payment=${directMatch.id}, reason=${payload.messageSys}`);
         }
 
@@ -151,7 +156,7 @@ export async function POST(request: NextRequest) {
                 pf_card_display: payload.displayNum || null,
               };
               if (!isApproved) {
-                updateData.notes = { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now };
+                updateData.notes = { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now, morosidad_emails: {} };
               }
               const { error: updateErr } = await sb.from('adm_cot_payments').update(updateData).eq('id', existingPay.id);
               if (updateErr) console.error(`[PF WEBHOOK] Update error for payment ${existingPay.id}:`, updateErr.message);
@@ -161,7 +166,11 @@ export async function POST(request: NextRequest) {
               }
 
               await logWebhookEvent(sb, isApproved ? 'recurrent_confirmed' : 'recurrent_rejected', existingPay.id, codOper, payload);
-              if (!isApproved) await notifyRejection(sb, { ...rec, installment_num: nextPending.num, amount: nextPending.amount }, payload);
+              if (!isApproved) {
+                await notifyRejection(sb, { ...rec, installment_num: nextPending.num, amount: nextPending.amount }, payload);
+                // Send immediate day-0 rejection email
+                await sendDay0RejectionEmail(sb, existingPay.id, { ...rec, installment_num: nextPending.num, amount: nextPending.amount }, payload.messageSys || 'Pago rechazado');
+              }
 
               return NextResponse.json({ received: true, action: 'recurrent_matched_by_relation', paymentId: existingPay.id });
 
@@ -315,6 +324,102 @@ async function logWebhookEvent(
       },
     });
   } catch { /* non-fatal */ }
+}
+
+async function sendDay0RejectionEmail(
+  sb: ReturnType<typeof getSb>,
+  paymentId: string,
+  paymentInfo: { nro_poliza?: string; client_name?: string; insurer?: string; installment_num?: number; amount?: number; cedula?: string },
+  rejectionReason: string,
+) {
+  try {
+    // Get cedula for payment link + email lookup
+    let cedula = paymentInfo.cedula || '';
+    if (!cedula) {
+      const { data: payRow } = await sb.from('adm_cot_payments').select('cedula').eq('id', paymentId).maybeSingle();
+      cedula = payRow?.cedula || '';
+    }
+
+    // Look up client email via cedula → clients.national_id
+    if (!cedula) {
+      console.log(`[PF WEBHOOK] No cedula for payment ${paymentId} — skipping day-0 email`);
+      return;
+    }
+    const { data: clientRow } = await sb
+      .from('clients')
+      .select('email')
+      .eq('national_id', cedula)
+      .not('email', 'is', null)
+      .maybeSingle();
+
+    const clientEmail = clientRow?.email;
+    if (!clientEmail) {
+      console.log(`[PF WEBHOOK] No email found for cedula ${cedula} — skipping day-0 email`);
+      return;
+    }
+
+    const paymentUrl = `${PAYMENT_BASE_URL}&cedula=${encodeURIComponent(cedula)}`;
+    const fmtAmount = `$${Number(paymentInfo.amount || 0).toFixed(2)}`;
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const htmlBody = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f9fafb;">
+<div style="max-width:640px;margin:0 auto;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+<div style="background:#010139;color:white;padding:24px;">
+<h1 style="margin:0;font-size:20px;">⚠️ Aviso de Pago Rechazado</h1>
+<p style="margin:6px 0 0;font-size:13px;opacity:0.85;">Líderes en Seguros</p>
+</div>
+<div style="padding:24px;font-size:14px;line-height:1.7;color:#374151;">
+<p>Estimado/a <strong>${paymentInfo.client_name || 'Cliente'}</strong>,</p>
+<p>Le informamos que el cobro automático de su cuota <strong>#${paymentInfo.installment_num || '?'}</strong> por <strong>${fmtAmount}</strong> de la póliza <strong>${paymentInfo.nro_poliza}</strong> (${paymentInfo.insurer || ''}) ha sido <strong style="color:#dc2626;">rechazado</strong>.</p>
+<p>Motivo: <em>${rejectionReason}</em></p>
+<p>Le solicitamos realizar el pago manualmente a la mayor brevedad para mantener su cobertura activa.</p>
+<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;">
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;width:45%;">Póliza</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${paymentInfo.nro_poliza}</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Aseguradora</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${paymentInfo.insurer || ''}</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Cuota</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">#${paymentInfo.installment_num || '?'}</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Monto pendiente</td><td style="padding:10px 14px;border:1px solid #e5e7eb;color:#dc2626;font-weight:bold;font-size:16px;">${fmtAmount}</td></tr>
+</table>
+</div>
+<div style="padding:0 24px 24px;text-align:center;">
+<a href="${paymentUrl}" style="display:inline-block;padding:16px 40px;background:#8AAA19;color:white;text-decoration:none;font-weight:bold;font-size:16px;border-radius:12px;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(138,170,25,0.3);">Realizar mi pago ahora</a>
+<p style="margin-top:12px;font-size:12px;color:#6b7280;">Haga clic en el botón para pagar de forma rápida y segura.</p>
+</div>
+<div style="padding:16px 24px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center;">
+<p style="margin:0;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
+<p style="margin:4px 0 0;">Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750</p>
+</div>
+</div>
+</body></html>`;
+
+    const result = await sendZeptoEmail({
+      to: clientEmail,
+      subject: `Aviso: pago rechazado — Póliza ${paymentInfo.nro_poliza}`,
+      htmlBody,
+      textBody: `Estimado/a ${paymentInfo.client_name}, su pago de la cuota #${paymentInfo.installment_num} de la póliza ${paymentInfo.nro_poliza} fue rechazado (${rejectionReason}). Monto: ${fmtAmount}. Pague en: ${paymentUrl}`,
+    });
+
+    if (result.success) {
+      // Track day0 email sent in notes
+      const { data: payRow } = await sb.from('adm_cot_payments').select('notes').eq('id', paymentId).single();
+      const notes = payRow?.notes || {};
+      const morosidadEmails = (notes as any).morosidad_emails || {};
+      morosidadEmails.day0 = todayStr;
+      await sb.from('adm_cot_payments').update({ notes: { ...notes as any, morosidad_emails: morosidadEmails } }).eq('id', paymentId);
+
+      await sb.from('adm_cot_audit_log').insert({
+        event_type: 'morosidad_auto_email',
+        entity_type: 'payment',
+        entity_id: paymentId,
+        detail: { stage: 'day0', source: 'webhook', client_email: clientEmail, zepto_message_id: result.messageId, nro_poliza: paymentInfo.nro_poliza },
+      });
+
+      console.log(`[PF WEBHOOK] 📧 Day-0 rejection email sent: ${paymentInfo.nro_poliza} → ${clientEmail}`);
+    } else {
+      console.warn(`[PF WEBHOOK] Day-0 email failed: ${result.error}`);
+    }
+  } catch (emailErr: any) {
+    console.error(`[PF WEBHOOK] Day-0 email error:`, emailErr.message);
+  }
 }
 
 async function notifyRejection(

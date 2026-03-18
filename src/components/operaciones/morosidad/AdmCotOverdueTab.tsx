@@ -241,10 +241,16 @@ export default function AdmCotOverdueTab() {
 
   const totalOverdueAmt = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
 
+  // Color stages matching auto-email schedule: white(0-13d), yellow(14-29d), red(30d+)
+  const cardColor = (days: number) => {
+    if (days >= 30) return { card: 'bg-red-50 border-red-300', badge: 'bg-red-600 text-white', label: 'Suspendida' };
+    if (days >= 14) return { card: 'bg-amber-50 border-amber-300', badge: 'bg-amber-500 text-white', label: 'Urgente' };
+    return { card: 'bg-white border-gray-200', badge: 'bg-gray-100 text-gray-700', label: '' };
+  };
   const severityColor = (days: number) => {
     if (days >= 30) return { bg: 'bg-red-100', text: 'text-red-700' };
-    if (days >= 20) return { bg: 'bg-orange-100', text: 'text-orange-700' };
-    return { bg: 'bg-amber-100', text: 'text-amber-700' };
+    if (days >= 14) return { bg: 'bg-amber-100', text: 'text-amber-700' };
+    return { bg: 'bg-gray-100', text: 'text-gray-600' };
   };
 
   return (
@@ -277,7 +283,11 @@ export default function AdmCotOverdueTab() {
         <div className="bg-red-50/50 border border-red-100 rounded-xl p-3 flex items-center gap-2.5">
           <FaExclamationTriangle className="text-red-400 text-xs flex-shrink-0" />
           <p className="text-xs text-red-600">
-            <span className="font-medium">{payments.length} cuota(s) recurrente(s)</span> llevan más de 15 días sin confirmación de pago en PagueloFacil.
+            <span className="font-medium">{payments.length} cuota(s) en mora.</span>
+            {payments.filter(p => p.days_overdue >= 30).length > 0 && (
+              <span className="font-bold text-red-700"> {payments.filter(p => p.days_overdue >= 30).length} con cobertura suspendida.</span>
+            )}
+            {' '}Los correos de cobro se envían automáticamente.
           </p>
         </div>
       )}
@@ -333,8 +343,9 @@ export default function AdmCotOverdueTab() {
             <div className="md:hidden space-y-2 p-3">
               {payments.map(p => {
                 const dc = severityColor(p.days_overdue);
+                const cc = cardColor(p.days_overdue);
                 return (
-                  <div key={p.id} className="bg-white rounded-lg border border-gray-200 p-3">
+                  <div key={p.id} className={`rounded-lg border p-3 ${cc.card}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer flex-shrink-0 mt-0.5" />
@@ -362,6 +373,9 @@ export default function AdmCotOverdueTab() {
                       <span>Vencía: {fmtDate(p.payment_date)}</span>
                       {p.client_email && <><span>·</span><FaEnvelope className="text-[8px] text-green-500" /></>}
                       {!p.client_email && <><span>·</span><span className="text-red-400">Sin correo</span></>}
+                      {p.notes?.morosidad_emails && Object.keys(p.notes.morosidad_emails).length > 0 && (
+                        <><span>·</span><span className="text-blue-500">{Object.keys(p.notes.morosidad_emails).length} correo(s)</span></>
+                      )}
                     </div>
                   </div>
                 );
@@ -383,6 +397,7 @@ export default function AdmCotOverdueTab() {
                     <th className="px-2 py-2.5 text-center font-semibold text-gray-500 text-[10px] uppercase tracking-wider">Cuota</th>
                     <th className="px-2 py-2.5 text-left font-semibold text-gray-500 text-[10px] uppercase tracking-wider">Vencimiento</th>
                     <th className="px-2 py-2.5 text-center font-semibold text-gray-500 text-[10px] uppercase tracking-wider">Días Atraso</th>
+                    <th className="px-2 py-2.5 text-center font-semibold text-gray-500 text-[10px] uppercase tracking-wider">Etapa</th>
                     <th className="px-2 py-2.5 text-center font-semibold text-gray-500 text-[10px] uppercase tracking-wider">Correo</th>
                   </tr>
                 </thead>
@@ -390,7 +405,7 @@ export default function AdmCotOverdueTab() {
                   {payments.map(p => {
                     const dc = severityColor(p.days_overdue);
                     return (
-                      <tr key={p.id} className={`border-b border-gray-50 transition-colors hover:bg-gray-50/60 ${p.days_overdue >= 30 ? 'border-l-[3px] border-l-red-400' : ''}`}>
+                      <tr key={p.id} className={`border-b border-gray-50 transition-colors hover:bg-gray-50/60 ${p.days_overdue >= 30 ? 'bg-red-50/50 border-l-[3px] border-l-red-500' : p.days_overdue >= 14 ? 'bg-amber-50/50 border-l-[3px] border-l-amber-400' : ''}`}>
                         <td className="px-3 py-2.5">
                           <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="rounded border-gray-300 cursor-pointer" />
                         </td>
@@ -413,6 +428,26 @@ export default function AdmCotOverdueTab() {
                               {p.days_overdue}d
                             </span>
                           )}
+                        </td>
+                        <td className="px-2 py-2.5 text-center">
+                          {(() => {
+                            const emails = p.notes?.morosidad_emails || {};
+                            const stages = [
+                              { key: 'day0', label: 'Aviso', color: 'bg-blue-100 text-blue-700' },
+                              { key: 'day7', label: '7d', color: 'bg-blue-100 text-blue-700' },
+                              { key: 'day14', label: '14d', color: 'bg-amber-100 text-amber-700' },
+                              { key: 'day30', label: '30d', color: 'bg-red-100 text-red-700' },
+                            ];
+                            const sentStages = stages.filter(s => emails[s.key]);
+                            if (sentStages.length === 0) return <span className="text-[10px] text-gray-300">—</span>;
+                            const last = sentStages[sentStages.length - 1]!;
+                            return (
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${last.color}`}
+                                title={`Correos enviados: ${sentStages.map(s => s.label).join(', ')}`}>
+                                <FaEnvelope className="text-[8px] mr-0.5" />{last.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-2.5 text-center">
                           {p.client_email

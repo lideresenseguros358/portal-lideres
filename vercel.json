@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/is-dt-reference",
       "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/morosidad-emails",
+      "schedule": "0 9 * * *"
     }
   ]
 }
