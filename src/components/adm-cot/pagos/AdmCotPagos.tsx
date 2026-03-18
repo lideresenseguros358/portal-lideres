@@ -53,6 +53,7 @@ function StatusBadge({ status }: { status: string }) {
     CONFIRMADO_PF: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'CONFIRMADO PF' },
     PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'POR CONFIRMAR' },
     RECHAZADO_PF: { bg: 'bg-red-100', text: 'text-red-800', label: 'RECHAZADO' },
+    EMISION_FALLIDA: { bg: 'bg-purple-100', text: 'text-purple-800', label: '⚠️ EMISIÓN FALLIDA' },
     PENDIENTE: { bg: 'bg-amber-100', text: 'text-amber-800' },
     AGRUPADO: { bg: 'bg-blue-100', text: 'text-blue-800' },
     PAGADO: { bg: 'bg-green-100', text: 'text-green-800' },
@@ -264,7 +265,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option><option value="REGIONAL">Regional</option><option value="ANCON">ANCÓN</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option><option value="RECHAZADO_PF">Rechazado PF</option>
+              <option value="">Estado</option><option value="CONFIRMADO_PF">Confirmado PF</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="EMISION_FALLIDA">Emisión Fallida</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option><option value="RECHAZADO_PF">Rechazado PF</option>
             </select>
             <select value={type} onChange={e => setType(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>

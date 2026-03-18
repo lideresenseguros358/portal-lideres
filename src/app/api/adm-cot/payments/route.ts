@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
 
         // Summary counts
         const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund, insurer');
-        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, confirmedPf: 0, confirmedPfAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, rejectedPf: 0, rejectedPfAmt: 0, overdueCount: 0, urgentCount: 0 };
+        const summary: Record<string, any> = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, confirmedPf: 0, confirmedPfAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0, rejectedPf: 0, rejectedPfAmt: 0, emisionFallida: 0, emisionFallidaAmt: 0, overdueCount: 0, urgentCount: 0 };
         const insurerMap: Record<string, { count: number; amount: number; statuses: Record<string, number> }> = {};
         (summaryData ?? []).forEach((r: any) => {
           const amt = Number(r.amount) || 0;
@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
           else if (r.status === 'CONFIRMADO_PF') { summary.confirmedPf++; summary.confirmedPfAmt += amt; }
           else if (r.status === 'PENDIENTE_CONFIRMACION') { summary.pendingConfirm++; summary.pendingConfirmAmt += amt; }
           else if (r.status === 'RECHAZADO_PF') { summary.rejectedPf++; summary.rejectedPfAmt += amt; }
+          else if (r.status === 'EMISION_FALLIDA') { summary.emisionFallida++; summary.emisionFallidaAmt += amt; }
           else if (r.status === 'PENDIENTE') { summary.pending++; summary.pendingAmt += amt; }
           else if (r.status === 'AGRUPADO') { summary.grouped++; summary.groupedAmt += amt; }
           else if (r.status === 'PAGADO') { summary.paid++; summary.paidAmt += amt; }

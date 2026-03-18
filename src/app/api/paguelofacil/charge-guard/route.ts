@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         .from('adm_cot_payments')
         .select('id, status, pf_cod_oper, nro_poliza, created_at')
         .or(`nro_poliza.ilike.%${numcot}%`)
-        .in('status', ['CONFIRMADO_PF', 'AGRUPADO', 'PAGADO'])
+        .in('status', ['CONFIRMADO_PF', 'EMISION_FALLIDA', 'AGRUPADO', 'PAGADO'])
         .limit(1)
         .maybeSingle();
 
