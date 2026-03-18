@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     const closedSince = searchParams.get('closed_since');
 
     // Lean columns for list view
-    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,client_email,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,urgency_flag,severity,category,chat_thread_id,source,metadata';
+    const LIST_COLS = 'id,ticket,case_type,status,policy_id,client_id,client_name,client_email,client_phone,cedula,insurer_name,policy_number,ramo,assigned_master_id,created_at,updated_at,first_response_at,closed_at,sla_breached,urgency_flag,severity,category,chat_thread_id,source,details';
     let query = supabase
       .from('ops_cases')
       .select(LIST_COLS, { count: 'exact' })

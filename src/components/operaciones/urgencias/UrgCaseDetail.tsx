@@ -580,7 +580,7 @@ export default function UrgCaseDetail({
               </div>
             )}
 
-            {isEmail && (
+            {isEmail && c.source !== 'COTIZADOR_EMISION' && (
               <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-center gap-2.5">
                 <FaEnvelope className="text-teal-400 text-sm flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -589,6 +589,107 @@ export default function UrgCaseDetail({
                 </div>
               </div>
             )}
+
+            {/* ── EMISSION FAILURE DETAIL ── */}
+            {c.category === 'emision_fallida' && c.details && (() => {
+              const d = c.details as any;
+              const cli = d.cliente || {};
+              const veh = d.vehiculo || {};
+              const cot = d.cotizacion || {};
+              const pago = d.pago || {};
+              const err = d.error || {};
+              const exp = d.expediente || {};
+              return (
+                <div className="space-y-3">
+                  {/* Alert banner */}
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5">
+                    <FaExclamationTriangle className="text-red-500 text-sm flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-red-800">Emisión Fallida — Pago cobrado</p>
+                      <p className="text-[10px] text-red-600 mt-0.5">
+                        El cliente realizó el pago pero la emisión falló. Requiere emisión manual.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Payment info */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-[10px] font-bold text-blue-800 mb-2 uppercase tracking-wider">Pago Confirmado</p>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div><span className="text-blue-400">CodOper:</span> <span className="font-mono font-semibold text-blue-900">{pago.codOper || '—'}</span></div>
+                      <div><span className="text-blue-400">Monto:</span> <span className="font-bold text-blue-900">${pago.monto || '0'}</span></div>
+                      <div><span className="text-blue-400">Tarjeta:</span> <span className="text-blue-900">{pago.cardType} {pago.cardDisplay}</span></div>
+                      <div><span className="text-blue-400">Cuotas:</span> <span className="text-blue-900">{pago.cuotas || 1}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Error */}
+                  <div className="bg-red-50/50 border border-red-100 rounded-lg p-3">
+                    <p className="text-[10px] font-bold text-red-700 mb-1 uppercase tracking-wider">Error de Emisión</p>
+                    <p className="text-[11px] text-red-600 font-mono break-all">{err.mensaje || '—'}</p>
+                    {err.timestamp && <p className="text-[9px] text-red-400 mt-1">{new Date(err.timestamp).toLocaleString('es-PA')}</p>}
+                  </div>
+
+                  {/* Client data */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-[10px] font-bold text-gray-700 mb-2 uppercase tracking-wider">Datos del Cliente</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                      <div><span className="text-gray-400">Nombre:</span> <span className="font-semibold text-gray-800">{cli.primerNombre} {cli.segundoNombre || ''} {cli.primerApellido} {cli.segundoApellido || ''}</span></div>
+                      <div><span className="text-gray-400">Cédula:</span> <span className="font-mono font-semibold text-gray-800">{cli.cedula || '—'}</span></div>
+                      <div><span className="text-gray-400">Email:</span> <span className="text-gray-800">{cli.email || '—'}</span></div>
+                      <div><span className="text-gray-400">Celular:</span> <span className="text-gray-800">{cli.celular || cli.telefono || '—'}</span></div>
+                      <div><span className="text-gray-400">Dirección:</span> <span className="text-gray-800">{cli.direccion || '—'}</span></div>
+                      <div><span className="text-gray-400">F. Nac:</span> <span className="text-gray-800">{cli.fechaNacimiento || '—'}</span></div>
+                      <div><span className="text-gray-400">Sexo:</span> <span className="text-gray-800">{cli.sexo === 'M' ? 'Masculino' : cli.sexo === 'F' ? 'Femenino' : cli.sexo || '—'}</span></div>
+                      <div><span className="text-gray-400">PEP:</span> <span className="text-gray-800">{cli.esPEP ? 'Sí' : 'No'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle data */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-[10px] font-bold text-gray-700 mb-2 uppercase tracking-wider">Datos del Vehículo</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                      <div><span className="text-gray-400">Marca:</span> <span className="font-semibold text-gray-800">{veh.marca || '—'}</span></div>
+                      <div><span className="text-gray-400">Modelo:</span> <span className="font-semibold text-gray-800">{veh.modelo || '—'}</span></div>
+                      <div><span className="text-gray-400">Año:</span> <span className="text-gray-800">{veh.anio || '—'}</span></div>
+                      <div><span className="text-gray-400">Placa:</span> <span className="font-mono font-semibold text-gray-800">{veh.placa || '—'}</span></div>
+                      <div><span className="text-gray-400">VIN/Chasis:</span> <span className="font-mono text-gray-800">{veh.vinChasis || '—'}</span></div>
+                      <div><span className="text-gray-400">Motor:</span> <span className="font-mono text-gray-800">{veh.motor || '—'}</span></div>
+                      <div><span className="text-gray-400">Color:</span> <span className="text-gray-800">{veh.color || '—'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Quote data */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-[10px] font-bold text-gray-700 mb-2 uppercase tracking-wider">Cotización</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                      <div><span className="text-gray-400">Aseguradora:</span> <span className="font-semibold text-gray-800">{c.insurer_name || '—'}</span></div>
+                      <div><span className="text-gray-400">Cobertura:</span> <span className="text-gray-800">{d.cobertura || '—'}</span></div>
+                      <div><span className="text-gray-400">N° Cotización:</span> <span className="font-mono text-gray-800">{cot.numcot || '—'}</span></div>
+                      <div><span className="text-gray-400">Prima:</span> <span className="font-bold text-gray-800">${cot.annualPremium || '—'}</span></div>
+                      <div><span className="text-gray-400">Plan:</span> <span className="text-gray-800">{cot.planType || '—'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Expedition docs */}
+                  {(exp.photos?.length > 0 || exp.firma || exp.cedula) && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-[10px] font-bold text-amber-700 mb-2 uppercase tracking-wider">Expediente</p>
+                      <div className="text-[11px] text-amber-800 space-y-1">
+                        {exp.photos?.length > 0 && (
+                          <div>📷 Fotos de inspección: <span className="font-semibold">{exp.photos.length}</span> ({exp.photos.join(', ')})</div>
+                        )}
+                        {exp.firma && <div>✍️ Firma: <span className="font-semibold">{exp.firma}</span></div>}
+                        {exp.cedula && <div>🪪 Cédula: <span className="font-semibold">{exp.cedula}</span></div>}
+                        {exp.licencia && <div>🚗 Licencia: <span className="font-semibold">{exp.licencia}</span></div>}
+                        {exp.registroVehicular && <div>📄 Registro vehicular: <span className="font-semibold">{exp.registroVehicular}</span></div>}
+                        {exp.debidaDiligencia && <div>📋 Debida diligencia: <span className="font-semibold">{exp.debidaDiligencia}</span></div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Closed — Resuelto */}
             {c.status === 'resuelto' && (

@@ -73,6 +73,13 @@ function SeverityDot({ severity }: { severity?: string }) {
 }
 
 function SourceBadge({ chatThreadId, source }: { chatThreadId: string | null; source: string | null }) {
+  if (source === 'COTIZADOR_EMISION') {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600" title="Origen: Emisión Fallida">
+        <FaExclamationTriangle className="text-[8px]" /> Emisión
+      </span>
+    );
+  }
   const isChat = !!chatThreadId || source === 'adm_cot_chat' || source === 'whatsapp';
   if (isChat) {
     return (

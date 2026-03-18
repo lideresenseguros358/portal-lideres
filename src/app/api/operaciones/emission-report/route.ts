@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Build the full details object for the case
+    // NOTE: ops_cases has no 'metadata' column — everything goes into 'details' (jsonb)
     const details: Record<string, any> = {
       tipo_reporte: 'EMISION_FALLIDA',
       cobertura: cobertura || 'CC',
@@ -62,6 +63,12 @@ export async function POST(req: NextRequest) {
       },
       // Expedition documents
       expediente: expedienteDocs || {},
+      // Quick-access metadata (also in details for the urgencias UI)
+      _meta: {
+        pfCodOper: paymentData?.pfCodOper || null,
+        paymentAmount: paymentData?.amount || null,
+        numcot: quoteData?.numcot || null,
+      },
     };
 
     const clientName = clientData
@@ -76,7 +83,7 @@ export async function POST(req: NextRequest) {
       case_type: 'urgencia',
       status: 'pendiente',
       urgency_flag: true,
-      severity: 'alta',
+      severity: 'high',
       category: 'emision_fallida',
       client_name: clientName,
       client_email: clientData?.email || null,
@@ -86,13 +93,6 @@ export async function POST(req: NextRequest) {
       ramo: ramo || 'AUTO',
       source: 'COTIZADOR_EMISION',
       details,
-      metadata: {
-        pfCodOper: paymentData?.pfCodOper || null,
-        paymentAmount: paymentData?.amount || null,
-        cobertura: cobertura || 'CC',
-        numcot: quoteData?.numcot || null,
-        emissionError: emissionError || null,
-      },
     }).select().single();
 
     if (insertErr) throw insertErr;
@@ -114,22 +114,25 @@ export async function POST(req: NextRequest) {
       });
     } catch { /* non-fatal */ }
 
-    // Activity log
+    // Activity log — user_id is required; use assigned master or skip
     try {
-      await supabase.from('ops_activity_log').insert({
-        user_id: null,
-        action_type: 'case_created',
-        entity_type: 'case',
-        entity_id: caseData.id,
-        metadata: {
-          ticket,
-          case_type: 'urgencia',
-          source: 'COTIZADOR_EMISION',
-          pfCodOper: paymentData?.pfCodOper || null,
-          insurerName,
-          emissionError,
-        },
-      });
+      const assignedId = caseData.assigned_master_id;
+      if (assignedId) {
+        await supabase.from('ops_activity_log').insert({
+          user_id: assignedId,
+          action_type: 'case_created',
+          entity_type: 'case',
+          entity_id: caseData.id,
+          metadata: {
+            ticket,
+            case_type: 'urgencia',
+            source: 'COTIZADOR_EMISION',
+            pfCodOper: paymentData?.pfCodOper || null,
+            insurerName,
+            emissionError,
+          },
+        });
+      }
     } catch { /* non-fatal */ }
 
     return NextResponse.json({
