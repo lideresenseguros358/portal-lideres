@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FaCheck, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt, FaExclamationTriangle } from 'react-icons/fa';
+import { FaCheck, FaTimes, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt, FaExclamationTriangle, FaQuestionCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
 import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
+import { normalizePlanBenefits, type StandardBenefit } from '@/lib/normalizers/third-party-benefits';
 
 interface ThirdPartyComparisonProps {
   onSelectPlan: (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => void;
@@ -404,6 +405,108 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     setExpandedBenefits(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // ── Render a single benefit row (with detail inline) ──
+  const renderBenefitRow = (benefit: StandardBenefit, idx: number, isLast: boolean) => {
+    const { status } = benefit;
+    const isExcluded = status.type === 'excluded';
+    const isConexion = status.type === 'conexion';
+    const detail = status.type === 'included' ? status.detail : status.type === 'conexion' ? status.detail : undefined;
+
+    return (
+      <div
+        key={benefit.key}
+        className={`flex items-start gap-2.5 px-3 py-2 text-xs sm:text-sm ${
+          idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'
+        } ${!isLast ? 'border-b border-gray-100' : ''}`}
+      >
+        {/* Icon */}
+        <span className="text-base flex-shrink-0 leading-5">{benefit.icon}</span>
+
+        {/* Label + detail underneath */}
+        <div className="flex-1 min-w-0">
+          <span className={`font-medium leading-5 block ${isExcluded ? 'text-gray-400' : 'text-gray-700'}`}>
+            {benefit.label}
+          </span>
+          {detail && (
+            <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{detail}</p>
+          )}
+        </div>
+
+        {/* Status */}
+        <div className="flex-shrink-0 text-right min-w-[70px]">
+          {isExcluded && (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-50">
+              <FaTimes className="text-red-400" size={11} />
+            </span>
+          )}
+          {isConexion && (
+            <span className="inline-flex items-center gap-1">
+              <span className="text-amber-600 font-semibold text-xs">Conexión</span>
+              <span className="relative group/tip">
+                <FaQuestionCircle className="text-amber-400 cursor-help" size={12} />
+                <span className="absolute bottom-full right-0 mb-1 w-52 p-2 bg-gray-900 text-white text-[10px] leading-tight rounded-lg shadow-lg opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-50">
+                  La aseguradora no cubre el gasto, pero le ayuda a contactar el servicio. El costo lo cubre el cliente.
+                </span>
+              </span>
+            </span>
+          )}
+          {status.type === 'included' && !status.amount && (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-50">
+              <FaCheck className="text-[#8AAA19]" size={11} />
+            </span>
+          )}
+          {status.type === 'included' && status.amount && (
+            <div className="text-right">
+              <span className="text-[#8AAA19] font-bold text-xs sm:text-sm whitespace-nowrap">
+                {status.amount.startsWith('$') ? status.amount : `$${status.amount}`}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render a single coverage row (top 3: always visible) ──
+  const renderCoverageRow = (benefit: StandardBenefit, idx: number, isLast: boolean) => {
+    const { status } = benefit;
+    const isExcluded = status.type === 'excluded';
+
+    return (
+      <div
+        key={benefit.key}
+        className={`flex items-start gap-2.5 px-3 py-2.5 ${
+          idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'
+        } ${!isLast ? 'border-b border-gray-100' : ''}`}
+      >
+        <span className="text-base flex-shrink-0 leading-5">{benefit.icon}</span>
+        <span className={`flex-1 font-semibold leading-5 text-xs sm:text-sm ${isExcluded ? 'text-gray-400' : 'text-gray-800'}`}>
+          {benefit.label}
+        </span>
+        <div className="flex-shrink-0 text-right min-w-[80px]">
+          {isExcluded ? (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-50">
+              <FaTimes className="text-red-400" size={11} />
+            </span>
+          ) : status.type === 'included' && status.amount ? (
+            <div>
+              <span className="text-[#010139] font-bold text-xs sm:text-sm whitespace-nowrap">
+                {status.amount.startsWith('$') ? status.amount : `$${status.amount}`}
+              </span>
+              {status.detail && (
+                <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{status.detail}</p>
+              )}
+            </div>
+          ) : (
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-50">
+              <FaCheck className="text-[#8AAA19]" size={11} />
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Render a single plan card section
   const renderPlanSection = (
     insurer: AutoInsurer,
@@ -413,15 +516,16 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   ) => {
     const benefitsKey = `${insurer.id}-${type}-benefits`;
     const isBenefitsExpanded = expandedBenefits[benefitsKey] || false;
-    const hasCoverageList = plan.coverageList && plan.coverageList.length > 0;
-    const hasEndosoBenefits = plan.endosoBenefits && plan.endosoBenefits.length > 0;
+
+    // Normalize to standard benefit list
+    const normalized = normalizePlanBenefits(insurer.id, plan, type);
 
     return (
       <div className={`p-4 sm:p-6 ${isPremium ? 'bg-gradient-to-br from-green-50 to-white' : 'border-b-2 border-gray-100'}`}>
         {/* Plan Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-bold text-[#010139] text-base sm:text-lg truncate">{plan.name || (isPremium ? 'Plan Premium' : 'Plan Básico')}</span>
+            <span className="font-bold text-[#010139] text-base sm:text-lg truncate">{isPremium ? 'Plan Premium' : 'Plan Básico'}</span>
             {isPremium && <FaStar className="text-[#8AAA19] flex-shrink-0" />}
           </div>
           <div className="text-right flex-shrink-0 ml-2">
@@ -445,80 +549,52 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           </div>
         )}
 
-        {/* Coberturas — from API coverageList (cached or live) */}
-        {hasCoverageList ? (
-          <div className="mb-3">
-            <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <FaShieldAlt className="text-[#010139]" />
-              Coberturas incluidas
-            </h5>
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 border-b border-gray-200">
-                <span>Cobertura</span>
-                <span>Límite</span>
-              </div>
-              {plan.coverageList!.map((cov, idx) => (
-                <div key={cov.code || idx} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${idx < plan.coverageList!.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                  <span className="text-gray-700 font-medium">{cov.name}</span>
-                  <span className="text-[#8AAA19] font-semibold text-right whitespace-nowrap">
-                    {cov.limit === 'INCLUIDO' ? (
-                      <span className="inline-flex items-center gap-1"><FaCheck size={10} /> INCLUIDO</span>
-                    ) : (
-                      cov.limit
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Beneficios y Asistencia — from API endosoBenefits (cached or live) */}
-        {hasEndosoBenefits && (
-          <div className="mb-3">
-            <button
-              onClick={() => toggleBenefits(benefitsKey)}
-              className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <FaShieldAlt className="text-[#8AAA19]" size={14} />
-                Beneficios y Asistencia
-              </span>
-              {isBenefitsExpanded ? <FaChevronUp className="text-gray-500" size={12} /> : <FaChevronDown className="text-gray-500" size={12} />}
-            </button>
-
-            {isBenefitsExpanded && (
-              <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-blue-50/50 p-3 sm:p-4">
-                  {plan.endoso && (
-                    <p className="text-xs font-bold text-[#010139] mb-2 flex items-center gap-1.5">
-                      <FaShieldAlt className="text-blue-500" size={11} />
-                      {plan.endoso}
-                    </p>
-                  )}
-                  <ul className="space-y-1.5">
-                    {plan.endosoBenefits!.map((benefit, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-xs sm:text-sm text-gray-700">
-                        <FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={10} />
-                        <span>{benefit}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {plan.endosoPdf && (
-                    <a
-                      href={plan.endosoPdf}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:underline"
-                    >
-                      Ver documento completo del endoso →
-                    </a>
-                  )}
-                </div>
-              </div>
+        {/* ── Coberturas principales (siempre visibles) ── */}
+        <div className="mb-3">
+          <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5 px-1">
+            <FaShieldAlt className="text-[#010139]" size={11} />
+            Coberturas
+          </h5>
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            {normalized.coverages.map((cov, idx) =>
+              renderCoverageRow(cov, idx, idx === normalized.coverages.length - 1)
             )}
           </div>
-        )}
+        </div>
+
+        {/* ── Beneficios y Asistencia (collapsible) ── */}
+        <div className="mb-4">
+          <button
+            onClick={() => toggleBenefits(benefitsKey)}
+            className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <FaShieldAlt className="text-[#8AAA19]" size={12} />
+              Beneficios y Asistencia
+            </span>
+            {isBenefitsExpanded ? <FaChevronUp className="text-gray-400" size={11} /> : <FaChevronDown className="text-gray-400" size={11} />}
+          </button>
+
+          {isBenefitsExpanded && (
+            <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
+              {normalized.benefits.map((ben, idx) =>
+                renderBenefitRow(ben, idx, idx === normalized.benefits.length - 1)
+              )}
+              {plan.endosoPdf && (
+                <div className="px-3 py-2 bg-blue-50/50 border-t border-gray-100">
+                  <a
+                    href={plan.endosoPdf}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                  >
+                    Ver documento completo del endoso →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Emit Button */}
         {offlineInsurers[insurer.id] ? (
