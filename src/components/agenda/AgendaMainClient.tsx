@@ -6,7 +6,8 @@ import { FaChevronLeft, FaChevronRight, FaPlus, FaTimes } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { actionGetEvents, actionRSVP, type AgendaEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, format as formatTZ } from 'date-fns-tz';
+import { es } from 'date-fns/locale';
 import CalendarGrid from './CalendarGrid';
 import EventDetailPanel from './EventDetailPanel';
 import EventFormModal from './EventFormModal';
@@ -333,11 +334,8 @@ export default function AgendaMainClient() {
               .map((event) => {
                 const eventDate = toZonedTime(new Date(event.start_at), TZ);
                 const day = eventDate.getDate();
-                const dayName = eventDate.toLocaleDateString('es-PA', { weekday: 'long' });
-                const eventTime = eventDate.toLocaleTimeString('es-PA', { 
-                  hour: '2-digit', 
-                  minute: '2-digit',
-                });
+                const dayName = formatTZ(eventDate, 'EEEE', { timeZone: TZ, locale: es });
+                const eventTime = formatTZ(eventDate, 'h:mm a', { timeZone: TZ });
                 
                 return (
                   <div

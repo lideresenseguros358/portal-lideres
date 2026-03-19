@@ -6,7 +6,8 @@ import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { actionRSVP, actionGetAttendees, actionDeleteEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
 import { supabaseClient } from '@/lib/supabase/client';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, format as formatTZ } from 'date-fns-tz';
+import { es } from 'date-fns/locale';
 
 const TZ = 'America/Panama';
 
@@ -161,21 +162,13 @@ END:VCALENDAR`;
 
   const formatDateTime = (dateString: string, isAllDay: boolean) => {
     const date = toZonedTime(new Date(dateString), TZ);
-    const dateStr = date.toLocaleDateString('es-PA', { 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
-    });
+    const dateStr = formatTZ(date, "d 'de' MMMM 'de' yyyy", { timeZone: TZ, locale: es });
     
     if (isAllDay) {
       return `${dateStr} - Todo el día`;
     }
 
-    const timeStr = date.toLocaleTimeString('es-PA', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true,
-    });
+    const timeStr = formatTZ(date, 'h:mm a', { timeZone: TZ });
     
     return `${dateStr} a las ${timeStr}`;
   };
@@ -200,13 +193,22 @@ END:VCALENDAR`;
             Eventos del {day} de {MONTH_NAMES[month - 1]}
           </h3>
           <div className="flex items-center gap-2">
+            {userRole === 'master' && dayEvents.length === 1 && dayEvents[0] && (
+              <button
+                onClick={() => onEditEvent(dayEvents[0]!)}
+                className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:shadow-lg transition-all"
+                title="Editar evento"
+              >
+                <FaEdit />
+              </button>
+            )}
             {userRole === 'master' && onCreateEvent && (
               <button
                 onClick={() => onCreateEvent(selectedDateStr)}
                 className="p-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all"
                 title="Crear evento en esta fecha"
               >
-                <FaEdit />
+                <FaCalendarPlus />
               </button>
             )}
             <button 
