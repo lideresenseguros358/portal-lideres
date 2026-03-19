@@ -25,7 +25,6 @@ import { detectRamo, RAMOS, OFFICE_HOURS } from '@/lib/ai/lissaKnowledge';
 import { sendEscalationAlert } from '@/lib/escalation';
 import { logChatInteraction } from '@/lib/logging';
 import { createClient } from '@supabase/supabase-js';
-import { trackLead } from '@/lib/meta/conversions';
 
 export interface ProcessMessageInput {
   message: string;
@@ -573,20 +572,6 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     },
   });
 
-  // ═══ META CAPI: Fire "Lead" when user asks for a quote via WhatsApp/chat ═══
-  if (intent === 'COTIZAR') {
-    trackLead({
-      phone: input.phone || undefined,
-      email: clientInfo?.email || undefined,
-      firstName: clientInfo?.name?.split(' ')[0] || undefined,
-      lastName: clientInfo?.name?.split(' ').slice(1).join(' ') || undefined,
-      actionSource: input.channel === 'whatsapp' ? 'chat' : 'website',
-      sourceUrl: input.channel === 'whatsapp'
-        ? 'https://portal.lideresenseguros.com/api/whatsapp'
-        : 'https://portal.lideresenseguros.com/chat',
-      clientIp: input.ipAddress || undefined,
-    }).catch(() => { /* silent */ });
-  }
 
   return {
     reply,

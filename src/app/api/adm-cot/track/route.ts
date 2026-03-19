@@ -234,34 +234,37 @@ export async function POST(request: NextRequest) {
         // Resolve region from IP (non-blocking, best-effort)
         const region = validation.cleaned.region || await resolveRegionFromIp(clientIp);
 
-        const { error } = await supabase.from('adm_cot_quotes').insert({
+        const { data: insertedRow, error } = await supabase.from('adm_cot_quotes').insert({
           ...validation.cleaned,
           ip_address: clientIp,
           region,
           user_agent: sanitizeString(request.headers.get('user-agent'), 1000),
           status: 'COTIZADA',
           quoted_at: new Date().toISOString(),
-        });
+        }).select('id').single();
 
         if (error) {
           console.error('[ADM-COT TRACK] Insert error:', error.message);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // ═══ META CAPI: Fire "Lead" event (fire-and-forget) ═══
-        const nameParts = (validation.cleaned.client_name || '').split(' ');
-        trackLead({
-          email: validation.cleaned.email || undefined,
-          phone: validation.cleaned.phone || undefined,
-          firstName: nameParts[0] || undefined,
-          lastName: nameParts.slice(1).join(' ') || undefined,
-          insurer: validation.cleaned.insurer,
-          ramo: validation.cleaned.ramo,
-          coverageType: validation.cleaned.coverage_type || undefined,
-          premium: validation.cleaned.annual_premium || undefined,
-          clientIp: clientIp !== 'unknown' ? clientIp : undefined,
-          userAgent: request.headers.get('user-agent') || undefined,
-        }).catch(() => { /* silent */ });
+        // ═══ META CAPI: Fire "Lead" after confirmed DB insert (dedup by row ID) ═══
+        if (insertedRow?.id) {
+          const nameParts = (validation.cleaned.client_name || '').split(' ');
+          trackLead({
+            quoteId: insertedRow.id,
+            email: validation.cleaned.email || undefined,
+            phone: validation.cleaned.phone || undefined,
+            firstName: nameParts[0] || undefined,
+            lastName: nameParts.slice(1).join(' ') || undefined,
+            insurer: validation.cleaned.insurer,
+            ramo: validation.cleaned.ramo,
+            coverageType: validation.cleaned.coverage_type || undefined,
+            premium: validation.cleaned.annual_premium || undefined,
+            clientIp: clientIp !== 'unknown' ? clientIp : undefined,
+            userAgent: request.headers.get('user-agent') || undefined,
+          }).catch(() => { /* silent */ });
+        }
 
         return NextResponse.json({ success: true, action: 'quote_created' });
       }
@@ -273,10 +276,10 @@ export async function POST(request: NextRequest) {
         const v = validateUpdatePayload(data);
         if (!v.valid) return NextResponse.json({ error: v.error }, { status: 400 });
 
-        // Fetch existing record to merge quote_payload
+        // Fetch existing record (id for CAPI dedup, premium for event value)
         const { data: existingRow } = await supabase
           .from('adm_cot_quotes')
-          .select('quote_payload, region')
+          .select('id, quote_payload, region, annual_premium, email, phone, client_name')
           .eq('quote_ref', data.quote_ref)
           .eq('insurer', data.insurer)
           .order('quoted_at', { ascending: false })
@@ -323,19 +326,26 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        // ═══ META CAPI: Fire "CompleteRegistration" event (fire-and-forget) ═══
-        const emitNameParts = (data.client_name || '').split(' ');
-        trackCompleteRegistration({
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-          firstName: emitNameParts[0] || undefined,
-          lastName: emitNameParts.slice(1).join(' ') || undefined,
-          insurer: data.insurer,
-          ramo: 'AUTO',
-          policyNumber: data.policy_number || undefined,
-          clientIp: clientIp !== 'unknown' ? clientIp : undefined,
-          userAgent: request.headers.get('user-agent') || undefined,
-        }).catch(() => { /* silent */ });
+        // ═══ META CAPI: Fire "CompleteRegistration" after confirmed DB update (dedup by row ID) ═══
+        if (existingRow?.id) {
+          const emitEmail = data.email || existingRow.email;
+          const emitPhone = data.phone || existingRow.phone;
+          const emitName = data.client_name || existingRow.client_name || '';
+          const emitNameParts = emitName.split(' ');
+          trackCompleteRegistration({
+            quoteId: existingRow.id,
+            email: emitEmail || undefined,
+            phone: emitPhone || undefined,
+            firstName: emitNameParts[0] || undefined,
+            lastName: emitNameParts.slice(1).join(' ') || undefined,
+            insurer: data.insurer,
+            ramo: 'AUTO',
+            policyNumber: data.policy_number || undefined,
+            premium: existingRow.annual_premium || undefined,
+            clientIp: clientIp !== 'unknown' ? clientIp : undefined,
+            userAgent: request.headers.get('user-agent') || undefined,
+          }).catch(() => { /* silent */ });
+        }
 
         return NextResponse.json({ success: true, action: 'quote_emitted' });
       }

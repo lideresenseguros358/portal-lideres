@@ -1,184 +1,147 @@
 /**
  * Meta Ads — Conversions API (CAPI) Service
  * ==========================================
- * Server-side event tracking via Meta's Graph API.
+ * Server-side event tracking using the official facebook-nodejs-business-sdk.
  *
- * Endpoint: POST https://graph.facebook.com/v18.0/{PIXEL_ID}/events
+ * Events:
+ *   - Lead                → New quote inserted in adm_cot_quotes (status=COTIZADA)
+ *   - CompleteRegistration → Quote updated to EMITIDA (policy issued)
  *
- * Events implemented:
- *   - Lead           → User generates an insurance quote
- *   - CompleteRegistration → Policy successfully emitted
- *   - ViewContent    → User views quote comparison page (future)
- *   - Purchase       → Payment confirmed (future)
+ * Deduplication: Uses the adm_cot_quotes.id (UUID) as event_id so Meta
+ * never counts the same lead/registration twice, even if the backend
+ * retries or the client fires a Pixel event with the same ID.
  *
- * User data is hashed with SHA-256 as required by Meta.
- * Supports test_event_code for debugging in Events Manager.
- *
- * Reference: Meta Conversions API docs + guías en /public/Guia API META ADS
+ * All PII is hashed SHA-256 by the SDK automatically.
+ * test_event_code is forwarded when META_ADS_TEST_EVENT_CODE is set.
  */
 
-import crypto from 'crypto';
+import bizSdk from 'facebook-nodejs-business-sdk';
 
-const META_ADS_PIXEL_ID = process.env.META_ADS_PIXEL_ID || '';
-const META_ADS_ACCESS_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
-const META_ADS_TEST_EVENT_CODE = process.env.META_ADS_TEST_EVENT_CODE || '';
-const GRAPH_API_VERSION = 'v18.0';
+const {
+  Content,
+  CustomData,
+  EventRequest,
+  UserData,
+  ServerEvent,
+} = bizSdk;
+
+// ════════════════════════════════════════════
+// Config
+// ════════════════════════════════════════════
+
+const PIXEL_ID = process.env.META_ADS_PIXEL_ID || '';
+const ACCESS_TOKEN = process.env.META_ADS_ACCESS_TOKEN || '';
+const TEST_EVENT_CODE = process.env.META_ADS_TEST_EVENT_CODE || '';
 
 // ════════════════════════════════════════════
 // Types
 // ════════════════════════════════════════════
 
-export type MetaEventName =
-  | 'Lead'
-  | 'CompleteRegistration'
-  | 'ViewContent'
-  | 'SubmitApplication'
-  | 'Purchase';
+export type MetaEventName = 'Lead' | 'CompleteRegistration';
 
-export interface MetaUserData {
+export interface CAPIEventParams {
+  /** Unique DB ID for deduplication (adm_cot_quotes.id) */
+  quoteId: string;
+  eventName: MetaEventName;
   email?: string;
   phone?: string;
   firstName?: string;
   lastName?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  dateOfBirth?: string; // YYYYMMDD
-  gender?: 'm' | 'f';
-  clientIpAddress?: string;
-  clientUserAgent?: string;
-  fbc?: string; // Meta click ID cookie
-  fbp?: string; // Meta browser ID cookie
-}
-
-export interface MetaEventOptions {
-  eventName: MetaEventName;
-  eventId?: string;        // For deduplication with Pixel
-  eventSourceUrl?: string;
-  actionSource?: 'website' | 'app' | 'chat' | 'other';
-  userData: MetaUserData;
-  customData?: {
-    currency?: string;     // ISO 4217 (e.g. "USD")
-    value?: number;
-    contentName?: string;
-    contentCategory?: string;
-    contents?: Array<{ id: string; quantity: number }>;
-    orderId?: string;
-    [key: string]: any;
-  };
+  /** Premium amount in USD */
+  value?: number;
+  /** e.g. "FEDPA - AUTO - Cobertura Completa" */
+  contentName?: string;
+  contentCategory?: string;
+  clientIp?: string;
+  userAgent?: string;
+  sourceUrl?: string;
 }
 
 // ════════════════════════════════════════════
-// Hashing (SHA-256, lowercase, trimmed)
+// Phone normalisation (Panama)
 // ════════════════════════════════════════════
 
-function sha256(value: string): string {
-  return crypto
-    .createHash('sha256')
-    .update(value.trim().toLowerCase())
-    .digest('hex');
-}
-
-/**
- * Normalize phone to E.164-ish format before hashing.
- * Meta expects digits only, no +, no spaces.
- * Panama numbers: strip leading + and any non-digits.
- */
 function normalizePhone(phone: string): string {
   let digits = phone.replace(/\D/g, '');
-  // If it doesn't start with country code, assume Panama (+507)
-  if (digits.length <= 8) {
-    digits = '507' + digits;
-  }
+  if (digits.length <= 8) digits = '507' + digits;
   return digits;
 }
 
-function buildUserData(ud: MetaUserData): Record<string, any> {
-  const result: Record<string, any> = {};
-
-  // Hashed fields
-  if (ud.email) result.em = [sha256(ud.email)];
-  if (ud.phone) result.ph = [sha256(normalizePhone(ud.phone))];
-  if (ud.firstName) result.fn = sha256(ud.firstName);
-  if (ud.lastName) result.ln = sha256(ud.lastName);
-  if (ud.city) result.ct = sha256(ud.city);
-  if (ud.state) result.st = sha256(ud.state);
-  if (ud.country) result.country = sha256(ud.country);
-  if (ud.dateOfBirth) result.db = sha256(ud.dateOfBirth);
-  if (ud.gender) result.ge = sha256(ud.gender);
-
-  // NOT hashed (per Meta spec)
-  if (ud.clientIpAddress) result.client_ip_address = ud.clientIpAddress;
-  if (ud.clientUserAgent) result.client_user_agent = ud.clientUserAgent;
-  if (ud.fbc) result.fbc = ud.fbc;
-  if (ud.fbp) result.fbp = ud.fbp;
-
-  return result;
-}
-
 // ════════════════════════════════════════════
-// Main function
+// Core sender
 // ════════════════════════════════════════════
 
 /**
- * Send a server-side conversion event to Meta Ads via Conversions API.
- * Fire-and-forget — never throws; logs errors.
+ * Send a server-side conversion event to Meta via the official SDK.
+ * Fire-and-forget — never throws to the caller.
  */
-export async function sendMetaConversionEvent(opts: MetaEventOptions): Promise<boolean> {
-  if (!META_ADS_PIXEL_ID || !META_ADS_ACCESS_TOKEN) {
-    console.warn('[META CAPI] Credentials not configured — event not sent:', opts.eventName);
-    return false;
+export async function sendCapiEvent(params: CAPIEventParams): Promise<{
+  success: boolean;
+  eventsReceived?: number;
+  error?: string;
+}> {
+  if (!PIXEL_ID || !ACCESS_TOKEN) {
+    const msg = 'META CAPI credentials not configured';
+    console.warn(`[META CAPI] ${msg} — event ${params.eventName} not sent`);
+    return { success: false, error: msg };
   }
 
   try {
-    const eventTime = Math.floor(Date.now() / 1000);
-    const eventId = opts.eventId || `${opts.eventName}_${eventTime}_${crypto.randomUUID()}`;
+    bizSdk.FacebookAdsApi.init(ACCESS_TOKEN);
 
-    const eventData: Record<string, any> = {
-      event_name: opts.eventName,
-      event_time: eventTime,
-      event_id: eventId,
-      action_source: opts.actionSource || 'website',
-      user_data: buildUserData(opts.userData),
-    };
+    const currentTimestamp = Math.floor(Date.now() / 1000);
 
-    if (opts.eventSourceUrl) {
-      eventData.event_source_url = opts.eventSourceUrl;
+    // ── User Data (SDK hashes automatically) ──
+    const userData = new UserData();
+    if (params.email) userData.setEmail(params.email.trim().toLowerCase());
+    if (params.phone) userData.setPhone(normalizePhone(params.phone));
+    if (params.firstName) userData.setFirstName(params.firstName.trim().toLowerCase());
+    if (params.lastName) userData.setLastName(params.lastName.trim().toLowerCase());
+    userData.setCountry('pa');
+    if (params.clientIp) userData.setClientIpAddress(params.clientIp);
+    if (params.userAgent) userData.setClientUserAgent(params.userAgent);
+
+    // ── Custom Data ──
+    const customData = new CustomData();
+    customData.setCurrency('USD');
+    if (params.value != null && params.value > 0) {
+      customData.setValue(params.value);
+    }
+    if (params.contentName) customData.setContentName(params.contentName);
+    if (params.contentCategory) customData.setContentCategory(params.contentCategory);
+
+    // ── Server Event ──
+    const serverEvent = new ServerEvent();
+    serverEvent.setEventName(params.eventName);
+    serverEvent.setEventTime(currentTimestamp);
+    serverEvent.setEventId(params.quoteId); // deduplication key
+    serverEvent.setActionSource('website');
+    serverEvent.setUserData(userData);
+    serverEvent.setCustomData(customData);
+    if (params.sourceUrl) {
+      serverEvent.setEventSourceUrl(params.sourceUrl);
     }
 
-    if (opts.customData) {
-      eventData.custom_data = { ...opts.customData };
+    // ── Event Request ──
+    const eventRequest = new EventRequest(ACCESS_TOKEN, PIXEL_ID);
+    eventRequest.setEvents([serverEvent]);
+    if (TEST_EVENT_CODE) {
+      eventRequest.setTestEventCode(TEST_EVENT_CODE);
     }
 
-    const payload: Record<string, any> = {
-      data: [eventData],
-    };
+    const response = await eventRequest.execute();
+    const received = response?.events_received ?? 0;
 
-    // Include test event code if configured (for debugging in Events Manager)
-    if (META_ADS_TEST_EVENT_CODE) {
-      payload.test_event_code = META_ADS_TEST_EVENT_CODE;
-    }
+    console.log(
+      `[META CAPI] ✅ ${params.eventName} | quote=${params.quoteId} | events_received=${received}` +
+      (TEST_EVENT_CODE ? ` | test_code=${TEST_EVENT_CODE}` : '')
+    );
 
-    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${META_ADS_PIXEL_ID}/events?access_token=${META_ADS_ACCESS_TOKEN}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('[META CAPI] Error:', response.status, errText.substring(0, 300));
-      return false;
-    }
-
-    const result = await response.json();
-    console.log(`[META CAPI] ✅ ${opts.eventName} sent | event_id: ${eventId} | events_received: ${result.events_received}`);
-    return true;
+    return { success: true, eventsReceived: received };
   } catch (err: any) {
-    console.error('[META CAPI] Exception:', err.message);
-    return false;
+    const errMsg = err?.response?.error?.message || err?.message || String(err);
+    console.error(`[META CAPI] ❌ ${params.eventName} | quote=${params.quoteId} | error: ${errMsg}`);
+    return { success: false, error: errMsg };
   }
 }
 
@@ -187,9 +150,10 @@ export async function sendMetaConversionEvent(opts: MetaEventOptions): Promise<b
 // ════════════════════════════════════════════
 
 /**
- * Fire a "Lead" event — user generated an insurance quote.
+ * Fire "Lead" — called after a new quote is confirmed inserted in adm_cot_quotes.
  */
 export function trackLead(params: {
+  quoteId: string;
   email?: string;
   phone?: string;
   firstName?: string;
@@ -200,35 +164,28 @@ export function trackLead(params: {
   premium?: number;
   clientIp?: string;
   userAgent?: string;
-  sourceUrl?: string;
-  actionSource?: 'website' | 'chat';
 }) {
-  return sendMetaConversionEvent({
+  return sendCapiEvent({
+    quoteId: params.quoteId,
     eventName: 'Lead',
-    actionSource: params.actionSource || 'website',
-    eventSourceUrl: params.sourceUrl || 'https://portal.lideresenseguros.com/cotizadores',
-    userData: {
-      email: params.email,
-      phone: params.phone,
-      firstName: params.firstName,
-      lastName: params.lastName,
-      country: 'pa',
-      clientIpAddress: params.clientIp,
-      clientUserAgent: params.userAgent,
-    },
-    customData: {
-      currency: 'USD',
-      value: params.premium,
-      contentName: [params.insurer, params.ramo, params.coverageType].filter(Boolean).join(' - '),
-      contentCategory: params.ramo || 'AUTO',
-    },
+    email: params.email,
+    phone: params.phone,
+    firstName: params.firstName,
+    lastName: params.lastName,
+    value: params.premium,
+    contentName: [params.insurer, params.ramo, params.coverageType].filter(Boolean).join(' - ') || undefined,
+    contentCategory: params.ramo || 'AUTO',
+    clientIp: params.clientIp,
+    userAgent: params.userAgent,
+    sourceUrl: 'https://portal.lideresenseguros.com/cotizadores',
   });
 }
 
 /**
- * Fire a "CompleteRegistration" event — policy successfully emitted.
+ * Fire "CompleteRegistration" — called after quote status flips to EMITIDA.
  */
 export function trackCompleteRegistration(params: {
+  quoteId: string;
   email?: string;
   phone?: string;
   firstName?: string;
@@ -239,27 +196,19 @@ export function trackCompleteRegistration(params: {
   premium?: number;
   clientIp?: string;
   userAgent?: string;
-  sourceUrl?: string;
 }) {
-  return sendMetaConversionEvent({
+  return sendCapiEvent({
+    quoteId: `${params.quoteId}_emit`,
     eventName: 'CompleteRegistration',
-    actionSource: 'website',
-    eventSourceUrl: params.sourceUrl || 'https://portal.lideresenseguros.com/cotizadores/confirmacion',
-    userData: {
-      email: params.email,
-      phone: params.phone,
-      firstName: params.firstName,
-      lastName: params.lastName,
-      country: 'pa',
-      clientIpAddress: params.clientIp,
-      clientUserAgent: params.userAgent,
-    },
-    customData: {
-      currency: 'USD',
-      value: params.premium,
-      contentName: [params.insurer, params.ramo, params.policyNumber].filter(Boolean).join(' - '),
-      contentCategory: params.ramo || 'AUTO',
-      orderId: params.policyNumber,
-    },
+    email: params.email,
+    phone: params.phone,
+    firstName: params.firstName,
+    lastName: params.lastName,
+    value: params.premium,
+    contentName: [params.insurer, params.ramo, params.policyNumber].filter(Boolean).join(' - ') || undefined,
+    contentCategory: params.ramo || 'AUTO',
+    clientIp: params.clientIp,
+    userAgent: params.userAgent,
+    sourceUrl: 'https://portal.lideresenseguros.com/cotizadores/confirmacion',
   });
 }
