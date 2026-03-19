@@ -5,7 +5,6 @@ import { FaTimes, FaCheck } from 'react-icons/fa';
 import { actionCreateEvent, actionUpdateEvent, actionGetBrokers, actionGetLissaConfig } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
-import { toZonedTime, fromZonedTime, format as formatTZ } from 'date-fns-tz';
 import { parseISO, format } from 'date-fns';
 
 interface EventFormModalProps {
@@ -100,18 +99,14 @@ export default function EventFormModal({
     setTitle(eventToEdit.title || '');
     setDetails(eventToEdit.details || '');
     
-    // Convertir de UTC a timezone local
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Panama';
-    const startDateUTC = parseISO(eventToEdit.start_at);
-    const endDateUTC = parseISO(eventToEdit.end_at);
+    // DB stores Panama local time as +00 — parse directly, no TZ conversion
+    const startParsed = parseISO(eventToEdit.start_at);
+    const endParsed = parseISO(eventToEdit.end_at);
     
-    const startLocal = toZonedTime(startDateUTC, userTimezone);
-    const endLocal = toZonedTime(endDateUTC, userTimezone);
-    
-    setStartDate(format(startLocal, 'yyyy-MM-dd'));
-    setStartTime(format(startLocal, 'HH:mm'));
-    setEndDate(format(endLocal, 'yyyy-MM-dd'));
-    setEndTime(format(endLocal, 'HH:mm'));
+    setStartDate(format(startParsed, 'yyyy-MM-dd'));
+    setStartTime(format(startParsed, 'HH:mm'));
+    setEndDate(format(endParsed, 'yyyy-MM-dd'));
+    setEndTime(format(endParsed, 'HH:mm'));
     setIsAllDay(eventToEdit.is_all_day || false);
     setModality(eventToEdit.modality || 'virtual');
     setZoomUrl(eventToEdit.zoom_url || '');
@@ -136,17 +131,17 @@ export default function EventFormModal({
       return;
     }
 
-    // Build datetime strings con timezone handling
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Panama';
+    // Build datetime strings — DB stores Panama local time as +00, no TZ conversion
+    const startISO = isAllDay 
+      ? `${startDate}T00:00:00` 
+      : `${startDate}T${startTime}:00`;
     
-    // Crear fechas en timezone local
-    const startLocal = isAllDay 
-      ? parseISO(`${startDate}T00:00:00`) 
-      : parseISO(`${startDate}T${startTime}:00`);
-    
-    const endLocal = isAllDay
-      ? parseISO(`${endDate}T23:59:59`)
-      : parseISO(`${endDate}T${endTime}:00`);
+    const endISO = isAllDay
+      ? `${endDate}T23:59:59`
+      : `${endDate}T${endTime}:00`;
+
+    const startLocal = parseISO(startISO);
+    const endLocal = parseISO(endISO);
 
     // Validar que fin > inicio
     if (endLocal <= startLocal) {
@@ -154,9 +149,9 @@ export default function EventFormModal({
       return;
     }
 
-    // Convertir a UTC para guardar en BD
-    const start_at = fromZonedTime(startLocal, userTimezone).toISOString();
-    const end_at = fromZonedTime(endLocal, userTimezone).toISOString();
+    // Save as-is (no fromZonedTime) — append Z so Supabase stores it with +00
+    const start_at = `${startISO}.000Z`;
+    const end_at = `${endISO}.000Z`;
 
     // Validate based on event type
     if (eventType === 'normal') {

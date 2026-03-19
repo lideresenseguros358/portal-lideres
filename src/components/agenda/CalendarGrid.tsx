@@ -4,9 +4,6 @@ import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useSwipeable } from 'react-swipeable';
-import { toZonedTime } from 'date-fns-tz';
-
-const TZ = 'America/Panama';
 
 interface CalendarGridProps {
   year: number;
@@ -44,22 +41,22 @@ export default function CalendarGrid({
   // Get events for a specific day
   const getEventsForDay = (day: number) => {
     return events.filter(event => {
-      const eventDate = toZonedTime(new Date(event.start_at), TZ);
-      return eventDate.getDate() === day &&
-             eventDate.getMonth() === month - 1 &&
-             eventDate.getFullYear() === year;
+      const d = new Date(event.start_at);
+      return d.getUTCDate() === day &&
+             d.getUTCMonth() === month - 1 &&
+             d.getUTCFullYear() === year;
     });
   };
 
   // Check if a day is within a multi-day event range
   const isDateInEventRange = (date: Date, event: AgendaEvent) => {
-    const eventStart = toZonedTime(new Date(event.start_at), TZ);
-    const eventEnd = toZonedTime(new Date(event.end_at), TZ);
+    const eventStart = new Date(event.start_at);
+    const eventEnd = new Date(event.end_at);
     
-    // Normalizar fechas a medianoche para comparación
-    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const normalizedStart = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
-    const normalizedEnd = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+    // Normalizar fechas a medianoche para comparación (use UTC since DB stores local as +00)
+    const normalizedDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const normalizedStart = new Date(Date.UTC(eventStart.getUTCFullYear(), eventStart.getUTCMonth(), eventStart.getUTCDate()));
+    const normalizedEnd = new Date(Date.UTC(eventEnd.getUTCFullYear(), eventEnd.getUTCMonth(), eventEnd.getUTCDate()));
     
     return normalizedDate >= normalizedStart && normalizedDate <= normalizedEnd;
   };

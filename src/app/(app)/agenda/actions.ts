@@ -3,10 +3,6 @@
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
-import { toZonedTime, format as formatTZ } from 'date-fns-tz';
-
-const TZ = 'America/Panama';
-
 export interface AgendaEvent {
   id: string;
   title: string;
@@ -52,10 +48,9 @@ export async function actionGetEvents(params: {
     }
 
     // Build date range for the month
-    // Pad ±1 day to account for UTC vs America/Panama offset (UTC-5).
-    // An event at 11 PM Panama on the last day is stored as next-day UTC.
-    const startDate = new Date(params.year, params.month - 1, 0); // day before month start
-    const endDate = new Date(params.year, params.month, 1, 23, 59, 59); // day after month end
+    // DB stores Panama local time as +00, so use UTC boundaries directly
+    const startDate = new Date(Date.UTC(params.year, params.month - 1, 1));
+    const endDate = new Date(Date.UTC(params.year, params.month, 0, 23, 59, 59));
 
     let query = supabase
       .from('events')
@@ -217,9 +212,10 @@ export async function actionCreateEvent(payload: {
       try {
         const { createNotification } = await import('@/lib/notifications/create');
         
-        const zonedStart = toZonedTime(new Date(notifPayload.start_at), TZ);
-        const eventDate = formatTZ(zonedStart, 'yyyy-MM-dd', { timeZone: TZ });
-        const eventTime = notifPayload.is_all_day ? undefined : formatTZ(zonedStart, 'hh:mm a', { timeZone: TZ });
+        const d = new Date(notifPayload.start_at);
+        const eventDate = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+        const h = d.getUTCHours(); const mn = d.getUTCMinutes();
+        const eventTime = notifPayload.is_all_day ? undefined : `${h===0?12:h>12?h-12:h}:${String(mn).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
         const isForAllBrokers = notifPayload.audience === 'ALL';
         
         if (isForAllBrokers) {
@@ -378,9 +374,10 @@ export async function actionUpdateEvent(params: {
           const isAllDay = updatePayload.is_all_day ?? currentIsAllDay;
           const audience = updatePayload.audience || currentAudience;
           
-          const zonedStart = toZonedTime(new Date(startAt), TZ);
-          const eventDate = formatTZ(zonedStart, 'yyyy-MM-dd', { timeZone: TZ });
-          const eventTime = isAllDay ? undefined : formatTZ(zonedStart, 'hh:mm a', { timeZone: TZ });
+          const d2 = new Date(startAt);
+          const eventDate = `${d2.getUTCFullYear()}-${String(d2.getUTCMonth()+1).padStart(2,'0')}-${String(d2.getUTCDate()).padStart(2,'0')}`;
+          const h2 = d2.getUTCHours(); const mn2 = d2.getUTCMinutes();
+          const eventTime = isAllDay ? undefined : `${h2===0?12:h2>12?h2-12:h2}:${String(mn2).padStart(2,'0')} ${h2>=12?'PM':'AM'}`;
           const isForAllBrokers = audience === 'ALL';
           
           if (isForAllBrokers) {

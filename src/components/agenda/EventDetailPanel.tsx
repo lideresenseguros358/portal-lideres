@@ -6,10 +6,7 @@ import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { actionRSVP, actionGetAttendees, actionDeleteEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
 import { supabaseClient } from '@/lib/supabase/client';
-import { toZonedTime, format as formatTZ } from 'date-fns-tz';
-import { es } from 'date-fns/locale';
-
-const TZ = 'America/Panama';
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
 interface EventDetailPanelProps {
   event: AgendaEvent | null;
@@ -161,14 +158,17 @@ END:VCALENDAR`;
   };
 
   const formatDateTime = (dateString: string, isAllDay: boolean) => {
-    const date = toZonedTime(new Date(dateString), TZ);
-    const dateStr = formatTZ(date, "d 'de' MMMM 'de' yyyy", { timeZone: TZ, locale: es });
+    const d = new Date(dateString);
+    const dateStr = `${d.getUTCDate()} de ${MESES[d.getUTCMonth()]} de ${d.getUTCFullYear()}`;
     
     if (isAllDay) {
       return `${dateStr} - Todo el día`;
     }
 
-    const timeStr = formatTZ(date, 'h:mm a', { timeZone: TZ });
+    const h = d.getUTCHours();
+    const m = d.getUTCMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const timeStr = `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')} ${ampm}`;
     
     return `${dateStr} a las ${timeStr}`;
   };
@@ -176,10 +176,10 @@ END:VCALENDAR`;
   // Get events for the selected day
   const dayEvents = events.filter(e => {
     if (!day) return false;
-    const eventDate = toZonedTime(new Date(e.start_at), TZ);
-    return eventDate.getDate() === day && 
-           eventDate.getMonth() + 1 === month &&
-           eventDate.getFullYear() === year;
+    const d = new Date(e.start_at);
+    return d.getUTCDate() === day && 
+           d.getUTCMonth() + 1 === month &&
+           d.getUTCFullYear() === year;
   });
 
   // If viewing a day (not a specific event)

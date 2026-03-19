@@ -6,13 +6,9 @@ import { FaChevronLeft, FaChevronRight, FaPlus, FaTimes } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { actionGetEvents, actionRSVP, type AgendaEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
-import { toZonedTime, format as formatTZ } from 'date-fns-tz';
-import { es } from 'date-fns/locale';
 import CalendarGrid from './CalendarGrid';
 import EventDetailPanel from './EventDetailPanel';
 import EventFormModal from './EventFormModal';
-
-const TZ = 'America/Panama';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -332,10 +328,14 @@ export default function AgendaMainClient() {
             {events
               .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
               .map((event) => {
-                const eventDate = toZonedTime(new Date(event.start_at), TZ);
-                const day = eventDate.getDate();
-                const dayName = formatTZ(eventDate, 'EEEE', { timeZone: TZ, locale: es });
-                const eventTime = formatTZ(eventDate, 'h:mm a', { timeZone: TZ });
+                const eventDate = new Date(event.start_at);
+                const day = eventDate.getUTCDate();
+                const dayNames = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+                const dayName = dayNames[eventDate.getUTCDay()] || '';
+                const h = eventDate.getUTCHours();
+                const m = eventDate.getUTCMinutes();
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const eventTime = `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')} ${ampm}`;
                 
                 return (
                   <div
