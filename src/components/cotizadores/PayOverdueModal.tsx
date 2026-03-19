@@ -133,12 +133,12 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
   // ── Lookup ──
 
   const handleLookup = useCallback(async () => {
-    if (!cedula.trim() || cedula.trim().length < 3) { setLookupError('Ingrese un n\u00famero de c\u00e9dula v\u00e1lido'); return; }
+    if (!cedula.trim() || cedula.trim().length < 3) { setLookupError('Ingrese un número de cédula válido'); return; }
     setLookupLoading(true); setLookupError(''); setLookupStatus(null);
     try {
       const res = await fetch(`/api/public/overdue-payments?cedula=${encodeURIComponent(cedula.trim())}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Error en la b\u00fasqueda');
+      if (!res.ok) throw new Error(json.error || 'Error en la búsqueda');
 
       const status: LookupStatus = json.status || 'no_recurrences';
       setLookupStatus(status);
@@ -159,7 +159,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
         setSelectedKeys(autoKeys);
         setStep('status');
       }
-    } catch (err: any) { setLookupError(err.message || 'Error de conexi\u00f3n'); }
+    } catch (err: any) { setLookupError(err.message || 'Error de conexión'); }
     setLookupLoading(false);
   }, [cedula]);
 
@@ -178,7 +178,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
         body: JSON.stringify({
           amount: selectedTotal,
           description: `Pago cuotas - ${policyNumbers}`,
-          concept: `Pago p\u00f3liza ${policyNumbers}`,
+          concept: `Pago póliza ${policyNumbers}`,
           cardNumber: cardData.cardNumber, expMonth: cardData.expMonth, expYear: cardData.expYear,
           cvv: cardData.cvv, cardholderName: cardData.cardName, cardType: cardData.brand,
           email: 'noreply@lideresenseguros.com',
@@ -216,7 +216,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
       let cancelledCount = 0;
       const completedRecs = confirmJson?.data?.completedRecurrences || [];
       if (completedRecs.length > 0) {
-        setProgressStep('Cancelando recurrencias completadas en PagueloF\u00e1cil...');
+        setProgressStep('Cancelando recurrencias completadas en PagueloFácil...');
         for (const cr of completedRecs) {
           if (cr.pf_rec_cod_oper) {
             try {
@@ -246,7 +246,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
         clientName, cedula: cedula.trim(),
         cancelledRecurrences: cancelledCount,
       });
-      setProgress(100); setProgressStep('\u00a1Pago completado!');
+      setProgress(100); setProgressStep('¡Pago completado!');
       setTimeout(() => setStep('receipt'), 1200);
     } catch (err: any) { setProcessingError(err.message || 'Error inesperado'); }
   }, [cardData, selectedInstallments, selectedTotal, policies, cedula]);
@@ -261,7 +261,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
     const itemsHtml = r.paidItems.map((item) =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;">${item.nro_poliza}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;">${item.insurer}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center;">${item.num}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right;font-weight:600;">${fmtCurrency(item.amount)}</td></tr>`
     ).join('');
-    const html = `<html><head><meta charset="utf-8"><title>Recibo de Pago</title></head><body style="margin:0;padding:40px;font-family:Arial,sans-serif;color:#333;"><div style="max-width:600px;margin:0 auto;"><div style="text-align:center;margin-bottom:30px;"><img src="${window.location.origin}/logo.png" alt="L\u00edderes en Seguros" style="height:60px;margin-bottom:10px;" /><h1 style="color:#010139;font-size:22px;margin:0;">Recibo de Pago</h1><p style="color:#6b7280;font-size:12px;margin:4px 0 0;">L\u00edderes en Seguros, S.A.</p></div><div style="background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:20px;"><table style="width:100%;font-size:13px;"><tr><td style="color:#6b7280;padding:4px 0;">Fecha:</td><td style="font-weight:600;">${dateStr}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">C\u00f3digo:</td><td style="font-weight:600;font-family:monospace;">${r.codOper}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Cliente:</td><td style="font-weight:600;">${r.clientName}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">C\u00e9dula:</td><td style="font-weight:600;">${r.cedula}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Tarjeta:</td><td style="font-weight:600;">${r.cardType} ${maskCard(r.cardDisplay)}</td></tr></table></div><table style="width:100%;border-collapse:collapse;margin-bottom:20px;"><thead><tr style="background:#010139;color:white;"><th style="padding:10px 12px;text-align:left;font-size:12px;">P\u00f3liza</th><th style="padding:10px 12px;text-align:left;font-size:12px;">Aseguradora</th><th style="padding:10px 12px;text-align:center;font-size:12px;">Cuota</th><th style="padding:10px 12px;text-align:right;font-size:12px;">Monto</th></tr></thead><tbody>${itemsHtml}</tbody><tfoot><tr style="background:#f0fdf4;"><td colspan="3" style="padding:12px;font-weight:700;font-size:14px;color:#010139;">TOTAL PAGADO</td><td style="padding:12px;text-align:right;font-weight:700;font-size:16px;color:#010139;">${fmtCurrency(r.totalPaid)}</td></tr></tfoot></table><p style="text-align:center;color:#9ca3af;font-size:10px;margin-top:30px;">Este recibo es generado autom\u00e1ticamente por el portal de L\u00edderes en Seguros.<br/>Para cualquier consulta: contacto@lideresenseguros.com</p></div></body></html>`;
+    const html = `<html><head><meta charset="utf-8"><title>Recibo de Pago</title></head><body style="margin:0;padding:40px;font-family:Arial,sans-serif;color:#333;"><div style="max-width:600px;margin:0 auto;"><div style="text-align:center;margin-bottom:30px;"><img src="${window.location.origin}/logo.png" alt="Líderes en Seguros" style="height:60px;margin-bottom:10px;" /><h1 style="color:#010139;font-size:22px;margin:0;">Recibo de Pago</h1><p style="color:#6b7280;font-size:12px;margin:4px 0 0;">Líderes en Seguros, S.A.</p></div><div style="background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:20px;"><table style="width:100%;font-size:13px;"><tr><td style="color:#6b7280;padding:4px 0;">Fecha:</td><td style="font-weight:600;">${dateStr}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Código:</td><td style="font-weight:600;font-family:monospace;">${r.codOper}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Cliente:</td><td style="font-weight:600;">${r.clientName}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Cédula:</td><td style="font-weight:600;">${r.cedula}</td></tr><tr><td style="color:#6b7280;padding:4px 0;">Tarjeta:</td><td style="font-weight:600;">${r.cardType} ${maskCard(r.cardDisplay)}</td></tr></table></div><table style="width:100%;border-collapse:collapse;margin-bottom:20px;"><thead><tr style="background:#010139;color:white;"><th style="padding:10px 12px;text-align:left;font-size:12px;">Póliza</th><th style="padding:10px 12px;text-align:left;font-size:12px;">Aseguradora</th><th style="padding:10px 12px;text-align:center;font-size:12px;">Cuota</th><th style="padding:10px 12px;text-align:right;font-size:12px;">Monto</th></tr></thead><tbody>${itemsHtml}</tbody><tfoot><tr style="background:#f0fdf4;"><td colspan="3" style="padding:12px;font-weight:700;font-size:14px;color:#010139;">TOTAL PAGADO</td><td style="padding:12px;text-align:right;font-weight:700;font-size:16px;color:#010139;">${fmtCurrency(r.totalPaid)}</td></tr></tfoot></table><p style="text-align:center;color:#9ca3af;font-size:10px;margin-top:30px;">Este recibo es generado automáticamente por el portal de Líderes en Seguros.<br/>Para cualquier consulta: contacto@lideresenseguros.com</p></div></body></html>`;
     const w = window.open('', '_blank');
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
   }, [receiptData]);
@@ -282,8 +282,8 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
   const upcomingInstallments = policies.flatMap(pol => pol.installments.filter(i => i.status === 'PENDIENTE').map(i => ({ ...i, _pol: pol })));
 
   const stepTitles: Record<Step, { title: string; sub: string }> = {
-    cedula: { title: 'Realiza tu Pago', sub: 'Ingresa tu c\u00e9dula para consultar tu estado de pagos' },
-    status: { title: lookupStatus === 'has_overdue' ? 'Pagos Pendientes' : 'Estado de Pagos', sub: lookupStatus === 'has_overdue' ? 'Tienes cuotas vencidas que requieren atenci\u00f3n' : 'Consulta de estado de pagos' },
+    cedula: { title: 'Realiza tu Pago', sub: 'Ingresa tu cédula para consultar tu estado de pagos' },
+    status: { title: lookupStatus === 'has_overdue' ? 'Pagos Pendientes' : 'Estado de Pagos', sub: lookupStatus === 'has_overdue' ? 'Tienes cuotas vencidas que requieren atención' : 'Consulta de estado de pagos' },
     select: { title: 'Selecciona tus Cuotas', sub: 'Selecciona las cuotas que deseas pagar' },
     card: { title: 'Datos de Tarjeta', sub: 'Ingresa los datos de tu tarjeta' },
     summary: { title: 'Resumen de Pago', sub: 'Verifica los detalles antes de confirmar' },
@@ -337,7 +337,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                 <p className="text-sm text-gray-600">Consulta el estado de tus pagos y paga tus cuotas de forma segura.</p>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-2">N\u00famero de C\u00e9dula</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Número de Cédula</label>
                 <div className="flex gap-2">
                   <input type="text" value={cedula} onChange={(e) => setCedula(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLookup()} placeholder="Ej: 8-888-8888" className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-colors" autoFocus />
                   <button onClick={handleLookup} disabled={lookupLoading} className="px-5 py-3 bg-[#010139] text-white rounded-xl font-semibold text-sm hover:bg-[#020270] disabled:opacity-50 cursor-pointer transition-colors flex items-center gap-2">
@@ -346,7 +346,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                 </div>
                 {lookupError && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><FaExclamationTriangle className="text-[10px]" /> {lookupError}</p>}
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-gray-400 justify-center"><FaShieldAlt /> Pago seguro procesado por PagueloF\u00e1cil</div>
+              <div className="flex items-center gap-2 text-[10px] text-gray-400 justify-center"><FaShieldAlt /> Pago seguro procesado por PagueloFácil</div>
             </div>
           )}
 
@@ -361,22 +361,22 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                   <h3 className="text-lg font-bold text-[#010139]">Sin pagos pendientes</h3>
                   <p className="text-sm text-gray-500 max-w-sm mx-auto">
                     {lookupStatus === 'no_recurrences'
-                      ? 'No se encontraron p\u00f3lizas con plan de pagos asociadas a esta c\u00e9dula.'
-                      : 'Todas tus cuotas han sido pagadas. \u00a1Gracias por mantenerte al d\u00eda!'
+                      ? 'No se encontraron pólizas con plan de pagos asociadas a esta cédula.'
+                      : 'Todas tus cuotas han sido pagadas. ¡Gracias por mantenerte al día!'
                     }
                   </p>
                   <button onClick={handleClose} className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm cursor-pointer hover:bg-gray-200 transition-colors">Cerrar</button>
                 </div>
               )}
 
-              {/* ── Al d\u00eda (has pending but none overdue) ── */}
+              {/* ── Al día (has pending but none overdue) ── */}
               {lookupStatus === 'al_dia' && (
                 <div className="space-y-5">
                   <div className="text-center pt-2">
                     <div className="w-20 h-20 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-4"><FaCalendarCheck className="text-3xl text-green-500" /></div>
-                    <h3 className="text-lg font-bold text-green-700">\u00a1Te encuentras al d\u00eda!</h3>
+                    <h3 className="text-lg font-bold text-green-700">¡Te encuentras al día!</h3>
                     <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
-                      Tus pagos est\u00e1n al corriente. No tienes cuotas vencidas en este momento.
+                      Tus pagos están al corriente. No tienes cuotas vencidas en este momento.
                     </p>
                   </div>
 
@@ -385,7 +385,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                     <div key={pol.recurrence_id} className="border border-green-200 bg-green-50/30 rounded-xl overflow-hidden">
                       <div className="px-4 py-3 flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-bold text-[#010139]">P\u00f3liza {pol.nro_poliza}</p>
+                          <p className="text-sm font-bold text-[#010139]">Póliza {pol.nro_poliza}</p>
                           <p className="text-[10px] text-gray-500">{pol.insurer} &middot; {pol.client_name}</p>
                         </div>
                         <div className="text-right">
@@ -408,10 +408,10 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                         onClick={() => { setShowAdelanto(true); setStep('select'); }}
                         className="w-full py-3 bg-[#010139] text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-[#020270] transition-colors flex items-center justify-center gap-2"
                       >
-                        <FaCreditCard className="text-xs" /> \u00bfDeseas adelantar alg\u00fan pago?
+                        <FaCreditCard className="text-xs" /> ¿Deseas adelantar algún pago?
                       </button>
                       <p className="text-[10px] text-gray-400 text-center mt-2">
-                        Puedes adelantar una o varias cuotas futuras y la recurrencia autom\u00e1tica se ajustar\u00e1.
+                        Puedes adelantar una o varias cuotas futuras y la recurrencia automática se ajustará.
                       </p>
                     </div>
                   )}
@@ -426,7 +426,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                     <FaExclamationTriangle className="text-red-500 text-lg mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-bold text-red-700">Tienes {overdueInstallments.length} cuota{overdueInstallments.length > 1 ? 's' : ''} vencida{overdueInstallments.length > 1 ? 's' : ''}</p>
-                      <p className="text-xs text-red-600 mt-1">Para mantener tu p\u00f3liza vigente, realiza el pago lo antes posible.</p>
+                      <p className="text-xs text-red-600 mt-1">Para mantener tu póliza vigente, realiza el pago lo antes posible.</p>
                     </div>
                   </div>
 
@@ -437,7 +437,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                     return (
                       <div key={pol.recurrence_id} className="border-2 border-red-200 rounded-xl overflow-hidden">
                         <div className="bg-red-50 px-4 py-3">
-                          <p className="text-sm font-bold text-[#010139]">P\u00f3liza {pol.nro_poliza}</p>
+                          <p className="text-sm font-bold text-[#010139]">Póliza {pol.nro_poliza}</p>
                           <p className="text-[10px] text-gray-500">{pol.insurer} &middot; {pol.client_name}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <span className="text-xs font-bold text-red-600">{overdueInsts.length} cuota{overdueInsts.length > 1 ? 's' : ''} vencida{overdueInsts.length > 1 ? 's' : ''}</span>
@@ -496,7 +496,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                   <div key={pol.recurrence_id} className="border-2 border-gray-100 rounded-xl overflow-hidden">
                     <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-bold text-[#010139]">P\u00f3liza {pol.nro_poliza}</p>
+                        <p className="text-sm font-bold text-[#010139]">Póliza {pol.nro_poliza}</p>
                         <p className="text-[10px] text-gray-500">{pol.insurer} &middot; {pol.client_name} &middot; {pol.paidCount}/{pol.total_installments} pagadas</p>
                       </div>
                       <button onClick={() => selectAllForPolicy(pol, finalInsts)} className="text-[10px] text-[#8AAA19] font-bold cursor-pointer hover:underline">
@@ -516,7 +516,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                                 {isOverdue ? (
                                   <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-semibold">Vencida</span>
                                 ) : (
-                                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Pr\u00f3xima</span>
+                                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold">Próxima</span>
                                 )}
                               </div>
                               <span className="text-[10px] text-gray-400">Vence: {fmtDate(inst.due_date)}</span>
@@ -535,7 +535,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                         })}
                         className="w-full px-4 py-2 text-[10px] text-[#8AAA19] font-bold cursor-pointer hover:bg-gray-50 flex items-center justify-center gap-1"
                       >
-                        {isExpanded ? <><FaChevronUp className="text-[8px]" /> Mostrar menos</> : <><FaChevronDown className="text-[8px]" /> Ver {finalInsts.length - 5} cuota{finalInsts.length - 5 > 1 ? 's' : ''} m\u00e1s</>}
+                        {isExpanded ? <><FaChevronUp className="text-[8px]" /> Mostrar menos</> : <><FaChevronDown className="text-[8px]" /> Ver {finalInsts.length - 5} cuota{finalInsts.length - 5 > 1 ? 's' : ''} más</>}
                       </button>
                     )}
                   </div>
@@ -548,7 +548,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                   onClick={() => setShowAdelanto(true)}
                   className="w-full py-2 text-xs text-[#010139] font-bold cursor-pointer hover:underline"
                 >
-                  + Tambi\u00e9n deseo adelantar cuotas futuras ({upcomingInstallments.length} disponibles)
+                  + También deseo adelantar cuotas futuras ({upcomingInstallments.length} disponibles)
                 </button>
               )}
 
@@ -586,7 +586,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                 <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">Datos del Cliente</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-gray-400">Nombre:</span> <span className="font-semibold text-gray-800">{policies[0]?.client_name}</span></div>
-                  <div><span className="text-gray-400">C\u00e9dula:</span> <span className="font-semibold text-gray-800">{cedula}</span></div>
+                  <div><span className="text-gray-400">Cédula:</span> <span className="font-semibold text-gray-800">{cedula}</span></div>
                 </div>
               </div>
 
@@ -597,7 +597,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                   if (selInsts.length === 0) return null;
                   return (
                     <div key={pol.recurrence_id} className="border border-gray-100 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-2"><p className="text-[11px] font-bold text-[#010139]">P\u00f3liza {pol.nro_poliza} &middot; {pol.insurer}</p></div>
+                      <div className="bg-gray-50 px-3 py-2"><p className="text-[11px] font-bold text-[#010139]">Póliza {pol.nro_poliza} &middot; {pol.insurer}</p></div>
                       {selInsts.map(inst => (
                         <div key={inst.num} className="flex justify-between px-3 py-2 text-xs border-t border-gray-50">
                           <span className="text-gray-600">
@@ -629,7 +629,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
                 });
                 return willComplete ? (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-[10px] text-amber-700 font-semibold flex items-center gap-2">
-                    <FaCheck className="text-[8px]" /> Al completar este pago se cancelar\u00e1 la recurrencia autom\u00e1tica en PagueloF\u00e1cil.
+                    <FaCheck className="text-[8px]" /> Al completar este pago se cancelará la recurrencia automática en PagueloFácil.
                   </div>
                 ) : null;
               })()}
@@ -671,13 +671,13 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
             <div className="space-y-5">
               <div className="text-center pt-2">
                 <div className="w-20 h-20 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-4"><FaCheckCircle className="text-4xl text-green-500" /></div>
-                <h3 className="text-xl font-bold text-[#010139]">\u00a1Pago Exitoso!</h3>
+                <h3 className="text-xl font-bold text-[#010139]">¡Pago Exitoso!</h3>
                 <p className="text-sm text-gray-500 mt-1">Tu pago ha sido procesado correctamente.</p>
               </div>
 
               <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-xs">
                 <div className="flex justify-between"><span className="text-gray-400">Fecha:</span><span className="font-semibold">{new Date(receiptData.date).toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">C\u00f3digo:</span><span className="font-mono font-semibold">{receiptData.codOper}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Código:</span><span className="font-mono font-semibold">{receiptData.codOper}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Cliente:</span><span className="font-semibold">{receiptData.clientName}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Tarjeta:</span><span className="font-semibold">{receiptData.cardType} {maskCard(receiptData.cardDisplay)}</span></div>
               </div>
@@ -693,7 +693,7 @@ export default function PayOverdueModal({ isOpen, onClose, prefillCedula }: Prop
 
               {receiptData.cancelledRecurrences > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 font-semibold flex items-center gap-2">
-                  <FaCheck className="text-[10px]" /> Se cancel\u00f3 la recurrencia autom\u00e1tica en PagueloF\u00e1cil ({receiptData.cancelledRecurrences} p\u00f3liza{receiptData.cancelledRecurrences > 1 ? 's' : ''} completada{receiptData.cancelledRecurrences > 1 ? 's' : ''}).
+                  <FaCheck className="text-[10px]" /> Se canceló la recurrencia automática en PagueloFácil ({receiptData.cancelledRecurrences} póliza{receiptData.cancelledRecurrences > 1 ? 's' : ''} completada{receiptData.cancelledRecurrences > 1 ? 's' : ''}).
                 </div>
               )}
 
