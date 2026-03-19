@@ -86,6 +86,13 @@ export async function sendCapiEvent(params: CAPIEventParams): Promise<{
     return { success: false, error: msg };
   }
 
+  // Meta requires at least one hashed PII field (email or phone) beyond country
+  if (!params.email && !params.phone) {
+    const msg = 'No email or phone — insufficient user data for Meta CAPI';
+    console.warn(`[META CAPI] ${msg} — event ${params.eventName} skipped (quote=${params.quoteId})`);
+    return { success: false, error: msg };
+  }
+
   try {
     bizSdk.FacebookAdsApi.init(ACCESS_TOKEN);
 
