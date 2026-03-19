@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { trackLead, trackCompleteRegistration } from '@/lib/meta/conversions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -246,6 +247,22 @@ export async function POST(request: NextRequest) {
           console.error('[ADM-COT TRACK] Insert error:', error.message);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // ═══ META CAPI: Fire "Lead" event (fire-and-forget) ═══
+        const nameParts = (validation.cleaned.client_name || '').split(' ');
+        trackLead({
+          email: validation.cleaned.email || undefined,
+          phone: validation.cleaned.phone || undefined,
+          firstName: nameParts[0] || undefined,
+          lastName: nameParts.slice(1).join(' ') || undefined,
+          insurer: validation.cleaned.insurer,
+          ramo: validation.cleaned.ramo,
+          coverageType: validation.cleaned.coverage_type || undefined,
+          premium: validation.cleaned.annual_premium || undefined,
+          clientIp: clientIp !== 'unknown' ? clientIp : undefined,
+          userAgent: request.headers.get('user-agent') || undefined,
+        }).catch(() => { /* silent */ });
+
         return NextResponse.json({ success: true, action: 'quote_created' });
       }
 
@@ -305,6 +322,21 @@ export async function POST(request: NextRequest) {
           console.error('[ADM-COT TRACK] Emit update error:', error.message);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // ═══ META CAPI: Fire "CompleteRegistration" event (fire-and-forget) ═══
+        const emitNameParts = (data.client_name || '').split(' ');
+        trackCompleteRegistration({
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          firstName: emitNameParts[0] || undefined,
+          lastName: emitNameParts.slice(1).join(' ') || undefined,
+          insurer: data.insurer,
+          ramo: 'AUTO',
+          policyNumber: data.policy_number || undefined,
+          clientIp: clientIp !== 'unknown' ? clientIp : undefined,
+          userAgent: request.headers.get('user-agent') || undefined,
+        }).catch(() => { /* silent */ });
+
         return NextResponse.json({ success: true, action: 'quote_emitted' });
       }
 
