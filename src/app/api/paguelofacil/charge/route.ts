@@ -30,8 +30,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// @ts-expect-error — @shoopiapp/paguelofacil has no type declarations
-import PagueloFacil from '@shoopiapp/paguelofacil';
+import PagueloFacil, { type PaymentInformation } from '@shoopiapp/paguelofacil';
 
 // ── User-friendly error messages (Spanish) for PagueloFacil codes ──
 const PF_ERROR_MAP: Record<string, string> = {
@@ -163,7 +162,7 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Execute AUTH_CAPTURE (Sale) ──
-    const response = await pf.AuthCapture(paymentInfo, cardInfo);
+    const response = await pf.AuthCapture(paymentInfo as PaymentInformation, cardInfo);
 
     console.log('[PAGUELOFACIL] AuthCapture response:', {
       success: response?.success,

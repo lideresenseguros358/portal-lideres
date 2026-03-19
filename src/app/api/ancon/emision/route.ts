@@ -62,7 +62,7 @@ async function rawSoap(method: string, params: Record<string, string>): Promise<
   const text = await res.text();
   const m = text.match(/<data[^>]*>([\s\S]*?)<\/data>/) || text.match(/<return[^>]*>([\s\S]*?)<\/return>/);
   if (!m) return text.substring(0, 500);
-  const decoded = decodeEntities(m[1]);
+  const decoded = decodeEntities(m[1]!);
   try { return JSON.parse(decoded); } catch { return decoded; }
 }
 
@@ -331,7 +331,7 @@ export async function POST(request: NextRequest) {
         const matchingInsp = inspections.find(
           (i) => i.no_cotizacion === no_cotizacion || i.cotizacion === no_cotizacion
         ) || inspections[0];
-        const inspId = matchingInsp.inspeccion || matchingInsp.no_inspeccion || matchingInsp.id;
+        const inspId = matchingInsp?.inspeccion || matchingInsp?.no_inspeccion || matchingInsp?.id;
         if (inspId) {
           log('5/7', `Enlazando inspección ${inspId} a cotización ${no_cotizacion}...`);
           const linkRaw = await rawSoap('EnlazarInspeccion', {

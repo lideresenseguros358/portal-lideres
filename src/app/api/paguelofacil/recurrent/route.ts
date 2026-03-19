@@ -24,7 +24,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// @ts-expect-error — @shoopiapp/paguelofacil has no type declarations
 import PagueloFacil from '@shoopiapp/paguelofacil';
 
 export async function POST(request: NextRequest) {

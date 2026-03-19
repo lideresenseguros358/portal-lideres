@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "@shoopiapp/paguelofacil": [
+        "src/types/shoopiapp-paguelofacil"
       ]
     },
     "noEmit": true,
