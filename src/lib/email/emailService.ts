@@ -51,15 +51,12 @@ function sleep(ms: number) {
  * Returns { valid, missing[] }.
  */
 function validateEnv(): { valid: boolean; missing: string[] } {
-  const required: Record<string, string | undefined> = {
-    ZEPTO_API_KEY: process.env.ZEPTO_API_KEY,
-    ZEPTO_SENDER: process.env.ZEPTO_SENDER,
-    ZEPTO_SENDER_NAME: process.env.ZEPTO_SENDER_NAME,
-  };
-
-  const missing = Object.entries(required)
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
+  // Accept either ZEPTO_API_KEY or ZEPTO_SMTP_PASS (same token)
+  const hasKey = !!(process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS);
+  const missing: string[] = [];
+  if (!hasKey) missing.push('ZEPTO_API_KEY or ZEPTO_SMTP_PASS');
+  if (!process.env.ZEPTO_SENDER) missing.push('ZEPTO_SENDER');
+  if (!process.env.ZEPTO_SENDER_NAME) missing.push('ZEPTO_SENDER_NAME');
 
   return { valid: missing.length === 0, missing };
 }
@@ -124,7 +121,11 @@ async function send(params: EmailSendParams): Promise<EmailSendResult> {
     console.log('[EMAIL-SERVICE] Production detected → forcing Zepto API');
   }
 
-  const apiKey = process.env.ZEPTO_API_KEY!;
+  let apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  // ZeptoMail REST API requires 'Zoho-enczapikey' prefix
+  if (apiKey && !apiKey.startsWith('Zoho-enczapikey')) {
+    apiKey = `Zoho-enczapikey ${apiKey}`;
+  }
   const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
   const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
 

@@ -24,7 +24,11 @@ const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 1_000;
 
 function getZeptoConfig() {
-  const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  let apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  // ZeptoMail REST API requires 'Zoho-enczapikey' prefix in Authorization header
+  if (apiKey && !apiKey.startsWith('Zoho-enczapikey')) {
+    apiKey = `Zoho-enczapikey ${apiKey}`;
+  }
   const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
   const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
   return { apiKey, sender, senderName };

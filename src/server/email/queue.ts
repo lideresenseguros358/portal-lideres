@@ -21,8 +21,8 @@ import type { SendEmailParams } from './types';
 // ==================== CONFIGURACIÓN ====================
 
 const RATE_LIMIT_CONFIG = {
-  /** Segundos entre cada correo (3s = 20 correos/min = 1200/hora) */
-  DELAY_BETWEEN_EMAILS: 3 * 1000, // 3 segundos en milisegundos
+  /** Milisegundos entre cada correo (500ms = 120/min — ZeptoMail handles thousands/hr) */
+  DELAY_BETWEEN_EMAILS: 500,
   
   /** Máximo de correos por lote */
   MAX_BATCH_SIZE: 200,
