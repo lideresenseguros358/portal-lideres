@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { FaChevronDown, FaChevronUp, FaShieldAlt, FaCheckCircle, FaStar, FaFileAlt, FaMoneyBillWave } from 'react-icons/fa';
+import { normalizeCCBenefits } from '@/lib/normalizers/cc-benefits';
 
 interface CoberturaDetalle {
   codigo: string | number;
@@ -177,32 +178,42 @@ export default function QuoteDetailsCard({
       )}
 
       {/* Beneficios */}
-      {beneficios.length > 0 && (
-        <div className="mb-4 md:mb-5">
-          <button
-            onClick={() => toggleSection('beneficios')}
-            className="w-full flex items-center justify-between p-4 md:p-5 bg-white rounded-xl border border-gray-200 hover:border-[#8AAA19] hover:shadow-md transition-all"
-          >
-            <span className="text-sm md:text-base font-semibold text-[#010139] flex items-center gap-2 md:gap-3">
-              <FaStar className="text-[#8AAA19] text-lg" />
-              Beneficios Extras ({beneficios.length})
-            </span>
-            {expandedSection === 'beneficios' ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
-          </button>
-          {expandedSection === 'beneficios' && (
-            <div className="mt-3 md:mt-4 space-y-2.5 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-              {beneficios.map((beneficio, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 md:p-4 bg-green-50 rounded-lg border border-green-100">
-                  <FaCheckCircle className="text-green-600 flex-shrink-0 mt-0.5 text-base" />
-                  <span className="text-sm md:text-base text-gray-700 leading-snug">
-                    {typeof beneficio === 'string' ? beneficio : beneficio.nombre}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {beneficios.length > 0 && (() => {
+        const normalized = normalizeCCBenefits(beneficios, aseguradora);
+        const allItems = [...normalized.standard, ...normalized.extras];
+        const totalCount = allItems.length;
+        return (
+          <div className="mb-4 md:mb-5">
+            <button
+              onClick={() => toggleSection('beneficios')}
+              className="w-full flex items-center justify-between p-4 md:p-5 bg-white rounded-xl border border-gray-200 hover:border-[#8AAA19] hover:shadow-md transition-all"
+            >
+              <span className="text-sm md:text-base font-semibold text-[#010139] flex items-center gap-2 md:gap-3">
+                <FaStar className="text-[#8AAA19] text-lg" />
+                Beneficios Extras ({totalCount})
+              </span>
+              {expandedSection === 'beneficios' ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
+            </button>
+            {expandedSection === 'beneficios' && (
+              <div className="mt-3 md:mt-4 space-y-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {allItems.map((item, index) => (
+                  <div key={item.key} className="flex items-start gap-3 p-3 md:p-4 bg-green-50 rounded-lg border border-green-100 benefit-item" style={{ opacity: 0 }}>
+                    <span className="text-base flex-shrink-0 mt-0.5 leading-5">{item.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm md:text-base text-gray-700 font-medium leading-snug">
+                        {item.label}
+                      </span>
+                      {item.detail && (
+                        <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{item.detail}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Endosos */}
       {endosos.length > 0 && (
