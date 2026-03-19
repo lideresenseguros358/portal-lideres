@@ -9,10 +9,23 @@ export const POLICY_TYPES = [
   { value: 'ACCIDENTES PERSONALES', label: '🚑 Accidentes Personales' },
   { value: 'TRANSPORTE', label: '🚚 Transporte' },
   { value: 'HOGAR', label: '🏠 Hogar' },
+  { value: 'VIAJERO', label: '✈️ Viajero' },
   { value: 'OTROS', label: '📋 Otros' },
 ] as const;
 
 export type PolicyType = typeof POLICY_TYPES[number]['value'];
+
+// Tipos de póliza que NO renuevan — se inactivan automáticamente al cumplir 1 año
+export const NON_RENEWABLE_TYPES = ['VIAJERO'] as const;
+
+/**
+ * Verifica si un tipo de póliza es no-renovable (ej: viajero).
+ * Estas pólizas no tienen fecha de renovación y se inactivan tras 1 año.
+ */
+export function isNonRenewablePolicy(ramo: string | null | undefined): boolean {
+  if (!ramo) return false;
+  return NON_RENEWABLE_TYPES.includes(ramo.trim().toUpperCase() as any);
+}
 
 // Condiciones especiales de override
 export const SPECIAL_OVERRIDE_CONDITIONS = {

@@ -2,6 +2,7 @@ import { getSupabaseAdmin, Tables } from '../supabase/admin';
 import { createNotification } from './create';
 import { getTodayLocalDate, getFutureDateLocal, getPastDateLocal } from '../utils/dates';
 import { sendNotificationEmail } from './send-email';
+import { NON_RENEWABLE_TYPES } from '../constants/policy-types';
 
 type Policy = Tables<'policies'>;
 type Client = Tables<'clients'>;
@@ -36,19 +37,24 @@ export async function runRenewalNotifications(options: RenewalNotificationOption
     alert_0d: 0,
     alert_60d_deleted: 0,
     brokers_notified: 0,
+    non_renewable_inactivated: 0,
   };
   
+  // Auto-inactivar pólizas no-renovables (VIAJERO) que cumplieron 1 año
+  const inactivated = await inactivateExpiredNonRenewable(supabase, todayISO!);
+  results.non_renewable_inactivated = inactivated;
+
   // Ejecutar según el parámetro daysBefore
   if (daysBefore === 'expired') {
-    results = await runExpiredAlert(supabase, todayISO!);
+    results = { ...results, ...await runExpiredAlert(supabase, todayISO!) };
   } else if (daysBefore === 30) {
-    results = await run30DaysAlert(supabase, todayISO!);
+    results = { ...results, ...await run30DaysAlert(supabase, todayISO!) };
   } else if (daysBefore === 7) {
-    results = await run7DaysAlert(supabase, todayISO!);
+    results = { ...results, ...await run7DaysAlert(supabase, todayISO!) };
   } else if (daysBefore === 0) {
-    results = await run0DaysAlert(supabase, todayISO!);
+    results = { ...results, ...await run0DaysAlert(supabase, todayISO!) };
   } else if (daysBefore === -60) {
-    results = await run60DaysPostExpiration(supabase, todayISO!);
+    results = { ...results, ...await run60DaysPostExpiration(supabase, todayISO!) };
   }
   
   // Log en audit_logs
@@ -391,6 +397,52 @@ async function run60DaysPostExpiration(supabase: any, todayISO: string) {
     alert_60d_deleted: clientIds.length,
     brokers_notified: brokerPoliciesMap.size,
   };
+}
+
+/**
+ * Auto-inactivar pólizas no-renovables (ej: VIAJERO) que cumplieron 1 año desde start_date.
+ * Estas pólizas no tienen renewal_date y deben pasar a VENCIDA automáticamente.
+ */
+async function inactivateExpiredNonRenewable(supabase: any, todayISO: string): Promise<number> {
+  try {
+    // Buscar pólizas ACTIVAS de tipos no-renovables cuya start_date + 1 año <= hoy
+    const oneYearAgo = getPastDateLocal(365);
+    
+    if (!oneYearAgo) return 0;
+
+    const { data: policies, error } = await supabase
+      .from('policies')
+      .select('id, policy_number, ramo, start_date, client_id')
+      .eq('status', 'ACTIVA')
+      .is('renewal_date', null)
+      .in('ramo', NON_RENEWABLE_TYPES as unknown as string[])
+      .lte('start_date', oneYearAgo);
+
+    if (error) {
+      console.error('[RENEWAL] Error buscando pólizas no-renovables:', error);
+      return 0;
+    }
+
+    if (!policies || policies.length === 0) return 0;
+
+    const ids = policies.map((p: any) => p.id);
+    console.log(`[RENEWAL] Inactivando ${ids.length} póliza(s) no-renovable(s):`, policies.map((p: any) => p.policy_number));
+
+    const { error: updateError } = await supabase
+      .from('policies')
+      .update({ status: 'VENCIDA' })
+      .in('id', ids);
+
+    if (updateError) {
+      console.error('[RENEWAL] Error actualizando pólizas no-renovables:', updateError);
+      return 0;
+    }
+
+    return ids.length;
+  } catch (err) {
+    console.error('[RENEWAL] Error en inactivateExpiredNonRenewable:', err);
+    return 0;
+  }
 }
 
 /**

@@ -9,7 +9,7 @@ import { supabaseClient } from '@/lib/supabase/client';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { normalizeToUpperCase } from '@/lib/utils/normalize-text';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
-import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
+import { POLICY_TYPES, checkSpecialOverride, isNonRenewablePolicy } from '@/lib/constants/policy-types';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
@@ -1069,7 +1069,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
         policy_number: normalizeToUpperCase(formData.policy_number.trim()),
         ramo: normalizeToUpperCase(formData.ramo.trim()),
         start_date: formData.start_date || null,
-        renewal_date: formData.renewal_date || null,
+        renewal_date: isNonRenewablePolicy(formData.ramo) ? null : (formData.renewal_date || null),
         status: formData.status,
         percent_override:
           formData.percent_override === ""
@@ -1198,7 +1198,14 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               <select
                 required
                 value={formData.ramo}
-                onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const updates: Partial<PolicyFormState> = { ramo: value };
+                  if (isNonRenewablePolicy(value)) {
+                    updates.renewal_date = '';
+                  }
+                  setFormData(prev => ({ ...prev, ...updates }));
+                }}
                 className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
               >
                 <option value="" disabled>
@@ -1248,18 +1255,30 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   style={{ WebkitAppearance: 'none' }}
                 />
               </div>
-              <div className="w-full max-w-full overflow-hidden">
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  🔁 Fecha de Renovación
-                </label>
-                <input
-                  type="date"
-                  value={formData.renewal_date}
-                  onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                  className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
-                  style={{ WebkitAppearance: 'none' }}
-                />
-              </div>
+              {isNonRenewablePolicy(formData.ramo) ? (
+                <div className="w-full max-w-full overflow-hidden">
+                  <label className="block text-sm font-bold text-[#010139] mb-2">
+                    🔁 Fecha de Renovación
+                  </label>
+                  <div className="w-full px-3 sm:px-4 py-2 border-2 border-gray-200 rounded-lg bg-gray-100 text-sm text-gray-500">
+                    N/A — Las pólizas de viajero no renuevan
+                  </div>
+                  <p className="text-xs text-amber-600 mt-1">✈️ Se inactivará automáticamente al cumplir 1 año</p>
+                </div>
+              ) : (
+                <div className="w-full max-w-full overflow-hidden">
+                  <label className="block text-sm font-bold text-[#010139] mb-2">
+                    🔁 Fecha de Renovación
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.renewal_date}
+                    onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
+                    className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                    style={{ WebkitAppearance: 'none' }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* % Comisión Override - Solo visible para Master */}

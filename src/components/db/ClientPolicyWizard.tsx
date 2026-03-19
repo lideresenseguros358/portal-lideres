@@ -6,7 +6,7 @@ import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
+import { POLICY_TYPES, checkSpecialOverride, isNonRenewablePolicy } from '@/lib/constants/policy-types';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
@@ -706,7 +706,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         errors.start_date = true;
         errorMessages.push('Fecha de inicio');
       }
-      if (!formData.renewal_date) {
+      if (!formData.renewal_date && !isNonRenewablePolicy(formData.ramo)) {
         errors.renewal_date = true;
         errorMessages.push('Fecha de renovación');
       }
@@ -789,7 +789,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
         // Normalizar fechas a formato YYYY-MM-DD estricto (sin hora, sin timezone)
         const normalizedStartDate = formData.start_date?.trim() || null;
-        const normalizedRenewalDate = formData.renewal_date?.trim() || null;
+        const normalizedRenewalDate = isNonRenewablePolicy(formData.ramo) ? null : (formData.renewal_date?.trim() || null);
         
         const policyPayload = {
           policy_number: normalizeToUpperCase(formData.policy_number),
@@ -844,7 +844,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         // Normalizar TODAS las fechas a formato YYYY-MM-DD estricto (sin hora, sin timezone)
         const normalizedBirthDate = formData.birth_date?.trim() || null;
         const normalizedStartDate = formData.start_date?.trim() || null;
-        const normalizedRenewalDate = formData.renewal_date?.trim() || null;
+        const normalizedRenewalDate = isNonRenewablePolicy(formData.ramo) ? null : (formData.renewal_date?.trim() || null);
         
         console.log('[FECHA DEBUG] Fechas normalizadas para cliente y póliza:', {
           birth_date_input: formData.birth_date,
@@ -1459,7 +1459,11 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <Select 
                   value={formData.ramo} 
                   onValueChange={(value) => {
-                    setFormData({ ...formData, ramo: value });
+                    const updates: Partial<FormData> = { ramo: value };
+                    if (isNonRenewablePolicy(value)) {
+                      updates.renewal_date = '';
+                    }
+                    setFormData(prev => ({ ...prev, ...updates }));
                     if (validationErrors.ramo && value) {
                       setValidationErrors(prev => ({ ...prev, ramo: false }));
                     }
@@ -1519,32 +1523,44 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   )}
                 </div>
 
-                <div className="w-full max-w-full overflow-hidden">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha de Renovación <span className="text-red-500">*</span>
-                    {formData.start_date && (
-                      <span className="text-xs text-green-600 ml-2">✓ Auto-calculada</span>
+                {isNonRenewablePolicy(formData.ramo) ? (
+                  <div className="w-full max-w-full overflow-hidden">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha de Renovación
+                    </label>
+                    <div className="w-full px-3 py-2 sm:px-4 border-2 border-gray-200 rounded-lg bg-gray-100 text-sm text-gray-500">
+                      N/A — Las pólizas de viajero no renuevan
+                    </div>
+                    <p className="text-xs text-amber-600 mt-1">✈️ Esta póliza se inactivará automáticamente al cumplir 1 año desde la fecha de inicio</p>
+                  </div>
+                ) : (
+                  <div className="w-full max-w-full overflow-hidden">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha de Renovación <span className="text-red-500">*</span>
+                      {formData.start_date && (
+                        <span className="text-xs text-green-600 ml-2">✓ Auto-calculada</span>
+                      )}
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.renewal_date}
+                      onChange={(e) => {
+                        setFormData({ ...formData, renewal_date: e.target.value });
+                        if (validationErrors.renewal_date && e.target.value) {
+                          setValidationErrors(prev => ({ ...prev, renewal_date: false }));
+                        }
+                      }}
+                      className={`w-full max-w-full px-3 py-2 sm:px-4 border-2 rounded-lg focus:outline-none transition text-sm sm:text-base ${
+                        validationErrors.renewal_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      style={{ WebkitAppearance: 'none' }}
+                      required
+                    />
+                    {validationErrors.renewal_date && (
+                      <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
                     )}
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.renewal_date}
-                    onChange={(e) => {
-                      setFormData({ ...formData, renewal_date: e.target.value });
-                      if (validationErrors.renewal_date && e.target.value) {
-                        setValidationErrors(prev => ({ ...prev, renewal_date: false }));
-                      }
-                    }}
-                    className={`w-full max-w-full px-3 py-2 sm:px-4 border-2 rounded-lg focus:outline-none transition text-sm sm:text-base ${
-                      validationErrors.renewal_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                    }`}
-                    style={{ WebkitAppearance: 'none' }}
-                    required
-                  />
-                  {validationErrors.renewal_date && (
-                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               <div>
