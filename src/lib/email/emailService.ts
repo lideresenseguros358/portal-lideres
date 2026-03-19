@@ -51,12 +51,10 @@ function sleep(ms: number) {
  * Returns { valid, missing[] }.
  */
 function validateEnv(): { valid: boolean; missing: string[] } {
-  // Accept either ZEPTO_API_KEY or ZEPTO_SMTP_PASS (same token)
+  // Only the API key is strictly required — sender/name have safe defaults
   const hasKey = !!(process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS);
   const missing: string[] = [];
   if (!hasKey) missing.push('ZEPTO_API_KEY or ZEPTO_SMTP_PASS');
-  if (!process.env.ZEPTO_SENDER) missing.push('ZEPTO_SENDER');
-  if (!process.env.ZEPTO_SENDER_NAME) missing.push('ZEPTO_SENDER_NAME');
 
   return { valid: missing.length === 0, missing };
 }
@@ -66,7 +64,7 @@ function validateEnv(): { valid: boolean; missing: string[] } {
  */
 function getEnvStatus(): EmailEnvStatus {
   const vercelEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown';
-  const apiKey = process.env.ZEPTO_API_KEY || '';
+  const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
   const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
   const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
 
