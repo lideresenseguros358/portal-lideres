@@ -16,6 +16,27 @@ const appUrl = process.env.APP_BASE_URL || 'https://portal.lideresenseguros.com'
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// DB stores Panama local time as +00 — getUTC* gives the correct local values
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DAYS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+
+function formatDatePanama(d: Date): string {
+  const wd = DAYS[d.getUTCDay()];
+  const day = d.getUTCDate();
+  const month = MONTHS[d.getUTCMonth()];
+  const year = d.getUTCFullYear();
+  return `${wd}, ${day} de ${month} de ${year}`;
+}
+
+function formatTimePanama(d: Date): string {
+  let h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? 'p.\u00a0m.' : 'a.\u00a0m.';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
 /**
  * Notificar creación de evento
  */
@@ -95,19 +116,10 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
   const rsvpYesUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=yes` : undefined;
   const rsvpNoUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=no` : undefined;
 
-  // Formatear fecha y hora — SIEMPRE en zona horaria de Panamá
-  const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    timeZone: 'America/Panama'
-  });
-  const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    timeZone: 'America/Panama'
-  });
+  // DB stores Panama local time as +00 — use getUTC* to read correctly
+  const d = new Date(event.start_at);
+  const eventDate = formatDatePanama(d);
+  const eventTime = formatTimePanama(d);
 
   // Enviar a cada asistente
   const emails = attendees.map(attendee => ({
@@ -138,7 +150,7 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
 /**
  * Notificar actualización de evento
  */
-export async function notifyEventUpdated(eventId: string, changes: any[]): Promise<void> {
+export async function notifyEventUpdated(eventId: string, changes: {field: string; oldValue?: string; newValue?: string}[]): Promise<void> {
   const { data: event, error } = await supabase
     .from('events')
     .select(`
@@ -203,18 +215,10 @@ export async function notifyEventUpdated(eventId: string, changes: any[]): Promi
 
   if (!attendees || attendees.length === 0) return;
 
-  const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric',
-    timeZone: 'America/Panama'
-  });
-  const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    timeZone: 'America/Panama'
-  });
+  // DB stores Panama local time as +00 — use getUTC* to read it directly
+  const d = new Date(event.start_at);
+  const eventDate = formatDatePanama(d);
+  const eventTime = formatTimePanama(d);
 
   const emails = attendees.map(attendee => ({
     to: attendee.email,
@@ -227,7 +231,7 @@ export async function notifyEventUpdated(eventId: string, changes: any[]): Promi
       eventTime,
       location: event.location_name,
       updatedBy: updater?.full_name || 'Sistema',
-      changes,
+      changes: changes.length > 0 ? changes : undefined,
       portalUrl: appUrl,
     }),
     fromType: 'PORTAL' as const,
@@ -346,18 +350,9 @@ export async function sendEventReminders(): Promise<{ sent: number; failed: numb
 
     if (!attendees || attendees.length === 0) continue;
 
-    const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      timeZone: 'America/Panama'
-    });
-    const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      timeZone: 'America/Panama'
-    });
+    const dr = new Date(event.start_at);
+    const eventDate = formatDatePanama(dr);
+    const eventTime = formatTimePanama(dr);
 
     const emails = attendees.map(attendee => ({
       to: attendee.email,

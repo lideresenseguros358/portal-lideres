@@ -189,8 +189,8 @@ export const COMPANY_INFO = {
   regulatory: 'Regulada y supervisada por la Superintendencia de Seguros y Reaseguros de Panamá',
   email: 'contacto@lideresenseguros.com',
   phone: '223-2373',
-  whatsapp: '+1 (415) 523-8886',
-  whatsappUrl: 'https://wa.me/14155238886',
+  whatsapp: '+507 6833-9167',
+  whatsappUrl: 'https://wa.me/50768339167',
   portalUrl: PORTAL_BASE,
   specialties: [
     'Seguros de Auto (Cobertura Completa y Daños a Terceros)',

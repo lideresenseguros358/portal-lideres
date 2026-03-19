@@ -308,6 +308,7 @@ export async function actionUpdateEvent(params: {
     selected_brokers: string[];
   }>;
   userId: string;
+  notifyBrokers?: boolean;
 }) {
   try {
     const supabase = await getSupabaseServer();
@@ -354,8 +355,9 @@ export async function actionUpdateEvent(params: {
       await supabase.from('event_audience').delete().eq('event_id', params.id);
     }
 
-    // Notificar SOLO si cambió la fecha — fire-and-forget (no bloquear respuesta)
-    if (dateChanged) {
+    // Notificar SOLO si el usuario eligió notificar — fire-and-forget (no bloquear respuesta)
+    const shouldNotify = params.notifyBrokers === true;
+    if (shouldNotify) {
       const updateEventId = params.id;
       const updatePayload = { ...params.payload };
       const currentTitle = currentEvent?.title;
@@ -370,7 +372,7 @@ export async function actionUpdateEvent(params: {
           const { createNotification } = await import('@/lib/notifications/create');
           
           const title = updatePayload.title || currentTitle;
-          const startAt = updatePayload.start_at || currentStartAt;
+          const startAt = updatePayload.start_at || currentStartAt || new Date().toISOString();
           const isAllDay = updatePayload.is_all_day ?? currentIsAllDay;
           const audience = updatePayload.audience || currentAudience;
           
@@ -434,7 +436,18 @@ export async function actionUpdateEvent(params: {
           // Enviar correos SMTP profesionales de actualización
           try {
             const { notifyEventUpdated } = await import('@/lib/email/agenda');
-            await notifyEventUpdated(updateEventId, ['Fecha reprogramada']);
+            // Build proper change objects for the email template
+            const emailChanges: {field: string; oldValue?: string; newValue?: string}[] = [];
+            if (updatePayload.start_at && currentStartAt && updatePayload.start_at !== currentStartAt) {
+              emailChanges.push({ field: 'Fecha/Hora', oldValue: new Date(currentStartAt).toISOString().slice(0, 16).replace('T', ' '), newValue: new Date(updatePayload.start_at).toISOString().slice(0, 16).replace('T', ' ') });
+            }
+            if (updatePayload.title && currentTitle && updatePayload.title !== currentTitle) {
+              emailChanges.push({ field: 'Título', oldValue: currentTitle, newValue: updatePayload.title });
+            }
+            if (updatePayload.location_name !== undefined && updatePayload.location_name !== currentLocationName) {
+              emailChanges.push({ field: 'Lugar', oldValue: currentLocationName || '—', newValue: updatePayload.location_name || '—' });
+            }
+            await notifyEventUpdated(updateEventId, emailChanges);
             console.log(`[actionUpdateEvent] ✅ Correos SMTP enviados para evento actualizado ${updateEventId}`);
           } catch (emailError) {
             console.error('[actionUpdateEvent] ⚠️ Error enviando correos SMTP:', emailError);

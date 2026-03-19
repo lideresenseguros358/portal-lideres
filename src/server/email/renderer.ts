@@ -14,18 +14,7 @@ import type { TemplateData } from './types';
 export function renderTemplate(html: string, data: TemplateData): string {
   let rendered = html;
 
-  // Reemplazar variables {{variable}}
-  Object.keys(data).forEach(key => {
-    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
-    rendered = rendered.replace(regex, String(data[key] || ''));
-  });
-
-  // Reemplazar condicionales {{#if variable}}...{{/if}}
-  rendered = rendered.replace(/{{#if\s+(\w+)}}(.*?){{\/if}}/gs, (match, key, content) => {
-    return data[key] ? content : '';
-  });
-
-  // Reemplazar loops {{#each items}}...{{/each}}
+  // 1. Process loops FIRST (before variable replacement corrupts the block syntax)
   rendered = rendered.replace(/{{#each\s+(\w+)}}(.*?){{\/each}}/gs, (match, key, template) => {
     const items = data[key];
     if (!Array.isArray(items)) return '';
@@ -38,6 +27,17 @@ export function renderTemplate(html: string, data: TemplateData): string {
       });
       return itemHtml;
     }).join('');
+  });
+
+  // 2. Process conditionals SECOND
+  rendered = rendered.replace(/{{#if\s+(\w+)}}(.*?){{\/if}}/gs, (match, key, content) => {
+    return data[key] ? content : '';
+  });
+
+  // 3. Replace simple variables LAST
+  Object.keys(data).forEach(key => {
+    const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+    rendered = rendered.replace(regex, String(data[key] || ''));
   });
 
   return rendered;

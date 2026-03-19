@@ -372,7 +372,7 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
         <p>Tu aliado de confianza en protección</p>
         <p style="margin-top: 12px;">
           <a href="${baseUrl}/cotizadores">Cotizar Ahora</a> |
-          <a href="https://wa.me/50760001234">WhatsApp</a>
+          <a href="https://wa.me/50768339167">WhatsApp</a>
         </p>
       </div>
     </div>

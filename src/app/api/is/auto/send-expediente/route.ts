@@ -769,8 +769,8 @@ function buildWelcomeEmail(data: {
   };
 }): string {
   const emergencyNumber = getInsurerEmergencyNumber(data.insurerName);
-  const whatsappUrl = 'https://wa.me/14155238886';
-  const whatsappNumber = '+1 (415) 523-8886';
+  const whatsappUrl = 'https://wa.me/50768339167';
+  const whatsappNumber = '+507 6833-9167';
   const contactEmail = 'contacto@lideresenseguros.com';
 
   return `

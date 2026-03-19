@@ -48,6 +48,8 @@ export default function EventFormModal({
   const [brokers, setBrokers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [pendingUpdatePayload, setPendingUpdatePayload] = useState<any>(null);
   const isEditing = !!eventToEdit?.id;
 
   useEffect(() => {
@@ -174,8 +176,8 @@ export default function EventFormModal({
       let result;
       
       if (isEditing && eventToEdit?.id) {
-        // Update existing event
-        result = await actionUpdateEvent({
+        // Store payload and show confirmation modal
+        setPendingUpdatePayload({
           id: eventToEdit.id,
           payload: {
             title: title.trim(),
@@ -195,6 +197,9 @@ export default function EventFormModal({
           },
           userId,
         });
+        setSubmitting(false);
+        setShowNotifyModal(true);
+        return;
       } else if (showMultipleDates && multipleDates.length > 0) {
         // Create multiple events (incluye fecha inicial + fechas adicionales)
         const allDates = [startDate, ...multipleDates];
@@ -259,6 +264,34 @@ export default function EventFormModal({
       toast.error('Error inesperado');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmUpdate = async (notifyBrokers: boolean) => {
+    setShowNotifyModal(false);
+    if (!pendingUpdatePayload) return;
+    
+    setSubmitting(true);
+    try {
+      const result = await actionUpdateEvent({
+        ...pendingUpdatePayload,
+        notifyBrokers,
+      });
+
+      if (result.ok) {
+        toast.success(result.message || 'Evento actualizado exitosamente');
+        if (notifyBrokers) {
+          toast.info('Se notificará a los corredores del cambio.');
+        }
+        onSuccess();
+      } else {
+        toast.error(result.error || 'Error al actualizar evento');
+      }
+    } catch (error) {
+      toast.error('Error inesperado');
+    } finally {
+      setSubmitting(false);
+      setPendingUpdatePayload(null);
     }
   };
 
@@ -847,6 +880,43 @@ export default function EventFormModal({
           </button>
         </div>
       </div>
+
+      {/* Confirmation modal: notify brokers? */}
+      {showNotifyModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="mx-auto w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <span className="text-2xl">📧</span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                ¿Notificar a los corredores?
+              </h3>
+              <p className="text-gray-600 text-sm">
+                El evento se actualizará. ¿Desea enviar una notificación por correo a los corredores sobre este cambio?
+              </p>
+            </div>
+            <div className="flex border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => handleConfirmUpdate(false)}
+                disabled={submitting}
+                className="flex-1 px-4 py-3 text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                No, solo actualizar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmUpdate(true)}
+                disabled={submitting}
+                className="flex-1 px-4 py-3 bg-[#010139] text-white font-semibold hover:bg-[#020270] transition-colors disabled:opacity-50 border-l border-gray-200"
+              >
+                {submitting ? 'Enviando...' : 'Sí, notificar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

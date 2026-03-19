@@ -14,7 +14,7 @@ interface LissaChatWidgetProps {
   onClose: () => void;
 }
 
-const LISSA_WHATSAPP_NUMBER = '14155238886';
+const LISSA_WHATSAPP_NUMBER = '50768339167';
 
 export default function LissaChatWidget({ open, onClose }: LissaChatWidgetProps) {
   // Prevent body scroll when open

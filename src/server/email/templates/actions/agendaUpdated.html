@@ -16,20 +16,20 @@
 
 {{#if changes}}
 <p><strong>Cambios realizados:</strong></p>
-<ul style="margin: 10px 0; padding-left: 20px; background-color: #fff3e0; padding: 16px; border-radius: 6px;">
+<div style="margin: 10px 0; background-color: #fff3e0; padding: 16px; border-radius: 6px;">
   {{#each changes}}
-  <li><strong>{{field}}:</strong> {{oldValue}} → {{newValue}}</li>
+  <p style="margin: 6px 0;"><strong>{{field}}:</strong> {{oldValue}} → {{newValue}}</p>
   {{/each}}
-</ul>
+</div>
 {{/if}}
 
 {{#if description}}
-<p><strong>Descripción actualizada:</strong></p>
+<p><strong>Descripción:</strong></p>
 <div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px;">
   {{description}}
 </div>
 {{/if}}
 
-<a href="{{portalUrl}}/agenda" class="button">
+<a href="{{portalUrl}}/agenda" style="display: inline-block; padding: 12px 32px; background-color: #010139; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 16px;">
   Ver en Agenda
 </a>

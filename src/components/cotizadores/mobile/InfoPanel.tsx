@@ -15,7 +15,7 @@ interface InfoPanelProps {
   onClose: () => void;
 }
 
-const LISSA_WHATSAPP_NUMBER = '14155238886';
+const LISSA_WHATSAPP_NUMBER = '50768339167';
 const LISSA_WHATSAPP_URL = `https://wa.me/${LISSA_WHATSAPP_NUMBER}?text=Hola%20Lissa%2C%20necesito%20ayuda`;
 
 export default function InfoPanel({ open, onClose }: InfoPanelProps) {

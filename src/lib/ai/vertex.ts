@@ -88,7 +88,7 @@ Somos una correduría con presencia en Panamá que trabaja con las principales a
 Contacto principal:
 - Email: contacto@lideresenseguros.com
 - Teléfono: 223-2373
-- WhatsApp con Lissa: https://wa.me/14155238886 (+1 415 523-8886)
+- WhatsApp con Lissa: https://wa.me/50768339167 (+507 6833-9167)
 - Portal: https://portal.lideresenseguros.com
 
 ## HORARIOS DE ATENCIÓN
