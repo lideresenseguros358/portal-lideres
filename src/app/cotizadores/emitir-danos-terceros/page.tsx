@@ -463,6 +463,9 @@ export default function EmitirDanosTercerosPage() {
         });
         
         // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        // FEDPA DT: cantidadPago=2 means "mensual 10 pagos" in the insurer's system,
+        // but the client pays via PF on their chosen schedule (e.g. 2 cuotas semestrales).
+        const isFedpaCuotasMismatch = selectedPaymentMode === 'cuotas' && selectedInstallmentsCount !== 10;
         createPaymentOnEmission({
           insurer: 'FEDPA',
           policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
@@ -476,6 +479,12 @@ export default function EmitirDanosTercerosPage() {
           pfRecCodOper,
           pfCardType,
           pfCardDisplay,
+          insurerPaymentPlan: selectedPaymentMode === 'cuotas' ? {
+            insurerCuotas: 10,
+            insurerFrequency: 'MENSUAL',
+            clientCuotas: selectedInstallmentsCount,
+            mismatch: isFedpaCuotasMismatch,
+          } : undefined,
         });
 
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
@@ -545,6 +554,12 @@ export default function EmitirDanosTercerosPage() {
             formaPago: selectedPaymentMode,
             cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
             montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
+            // Insurer payment plan mismatch info for welcome email
+            insurerPaymentPlan: selectedPaymentMode === 'cuotas' && isFedpaCuotasMismatch ? {
+              insurerCuotas: 10,
+              insurerFrequency: 'mensual',
+              clientCuotas: selectedInstallmentsCount,
+            } : undefined,
           }));
           
           if (emissionData.cedulaFile) {

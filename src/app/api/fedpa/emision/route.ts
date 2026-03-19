@@ -56,16 +56,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // ── Normalizar marca/modelo: IS numeric codes → FEDPA alpha codes ──
+    // ── Marca/Modelo: FEDPA PROD requires string numeric codes (e.g. '5' for Toyota, '100' for model) ──
+    // Do NOT convert to text abbreviations — PROD validates against AUT_MODELO_FK.
     const rawMarca = String(emisionData.Marca || '');
     const rawModelo = String(emisionData.Modelo || '');
     const marcaNombre = emisionData.MarcaNombre || '';
     const modeloNombre = emisionData.ModeloNombre || rawModelo;
-    const isNumericMarca = /^\d+$/.test(rawMarca);
-    const fedpaMarca = isNumericMarca
-      ? getFedpaMarcaFromIS(parseInt(rawMarca), marcaNombre)
-      : rawMarca;
-    const fedpaModelo = normalizarModeloFedpa(modeloNombre || rawModelo);
     
     const env = environment as FedpaEnvironment;
     const emisionRequest: EmitirPolizaRequest = {
@@ -88,11 +84,11 @@ export async function POST(request: NextRequest) {
       esPEP: emisionData.esPEP,
       Acreedor: emisionData.Acreedor,
       
-      // Vehículo — marca/modelo normalizados a formato FEDPA
+      // Vehículo — pass marca/modelo as-is (string numeric codes for PROD)
       sumaAsegurada: emisionData.sumaAsegurada || 0,
       Uso: emisionData.Uso,
-      Marca: fedpaMarca,
-      Modelo: fedpaModelo,
+      Marca: rawMarca,
+      Modelo: rawModelo,
       Ano: emisionData.Ano,
       Motor: emisionData.Motor,
       Placa: emisionData.Placa,
@@ -110,7 +106,7 @@ export async function POST(request: NextRequest) {
     // ═══ LOG: JSON completo que se envía a FEDPA ═══
     console.log(`\n[FEDPA EMISIÓN] ${requestId} ═══ PAYLOAD JSON ═══`);
     console.log(JSON.stringify(emisionRequest, null, 2));
-    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${rawMarca} → ${fedpaMarca} | Modelo: ${rawModelo} → ${fedpaModelo}`);
+    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${rawMarca} | Modelo: ${rawModelo} | MarcaNombre: ${marcaNombre} | ModeloNombre: ${modeloNombre}`);
     console.log(`[FEDPA EMISIÓN] ${requestId} ═════════════════════════\n`);
     
     // Emitir con FEDPA — NO reintentar automáticamente (operación crítica)

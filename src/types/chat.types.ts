@@ -35,7 +35,7 @@ export interface ChatThread {
 
 // ── Message ──
 export type MessageDirection = 'inbound' | 'outbound';
-export type MessageProvider = 'twilio' | 'portal' | 'system';
+export type MessageProvider = 'whatsapp_cloud' | 'portal' | 'system';
 
 export interface ChatMessage {
   id: string;

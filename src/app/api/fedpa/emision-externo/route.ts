@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
     const defaultEnv = getFedpaDefaultEnv();
     const environment = (body.environment || defaultEnv).toUpperCase() === 'DEV' ? 'DEV' : 'PROD';
     const nroPolizaEndpoint = environment === 'DEV'
-      ? '/api/Polizas/get_nropoliza'
-      : '/api/Polizas/get_nropoliza_emitir';
+      ? '/Polizas/get_nropoliza'
+      : '/Polizas/get_nropoliza_emitir';
 
     console.log(`\n[EMISOR EXTERNO] ${requestId} ═══ START (env=${environment}) ═══`);
     console.log(`[EMISOR EXTERNO] Files: File1=${file1?.name || 'NONE'} (${file1?.size || 0}B), File2=${file2?.name || 'NONE'} (${file2?.size || 0}B), File3=${file3?.name || 'NONE'} (${file3?.size || 0}B)`);
@@ -117,8 +117,8 @@ export async function POST(request: NextRequest) {
       CodLimiteGastosMedico: String(body.CodLimiteGastosMedico || '16'),
       EndosoIncluido: body.EndosoIncluido || 'S',
       CodPlan: String(body.CodPlan || '411'),
-      CodMarca: /^\d+$/.test(String(body.Marca)) ? getFedpaMarcaFromIS(parseInt(body.Marca), body.MarcaNombre) : normalizeText(body.Marca),
-      CodModelo: /^\d+$/.test(String(body.Modelo)) ? normalizarModeloFedpa(body.ModeloNombre || body.Modelo) : normalizeText(body.Modelo),
+      CodMarca: String(body.Marca || '5'),
+      CodModelo: String(body.Modelo || '10'),
       Nombre: normalizeText(body.PrimerNombre),
       Apellido: normalizeText(body.PrimerApellido),
       Cedula: body.Identificacion || '0-0-0',
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
 
     const nroBody = {
       ...creds,
-      codCotizacion: idCotizacion,
+      codCotizacion: String(idCotizacion),
     };
     console.log(`[EMISOR EXTERNO] ${requestId} get_nropoliza body:`, JSON.stringify(nroBody));
 

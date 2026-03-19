@@ -458,6 +458,7 @@ export async function POST(request: NextRequest) {
         pdfUrl: resolvedPdfUrl,
         insurerName,
         caratulaUrl,
+        insurerPaymentPlan: quoteData.insurerPaymentPlan || undefined,
       });
       
       const welcomeSubject = `¡Bienvenido! Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`;
@@ -760,6 +761,12 @@ function buildWelcomeEmail(data: {
   formaPago?: string;
   cantidadCuotas?: number;
   montoCuota?: number;
+  // When insurer payment plan differs from client's chosen PF plan
+  insurerPaymentPlan?: {
+    insurerCuotas: number;
+    insurerFrequency: string;
+    clientCuotas: number;
+  };
 }): string {
   const emergencyNumber = getInsurerEmergencyNumber(data.insurerName);
   const whatsappUrl = 'https://wa.me/14155238886';
@@ -875,6 +882,42 @@ function buildWelcomeEmail(data: {
           <div class="lbl">Prima Total Anual</div>
           <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
         `}
+      </div>` : ''}
+
+      ${data.insurerPaymentPlan && data.insurerPaymentPlan.clientCuotas > 1 ? `
+      <!-- SPECIAL NOTICE: Insurer payment plan differs from client's PF plan -->
+      <div style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border:2px solid #1976d2;border-radius:12px;padding:18px 20px;margin:20px 0;">
+        <h4 style="margin:0 0 10px;color:#0d47a1;font-size:15px;font-weight:700;">&#x2139;&#xFE0F; Nota Importante sobre su Plan de Pagos</h4>
+        <p style="margin:0 0 10px;font-size:14px;color:#1a237e;line-height:1.6;">
+          En la <strong>car&aacute;tula oficial</strong> de su p&oacute;liza emitida por <strong>${data.insurerName}</strong>, 
+          usted ver&aacute; que el plan de pago figura como 
+          <strong>${data.insurerPaymentPlan.insurerFrequency === 'contado' || data.insurerPaymentPlan.insurerFrequency === 'CONTADO'
+            ? 'pago de contado'
+            : `${data.insurerPaymentPlan.insurerCuotas} pagos ${data.insurerPaymentPlan.insurerFrequency.toLowerCase()}es`}</strong>.
+        </p>
+        <p style="margin:0 0 10px;font-size:14px;color:#1a237e;line-height:1.6;">
+          Sin embargo, <strong>sus pagos reales ser&aacute;n descontados en ${data.insurerPaymentPlan.clientCuotas} cuota(s)</strong> 
+          seg&uacute;n lo acordado con usted, a trav&eacute;s de nuestro sistema de cobro autom&aacute;tico.
+        </p>
+        ${data.montoCuota ? `
+        <div style="background:white;border-radius:8px;padding:12px 16px;margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;">
+            <span>Monto por cuota:</span>
+            <strong style="color:#0d47a1;">$${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;margin-top:6px;">
+            <span>N&uacute;mero de cuotas:</span>
+            <strong style="color:#0d47a1;">${data.insurerPaymentPlan.clientCuotas}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;margin-top:6px;padding-top:6px;border-top:1px solid #e0e0e0;">
+            <span>Total a pagar:</span>
+            <strong style="color:#0d47a1;">$${Number(data.montoCuota * data.insurerPaymentPlan.clientCuotas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+          </div>
+        </div>` : ''}
+        <p style="margin:12px 0 0;font-size:12px;color:#1565c0;line-height:1.5;">
+          Esto es completamente normal y no afecta su cobertura. Su p&oacute;liza est&aacute; activa y vigente. 
+          Si tiene alguna duda, no dude en contactarnos.
+        </p>
       </div>` : ''}
 
       ${data.caratulaUrl ? `

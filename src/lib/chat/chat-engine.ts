@@ -4,7 +4,7 @@
  * Orchestrates: save → classify → update thread → escalate → AI reply → send
  *
  * Used by:
- *   - POST /api/whatsapp (Twilio webhook)
+ *   - POST /api/whatsapp (Meta WhatsApp Cloud API webhook)
  *   - Can also be called from portal for testing
  */
 
@@ -117,7 +117,7 @@ async function saveInboundMessage(
     .insert({
       thread_id: threadId,
       direction: 'inbound',
-      provider: 'twilio',
+      provider: 'whatsapp_cloud',
       provider_message_id: providerMessageId || null,
       from_phone: fromPhone,
       to_phone: toPhone,
@@ -142,7 +142,7 @@ export async function saveOutboundMessage(
   fromPhone: string,
   toPhone: string,
   opts: {
-    provider?: 'twilio' | 'portal' | 'system';
+    provider?: 'whatsapp_cloud' | 'portal' | 'system';
     aiGenerated?: boolean;
     aiModel?: string;
     intent?: string;
@@ -157,7 +157,7 @@ export async function saveOutboundMessage(
     .insert({
       thread_id: threadId,
       direction: 'outbound',
-      provider: opts.provider || 'twilio',
+      provider: opts.provider || 'whatsapp_cloud',
       from_phone: fromPhone,
       to_phone: toPhone,
       body,
@@ -423,7 +423,7 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
 
     // Save outbound AI message
     await saveOutboundMessage(sb, thread.id, aiReply, toPhone, fromPhone, {
-      provider: 'twilio',
+      provider: 'whatsapp_cloud',
       aiGenerated: true,
       aiModel: process.env.VERTEX_MODEL_CHAT || 'gemini-2.0-flash',
       intent: classification.intent,

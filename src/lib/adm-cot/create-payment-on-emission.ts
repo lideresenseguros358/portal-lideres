@@ -23,31 +23,22 @@ function computeSLADueDate(baseDate: Date, slaBusinessDays: number = 15): string
 
 /**
  * Compute recurrence frequency based on installment count.
- * CC (Cobertura Completa): spread over 12 months → 12/installments = months between payments
- * DT (Daños a Terceros): always MENSUAL (2 cuotas = hoy + 1 mes)
  *
- * Mapping (CC):
- *   2 cuotas → 6 meses (SEMESTRAL)
- *   3 cuotas → 4 meses (CUATRIMESTRAL)
- *   4 cuotas → 3 meses (TRIMESTRAL)
- *   5-6 cuotas → 2 meses (BIMESTRAL)
- *   7-10 cuotas → 1 mes (MENSUAL)
+ * DB constraint only allows: MENSUAL, SEMESTRAL.
+ * We map the client's chosen installments to the closest valid frequency:
+ *   1 cuota  → CONTADO (no recurrence)
+ *   2 cuotas → SEMESTRAL (every 6 months)
+ *   3-12     → MENSUAL  (monthly — PF cron charges on schedule dates)
+ *
+ * Note: The actual charge dates are determined by the schedule array,
+ * so even if frequency is MENSUAL, a 4-cuota plan will have charges
+ * every 3 months (schedule controls the real dates).
  */
-function computeFrequency(installments: number, cobertura?: string): { label: string; months: number } {
+function computeFrequency(installments: number, _cobertura?: string): { label: string; months: number } {
   if (installments <= 1) return { label: 'CONTADO', months: 12 };
-
-  // DT: always monthly (2 cuotas = hoy + 1 mes)
-  if (cobertura === 'TERCEROS' || cobertura === 'DT') {
-    return { label: 'MENSUAL', months: 1 };
-  }
-
-  // CC: distribute across 12-month policy period
-  const months = Math.floor(12 / installments);
-  if (months >= 6) return { label: 'SEMESTRAL', months: 6 };
-  if (months >= 4) return { label: 'CUATRIMESTRAL', months: 4 };
-  if (months >= 3) return { label: 'TRIMESTRAL', months: 3 };
-  if (months >= 2) return { label: 'BIMESTRAL', months: 2 };
-  return { label: 'MENSUAL', months: 1 };
+  if (installments === 2) return { label: 'SEMESTRAL', months: 6 };
+  // For 3+ installments: MENSUAL label but actual interval from schedule
+  return { label: 'MENSUAL', months: Math.max(1, Math.floor(12 / installments)) };
 }
 
 export async function createPaymentOnEmission(params: {
@@ -64,6 +55,14 @@ export async function createPaymentOnEmission(params: {
   pfRecCodOper?: string;
   pfCardType?: string;
   pfCardDisplay?: string;
+  // Insurer payment plan metadata — when insurer plan differs from client plan
+  // e.g. FEDPA DT: insurer sees "mensual 10 pagos" but client pays in 2 cuotas via PF
+  insurerPaymentPlan?: {
+    insurerCuotas: number;      // what the insurer sees (e.g. 10 for FEDPA monthly)
+    insurerFrequency: string;   // e.g. 'MENSUAL'
+    clientCuotas: number;       // what the client actually pays (e.g. 2, 3, 4)
+    mismatch: boolean;          // true when insurer plan != client plan
+  };
 }) {
   try {
     const {

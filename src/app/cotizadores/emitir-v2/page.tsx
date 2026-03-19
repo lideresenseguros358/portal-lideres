@@ -460,6 +460,7 @@ export default function EmitirV2Page() {
           });
         }
 
+        // FEDPA CC: always emitted as contado to insurer, PF recurrence handles client's installments
         createPaymentOnEmission({
           insurer: 'FEDPA',
           policyNumber: emisionResult.poliza || emisionResult.nroPoliza || '',
@@ -473,6 +474,12 @@ export default function EmitirV2Page() {
           pfRecCodOper,
           pfCardType,
           pfCardDisplay,
+          insurerPaymentPlan: installments > 1 ? {
+            insurerCuotas: 1,
+            insurerFrequency: 'CONTADO',
+            clientCuotas: installments,
+            mismatch: true,
+          } : undefined,
         });
 
         // ========== PASO 4: Enviar expediente y guardar documentos ==========
@@ -513,6 +520,8 @@ export default function EmitirV2Page() {
             anio: quoteData?.anio || quoteData?.anno || '',
           }));
 
+          // FEDPA CC: always emitted as contado to insurer. If client chose cuotas, there's a mismatch.
+          const isFedpaCCv2Mismatch = installments > 1;
           welcomeForm.append('quoteData', JSON.stringify({
             marca: quoteData?.marca || '',
             modelo: quoteData?.modelo || '',
@@ -524,6 +533,11 @@ export default function EmitirV2Page() {
             formaPago: installments > 1 ? 'cuotas' : 'contado',
             cantidadCuotas: installments,
             montoCuota: installments > 1 ? monthlyPayment : undefined,
+            insurerPaymentPlan: isFedpaCCv2Mismatch ? {
+              insurerCuotas: 1,
+              insurerFrequency: 'contado',
+              clientCuotas: installments,
+            } : undefined,
           }));
 
           if (documents?.cedulaFile) welcomeForm.append('cedulaFile', documents.cedulaFile);

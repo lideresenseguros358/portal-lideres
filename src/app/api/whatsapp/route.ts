@@ -1,15 +1,20 @@
 /**
- * WHATSAPP ENDPOINT — Twilio Webhook
- * ====================================
- * Receives incoming WhatsApp messages from Twilio.
- * Processes via ADM COT Chat Engine pipeline:
- *   save → classify (Vertex AI) → escalate (if urgent) → AI reply (if enabled) → send via Twilio
- * 
+ * WHATSAPP ENDPOINT — Meta WhatsApp Cloud API (Graph API)
+ * ========================================================
+ * Direct integration with Meta's official WhatsApp Cloud API.
+ * No intermediary (Twilio removed).
+ *
+ * GET  /api/whatsapp — Webhook verification (Meta challenge)
+ * POST /api/whatsapp — Incoming messages from WhatsApp Cloud API
+ *
+ * Pipeline: receive → save → classify (Vertex AI) → AI reply → send via Graph API
+ *
  * Security:
- * - Twilio signature validation
+ * - Meta webhook verify_token validation
  * - Input sanitization
  * - Rate limiting per phone
  * - Message deduplication
+ * - Immediate 200 to Meta to avoid retries
  */
 
 export const dynamic = 'force-dynamic';
@@ -17,22 +22,10 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processInboundMessage } from '@/lib/chat/chat-engine';
-import crypto from 'crypto';
 
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-
-// Empty TwiML response — tells Twilio "don't send any additional message"
-const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
-function twimlResponse(status = 200) {
-  return new NextResponse(EMPTY_TWIML, {
-    status,
-    headers: { 'Content-Type': 'text/xml' },
-  });
-}
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '';
-// The public URL that Twilio signs against — MUST match webhook config exactly
-const WEBHOOK_PUBLIC_URL = process.env.WHATSAPP_WEBHOOK_URL || 'https://portal.lideresenseguros.com/api/whatsapp';
+const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
+const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 
 // Simple in-memory rate limiter (per phone, 20 msgs/min)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -52,208 +45,136 @@ function checkRateLimit(phone: string): boolean {
 }
 
 /**
- * Validate Twilio request signature
- * 
- * Twilio signs: URL + sorted(key+value) pairs from the POST body.
- * The values must be the fully decoded form values.
- * Behind Vercel, req.url is internal — we MUST use the exact public webhook URL.
+ * Send a text message via Meta WhatsApp Cloud API (Graph API)
  */
-function validateTwilioSignature(req: NextRequest, body: string): boolean {
-  // Allow bypassing signature validation while token is being fixed
-  // Set SKIP_TWILIO_SIGNATURE=true in Vercel env vars to enable
-  if (process.env.SKIP_TWILIO_SIGNATURE === 'true') {
-    console.warn('[WHATSAPP] Signature validation SKIPPED (SKIP_TWILIO_SIGNATURE=true) — fix TWILIO_AUTH_TOKEN and remove this flag');
-    return true;
-  }
-
-  if (!TWILIO_AUTH_TOKEN) {
-    console.warn('[WHATSAPP] No TWILIO_AUTH_TOKEN — skipping signature validation');
-    return true;
-  }
-
-  const twilioSignature = req.headers.get('x-twilio-signature');
-  if (!twilioSignature) {
-    console.warn('[WHATSAPP] No x-twilio-signature header present');
-    return false;
-  }
-
-  const url = WEBHOOK_PUBLIC_URL;
-
-  // Parse raw form body into a map of decoded key-value pairs
-  // Twilio spec: sort params by key, concatenate key+value (decoded)
-  const paramPairs: Record<string, string> = {};
-  if (body) {
-    const pairs = body.split('&');
-    for (const pair of pairs) {
-      const eqIdx = pair.indexOf('=');
-      if (eqIdx === -1) continue;
-      const key = decodeURIComponent(pair.substring(0, eqIdx).replace(/\+/g, ' '));
-      const val = decodeURIComponent(pair.substring(eqIdx + 1).replace(/\+/g, ' '));
-      paramPairs[key] = val;
-    }
-  }
-
-  // Build signature string: URL + sorted key+value
-  const sortedKeys = Object.keys(paramPairs).sort();
-  let signatureString = url;
-  for (const key of sortedKeys) {
-    signatureString += key + paramPairs[key];
-  }
-
-  const expectedSignature = crypto
-    .createHmac('sha1', TWILIO_AUTH_TOKEN)
-    .update(signatureString)
-    .digest('base64');
-
-  const valid = twilioSignature === expectedSignature;
-  if (!valid) {
-    // Try alternate URLs — Twilio might sign against a different variant
-    const forwardedHost = req.headers.get('x-forwarded-host');
-    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
-    const altUrls = new Set([
-      url,
-      url + '/',
-      url.replace('https://', 'http://'),
-      req.url,                                          // Vercel internal URL
-      req.nextUrl.toString(),                            // Next.js resolved URL
-      ...(forwardedHost ? [
-        `${forwardedProto}://${forwardedHost}/api/whatsapp`,
-        `https://${forwardedHost}/api/whatsapp`,
-      ] : []),
-    ]);
-
-    for (const alt of altUrls) {
-      if (alt === url) continue; // already tried
-      let altSig = alt;
-      for (const key of sortedKeys) altSig += key + paramPairs[key];
-      const altExpected = crypto.createHmac('sha1', TWILIO_AUTH_TOKEN).update(altSig).digest('base64');
-      if (altExpected === twilioSignature) {
-        console.warn('[WHATSAPP] Signature matched with alternate URL:', alt, '— update WHATSAPP_WEBHOOK_URL env var to this value');
-        return true;
-      }
-    }
-
-    console.warn('[WHATSAPP] Signature mismatch — no URL variant matched', {
-      received: twilioSignature,
-      expected: expectedSignature,
-      configuredUrl: url,
-      reqUrl: req.url,
-      forwardedHost,
-      tokenPrefix: TWILIO_AUTH_TOKEN.substring(0, 4) + '...',
-      paramKeys: sortedKeys,
-    });
-  }
-  return valid;
-}
-
-/**
- * Send reply via Twilio REST API
- */
-async function sendTwilioReply(to: string, body: string): Promise<boolean> {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_WHATSAPP_NUMBER) {
-    console.warn('[WHATSAPP] Twilio credentials not configured — reply not sent');
+export async function sendWhatsAppMessage(to: string, body: string): Promise<boolean> {
+  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+    console.warn('[WHATSAPP] Meta credentials not configured — reply not sent');
     return false;
   }
 
   try {
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-    const authString = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+    const url = `https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${authString}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
       },
-      body: new URLSearchParams({
-        From: TWILIO_WHATSAPP_NUMBER.startsWith('whatsapp:') ? TWILIO_WHATSAPP_NUMBER : `whatsapp:${TWILIO_WHATSAPP_NUMBER}`,
-        To: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
-        Body: body.substring(0, 1600), // Twilio limit
-      }).toString(),
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'text',
+        text: { body: body.substring(0, 4096) },
+      }),
     });
 
     if (!response.ok) {
       const err = await response.text();
-      console.error('[WHATSAPP] Twilio send error:', err);
+      console.error('[WHATSAPP] Graph API send error:', response.status, err.substring(0, 300));
       return false;
     }
 
-    console.log('[WHATSAPP] Reply sent to', to);
+    const data = await response.json();
+    console.log('[WHATSAPP] Message sent to', to, '| id:', data?.messages?.[0]?.id);
     return true;
   } catch (err: any) {
-    console.error('[WHATSAPP] Twilio send exception:', err.message);
+    console.error('[WHATSAPP] Graph API send exception:', err.message);
     return false;
   }
 }
 
 // ═══════════════════════════════════════
-// POST — Twilio webhook
+// GET — Meta Webhook Verification
+// ═══════════════════════════════════════
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const mode = searchParams.get('hub.mode');
+  const token = searchParams.get('hub.verify_token');
+  const challenge = searchParams.get('hub.challenge');
+
+  if (mode === 'subscribe' && token === WHATSAPP_VERIFY_TOKEN) {
+    console.log('[WHATSAPP] Webhook verified successfully');
+    return new NextResponse(challenge, { status: 200 });
+  }
+
+  console.warn('[WHATSAPP] Webhook verification failed', { mode, tokenMatch: token === WHATSAPP_VERIFY_TOKEN });
+  return NextResponse.json({ error: 'Verification failed' }, { status: 403 });
+}
+
+// ═══════════════════════════════════════
+// POST — Incoming WhatsApp Cloud API message
 // ═══════════════════════════════════════
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
+
+  // CRITICAL: Return 200 immediately to Meta to prevent retries.
+  // We process the message asynchronously after parsing.
   try {
+    const body = await request.json();
     console.log('[WHATSAPP] ====== Incoming webhook ======');
-    const rawBody = await request.text();
-    console.log('[WHATSAPP] Body length:', rawBody.length);
 
-    // Validate Twilio signature
-    if (!validateTwilioSignature(request, rawBody)) {
-      console.warn('[WHATSAPP] Invalid Twilio signature — rejecting');
-      return twimlResponse(403);
+    // Extract message from Meta WhatsApp Cloud API payload
+    const entry = body?.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+
+    // Status updates, read receipts, etc. — acknowledge without processing
+    if (!value?.messages?.length) {
+      return NextResponse.json({ success: true }, { status: 200 });
     }
-    console.log('[WHATSAPP] Signature valid');
 
-    // Parse form-urlencoded body
-    const params = new URLSearchParams(rawBody);
-    const messageBody = params.get('Body') || '';
-    const from = params.get('From') || ''; // whatsapp:+507XXXXXXXX
-    const to = params.get('To') || '';
-    const profileName = params.get('ProfileName') || null;
-    const messageSid = params.get('MessageSid') || null;
+    const messageData = value.messages[0];
+    const phone = messageData.from; // Sender phone (e.g. "507XXXXXXXX")
+    const messageId = messageData.id; // Meta message ID (for dedup)
+    const messageType = messageData.type; // text, image, audio, etc.
+    const contactName = value?.contacts?.[0]?.profile?.name || null;
 
-    console.log('[WHATSAPP] From:', from, '| Profile:', profileName, '| Message:', messageBody.substring(0, 100));
-
-    if (!messageBody.trim() || !from) {
-      console.log('[WHATSAPP] Empty message or no From — ignoring');
-      return twimlResponse();
+    // Only process text messages for now
+    if (messageType !== 'text' || !messageData.text?.body?.trim()) {
+      console.log('[WHATSAPP] Non-text message ignored:', messageType);
+      return NextResponse.json({ success: true }, { status: 200 });
     }
+
+    const messageText = messageData.text.body;
+    console.log('[WHATSAPP] From:', phone, '| Name:', contactName, '| Message:', messageText.substring(0, 100));
 
     // Rate limit
-    const phone = from.replace(/^whatsapp:/i, '');
-    const toPhone = to.replace(/^whatsapp:/i, '');
     if (!checkRateLimit(phone)) {
       console.warn('[WHATSAPP] Rate limited:', phone);
-      await sendTwilioReply(from, 'Ha enviado muchos mensajes en poco tiempo. Por favor espere un momento antes de intentar de nuevo.');
-      return twimlResponse();
+      await sendWhatsAppMessage(phone, 'Ha enviado muchos mensajes en poco tiempo. Por favor espere un momento antes de intentar de nuevo.');
+      return NextResponse.json({ success: true }, { status: 200 });
     }
 
-    // Process through ADM COT Chat Engine pipeline
+    // Process through Chat Engine pipeline (Vertex AI classification + reply)
     console.log('[WHATSAPP] Processing via chat-engine...');
     const result = await processInboundMessage({
       fromPhone: phone,
-      toPhone: toPhone || TWILIO_WHATSAPP_NUMBER.replace(/^whatsapp:/i, ''),
-      body: messageBody,
-      profileName: profileName || undefined,
-      providerMessageId: messageSid || undefined,
+      toPhone: WHATSAPP_PHONE_NUMBER_ID,
+      body: messageText,
+      profileName: contactName || undefined,
+      providerMessageId: messageId || undefined,
       channel: 'whatsapp',
     });
 
     console.log('[WHATSAPP] Thread:', result.threadId, '| Category:', result.classification.category, '| Severity:', result.classification.severity);
 
-    // If AI generated a reply, send it via Twilio
+    // If AI generated a reply, send it via Meta Graph API
     if (result.aiReply && result.aiReplySent) {
-      const sent = await sendTwilioReply(from, result.aiReply);
+      const sent = await sendWhatsAppMessage(phone, result.aiReply);
       console.log('[WHATSAPP] AI reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
     } else {
       console.log('[WHATSAPP] No AI reply (ai_enabled=false or assigned to master). Duration:', Date.now() - startTime, 'ms');
     }
 
-    // Always return empty TwiML to Twilio
-    return twimlResponse();
+    return NextResponse.json({ success: true }, { status: 200 });
   } catch (err: any) {
     console.error('[WHATSAPP] Webhook error:', err.message, err.stack);
-    // Always return empty TwiML to avoid retries
-    return twimlResponse();
+    // Always return 200 to Meta to prevent retries
+    return NextResponse.json({ success: true }, { status: 200 });
   }
 }

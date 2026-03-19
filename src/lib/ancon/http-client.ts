@@ -1,6 +1,12 @@
 /**
  * SOAP HTTP Client for Aseguradora ANCON
  * Handles SOAP envelope creation, token management, and response parsing
+ *
+ * IMPORTANT: Next.js Turbopack creates separate module instances per API route.
+ * ANCON invalidates old tokens when GenerarToken is called, so if two routes
+ * each generate their own token, they destroy each other's sessions.
+ * We solve this by sharing the token via a temp file + in-memory cache so ALL
+ * routes reuse the same token.
  */
 
 import {
@@ -11,19 +17,64 @@ import {
   RETRY_CONFIG,
 } from './config';
 import type { AnconLoginResponse, AnconSoapResponse } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
-// ═══ Token Cache ═══
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
+// ═══ Cross-Worker Token Cache (file-based + in-memory) ═══
+
+const TOKEN_FILE = path.join(os.tmpdir(), 'ancon-token.json');
+
+interface TokenData {
+  token: string;
+  expiresAt: number;
+}
+
+// In-memory fast cache (per module instance)
+let memToken: string | null = null;
+let memExpiresAt = 0;
+
+function readTokenFile(): TokenData | null {
+  try {
+    const raw = fs.readFileSync(TOKEN_FILE, 'utf8');
+    const data = JSON.parse(raw) as TokenData;
+    if (data.token && data.expiresAt > Date.now()) return data;
+  } catch { /* file missing or corrupt — ignore */ }
+  return null;
+}
+
+function writeTokenFile(token: string, expiresAt: number): void {
+  try {
+    fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token, expiresAt }), 'utf8');
+  } catch (e) {
+    console.warn('[ANCON] Could not write token file:', e);
+  }
+}
+
+function clearTokenFile(): void {
+  try { fs.unlinkSync(TOKEN_FILE); } catch { /* ignore */ }
+}
 
 /**
- * Get a valid ANCON token, refreshing if expired
+ * Get a valid ANCON token, refreshing if expired.
+ * Checks in-memory cache first, then file cache, then generates new.
  */
 export async function getAnconToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiresAt) {
-    return cachedToken;
+  // 1. In-memory cache (fastest, same module instance)
+  if (memToken && Date.now() < memExpiresAt) {
+    return memToken;
   }
 
+  // 2. File cache (cross-worker — another route may have generated one)
+  const fileData = readTokenFile();
+  if (fileData) {
+    memToken = fileData.token;
+    memExpiresAt = fileData.expiresAt;
+    console.log(`[ANCON] Token loaded from file cache: ${memToken.substring(0, 16)}...`);
+    return memToken;
+  }
+
+  // 3. Generate new token
   console.log('[ANCON] Generating new token...');
   const creds = getAnconCredentials();
 
@@ -46,19 +97,22 @@ export async function getAnconToken(): Promise<string> {
     throw new Error(`ANCON login failed: ${msg}`);
   }
 
-  cachedToken = login.Token;
-  tokenExpiresAt = Date.now() + TOKEN_TTL_MS;
-  console.log(`[ANCON] Token obtained: ${cachedToken.substring(0, 16)}... (TTL: ${TOKEN_TTL_MS / 60000}min)`);
+  memToken = login.Token;
+  memExpiresAt = Date.now() + TOKEN_TTL_MS;
+  writeTokenFile(memToken, memExpiresAt);
+  console.log(`[ANCON] Token obtained: ${memToken.substring(0, 16)}... (TTL: ${TOKEN_TTL_MS / 60000}min)`);
 
-  return cachedToken;
+  return memToken;
 }
 
 /**
- * Invalidate the cached token (e.g. after "Token Inactivo" error)
+ * Invalidate the cached token (e.g. after "Token Inactivo" error).
+ * Clears both in-memory and file caches.
  */
 export function invalidateAnconToken(): void {
-  cachedToken = null;
-  tokenExpiresAt = 0;
+  memToken = null;
+  memExpiresAt = 0;
+  clearTokenFile();
 }
 
 // ═══ SOAP Envelope Builder ═══
@@ -202,17 +256,46 @@ export async function soapCall<T = unknown>(
 }
 
 /**
- * Convenience: SOAP call that auto-injects the current token.
- * Token refresh on "Token Inactivo" is handled by soapCall retry logic.
- * IMPORTANT: ANCON invalidates the previous token when GenerarToken is called,
- * so we reuse the cached token and only refresh on failure.
+ * Convenience: SOAP call that auto-injects a valid token.
+ *
+ * Generates a fresh token, calls the method, and if "Token Inactivo" is
+ * returned (e.g. another worker invalidated our token), generates a NEW
+ * token in-line and retries once. Uses skipAuth=true on soapCall to avoid
+ * double-refresh conflicts.
  */
 export async function anconCall<T = unknown>(
   method: string,
   params: Record<string, string> = {}
 ): Promise<AnconSoapResponse<T>> {
-  const token = await getAnconToken();
-  return soapCall<T>(method, { ...params, token });
+  // Attempt 1: use cached-or-fresh token
+  // IMPORTANT: token MUST be the first XML param — ANCON's PHP SOAP parser is order-sensitive
+  let token = await getAnconToken();
+  let result = await soapCall<T>(method, { token, ...params }, true);
+
+  // If "Token Inactivo", another worker may have generated a newer token.
+  // Re-read file cache first; only generate new if file is also stale.
+  if (!result.success && result.error === 'Token Inactivo') {
+    console.log(`[ANCON] anconCall ${method}: Token Inactivo, checking file cache...`);
+    // Clear in-memory cache so getAnconToken re-reads the file
+    memToken = null;
+    memExpiresAt = 0;
+    const fileToken = await getAnconToken(); // reads file → may find a newer token
+    if (fileToken !== token) {
+      // Another worker generated a valid token — use it
+      console.log(`[ANCON] anconCall ${method}: Found newer token in file cache`);
+      token = fileToken;
+      result = await soapCall<T>(method, { token, ...params }, true);
+    }
+    // If still failing, force-generate a brand new token
+    if (!result.success && result.error === 'Token Inactivo') {
+      console.log(`[ANCON] anconCall ${method}: Force-generating new token...`);
+      invalidateAnconToken();
+      token = await getAnconToken();
+      result = await soapCall<T>(method, { token, ...params }, true);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -226,7 +309,7 @@ export async function anconCallWithToken<T = unknown>(
   params: Record<string, string>,
   token: string
 ): Promise<AnconSoapResponse<T>> {
-  return soapCall<T>(method, { ...params, token }, true /* skipAuth — never auto-refresh */);
+  return soapCall<T>(method, { token, ...params }, true /* skipAuth — never auto-refresh */);
 }
 
 // ═══ Helpers ═══

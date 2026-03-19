@@ -388,7 +388,7 @@ export async function POST(request: NextRequest) {
       codigo_producto_agt: cod_producto || '00312',
       nombre_producto: nombre_producto || 'AUTO COMPLETA',
       Responsable_de_cobro: 'CORREDOR',
-      suma_asegurada: String(suma_asegurada || '15000'),
+      suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',
       codigo_acreedor: codigo_acreedor || '',
       nombre_acreedor: nombre_acreedor || '',
       cod_marca_agt: String(cod_marca_agt || ''),
