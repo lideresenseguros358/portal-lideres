@@ -328,21 +328,23 @@ export const LEGAL_KNOWLEDGE = {
 // ─────────────────────────────────────────────────────────────
 export const FISCAL_KNOWLEDGE = {
   personaNatural: {
-    label: 'Persona Natural — Art. 709 del Código Fiscal',
+    label: 'Persona Natural — Art. 709 del Código Fiscal y DGI Panamá',
     deducciones: [
       'Numeral 7: Primas de seguro de hospitalización y atención médica son deducibles',
       'Gastos médicos no cubiertos por seguro, dentro del territorio nacional, son deducibles',
+      'Seguros de vida con componente de ahorro: deducibles del ISR al amparo de "fondos de jubilación privada"',
+      'Límite general de deducción: hasta 10% del ingreso bruto anual o un tope máximo de $15,000 (según normativa vigente DGI)',
       'Aportaciones a planes de jubilación privados autorizados son deducibles del ISR',
-      'Seguro de vida con componente de ahorro puede calificar como plan de jubilación privada',
     ],
-    nota: 'Siempre recomendar al cliente confirmar con su contador',
+    nota: 'Siempre recomendar al cliente confirmar con su contador para su caso particular',
   },
   personaJuridica: {
-    label: 'Persona Jurídica — Seguro Hombre/Mujer Clave',
+    label: 'Persona Jurídica — Seguro Hombre/Mujer Clave y Seguro de Socios',
     deducciones: [
-      'Primas de Key Man Insurance son deducibles como gasto operativo (Art. 697 CF)',
-      'Beneficio doble: la empresa deduce la prima Y la indemnización mitiga impacto económico',
-      'Seguro de Socios: capital asegurado para comprar participación del socio fallecido',
+      'Primas de seguros de vida corporativos (Key Man / Hombre Clave, Seguro de Socios) son deducibles como gasto operativo (Art. 697 CF)',
+      'Sustento legal: gasto necesario para la protección, continuidad operativa y conservación de la fuente productora de ingresos',
+      'Beneficio doble: la empresa deduce la prima Y en caso de siniestro, la indemnización mitiga el impacto económico',
+      'Seguro de Socios: protege ante muerte de un socio; el capital puede comprar la participación del fallecido a sus herederos',
     ],
   },
   impuestosPrimas: {
