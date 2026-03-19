@@ -10,12 +10,13 @@ import { acquireCronLock, completeCronRun, failCronRun } from '@/lib/operaciones
 
 const JOB_NAME = 'ops-sla-check';
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
+    const xCronSecret = request.headers.get('x-cron-secret');
     const cronSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || (authHeader !== `Bearer ${cronSecret}` && xCronSecret !== cronSecret)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -114,8 +115,3 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    error: 'Method not allowed. Use POST with proper authorization.',
-  }, { status: 405 });
-}
