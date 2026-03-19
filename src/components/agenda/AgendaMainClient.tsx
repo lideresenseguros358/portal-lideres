@@ -6,9 +6,12 @@ import { FaChevronLeft, FaChevronRight, FaPlus, FaTimes } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { actionGetEvents, actionRSVP, type AgendaEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
+import { toZonedTime } from 'date-fns-tz';
 import CalendarGrid from './CalendarGrid';
 import EventDetailPanel from './EventDetailPanel';
 import EventFormModal from './EventFormModal';
+
+const TZ = 'America/Panama';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -328,13 +331,12 @@ export default function AgendaMainClient() {
             {events
               .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
               .map((event) => {
-                const eventDate = new Date(event.start_at);
+                const eventDate = toZonedTime(new Date(event.start_at), TZ);
                 const day = eventDate.getDate();
                 const dayName = eventDate.toLocaleDateString('es-PA', { weekday: 'long' });
                 const eventTime = eventDate.toLocaleTimeString('es-PA', { 
                   hour: '2-digit', 
                   minute: '2-digit',
-                  timeZone: 'America/Panama'
                 });
                 
                 return (

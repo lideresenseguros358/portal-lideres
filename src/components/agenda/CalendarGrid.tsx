@@ -4,6 +4,9 @@ import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useSwipeable } from 'react-swipeable';
+import { toZonedTime } from 'date-fns-tz';
+
+const TZ = 'America/Panama';
 
 interface CalendarGridProps {
   year: number;
@@ -41,7 +44,7 @@ export default function CalendarGrid({
   // Get events for a specific day
   const getEventsForDay = (day: number) => {
     return events.filter(event => {
-      const eventDate = new Date(event.start_at);
+      const eventDate = toZonedTime(new Date(event.start_at), TZ);
       return eventDate.getDate() === day &&
              eventDate.getMonth() === month - 1 &&
              eventDate.getFullYear() === year;
@@ -50,8 +53,8 @@ export default function CalendarGrid({
 
   // Check if a day is within a multi-day event range
   const isDateInEventRange = (date: Date, event: AgendaEvent) => {
-    const eventStart = new Date(event.start_at);
-    const eventEnd = new Date(event.end_at);
+    const eventStart = toZonedTime(new Date(event.start_at), TZ);
+    const eventEnd = toZonedTime(new Date(event.end_at), TZ);
     
     // Normalizar fechas a medianoche para comparación
     const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());

@@ -6,6 +6,9 @@ import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { actionRSVP, actionGetAttendees, actionDeleteEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
 import { supabaseClient } from '@/lib/supabase/client';
+import { toZonedTime } from 'date-fns-tz';
+
+const TZ = 'America/Panama';
 
 interface EventDetailPanelProps {
   event: AgendaEvent | null;
@@ -157,7 +160,7 @@ END:VCALENDAR`;
   };
 
   const formatDateTime = (dateString: string, isAllDay: boolean) => {
-    const date = new Date(dateString);
+    const date = toZonedTime(new Date(dateString), TZ);
     const dateStr = date.toLocaleDateString('es-PA', { 
       day: 'numeric', 
       month: 'long', 
@@ -172,7 +175,6 @@ END:VCALENDAR`;
       hour: 'numeric', 
       minute: '2-digit',
       hour12: true,
-      timeZone: 'America/Panama'
     });
     
     return `${dateStr} a las ${timeStr}`;
@@ -181,7 +183,7 @@ END:VCALENDAR`;
   // Get events for the selected day
   const dayEvents = events.filter(e => {
     if (!day) return false;
-    const eventDate = new Date(e.start_at);
+    const eventDate = toZonedTime(new Date(e.start_at), TZ);
     return eventDate.getDate() === day && 
            eventDate.getMonth() + 1 === month &&
            eventDate.getFullYear() === year;

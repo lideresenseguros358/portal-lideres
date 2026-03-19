@@ -3,6 +3,9 @@
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { toZonedTime, format as formatTZ } from 'date-fns-tz';
+
+const TZ = 'America/Panama';
 
 export interface AgendaEvent {
   id: string;
@@ -49,8 +52,10 @@ export async function actionGetEvents(params: {
     }
 
     // Build date range for the month
-    const startDate = new Date(params.year, params.month - 1, 1);
-    const endDate = new Date(params.year, params.month, 0, 23, 59, 59);
+    // Pad ±1 day to account for UTC vs America/Panama offset (UTC-5).
+    // An event at 11 PM Panama on the last day is stored as next-day UTC.
+    const startDate = new Date(params.year, params.month - 1, 0); // day before month start
+    const endDate = new Date(params.year, params.month, 1, 23, 59, 59); // day after month end
 
     let query = supabase
       .from('events')
@@ -212,8 +217,9 @@ export async function actionCreateEvent(payload: {
       try {
         const { createNotification } = await import('@/lib/notifications/create');
         
-        const eventDate = new Date(notifPayload.start_at).toISOString().split('T')[0];
-        const eventTime = notifPayload.is_all_day ? undefined : new Date(notifPayload.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' });
+        const zonedStart = toZonedTime(new Date(notifPayload.start_at), TZ);
+        const eventDate = formatTZ(zonedStart, 'yyyy-MM-dd', { timeZone: TZ });
+        const eventTime = notifPayload.is_all_day ? undefined : formatTZ(zonedStart, 'hh:mm a', { timeZone: TZ });
         const isForAllBrokers = notifPayload.audience === 'ALL';
         
         if (isForAllBrokers) {
@@ -372,8 +378,9 @@ export async function actionUpdateEvent(params: {
           const isAllDay = updatePayload.is_all_day ?? currentIsAllDay;
           const audience = updatePayload.audience || currentAudience;
           
-          const eventDate = new Date(startAt).toISOString().split('T')[0];
-          const eventTime = isAllDay ? undefined : new Date(startAt).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' });
+          const zonedStart = toZonedTime(new Date(startAt), TZ);
+          const eventDate = formatTZ(zonedStart, 'yyyy-MM-dd', { timeZone: TZ });
+          const eventTime = isAllDay ? undefined : formatTZ(zonedStart, 'hh:mm a', { timeZone: TZ });
           const isForAllBrokers = audience === 'ALL';
           
           if (isForAllBrokers) {
