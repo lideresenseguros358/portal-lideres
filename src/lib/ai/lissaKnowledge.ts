@@ -285,6 +285,104 @@ Los clientes preliminares aparecen marcados visualmente en la base de datos para
 `;
 
 // ─────────────────────────────────────────────────────────────
+// CONOCIMIENTO LEGAL — Ley 12 de 2012 y Código de Comercio
+// ─────────────────────────────────────────────────────────────
+export const LEGAL_KNOWLEDGE = {
+  ley12: {
+    label: 'Ley 12 de 2012 — Ley de Seguros de Panamá',
+    regulator: 'Superintendencia de Seguros y Reaseguros de Panamá (SSRP)',
+    derechosAsegurado: [
+      'Recibir condiciones generales y particulares en español antes de firmar (Art. 140–142)',
+      'Periodo de gracia (~30 días) donde la póliza sigue vigente tras no pagar a tiempo (Art. 155–158)',
+      'Presentar reclamo formal y recibir respuesta escrita en plazo razonable',
+      'Cancelar la póliza en cualquier momento y recibir prima no devengada a prorrata',
+      'Protección contra cláusulas abusivas — la SSRP revisa y autoriza modelos de pólizas',
+    ],
+    deberesAsegurado: [
+      'Declarar verazmente hechos relevantes al solicitar el seguro (Art. 148–150)',
+      'Pagar la prima oportunamente',
+      'Reportar siniestros dentro del plazo de la póliza (usualmente 5–10 días hábiles)',
+      'Mitigar el daño: tomar medidas razonables para que no se agrave',
+      'No agravar el riesgo sin notificar a la aseguradora',
+    ],
+    quejasSsrp: [
+      'Queja escrita al Sistema de Atención de Controversias de la aseguradora',
+      'La aseguradora tiene 30 días calendario para responder',
+      'Si no responde satisfactoriamente, escalar a la SSRP con copia de la queja y acuse de recibo',
+    ],
+  },
+  codigoComercio: {
+    label: 'Código de Comercio — Contrato de Seguro',
+    principios: [
+      'Contrato consensual: se perfecciona con el acuerdo, documentado en la póliza',
+      'Principio de buena fe: declaración veraz del asegurado; explicación clara de la aseguradora',
+      'Interés asegurable: solo se puede asegurar aquello en lo que haya interés legítimo',
+      'Subrogación: la aseguradora adquiere derecho de reclamar al tercero responsable tras pagar siniestro',
+      'Prescripción: acciones del contrato prescriben en 2 años desde el evento',
+    ],
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+// CONOCIMIENTO FISCAL — Deducciones de Seguros (Art. 709 CF)
+// ─────────────────────────────────────────────────────────────
+export const FISCAL_KNOWLEDGE = {
+  personaNatural: {
+    label: 'Persona Natural — Art. 709 del Código Fiscal',
+    deducciones: [
+      'Numeral 7: Primas de seguro de hospitalización y atención médica son deducibles',
+      'Gastos médicos no cubiertos por seguro, dentro del territorio nacional, son deducibles',
+      'Aportaciones a planes de jubilación privados autorizados son deducibles del ISR',
+      'Seguro de vida con componente de ahorro puede calificar como plan de jubilación privada',
+    ],
+    nota: 'Siempre recomendar al cliente confirmar con su contador',
+  },
+  personaJuridica: {
+    label: 'Persona Jurídica — Seguro Hombre/Mujer Clave',
+    deducciones: [
+      'Primas de Key Man Insurance son deducibles como gasto operativo (Art. 697 CF)',
+      'Beneficio doble: la empresa deduce la prima Y la indemnización mitiga impacto económico',
+      'Seguro de Socios: capital asegurado para comprar participación del socio fallecido',
+    ],
+  },
+  impuestosPrimas: {
+    generales: '5% impuesto + 1% timbres = 6% total sobre prima neta',
+    vida: 'Exentas del impuesto sobre primas',
+    nota: 'Impuestos ya incluidos en las cotizaciones del portal',
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+// GLOSARIO TÉCNICO DE SEGUROS
+// ─────────────────────────────────────────────────────────────
+export const GLOSSARY = {
+  auto: {
+    prima: 'Costo del seguro (anual o en cuotas). Sin pago, la póliza se suspende.',
+    deducible: 'Parte del daño que el asegurado paga de su bolsillo al reclamar. Deducible alto = prima más baja.',
+    comprensivo: 'Cubre daños al vehículo por robo, incendio, vandalismo, inundación — todo lo que NO sea choque.',
+    colisionVuelco: 'Cubre daños al vehículo cuando choca contra otro vehículo/objeto o vuelca.',
+    lesionesCorporales: 'RC: Cubre gastos médicos de TERCEROS heridos en accidente donde el asegurado es responsable.',
+    danosPropiedad: 'RC: Cubre daños a propiedad de terceros causados por el asegurado.',
+    gastosMedicos: 'Cubre gastos médicos del conductor y pasajeros, sin importar culpa.',
+    coberturaCompleta: 'Incluye Comprensivo + Colisión/Vuelco + RC + Gastos Médicos + beneficios adicionales.',
+    danosTerceros: 'Solo cubre daños causados a otros. El vehículo propio NO queda protegido.',
+    endoso: 'Anexo que modifica, amplía o restringe la cobertura de la póliza.',
+    periodoGracia: 'Plazo adicional (~30 días) tras vencimiento donde la póliza sigue vigente.',
+    sumaAsegurada: 'Valor máximo asegurado del vehículo. En pérdida total, se paga hasta ese monto.',
+    depreciacion: 'Reducción del valor del vehículo con el tiempo.',
+    asistenciaVial: 'Grúa, paso de corriente, combustible, cambio de llanta, cerrajería.',
+  },
+  vida: {
+    beneficiario: 'Persona que recibe el capital asegurado si el asegurado fallece.',
+    valorRescate: 'Monto acumulado en pólizas con ahorro, retirable al cancelar antes de vencimiento.',
+    vidaTemporal: 'Cobertura por plazo fijo. Si fallece en ese plazo, se paga. Sin ahorro.',
+    vidaConAhorro: 'Protección + inversión. Prima se acumula como valor de rescate.',
+    vidaDeudor: 'Vinculada a préstamo. Si fallece, la aseguradora paga el saldo.',
+    keyMan: 'Póliza empresarial sobre directivo/socio clave. La empresa es beneficiaria.',
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
 // TEXTO DEL SISTEMA COMPLETO — Para inyectar en el SYSTEM_PROMPT
 // ─────────────────────────────────────────────────────────────
 export function buildInstitutionalKnowledge(): string {
