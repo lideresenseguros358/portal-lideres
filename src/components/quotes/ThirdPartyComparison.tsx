@@ -213,6 +213,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   });
   const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
   const [offlineInsurers, setOfflineInsurers] = useState<Record<string, boolean>>({});
+  const [conexionTip, setConexionTip] = useState<string | null>(null);
   const fetchingRef = useRef(false);
 
   // Silent background refresh — NEVER shows loading/skeleton/banner
@@ -442,11 +443,20 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           {isConexion && (
             <span className="inline-flex items-center gap-1">
               <span className="text-amber-600 font-semibold text-xs">Conexión</span>
-              <span className="relative group/tip">
-                <FaQuestionCircle className="text-amber-400 cursor-help" size={12} />
-                <span className="absolute bottom-full right-0 mb-1 w-52 p-2 bg-gray-900 text-white text-[10px] leading-tight rounded-lg shadow-lg opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-50">
-                  La aseguradora no cubre el gasto, pero le ayuda a contactar el servicio. El costo lo cubre el cliente.
-                </span>
+              <span className="relative">
+                <FaQuestionCircle
+                  className="text-amber-400 cursor-help"
+                  size={12}
+                  onClick={(e) => { e.stopPropagation(); setConexionTip(prev => prev === benefit.key ? null : benefit.key); }}
+                />
+                {conexionTip === benefit.key && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setConexionTip(null)} />
+                    <span className="absolute bottom-full right-0 mb-1 w-52 p-2 bg-gray-900 text-white text-[10px] leading-tight rounded-lg shadow-lg z-50">
+                      La aseguradora no cubre el gasto, pero le ayuda a contactar el servicio. El costo lo cubre el cliente.
+                    </span>
+                  </>
+                )}
               </span>
             </span>
           )}
