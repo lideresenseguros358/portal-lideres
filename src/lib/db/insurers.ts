@@ -660,6 +660,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
             };
 
             const assaRows: { policy_number: string; client_name: string; gross_amount: number }[] = [];
+            let debugCount = 0;
             for (let i = headerRowIndex + 1; i < allRows.length; i++) {
               const row = allRows[i];
               if (!row) continue;
@@ -671,9 +672,17 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
               // Sumar Monto + Vida 1er. año + Vida Renov. SOLO del grupo Honorarios
               let totalCommission = 0;
-              if (hMontoCol >= 0) totalCommission += parseNum(row[hMontoCol]);
-              if (hVida1Col >= 0) totalCommission += parseNum(row[hVida1Col]);
-              if (hVidaRenovCol >= 0) totalCommission += parseNum(row[hVidaRenovCol]);
+              const mVal = hMontoCol >= 0 ? row[hMontoCol] : '';
+              const v1Val = hVida1Col >= 0 ? row[hVida1Col] : '';
+              const vrVal = hVidaRenovCol >= 0 ? row[hVidaRenovCol] : '';
+              if (hMontoCol >= 0) totalCommission += parseNum(mVal);
+              if (hVida1Col >= 0) totalCommission += parseNum(v1Val);
+              if (hVidaRenovCol >= 0) totalCommission += parseNum(vrVal);
+
+              if (debugCount < 5) {
+                log(`ASSA row ${i}: policy=${policyNum}, monto[${hMontoCol}]=${mVal}, vida1[${hVida1Col}]=${v1Val}, vidaR[${hVidaRenovCol}]=${vrVal}, total=${totalCommission}`);
+                debugCount++;
+              }
 
               if (Math.abs(totalCommission) > 0.001) {
                 assaRows.push({
