@@ -555,6 +555,116 @@ export async function previewMapping(options: PreviewMappingOptions) {
       }
     }
     
+    // PARSER ESPECIAL PARA ASSA (multi-columna: Monto + Vida 1er. año + Vida Renov.)
+    if (insurer?.name?.toUpperCase().includes('ASSA')) {
+      log('Detectado ASSA - Usando parser especial (multi-columna)');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(fileBuffer, { type: 'array', cellDates: true, cellNF: false, cellText: false });
+          const firstSheetName = workbook.SheetNames[0];
+          if (!firstSheetName) throw new Error('El archivo Excel no tiene hojas');
+          const worksheet = workbook.Sheets[firstSheetName];
+          if (!worksheet) throw new Error('No se pudo leer la hoja de Excel');
+
+          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1, defval: '', blankrows: false, raw: false
+          });
+
+          // Buscar fila de headers con keywords de ASSA
+          const headerKeywords = ['poliza', 'fecha', 'asegurado', 'monto', 'vida', 'tasa', 'remesa', 'referencia', 'saldo'];
+          let headerRowIndex = 0;
+          let maxScore = 0;
+          for (let i = 0; i < Math.min(15, jsonData.length); i++) {
+            const row = jsonData[i] as any[];
+            const keywordMatches = row.filter(cell => {
+              if (!cell) return false;
+              const cellText = String(cell).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return headerKeywords.some(kw => cellText.includes(kw));
+            }).length;
+            const score = keywordMatches * 10;
+            if (score > maxScore) { maxScore = score; headerRowIndex = i; }
+          }
+
+          const headerRow = jsonData[headerRowIndex] as any[];
+          const assaHeaders = headerRow.map((h: any) => String(h || '').trim());
+          log('ASSA headers:', assaHeaders);
+
+          // Encontrar índices de columnas clave (normalizar para comparar)
+          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          let polizaIdx = -1, aseguradoIdx = -1;
+          const montoIndices: number[] = [];
+          const vida1Indices: number[] = [];
+          const vidaRenovIndices: number[] = [];
+
+          assaHeaders.forEach((h, i) => {
+            const n = norm(h);
+            if (n === 'poliza' && polizaIdx === -1) polizaIdx = i;
+            if (n === 'asegurado' && aseguradoIdx === -1) aseguradoIdx = i;
+            if (n === 'monto') montoIndices.push(i);
+            if (n.includes('vida 1er') || n.includes('vida 1er.')) vida1Indices.push(i);
+            if (n.includes('vida renov')) vidaRenovIndices.push(i);
+          });
+
+          log(`ASSA column indices: poliza=${polizaIdx}, asegurado=${aseguradoIdx}, monto=${montoIndices}, vida1=${vida1Indices}, vidaRenov=${vidaRenovIndices}`);
+
+          // Parsear filas de datos
+          const assaRows: { policy_number: string; client_name: string; gross_amount: number }[] = [];
+          for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+            const row = jsonData[i] as any[];
+            if (!row || !row.some(cell => cell && String(cell).trim())) continue;
+
+            const policyNum = polizaIdx >= 0 ? String(row[polizaIdx] || '').trim() : '';
+            const clientName = aseguradoIdx >= 0 ? String(row[aseguradoIdx] || '').trim() : '';
+
+            if (!policyNum || policyNum.length < 3) continue;
+
+            // Sumar TODAS las columnas de comisión: Monto + Vida 1er. año + Vida Renov.
+            let totalCommission = 0;
+            const parseNum = (val: any) => {
+              if (!val) return 0;
+              const cleaned = String(val).replace(/[^\d.-]/g, '');
+              const num = parseFloat(cleaned);
+              return isNaN(num) ? 0 : num;
+            };
+
+            for (const idx of montoIndices) totalCommission += parseNum(row[idx]);
+            for (const idx of vida1Indices) totalCommission += parseNum(row[idx]);
+            for (const idx of vidaRenovIndices) totalCommission += parseNum(row[idx]);
+
+            if (Math.abs(totalCommission) > 0.001) {
+              assaRows.push({
+                policy_number: policyNum,
+                client_name: clientName,
+                gross_amount: invertNegatives ? totalCommission * -1 : totalCommission
+              });
+            }
+          }
+
+          log(`ASSA Parser extrajo ${assaRows.length} filas con comisión > 0`);
+
+          return {
+            success: true,
+            previewRows: assaRows,
+            originalHeaders: ['Póliza', 'Asegurado', 'Monto + Vida 1er. año + Vida Renov.'],
+            normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+            rules: [],
+            debugLogs
+          };
+        }
+        // Si no es XLSX, caer al parser genérico
+        log('ASSA: archivo no XLSX - usando parseo genérico');
+      } catch (error) {
+        log(`ERROR en parser ASSA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de ASSA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
     if (insurer?.name?.toUpperCase().includes('SURA')) {
       log('Detectado SURA - Usando parser especial');
       try {
