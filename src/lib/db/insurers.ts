@@ -238,7 +238,25 @@ export async function listMappingRules(insurerId: string, targetField?: string) 
     query = query.eq('target_field', targetField);
   }
   
-  const { data, error } = await query.returns<MappingRuleRow[]>();
+  const { data, error, status, statusText } = await query.returns<MappingRuleRow[]>();
+  console.log(`[RULES DEBUG] listMappingRules(${insurerId}, ${targetField}): status=${status} ${statusText}, error=${error?.message || 'none'}, count=${data?.length ?? 'null'}`);
+  if (data && data.length > 0) {
+    console.log(`[RULES DEBUG] First rule:`, JSON.stringify(data[0]));
+  }
+  // DEBUG: Also try with admin client to check RLS
+  if (!data || data.length === 0) {
+    const adminSb = getSupabaseAdmin();
+    const { data: adminData, error: adminError } = await adminSb
+      .from('insurer_mapping_rules')
+      .select('*')
+      .eq('insurer_id', insurerId)
+      .order('target_field');
+    console.log(`[RULES DEBUG] Admin fallback: error=${adminError?.message || 'none'}, count=${adminData?.length ?? 'null'}`);
+    if (adminData && adminData.length > 0) {
+      console.log(`[RULES DEBUG] ⚠️ RLS ISSUE! Admin found ${adminData.length} rules but server client found 0. Returning admin data.`);
+      return adminData as MappingRuleRow[];
+    }
+  }
   if (error) throw new Error(`Error listando reglas: ${error.message}`);
   
   return data ?? [];
