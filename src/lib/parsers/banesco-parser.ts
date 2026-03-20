@@ -66,7 +66,7 @@ export async function parseBanescoPDF(pdfBuffer: ArrayBuffer): Promise<BanescoRo
           continue;
         }
         
-        if (isNaN(commission) || commission <= 0) {
+        if (isNaN(commission) || Math.abs(commission) < 0.01) {
           console.log(`[BANESCO PDF] ⏭️ Rechazado (comisión inválida): ${commission}`);
           continue;
         }
@@ -194,7 +194,7 @@ export function parseBanescoExcel(fileBuffer: ArrayBuffer): BanescoRow[] {
     
     // EXTRAER COMISIÓN
     const commission = parseFloat(dataR);
-    if (isNaN(commission) || commission === 0) {
+    if (isNaN(commission) || Math.abs(commission) < 0.01) {
       console.log(`[BANESCO PARSER]   ⏭️ Saltando (comisión inválida: ${dataR})`);
       continue;
     }

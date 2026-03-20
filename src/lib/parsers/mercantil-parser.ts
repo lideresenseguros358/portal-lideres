@@ -73,7 +73,7 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
       console.log(`[MERCANTIL PDF] 🔍 Nombre extraído: "${clientName}"`);
       
       // Validar
-      if (commission > 0 && clientName.length > 3 && !clientName.includes('TOTAL') && !clientName.includes('DESCUENTO')) {
+      if (Math.abs(commission) > 0.01 && clientName.length > 3 && !clientName.includes('TOTAL') && !clientName.includes('DESCUENTO')) {
         console.log(`[MERCANTIL PDF] ✅ VÁLIDO - Póliza=${policyNumber}, Cliente="${clientName}", Comisión=$${commission}`);
         rows.push({
           policy_number: policyNumber,
@@ -164,14 +164,14 @@ export function parseMercantilExcel(fileBuffer: ArrayBuffer): MercantilRow[] {
           }
           
           // Detectar comisión (número decimal)
-          const numMatch = value.match(/^(\d+\.?\d*)$/);
-          if (numMatch && numMatch[1] && parseFloat(numMatch[1]) > 0.01) {
-            commission = parseFloat(numMatch[1]);
+          const numMatch = value.match(/^-?(\d+\.?\d*)$/);
+          if (numMatch && Math.abs(parseFloat(value)) > 0.01) {
+            commission = parseFloat(value);
           }
         }
       }
       
-      if (clientName && commission > 0) {
+      if (clientName && Math.abs(commission) > 0.01) {
         console.log(`[MERCANTIL PARSER]   ✅ VÁLIDA - Póliza: ${policyNumber}, Cliente: ${clientName}, Comisión: ${commission}`);
         rows.push({
           policy_number: policyNumber,

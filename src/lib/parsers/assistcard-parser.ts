@@ -134,7 +134,7 @@ function extractRowsFromText(text: string): AssistcardRow[] {
   const rows: AssistcardRow[] = [];
 
   // Check if all clients have inline commissions
-  const allInline = clients.length > 0 && clients.every(c => c.inlineCommission !== undefined && c.inlineCommission > 0);
+  const allInline = clients.length > 0 && clients.every(c => c.inlineCommission !== undefined && Math.abs(c.inlineCommission) > 0.01);
 
   if (allInline) {
     // All amounts were on the same line as the client
@@ -173,7 +173,7 @@ function extractRowsFromText(text: string): AssistcardRow[] {
       // and pair remaining standalone amounts with those that don't
       const remaining = [...standaloneAmounts];
       for (const c of clients) {
-        if (c.inlineCommission && c.inlineCommission > 0) {
+        if (c.inlineCommission && Math.abs(c.inlineCommission) > 0.01) {
           rows.push({ policy_number: c.voucher, client_name: c.name, gross_amount: c.inlineCommission });
           console.log(`[ASSISTCARD PARSER] ✅ (mixed-inline) Voucher=${c.voucher} Client="${c.name}" Commission=${c.inlineCommission}`);
         } else if (remaining.length >= 2) {

@@ -895,7 +895,7 @@ export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [],
     }
     
     // Only add rows with at least policy number or amount
-    if (policyNumber || grossAmount > 0) {
+    if (policyNumber || Math.abs(grossAmount) > 0.01) {
       rows.push({
         policy_number: policyNumber,
         client_name: insuredName,

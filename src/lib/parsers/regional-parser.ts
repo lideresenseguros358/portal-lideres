@@ -191,7 +191,7 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
     const clientName = names[i] || '';
     const grossAmount = alignedMontoCPagadoList[i] || 0;
 
-    if (policyFull && clientName && grossAmount > 0) {
+    if (policyFull && clientName && Math.abs(grossAmount) > 0.01) {
       rows.push({
         policy_number: policyFull,
         client_name: clientName,

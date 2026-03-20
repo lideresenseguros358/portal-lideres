@@ -148,7 +148,7 @@ export async function parseVumiPDF(fileBuffer: ArrayBuffer): Promise<VumiRow[]> 
         }
         
         // Si encontramos póliza, nombre y comisión, agregar
-        if (policyNum && nameTokens.length >= 2 && commission > 0) {
+        if (policyNum && nameTokens.length >= 2 && Math.abs(commission) > 0.01) {
           const clientName = nameTokens.join(' ');
           
           results.push({

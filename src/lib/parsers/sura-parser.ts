@@ -114,9 +114,11 @@ export function parseSuraExcel(buffer: ArrayBuffer): SuraRow[] {
                             !insured.toUpperCase().includes('ASEGURADO') &&
                             !insured.toUpperCase().includes('DETALLE');
 
-      // Limpiar y parsear comisión
-      const commissionCleaned = commissionRaw.replace(/[$,\s]/g, '');
-      const commission = parseFloat(commissionCleaned);
+      // Limpiar y parsear comisión (soporta negativos con paréntesis o signo menos)
+      const hasParentheses = commissionRaw.includes('(') && commissionRaw.includes(')');
+      const commissionCleaned = commissionRaw.replace(/[$,\s()]/g, '');
+      let commission = parseFloat(commissionCleaned);
+      if (hasParentheses && !isNaN(commission)) commission = -Math.abs(commission);
       const isValidCommission = !isNaN(commission) && Math.abs(commission) > 0.01;
 
       if (isValidPolicy && isValidInsured && isValidCommission) {

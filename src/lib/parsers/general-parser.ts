@@ -295,7 +295,7 @@ export async function parseGeneralPDF(fileBuffer: ArrayBuffer): Promise<GeneralR
       }
     }
 
-    if (policyNumber && clientName && grossAmount > 0) {
+    if (policyNumber && clientName && Math.abs(grossAmount) > 0.01) {
       rows.push({
         policy_number: policyNumber,
         client_name: clientName,
