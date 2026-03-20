@@ -255,12 +255,12 @@ function parseMultiLineOCR(lines: string[]): IFSRow[] {
   const rows: IFSRow[] = [];
   // Policy line MUST start with a date DD/MM/YYYY to distinguish from codes like AG-0139
   const DATE_POLICY_RE = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?)/;
-  const NOISE_WORDS = ['DETALLE', 'LIDERES', 'DIRECCION', 'LICENCIA', 'CODIGO',
-    'PORCENTAJE', 'RECIBO', 'FECHA', 'POLIZA', 'PRODUCTO', 'CLIENTE',
-    'FIANZAS', 'SECUROS', 'SEGUROS', 'INTERAMERICANA', 'HUELLAS', 'GENERALES', 'PERSONAS',
-    'DEJANDO', 'PH BAY', 'AVE 3', 'PISO', 'OFIC'];
+  // IFS product names to skip when looking for client name
+  const PRODUCT_WORDS = ['FIANZA', 'INCENDIO', 'MULTIRIESGO', 'RESPONSABILIDAD', 'TRANSPORTE',
+    'EQUIPO', 'TODO RIESGO', 'ROTURA', 'FIDELIDAD', 'LUCRO', 'AUTOMOVIL', 'TERREMOTO',
+    'VIDA', 'SALUD', 'ACCIDENTE'];
 
-  // Find all policy lines (only those preceded by a date)
+  // Find all policy line indices
   const policyIndices: { idx: number; policy: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!.toUpperCase();
@@ -274,73 +274,87 @@ function parseMultiLineOCR(lines: string[]): IFSRow[] {
 
   for (let p = 0; p < policyIndices.length; p++) {
     const { idx: i, policy: policy_number } = policyIndices[p]!;
+    // Scan until next policy or end of document
     const endIdx = p + 1 < policyIndices.length 
       ? policyIndices[p + 1]!.idx 
       : Math.min(i + 30, lines.length);
 
-    console.log(`[IFS OCR] Policy at line ${i}: ${policy_number}, scanning lines ${i+1}-${endIdx}`);
-
+    // Collect all lines between this policy and the next into ordered tokens
+    // IFS OCR layout per policy block (each on its own line):
+    //   PRODUCT_NAME
+    //   CLIENT_NAME  
+    //   RECIBO_NUMBER (digits only)
+    //   PRIMA (money)
+    //   PORCENTAJE (nn.n%)
+    //   COMISION (money)
     let client_name: string | null = null;
     let commission = 0;
-    let sawComisionLabel = false;
-    let sawPorcentajeLabel = false;
+    let sawPercentage = false;
+    const textLines: string[] = [];
+    const amounts: number[] = [];
 
     for (let j = i + 1; j < endIdx; j++) {
       const fwd = lines[j]!.trim();
       const fwdU = fwd.toUpperCase();
+      if (!fwd) continue;
 
-      // Skip pure noise lines
-      const isNoise = NOISE_WORDS.some(w => fwdU === w || (fwdU.length < 25 && fwdU.startsWith(w)));
-
-      // Track labels: the commission value comes right after "COMISION" or "PORCENTAJE" label
-      if (fwdU === 'COMISION' || fwdU.startsWith('COMISION')) {
-        sawComisionLabel = true;
-        sawPorcentajeLabel = false;
-        continue;
-      }
-      if (fwdU === 'PORCENTAJE' || fwdU.includes('PORCENTAJE')) {
-        sawPorcentajeLabel = true;
+      // Check if this line is a percentage like "15.0%" or "25.0%"
+      if (/^\d{1,3}(\.\d+)?%$/.test(fwd)) {
+        sawPercentage = true;
+        console.log(`[IFS OCR]   line ${j}: PERCENTAGE = ${fwd}`);
         continue;
       }
 
-      // If we just saw COMISION label, the next line with a number IS the commission
-      if (sawComisionLabel && commission === 0) {
-        const moneyRe = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/;
-        const m = fwd.match(moneyRe);
-        if (m) {
-          commission = parseMoneyToken(m[1]!);
-          console.log(`[IFS OCR] Commission after COMISION label: ${commission}`);
-          sawComisionLabel = false;
-          continue;
+      // Check if this line is a money amount (with optional B/. prefix)
+      const moneyMatch = fwd.match(/^(?:B\/\.\s*)?(\d{1,3}(?:[,.]?\d{3})*[.,]\d{2})$/);
+      if (moneyMatch) {
+        const val = parseMoneyToken(moneyMatch[1]!.replace(',', '.'));
+        amounts.push(val);
+        // The amount right AFTER the percentage is the commission
+        if (sawPercentage && commission === 0) {
+          commission = val;
+          console.log(`[IFS OCR]   line ${j}: COMMISSION (after %) = ${val}`);
+        } else {
+          console.log(`[IFS OCR]   line ${j}: amount = ${val} (sawPct=${sawPercentage})`);
         }
+        continue;
       }
 
-      // Also check: line with multiple amounts like "PRIMA PORCENTAJE COMISION" header
-      // followed by a line with amounts "275.63 20% 55.13"
-      // or amounts on same line as COMISION: "55.13"
-      const multiAmountRe = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/g;
-      const amountsOnLine: number[] = [];
-      let mm;
-      while ((mm = multiAmountRe.exec(fwd)) !== null) {
-        amountsOnLine.push(parseMoneyToken(mm[1]!));
-      }
-      // If line has exactly 2 amounts (prima + comision), commission is the last one
-      if (amountsOnLine.length === 2 && commission === 0) {
-        commission = amountsOnLine[1]!;
-        console.log(`[IFS OCR] Commission from dual-amount line: ${commission} (prima=${amountsOnLine[0]})`);
+      // Check if it's a pure number (recibo)
+      if (/^\d{3,10}$/.test(fwd)) {
+        console.log(`[IFS OCR]   line ${j}: RECIBO = ${fwd}`);
+        continue;
       }
 
-      // Try to identify client name: text with letters, has comma/S.A., not noise
-      if (!client_name && !isNoise && fwdU.replace(/[^A-Z]/g, '').length >= 4) {
-        const looksLikeClient = (fwdU.includes(',') || fwdU.includes('S.A') || fwdU.includes('S. A'))
-          || (!fwdU.match(/^(RESPONSABILIDAD|RAMO|GENERAL|VIDA|SALUD|AUTO|INCENDIO|TOTAL|RESUMEN|PRIMA|COMISION|MOS)\b/));
-        if (looksLikeClient && isLikelyClientName(fwdU)) {
-          client_name = fwd.replace(/\s+/g, ' ').trim();
-        }
+      // It's a text line — could be product or client name
+      textLines.push(fwd);
+    }
+
+    // Identify client from text lines
+    // IFS format: first text line = product, second = client
+    // Products start with known words (FIANZA, INCENDIO, etc.)
+    // Client names usually have commas, S.A., or are person names
+    for (const txt of textLines) {
+      const u = txt.toUpperCase();
+      const isProduct = PRODUCT_WORDS.some(w => u.startsWith(w));
+      if (isProduct) continue;
+      if (isLikelyClientName(u)) {
+        client_name = txt.replace(/\s+/g, ' ').trim();
+        break;
       }
     }
 
-    console.log(`[IFS OCR] Result: policy=${policy_number}, client="${client_name}", commission=${commission}`);
+    // Fallback: if no commission found after percentage, check for "COMISION" label pattern
+    // or use the last amount in the block
+    if (commission === 0 && amounts.length >= 2) {
+      // [prima, comision] — commission is the last amount
+      commission = amounts[amounts.length - 1]!;
+      console.log(`[IFS OCR] Fallback commission (last amount): ${commission}`);
+    } else if (commission === 0 && amounts.length === 1) {
+      commission = amounts[0]!;
+    }
+
+    console.log(`[IFS OCR] Result: policy=${policy_number}, client="${client_name}", amounts=[${amounts}], commission=${commission}`);
 
     if (Math.abs(commission) > 0.01) {
       rows.push({ policy_number, client_name, gross_amount: commission });
