@@ -45,6 +45,55 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
   const [extrasSeleccionados, setExtrasSeleccionados] = useState<string[]>([]);
   const [extrasDetalle, setExtrasDetalle] = useState('');
   const [buenEstadoFisico, setBuenEstadoFisico] = useState(true);
+  // Per-part damage conditions: key=partId, value='R'|'A'|'RA' (unlisted = 'B' bueno)
+  const [partConditions, setPartConditions] = useState<Record<string, 'R' | 'A' | 'RA'>>({});
+
+  // Official IS inspection form parts (matches formulario-inspeccion-auto.pdf)
+  const INSPECTION_PARTS_LEFT = [
+    { id: 'tapa_motor',        label: 'Tapa de Motor' },
+    { id: 'parabrisas',        label: 'V/Parabrisas' },
+    { id: 'parrilla_camisa',   label: 'Parrilla/Camisa' },
+    { id: 'faroles',           label: 'Faroles' },
+    { id: 'defensa_delantera', label: 'Defensa Delantera' },
+    { id: 'deflector_del',     label: 'Deflector Del.' },
+    { id: 'guard_del_lh',      label: 'Guard. Del. LH' },
+    { id: 'guard_tras_lh',     label: 'Guard. Tras. LH' },
+    { id: 'puerta_del_lh',     label: 'Puerta Del. LH' },
+    { id: 'puerta_tras_lh',    label: 'Puerta Tras. LH' },
+    { id: 'luces_direcc_del',  label: 'Luces Direcc. Del' },
+    { id: 'lamp_def_tras',     label: 'Lamp. de Def. Tras.' },
+  ];
+  const INSPECTION_PARTS_RIGHT = [
+    { id: 'tapa_baul',         label: 'Tapa del Baúl' },
+    { id: 'vidrio_trasero',    label: 'Vidrio Trasero' },
+    { id: 'luces_traseras',    label: 'Luces Traseras' },
+    { id: 'defensas_traseras', label: 'Defensas Traseras' },
+    { id: 'deflector_trasero', label: 'Deflector Trasero' },
+    { id: 'guard_del_rh',      label: 'Guard. Del RH' },
+    { id: 'guard_tras_rh',     label: 'Guard. Tras. RH' },
+    { id: 'puerta_del_rh',     label: 'Puerta Del. RH' },
+    { id: 'puerta_tras_rh',    label: 'Puerta Tras. RH' },
+    { id: 'cond_ventanas',     label: 'Condición de Ventanas' },
+    { id: 'cond_llantas',      label: 'Condición de Llantas' },
+    { id: 'cond_general',      label: 'Condición General del Auto' },
+  ];
+  const DAMAGE_OPTIONS = [
+    { value: 'R' as const,  label: 'R',  fullLabel: 'Regular' },
+    { value: 'A' as const,  label: 'A',  fullLabel: 'Abollado' },
+    { value: 'RA' as const, label: 'RA', fullLabel: 'Rayado/Roto' },
+  ];
+
+  const togglePartCondition = (partId: string, condition: 'R' | 'A' | 'RA') => {
+    setPartConditions(prev => {
+      const next = { ...prev };
+      if (next[partId] === condition) {
+        delete next[partId]; // Deselect → defaults to B (Bueno)
+      } else {
+        next[partId] = condition;
+      }
+      return next;
+    });
+  };
 
   const EXTRAS_OPTIONS = [
     'Alarma de Fca.', 'Otra Alarma', 'Inmobilizer', 'GPS', 'Copas de Lujo',
@@ -132,6 +181,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
         extrasSeleccionados: tieneExtras ? extrasSeleccionados : [],
         extrasDetalle: tieneExtras ? extrasDetalle : '',
         buenEstadoFisico,
+        partConditions: buenEstadoFisico ? {} : partConditions,
       };
       // Also store in sessionStorage for later PDF generation
       sessionStorage.setItem('isInspectionData', JSON.stringify({
@@ -139,6 +189,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
         extrasSeleccionados: tieneExtras ? extrasSeleccionados : [],
         extrasDetalle: tieneExtras ? extrasDetalle : '',
         buenEstadoFisico,
+        partConditions: buenEstadoFisico ? {} : partConditions,
       }));
     }
     
@@ -481,7 +532,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
               🚗 ¿Su vehículo se encuentra en buen estado físico?
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              Si marca &quot;Sí&quot;, todas las partes del vehículo se marcarán como &quot;B&quot; (Bueno) en el formulario de inspección.
+              Si marca &quot;Sí&quot;, todas las partes del vehículo se considerarán en buen estado.
             </p>
             
             <div className="flex items-center gap-4">
@@ -490,7 +541,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
                   type="radio"
                   name="buenEstadoFisico"
                   checked={buenEstadoFisico === true}
-                  onChange={() => setBuenEstadoFisico(true)}
+                  onChange={() => { setBuenEstadoFisico(true); setPartConditions({}); }}
                   className="w-4 h-4 text-[#8AAA19]"
                 />
                 <span className="text-sm font-semibold text-gray-700">Sí, en buen estado</span>
@@ -510,8 +561,150 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             {buenEstadoFisico && (
               <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                 <p className="text-xs text-green-800">
-                  ✅ Se marcará &quot;B&quot; (Bueno) en todas las partes del formulario de inspección IS.
+                  ✅ Todas las partes del vehículo se marcarán como en buen estado en el formulario de inspección.
                 </p>
+              </div>
+            )}
+
+            {/* ── Damage Checklist (only when buenEstadoFisico = false) ── */}
+            {!buenEstadoFisico && (
+              <div className="mt-4 space-y-4">
+                {/* Instructions */}
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-900 mb-1">
+                    ⚠️ Marque únicamente las piezas que presentan algún daño
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Las piezas que no marque se considerarán automáticamente en buen estado (B).
+                    Seleccione el tipo de daño para cada pieza afectada:
+                    <strong> R</strong> = Regular,
+                    <strong> A</strong> = Abollado,
+                    <strong> RA</strong> = Rayado/Roto.
+                  </p>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-7 h-5 rounded bg-yellow-400 text-center text-[10px] font-bold leading-5 text-yellow-900">R</span>
+                    <span className="text-gray-600">Regular</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-7 h-5 rounded bg-orange-400 text-center text-[10px] font-bold leading-5 text-white">A</span>
+                    <span className="text-gray-600">Abollado</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-7 h-5 rounded bg-red-500 text-center text-[10px] font-bold leading-5 text-white">RA</span>
+                    <span className="text-gray-600">Rayado/Roto</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block w-7 h-5 rounded bg-gray-200 text-center text-[10px] font-bold leading-5 text-gray-500">—</span>
+                    <span className="text-gray-600">Bueno (sin marcar)</span>
+                  </div>
+                </div>
+
+                {/* Two-column parts grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Left column */}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-[#010139] text-white text-xs font-bold px-3 py-2 text-center">
+                      Lado Izquierdo / Frontal
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {INSPECTION_PARTS_LEFT.map((part) => (
+                        <div key={part.id} className="flex items-center px-2 py-1.5 hover:bg-gray-50">
+                          <span className="flex-1 text-xs font-medium text-gray-700 truncate pr-1">{part.label}</span>
+                          <div className="flex gap-1 flex-shrink-0">
+                            {DAMAGE_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => togglePartCondition(part.id, opt.value)}
+                                className={`w-8 h-6 rounded text-[10px] font-bold transition-all ${
+                                  partConditions[part.id] === opt.value
+                                    ? opt.value === 'R'
+                                      ? 'bg-yellow-400 text-yellow-900 ring-2 ring-yellow-500'
+                                      : opt.value === 'A'
+                                        ? 'bg-orange-400 text-white ring-2 ring-orange-500'
+                                        : 'bg-red-500 text-white ring-2 ring-red-600'
+                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right column */}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-[#010139] text-white text-xs font-bold px-3 py-2 text-center">
+                      Lado Derecho / Trasero
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {INSPECTION_PARTS_RIGHT.map((part) => (
+                        <div key={part.id} className="flex items-center px-2 py-1.5 hover:bg-gray-50">
+                          <span className="flex-1 text-xs font-medium text-gray-700 truncate pr-1">{part.label}</span>
+                          <div className="flex gap-1 flex-shrink-0">
+                            {DAMAGE_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => togglePartCondition(part.id, opt.value)}
+                                className={`w-8 h-6 rounded text-[10px] font-bold transition-all ${
+                                  partConditions[part.id] === opt.value
+                                    ? opt.value === 'R'
+                                      ? 'bg-yellow-400 text-yellow-900 ring-2 ring-yellow-500'
+                                      : opt.value === 'A'
+                                        ? 'bg-orange-400 text-white ring-2 ring-orange-500'
+                                        : 'bg-red-500 text-white ring-2 ring-red-600'
+                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary of damaged parts */}
+                {Object.keys(partConditions).length > 0 && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-xs font-semibold text-red-800 mb-1">
+                      🔴 Piezas con daño marcado ({Object.keys(partConditions).length}):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(partConditions).map(([partId, condition]) => {
+                        const allParts = [...INSPECTION_PARTS_LEFT, ...INSPECTION_PARTS_RIGHT];
+                        const part = allParts.find(p => p.id === partId);
+                        return (
+                          <span key={partId} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            condition === 'R' ? 'bg-yellow-100 text-yellow-800' :
+                            condition === 'A' ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {part?.label || partId} ({condition})
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {Object.keys(partConditions).length === 0 && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      ℹ️ No ha marcado ninguna pieza con daño. Si el vehículo realmente está en buen estado, seleccione &quot;Sí&quot; arriba.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

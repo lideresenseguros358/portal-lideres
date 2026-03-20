@@ -38,6 +38,7 @@ export interface InspectionPdfData {
 
   // Inspection
   buenEstadoFisico: boolean;
+  partConditions?: Record<string, 'R' | 'A' | 'RA'>;
   tieneExtras: boolean;
   extrasSeleccionados: string[];
   extrasDetalle: string;
@@ -224,15 +225,38 @@ export async function generateInspectionPdf(data: InspectionPdfData): Promise<Bu
 
   // ─── PHYSICAL CONDITION TABLE ───────────────────────────────────────
   // Exact checkbox positions from PDF content stream (non-uniform spacing)
-  // Left B column x=140.4, Right B column x=451.4
-  if (data.buenEstadoFisico) {
-    const rowYs = [346.7, 334.7, 324.2, 312.2, 301.8, 289.6, 277.3, 265.1, 252.8, 240.6, 228.4, 216.1];
-    const leftBx = 141;
-    const rightBx = 452;
-    for (const y of rowYs) {
-      X(leftBx, y);
-      X(rightBx, y);
-    }
+  // Column headers at y=357.5:
+  //   Left:  B=151, R=183, A=218, RA=250
+  //   Right: B=465, R=500, A=535, RA=565
+  // Row Y positions (12 rows): 346.7→216.1
+  const condRowYs = [346.7, 334.7, 324.2, 312.2, 301.8, 289.6, 277.3, 265.1, 252.8, 240.6, 228.4, 216.1];
+  const condColsLeft  = { B: 141, R: 174, A: 209, RA: 241 };
+  const condColsRight = { B: 452, R: 491, A: 526, RA: 556 };
+
+  // Part IDs in order matching the 12 left rows and 12 right rows of the PDF form
+  const leftPartIds = [
+    'tapa_motor', 'parabrisas', 'parrilla_camisa', 'faroles',
+    'defensa_delantera', 'deflector_del', 'guard_del_lh', 'guard_tras_lh',
+    'puerta_del_lh', 'puerta_tras_lh', 'luces_direcc_del', 'lamp_def_tras',
+  ];
+  const rightPartIds = [
+    'tapa_baul', 'vidrio_trasero', 'luces_traseras', 'defensas_traseras',
+    'deflector_trasero', 'guard_del_rh', 'guard_tras_rh', 'puerta_del_rh',
+    'puerta_tras_rh', 'cond_ventanas', 'cond_llantas', 'cond_general',
+  ];
+
+  const pc = data.partConditions || {};
+
+  for (let i = 0; i < condRowYs.length; i++) {
+    const y = condRowYs[i] as number;
+    const leftPartId = leftPartIds[i] as string;
+    const rightPartId = rightPartIds[i] as string;
+    // Left side
+    const leftCond: 'B' | 'R' | 'A' | 'RA' = data.buenEstadoFisico ? 'B' : (pc[leftPartId] || 'B');
+    X(condColsLeft[leftCond], y);
+    // Right side
+    const rightCond: 'B' | 'R' | 'A' | 'RA' = data.buenEstadoFisico ? 'B' : (pc[rightPartId] || 'B');
+    X(condColsRight[rightCond], y);
   }
 
   // ─── INSURANCE VALUES ─────────────────────────────────────────────

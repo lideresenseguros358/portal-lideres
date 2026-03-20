@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
         tipoTransmision: (vehicleData.tipoTransmision as 'AUTOMATICO' | 'MANUAL') || 'AUTOMATICO',
         // Inspection extras only collected during CC flow; DT defaults to clean
         buenEstadoFisico: inspectionData.buenEstadoFisico ?? true,
+        partConditions: inspectionData.partConditions || {},
         tieneExtras: inspectionData.tieneExtras ?? false,
         extrasSeleccionados: inspectionData.extrasSeleccionados || [],
         extrasDetalle: inspectionData.extrasDetalle || '',
