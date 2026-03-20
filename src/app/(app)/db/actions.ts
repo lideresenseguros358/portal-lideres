@@ -19,8 +19,9 @@ export async function actionCreateClientWithPolicy(clientData: unknown, policyDa
   }
 }
 
-// Buscar clientes duplicados por cédula
-export async function actionFindDuplicateByNationalId(nationalId: string, excludeClientId?: string) {
+// Buscar clientes duplicados por cédula (scoped al mismo broker)
+// El mismo cliente puede existir bajo distintos brokers tras reasignación de póliza individual
+export async function actionFindDuplicateByNationalId(nationalId: string, excludeClientId?: string, brokerId?: string) {
   try {
     const supabase = await getSupabaseServer();
     
@@ -47,6 +48,11 @@ export async function actionFindDuplicateByNationalId(nationalId: string, exclud
     
     if (excludeClientId) {
       query = query.neq('id', excludeClientId);
+    }
+
+    // Solo detectar duplicados dentro del mismo broker
+    if (brokerId) {
+      query = query.eq('broker_id', brokerId);
     }
 
     const { data, error } = await query.single();

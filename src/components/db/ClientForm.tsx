@@ -254,7 +254,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     
     setCheckingDuplicate(true);
     try {
-      const result = await actionFindDuplicateByNationalId(nationalId, client.id);
+      const result = await actionFindDuplicateByNationalId(nationalId, client.id, client.broker_id);
       if (result.ok && result.data) {
         setDuplicateClient(result.data);
         setShowMergeModal(true);

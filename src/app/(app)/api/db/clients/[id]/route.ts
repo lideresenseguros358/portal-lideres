@@ -51,10 +51,18 @@ export async function PUT(
 
     const newNationalId = body.national_id?.trim().toUpperCase() || null;
     
+    // Obtener broker_id del cliente actual para scoping de duplicados
+    const { data: fullClient } = await supabase
+      .from('clients')
+      .select('broker_id')
+      .eq('id', id)
+      .single();
+
     // DETECCIÓN DE DUPLICADOS: Si se está agregando/cambiando la cédula
+    // Solo detectar duplicados dentro del mismo broker (el mismo cliente puede
+    // existir bajo distintos brokers tras reasignación de póliza individual)
     if (newNationalId && newNationalId !== currentClient.national_id) {
-      // Buscar si ya existe otro cliente con esta cédula
-      const { data: duplicate, error: dupError } = await supabase
+      let dupQuery = supabase
         .from('clients')
         .select(`
           id,
@@ -75,8 +83,14 @@ export async function PUT(
           )
         `)
         .eq('national_id', newNationalId)
-        .neq('id', id)
-        .single();
+        .neq('id', id);
+
+      // Scoped al mismo broker
+      if (fullClient?.broker_id) {
+        dupQuery = dupQuery.eq('broker_id', fullClient.broker_id);
+      }
+
+      const { data: duplicate, error: dupError } = await dupQuery.single();
 
       // Si existe un duplicado, retornar info para que el frontend pregunte
       if (duplicate && !dupError) {
