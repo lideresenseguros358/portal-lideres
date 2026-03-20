@@ -555,10 +555,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
       }
     }
     
-    // PARSER ESPECIAL PARA ASSA - SOLO para reportes con formato dual (Prima Cobrada + Honorarios Profesionales)
-    // Otros reportes ASSA más simples se manejan con el mapper genérico (caen al flujo normal)
+    // PARSER ESPECIAL PARA ASSA - formato dual (Prima Cobrada + Honorarios Profesionales)
+    // Lee celdas directamente del worksheet para evitar que sheet_to_json mezcle columnas duplicadas
     if (insurer?.name?.toUpperCase().includes('ASSA')) {
-      log('Detectado ASSA - Verificando si es formato dual (Prima Cobrada + Honorarios)');
+      log('Detectado ASSA - Verificando formato dual');
       try {
         const fileExtension = fileName.toLowerCase().split('.').pop();
         if (fileExtension === 'xlsx' || fileExtension === 'xls') {
@@ -570,117 +570,94 @@ export async function previewMapping(options: PreviewMappingOptions) {
           if (!worksheet) throw new Error('No se pudo leer la hoja de Excel');
 
           const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-          // 1) Buscar "Honorarios Profesionales" en las celdas del worksheet directamente
-          //    (las celdas merged solo aparecen en su celda origen, no en sheet_to_json)
-          let honorariosStartCol = -1;
-          let honorariosRow = -1;
           const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-          for (let r = range.s.r; r <= Math.min(range.s.r + 20, range.e.r); r++) {
+
+          // Helper: leer celda directamente del worksheet
+          const getCell = (r: number, c: number): any => {
+            const ref = XLSX.utils.encode_cell({ r, c });
+            const cell = worksheet[ref];
+            return cell ? (cell.v ?? '') : '';
+          };
+
+          const getCellNum = (r: number, c: number): number => {
+            const val = getCell(r, c);
+            if (val == null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            const cleaned = String(val).replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+          };
+
+          // 1) Buscar fila de headers (la que tiene Poliza, Asegurado, Monto, Vida, etc.)
+          const headerKeywords = ['poliza', 'asegurado', 'monto', 'vida', 'tasa', 'saldo'];
+          let headerRowIdx = -1;
+          let maxScore = 0;
+          for (let r = range.s.r; r <= Math.min(range.s.r + 25, range.e.r); r++) {
+            let matches = 0;
             for (let c = range.s.c; c <= range.e.c; c++) {
-              const cellRef = XLSX.utils.encode_cell({ r, c });
-              const cell = worksheet[cellRef];
-              if (cell && cell.v != null) {
-                const cellText = norm(String(cell.v));
-                if (cellText.includes('honorarios profesionales') || cellText === 'honorarios') {
-                  honorariosStartCol = c;
-                  honorariosRow = r;
-                  log(`Found "Honorarios" cell at row=${r}, col=${c}, value="${cell.v}"`);
-                  break;
-                }
-              }
+              const val = getCell(r, c);
+              if (!val) continue;
+              const t = norm(String(val));
+              if (headerKeywords.some(kw => t.includes(kw))) matches++;
             }
-            if (honorariosStartCol >= 0) break;
+            if (matches > maxScore) { maxScore = matches; headerRowIdx = r; }
+          }
+          if (headerRowIdx < 0) throw new Error('No se encontró la fila de encabezados ASSA');
+
+          // 2) Leer headers de esa fila y encontrar TODAS las posiciones de columnas clave
+          let polizaCol = -1, aseguradoCol = -1;
+          const allMonto: number[] = [];
+          const allVida1: number[] = [];
+          const allVidaRenov: number[] = [];
+
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const val = getCell(headerRowIdx, c);
+            if (!val) continue;
+            const n = norm(String(val));
+            if (n === 'poliza' && polizaCol === -1) polizaCol = c;
+            if (n === 'asegurado' && aseguradoCol === -1) aseguradoCol = c;
+            if (n === 'monto') allMonto.push(c);
+            if (n.includes('vida') && (n.includes('1er') || n.includes('1er.'))) allVida1.push(c);
+            if (n.includes('vida') && n.includes('renov')) allVidaRenov.push(c);
           }
 
-          // Si NO encontramos "Honorarios Profesionales", es un reporte simple → caer al genérico
-          if (honorariosStartCol < 0) {
-            log('ASSA: No se encontró header "Honorarios Profesionales" - usando parser genérico');
-            // Caer al flujo genérico (no hacer return, seguir al código de abajo)
+          log(`ASSA header row: ${headerRowIdx}`);
+          log(`ASSA all Monto cols: [${allMonto}], Vida1: [${allVida1}], VidaRenov: [${allVidaRenov}]`);
+
+          // 3) Determinar columnas de Honorarios Profesionales
+          // Si hay 2+ ocurrencias de Monto/Vida, la SEGUNDA es Honorarios Profesionales
+          // Si solo hay 1 ocurrencia, es un reporte simple → caer al genérico
+          const hasDualColumns = allMonto.length >= 2 || allVida1.length >= 2 || allVidaRenov.length >= 2;
+
+          if (!hasDualColumns) {
+            log('ASSA: Reporte simple (sin columnas duplicadas) - usando parser genérico');
+            // Caer al flujo genérico
           } else {
-            // Es formato dual → usar parser especial
-            log(`ASSA formato dual detectado. Honorarios empieza en columna ${honorariosStartCol}`);
+            // Usar la ÚLTIMA ocurrencia de cada columna = Honorarios Profesionales
+            const hMontoCol = allMonto.length >= 2 ? allMonto[allMonto.length - 1]! : (allMonto[0] ?? -1);
+            const hVida1Col = allVida1.length >= 2 ? allVida1[allVida1.length - 1]! : (allVida1[0] ?? -1);
+            const hVidaRenovCol = allVidaRenov.length >= 2 ? allVidaRenov[allVidaRenov.length - 1]! : (allVidaRenov[0] ?? -1);
 
-            // Leer como array de arrays (raw) para acceso por índice de columna real
-            const allRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
-              header: 1, defval: '', blankrows: true, raw: true
-            });
+            log(`ASSA Honorarios columns (LAST occurrence): monto=${hMontoCol}, vida1=${hVida1Col}, vidaRenov=${hVidaRenovCol}`);
 
-            // 2) Buscar fila de headers de datos (la que tiene Poliza, Asegurado, Monto, Vida, etc.)
-            const headerKeywords = ['poliza', 'asegurado', 'monto', 'vida', 'tasa', 'saldo'];
-            let headerRowIndex = -1;
-            let maxScore = 0;
-            for (let i = 0; i < Math.min(20, allRows.length); i++) {
-              const row = allRows[i];
-              if (!row) continue;
-              let matches = 0;
-              for (const cell of row) {
-                if (!cell) continue;
-                const t = norm(String(cell));
-                if (headerKeywords.some(kw => t.includes(kw))) matches++;
-              }
-              if (matches > maxScore) { maxScore = matches; headerRowIndex = i; }
-            }
-
-            if (headerRowIndex < 0) throw new Error('No se encontró la fila de encabezados');
-            const headerRow = allRows[headerRowIndex];
-            const headers = headerRow.map((h: any) => String(h || '').trim());
-            log('ASSA header row:', headerRowIndex, 'headers:', headers);
-
-            // 3) Identificar columnas
-            let polizaCol = -1, aseguradoCol = -1;
-            const allMonto: number[] = [];
-            const allVida1: number[] = [];
-            const allVidaRenov: number[] = [];
-
-            headers.forEach((h, i) => {
-              const n = norm(h);
-              if (n === 'poliza' && polizaCol === -1) polizaCol = i;
-              if (n === 'asegurado' && aseguradoCol === -1) aseguradoCol = i;
-              if (n === 'monto') allMonto.push(i);
-              if (n.includes('vida') && (n.includes('1er') || n.includes('1er.'))) allVida1.push(i);
-              if (n.includes('vida') && n.includes('renov')) allVidaRenov.push(i);
-            });
-
-            // Seleccionar columnas del grupo Honorarios (>= honorariosStartCol)
-            const hMontoCol = allMonto.find(c => c >= honorariosStartCol) ?? (allMonto[allMonto.length - 1] ?? -1);
-            const hVida1Col = allVida1.find(c => c >= honorariosStartCol) ?? (allVida1[allVida1.length - 1] ?? -1);
-            const hVidaRenovCol = allVidaRenov.find(c => c >= honorariosStartCol) ?? (allVidaRenov[allVidaRenov.length - 1] ?? -1);
-
-            log(`ASSA Honorarios columns: monto=${hMontoCol}, vida1=${hVida1Col}, vidaRenov=${hVidaRenovCol}`);
-            log(`ASSA all Monto positions: ${allMonto}, all Vida1: ${allVida1}, all VidaRenov: ${allVidaRenov}`);
-
-            // 4) Parsear filas
-            const parseNum = (val: any) => {
-              if (val == null || val === '') return 0;
-              if (typeof val === 'number') return val;
-              const cleaned = String(val).replace(/[^\d.-]/g, '');
-              const num = parseFloat(cleaned);
-              return isNaN(num) ? 0 : num;
-            };
-
+            // 4) Leer datos fila por fila directamente del worksheet
             const assaRows: { policy_number: string; client_name: string; gross_amount: number }[] = [];
             let debugCount = 0;
-            for (let i = headerRowIndex + 1; i < allRows.length; i++) {
-              const row = allRows[i];
-              if (!row) continue;
 
-              const policyNum = polizaCol >= 0 ? String(row[polizaCol] ?? '').trim() : '';
-              const clientName = aseguradoCol >= 0 ? String(row[aseguradoCol] ?? '').trim() : '';
+            for (let r = headerRowIdx + 1; r <= range.e.r; r++) {
+              const policyNum = polizaCol >= 0 ? String(getCell(r, polizaCol) ?? '').trim() : '';
+              const clientName = aseguradoCol >= 0 ? String(getCell(r, aseguradoCol) ?? '').trim() : '';
 
               if (!policyNum || policyNum.length < 3) continue;
 
-              // Sumar Monto + Vida 1er. año + Vida Renov. SOLO del grupo Honorarios
-              let totalCommission = 0;
-              const mVal = hMontoCol >= 0 ? row[hMontoCol] : '';
-              const v1Val = hVida1Col >= 0 ? row[hVida1Col] : '';
-              const vrVal = hVidaRenovCol >= 0 ? row[hVidaRenovCol] : '';
-              if (hMontoCol >= 0) totalCommission += parseNum(mVal);
-              if (hVida1Col >= 0) totalCommission += parseNum(v1Val);
-              if (hVidaRenovCol >= 0) totalCommission += parseNum(vrVal);
+              // Leer directamente las celdas de Honorarios (no de sheet_to_json)
+              const mVal = hMontoCol >= 0 ? getCellNum(r, hMontoCol) : 0;
+              const v1Val = hVida1Col >= 0 ? getCellNum(r, hVida1Col) : 0;
+              const vrVal = hVidaRenovCol >= 0 ? getCellNum(r, hVidaRenovCol) : 0;
+              const totalCommission = mVal + v1Val + vrVal;
 
               if (debugCount < 5) {
-                log(`ASSA row ${i}: policy=${policyNum}, monto[${hMontoCol}]=${mVal}, vida1[${hVida1Col}]=${v1Val}, vidaR[${hVidaRenovCol}]=${vrVal}, total=${totalCommission}`);
+                log(`ASSA row ${r}: policy=${policyNum}, monto[col${hMontoCol}]=${mVal}, vida1[col${hVida1Col}]=${v1Val}, vidaR[col${hVidaRenovCol}]=${vrVal}, total=${totalCommission}`);
                 debugCount++;
               }
 
@@ -698,7 +675,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
             return {
               success: true,
               previewRows: assaRows,
-              originalHeaders: ['Póliza', 'Asegurado', 'Honorarios'],
+              originalHeaders: ['Póliza', 'Asegurado', 'Honorarios Profesionales'],
               normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
               rules: [],
               debugLogs
@@ -707,7 +684,6 @@ export async function previewMapping(options: PreviewMappingOptions) {
         }
       } catch (error) {
         log(`ERROR en parser ASSA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-        // No retornar error - caer al parser genérico
         log('ASSA: Cayendo al parser genérico después de error');
       }
     }
