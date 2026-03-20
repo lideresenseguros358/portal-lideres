@@ -253,37 +253,37 @@ function parseSingleLine(lines: string[]): IFSRow[] {
  */
 function parseMultiLineOCR(lines: string[]): IFSRow[] {
   const rows: IFSRow[] = [];
-  // Date + policy pattern: "02/10/2026 RGRCG-953" or just "RGRCG-953"
-  const DATE_POLICY_RE = /(?:\d{1,2}\/\d{1,2}\/\d{2,4}\s+)?([A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?)/;
+  // Policy line MUST start with a date DD/MM/YYYY to distinguish from codes like AG-0139
+  const DATE_POLICY_RE = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?)/;
   const NOISE_WORDS = ['DETALLE', 'LIDERES', 'DIRECCION', 'LICENCIA', 'CODIGO',
     'PORCENTAJE', 'RECIBO', 'FECHA', 'POLIZA', 'PRODUCTO', 'CLIENTE',
     'FIANZAS', 'SECUROS', 'SEGUROS', 'INTERAMERICANA', 'HUELLAS', 'GENERALES', 'PERSONAS',
     'DEJANDO', 'PH BAY', 'AVE 3', 'PISO', 'OFIC'];
-  // Money regex that also handles B/.prefix: "275.63" or "B/.55.13"
-  const MONEY_LINE_RE = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/g;
 
-  // Find all policy lines first
+  // Find all policy lines (only those preceded by a date)
   const policyIndices: { idx: number; policy: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!.toUpperCase();
     const m = line.match(DATE_POLICY_RE);
     if (m) {
-      policyIndices.push({ idx: i, policy: m[1]!.trim() });
+      policyIndices.push({ idx: i, policy: m[2]!.trim() });
     }
   }
 
+  console.log(`[IFS OCR] Found ${policyIndices.length} policy lines with dates`);
+
   for (let p = 0; p < policyIndices.length; p++) {
     const { idx: i, policy: policy_number } = policyIndices[p]!;
-    // Scan from policy line to end of section (next policy or end of page)
     const endIdx = p + 1 < policyIndices.length 
       ? policyIndices[p + 1]!.idx 
-      : Math.min(i + 25, lines.length);
+      : Math.min(i + 30, lines.length);
 
-    console.log(`[IFS OCR] Found policy at line ${i}: ${policy_number}, scanning to line ${endIdx}`);
+    console.log(`[IFS OCR] Policy at line ${i}: ${policy_number}, scanning lines ${i+1}-${endIdx}`);
 
     let client_name: string | null = null;
-    const moneyValues: number[] = [];
-    let lastComisionIdx = -1;
+    let commission = 0;
+    let sawComisionLabel = false;
+    let sawPorcentajeLabel = false;
 
     for (let j = i + 1; j < endIdx; j++) {
       const fwd = lines[j]!.trim();
@@ -291,49 +291,56 @@ function parseMultiLineOCR(lines: string[]): IFSRow[] {
 
       // Skip pure noise lines
       const isNoise = NOISE_WORDS.some(w => fwdU === w || (fwdU.length < 25 && fwdU.startsWith(w)));
-      
-      // Track if this line or a preceding line says "COMISION" to know which amounts are commissions
-      if (fwdU.includes('COMISION')) {
-        lastComisionIdx = j;
+
+      // Track labels: the commission value comes right after "COMISION" or "PORCENTAJE" label
+      if (fwdU === 'COMISION' || fwdU.startsWith('COMISION')) {
+        sawComisionLabel = true;
+        sawPorcentajeLabel = false;
+        continue;
+      }
+      if (fwdU === 'PORCENTAJE' || fwdU.includes('PORCENTAJE')) {
+        sawPorcentajeLabel = true;
+        continue;
       }
 
-      // Collect money values (handle B/. prefix)
-      let moneyMatch;
-      const moneyReCopy = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/g;
-      while ((moneyMatch = moneyReCopy.exec(fwd)) !== null) {
-        moneyValues.push(parseMoneyToken(moneyMatch[1]!));
+      // If we just saw COMISION label, the next line with a number IS the commission
+      if (sawComisionLabel && commission === 0) {
+        const moneyRe = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/;
+        const m = fwd.match(moneyRe);
+        if (m) {
+          commission = parseMoneyToken(m[1]!);
+          console.log(`[IFS OCR] Commission after COMISION label: ${commission}`);
+          sawComisionLabel = false;
+          continue;
+        }
       }
 
-      // Try to identify client name
+      // Also check: line with multiple amounts like "PRIMA PORCENTAJE COMISION" header
+      // followed by a line with amounts "275.63 20% 55.13"
+      // or amounts on same line as COMISION: "55.13"
+      const multiAmountRe = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/g;
+      const amountsOnLine: number[] = [];
+      let mm;
+      while ((mm = multiAmountRe.exec(fwd)) !== null) {
+        amountsOnLine.push(parseMoneyToken(mm[1]!));
+      }
+      // If line has exactly 2 amounts (prima + comision), commission is the last one
+      if (amountsOnLine.length === 2 && commission === 0) {
+        commission = amountsOnLine[1]!;
+        console.log(`[IFS OCR] Commission from dual-amount line: ${commission} (prima=${amountsOnLine[0]})`);
+      }
+
+      // Try to identify client name: text with letters, has comma/S.A., not noise
       if (!client_name && !isNoise && fwdU.replace(/[^A-Z]/g, '').length >= 4) {
         const looksLikeClient = (fwdU.includes(',') || fwdU.includes('S.A') || fwdU.includes('S. A'))
-          || (!fwdU.match(/^(RESPONSABILIDAD|RAMO|GENERAL|VIDA|SALUD|AUTO|INCENDIO|TOTAL|RESUMEN|PRIMA|COMISION)\b/));
+          || (!fwdU.match(/^(RESPONSABILIDAD|RAMO|GENERAL|VIDA|SALUD|AUTO|INCENDIO|TOTAL|RESUMEN|PRIMA|COMISION|MOS)\b/));
         if (looksLikeClient && isLikelyClientName(fwdU)) {
           client_name = fwd.replace(/\s+/g, ' ').trim();
         }
       }
     }
 
-    // Determine commission from collected amounts.
-    // IFS reports show: PRIMA, COMISION as paired values.
-    // Typically amounts appear as pairs: [prima, comision] possibly repeated with B/. prefix.
-    // The commission is the SMALLER of each pair, or the one after "COMISION" label.
-    // For OCR text like: "275.63" then "55.13" then "B/.275.63" then "B/.55.13"
-    // → unique amounts are [275.63, 55.13], commission is 55.13 (smaller)
-    let commission = 0;
-    
-    // Deduplicate amounts (B/. values repeat the same numbers)
-    const uniqueAmounts = [...new Set(moneyValues.map(v => Math.round(v * 100)))].map(v => v / 100);
-    
-    if (uniqueAmounts.length >= 2) {
-      // Commission is the smaller amount (prima > commission)
-      uniqueAmounts.sort((a, b) => a - b);
-      commission = uniqueAmounts[0]!; // smallest = commission
-    } else if (uniqueAmounts.length === 1) {
-      commission = uniqueAmounts[0]!;
-    }
-
-    console.log(`[IFS OCR] Policy ${policy_number}: client="${client_name}", money=[${moneyValues}], unique=[${uniqueAmounts}], commission=${commission}`);
+    console.log(`[IFS OCR] Result: policy=${policy_number}, client="${client_name}", commission=${commission}`);
 
     if (Math.abs(commission) > 0.01) {
       rows.push({ policy_number, client_name, gross_amount: commission });
@@ -343,42 +350,49 @@ function parseMultiLineOCR(lines: string[]): IFSRow[] {
   return rows;
 }
 
-/** Strategy 3: Join all text and use regex to find patterns across the full blob */
+/** Strategy 3: Join all text and find DATE POLICY ... COMISION amount patterns */
 function parseFullTextScan(normalized: string): IFSRow[] {
   const rows: IFSRow[] = [];
-  // Look for policy number followed eventually by money amounts
   const fullText = normalized.replace(/\n/g, ' ').replace(/\s+/g, ' ');
-  const policyGlobalRe = /([A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?)/g;
+  // Require date before policy to avoid false matches
+  const policyGlobalRe = /\d{1,2}\/\d{1,2}\/\d{2,4}\s+([A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?)/g;
   let match;
   
   while ((match = policyGlobalRe.exec(fullText)) !== null) {
     const policy_number = match[1]!;
-    const afterPolicy = fullText.slice(match.index + match[0].length, match.index + match[0].length + 300);
+    const afterPolicy = fullText.slice(match.index + match[0].length, match.index + match[0].length + 400);
     
-    // Find all money tokens after this policy
-    const moneyRe = /\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
-    const amounts: number[] = [];
-    let m;
-    while ((m = moneyRe.exec(afterPolicy)) !== null) {
-      amounts.push(parseMoneyToken(m[1]!));
-      if (amounts.length >= 4) break; // enough
+    // Find commission: look for "COMISION" label followed by an amount
+    let commission = 0;
+    const comisionMatch = afterPolicy.match(/COMISION\s+(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/i);
+    if (comisionMatch) {
+      commission = parseMoneyToken(comisionMatch[1]!);
     }
     
-    // Try to find client name: text between policy and first number
+    // Fallback: find all amounts and take the last one
+    if (!commission) {
+      const moneyRe = /(?:B\/\.\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})/g;
+      const amounts: number[] = [];
+      let m;
+      while ((m = moneyRe.exec(afterPolicy)) !== null) {
+        amounts.push(parseMoneyToken(m[1]!));
+        if (amounts.length >= 4) break;
+      }
+      if (amounts.length >= 2) commission = amounts[amounts.length - 1]!;
+      else if (amounts.length === 1) commission = amounts[0]!;
+    }
+    
+    // Try to find client name between policy and first number
     const firstNumMatch = afterPolicy.match(/\d{1,3}(?:,\d{3})*\.\d{2}/);
     let client_name: string | null = null;
     if (firstNumMatch && firstNumMatch.index != null) {
       const textBefore = afterPolicy.slice(0, firstNumMatch.index).trim();
-      // Remove product/ramo words
-      const cleaned = textBefore.replace(/RESPONSABILIDAD CIVIL|RAMO|GENERAL|FIANZAS/gi, '').trim();
+      const cleaned = textBefore.replace(/RESPONSABILIDAD CIVIL|RAMO|GENERAL|FIANZAS|TOTAL|RESUMEN[^.]*|PRIMA|PORCENTAJE|COMISION/gi, '').trim();
       if (isLikelyClientName(cleaned)) {
         client_name = cleaned.replace(/\s+/g, ' ').trim();
       }
     }
 
-    // Last amount is commission
-    const commission = amounts.length >= 2 ? amounts[amounts.length - 1]! : (amounts[0] ?? 0);
-    
     if (Math.abs(commission) > 0.01) {
       rows.push({ policy_number, client_name, gross_amount: commission });
     }
