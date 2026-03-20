@@ -16,7 +16,7 @@
  * Última sincronización con IS API: 2026-02-26
  */
 
-export type TipoAcreedor = 'BANCO' | 'FINANCIERA' | 'COOPERATIVA' | 'OTRO';
+export type TipoAcreedor = 'BANCO' | 'FINANCIERA' | 'FIDUCIARIA' | 'COOPERATIVA' | 'OTRO';
 
 export interface Acreedor {
   label: string;               // Nombre para mostrar en el dropdown
@@ -24,6 +24,8 @@ export interface Acreedor {
   codTipoConductoIS: number;   // IS: siempre 1 (catálogo único /catalogos/bancos)
   codConductoIS: number;       // IS: codigoBanco real del endpoint /catalogos/bancos
   codigoFEDPA: string;         // FEDPA: string libre para campo "Acreedor"
+  codigoREGIONAL: string;      // REGIONAL: código numérico string (ej: '81'=sin acreedor)
+  codigoANCON?: string;        // ANCÓN: cod_acreedor de GenerarAcreedores (se resuelve dinámicamente)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -39,51 +41,76 @@ export const ACREEDORES_PANAMA: Acreedor[] = [
 
   // ── BANCOS ────────────────────────────────────────────────────
   // codConductoIS extraído de IS /catalogos/bancos (codigoBanco real)
-  { label: 'Allbank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 275, codigoFEDPA: 'ALLBANK' },
-  { label: 'BAC International Bank',           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 36,  codigoFEDPA: 'BAC INTERNATIONAL BANK' },
-  { label: 'Balboa Bank & Trust',              tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 266, codigoFEDPA: 'BALBOA BANK TRUST' },
-  { label: 'Banco Aliado',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 4,   codigoFEDPA: 'BANCO ALIADO' },
-  { label: 'Banco Davivienda',                 tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 270, codigoFEDPA: 'BANCO DAVIVIENDA' },
-  { label: 'Banco Delta',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 254, codigoFEDPA: 'BANCO DELTA' },
-  { label: 'Banco Ficohsa',                    tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 115, codigoFEDPA: 'BANCO FICOHSA' },
-  { label: 'Banco General',                    tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 12,  codigoFEDPA: 'BANCO GENERAL' },
-  { label: 'Banco Lafise',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 256, codigoFEDPA: 'BANCO LAFISE' },
-  { label: 'Banco Nacional de Panamá',         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 45,  codigoFEDPA: 'BANCO NACIONAL DE PANAMA' },
-  { label: 'Banco Pichincha',                  tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 265, codigoFEDPA: 'BANCO PICHINCHA PANAMA' },
-  { label: 'Banesco',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 245, codigoFEDPA: 'BANESCO' },
-  { label: 'Banisi',                           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 279, codigoFEDPA: 'BANISI' },
-  { label: 'Banistmo',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 35,  codigoFEDPA: 'BANISTMO' },
-  { label: 'BBP Bank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 292, codigoFEDPA: 'BBP BANK' },
-  { label: 'BCT Bank International',           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 79,  codigoFEDPA: 'BCT BANK INTERNATIONAL' },
-  { label: 'Bi-Bank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 289, codigoFEDPA: 'BI-BANK' },
-  { label: 'Caja de Ahorros',                  tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 46,  codigoFEDPA: 'CAJA DE AHORROS' },
-  { label: 'Canal Bank',                       tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 281, codigoFEDPA: 'CANAL BANK' },
-  { label: 'Capital Bank',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 250, codigoFEDPA: 'CAPITAL BANK' },
-  { label: 'Credicorp Bank',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 34,  codigoFEDPA: 'CREDICORP BANK' },
-  { label: 'Global Bank',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 41,  codigoFEDPA: 'GLOBAL BANK' },
-  { label: 'La Hipotecaria',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 259, codigoFEDPA: 'LA HIPOTECARIA' },
-  { label: 'Mercantil Bank',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 276, codigoFEDPA: 'MERCANTIL BANK PANAMA' },
-  { label: 'Metrobank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 247, codigoFEDPA: 'METRO BANK' },
-  { label: 'MMG Bank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 44,  codigoFEDPA: 'MMG BANK' },
-  { label: 'Multibank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 24,  codigoFEDPA: 'MULTIBANK' },
-  { label: 'Panabank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 19,  codigoFEDPA: 'PANABANK' },
-  { label: 'Prival Bank',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 267, codigoFEDPA: 'PRIVAL BANK' },
-  { label: 'Scotiabank',                       tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 93,  codigoFEDPA: 'SCOTIABANK' },
-  { label: 'St. Georges Bank',                 tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 75,  codigoFEDPA: 'ST. GEORGES BANK' },
-  { label: 'Towerbank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 32,  codigoFEDPA: 'TOWERBANK' },
-  { label: 'Unibank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 257, codigoFEDPA: 'UNIBANK' },
+  // codigoREGIONAL: '81' = sin acreedor (pendiente catálogo completo de Regional)
+  { label: 'Allbank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 275, codigoFEDPA: 'ALLBANK',                          codigoREGIONAL: '81' },
+  { label: 'BAC International Bank',           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 36,  codigoFEDPA: 'BAC INTERNATIONAL BANK',           codigoREGIONAL: '81' },
+  { label: 'Balboa Bank & Trust',              tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 266, codigoFEDPA: 'BALBOA BANK TRUST',                codigoREGIONAL: '81' },
+  { label: 'Banco Aliado',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 4,   codigoFEDPA: 'BANCO ALIADO',                     codigoREGIONAL: '81' },
+  { label: 'Banco Davivienda',                 tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 270, codigoFEDPA: 'BANCO DAVIVIENDA',                 codigoREGIONAL: '81' },
+  { label: 'Banco Delta',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 254, codigoFEDPA: 'BANCO DELTA',                      codigoREGIONAL: '81' },
+  { label: 'Banco Ficohsa',                    tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 115, codigoFEDPA: 'BANCO FICOHSA',                    codigoREGIONAL: '81' },
+  { label: 'Banco General',                    tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 12,  codigoFEDPA: 'BANCO GENERAL',                    codigoREGIONAL: '81' },
+  { label: 'Banco Lafise',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 256, codigoFEDPA: 'BANCO LAFISE',                     codigoREGIONAL: '81' },
+  { label: 'Banco Nacional de Panamá',         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 45,  codigoFEDPA: 'BANCO NACIONAL DE PANAMA',         codigoREGIONAL: '81' },
+  { label: 'Banco Pichincha',                  tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 265, codigoFEDPA: 'BANCO PICHINCHA PANAMA',           codigoREGIONAL: '81' },
+  { label: 'Banesco',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 245, codigoFEDPA: 'BANESCO',                          codigoREGIONAL: '81' },
+  { label: 'Banisi',                           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 279, codigoFEDPA: 'BANISI',                           codigoREGIONAL: '81' },
+  { label: 'Banistmo',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 35,  codigoFEDPA: 'BANISTMO',                         codigoREGIONAL: '81' },
+  { label: 'BBP Bank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 292, codigoFEDPA: 'BBP BANK',                         codigoREGIONAL: '81' },
+  { label: 'BCT Bank International',           tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 79,  codigoFEDPA: 'BCT BANK INTERNATIONAL',           codigoREGIONAL: '81' },
+  { label: 'Bi-Bank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 289, codigoFEDPA: 'BI-BANK',                          codigoREGIONAL: '81' },
+  { label: 'Caja de Ahorros',                  tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 46,  codigoFEDPA: 'CAJA DE AHORROS',                  codigoREGIONAL: '81' },
+  { label: 'Canal Bank',                       tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 281, codigoFEDPA: 'CANAL BANK',                       codigoREGIONAL: '81' },
+  { label: 'Capital Bank',                     tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 250, codigoFEDPA: 'CAPITAL BANK',                     codigoREGIONAL: '81' },
+  { label: 'Credicorp Bank',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 34,  codigoFEDPA: 'CREDICORP BANK',                   codigoREGIONAL: '81' },
+  { label: 'Global Bank',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 41,  codigoFEDPA: 'GLOBAL BANK',                      codigoREGIONAL: '81' },
+  { label: 'La Hipotecaria',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 259, codigoFEDPA: 'LA HIPOTECARIA',                   codigoREGIONAL: '81' },
+  { label: 'Mercantil Bank',                   tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 276, codigoFEDPA: 'MERCANTIL BANK PANAMA',            codigoREGIONAL: '81' },
+  { label: 'Metrobank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 247, codigoFEDPA: 'METRO BANK',                       codigoREGIONAL: '81' },
+  { label: 'MMG Bank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 44,  codigoFEDPA: 'MMG BANK',                         codigoREGIONAL: '81' },
+  { label: 'Multibank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 24,  codigoFEDPA: 'MULTIBANK',                        codigoREGIONAL: '81' },
+  { label: 'Panabank',                         tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 19,  codigoFEDPA: 'PANABANK',                         codigoREGIONAL: '81' },
+  { label: 'Prival Bank',                      tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 267, codigoFEDPA: 'PRIVAL BANK',                      codigoREGIONAL: '81' },
+  { label: 'Scotiabank',                       tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 93,  codigoFEDPA: 'SCOTIABANK',                       codigoREGIONAL: '81' },
+  { label: 'St. Georges Bank',                 tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 75,  codigoFEDPA: 'ST. GEORGES BANK',                 codigoREGIONAL: '81' },
+  { label: 'Towerbank',                        tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 32,  codigoFEDPA: 'TOWERBANK',                        codigoREGIONAL: '81' },
+  { label: 'Unibank',                          tipo: 'BANCO', codTipoConductoIS: 1, codConductoIS: 257, codigoFEDPA: 'UNIBANK',                          codigoREGIONAL: '81' },
+
+  // ── FINANCIERAS ─────────────────────────────────────────────────
+  { label: 'Financia Credit',                  tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'FINANCIA CREDIT',                codigoREGIONAL: '81' },
+  { label: 'Finance Corp',                     tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'FINANCE CORP',                   codigoREGIONAL: '81' },
+  { label: 'Financiera Govimar',               tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'FINANCIERA GOVIMAR',             codigoREGIONAL: '81' },
+  { label: 'Financiera Madrileña',             tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'FINANCIERA MADRILENA',           codigoREGIONAL: '81' },
+  { label: 'GDP Financial',                    tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'GDP FINANCIAL',                  codigoREGIONAL: '81' },
+  { label: 'Grupo Financiero Continental',     tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'GRUPO FINANCIERO CONTINENTAL',   codigoREGIONAL: '81' },
+  { label: 'Leasing de Panamá',                tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'LEASING DE PANAMA',              codigoREGIONAL: '81' },
+  { label: 'Macrofinanciera',                  tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'MACROFINANCIERA',                codigoREGIONAL: '81' },
+  { label: 'Multicréditos',                    tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'MULTICREDITOS',                  codigoREGIONAL: '81' },
+  { label: 'Panacredit',                       tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'PANACREDIT',                     codigoREGIONAL: '81' },
+  { label: 'TCM Financial',                    tipo: 'FINANCIERA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'TCM FINANCIAL',                  codigoREGIONAL: '81' },
+
+  // ── FIDUCIARIAS ─────────────────────────────────────────────────
+  { label: 'Aliado Fiduciaria',                tipo: 'FIDUCIARIA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'ALIADO FIDUCIARIA',              codigoREGIONAL: '81' },
+  { label: 'BG Trust',                         tipo: 'FIDUCIARIA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'BG TRUST',                       codigoREGIONAL: '81' },
+  { label: 'Global Trust',                     tipo: 'FIDUCIARIA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'GLOBAL TRUST',                   codigoREGIONAL: '81' },
+  { label: 'Multi Trust',                      tipo: 'FIDUCIARIA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'MULTI TRUST',                    codigoREGIONAL: '81' },
+  { label: 'Panama Trust',                     tipo: 'FIDUCIARIA', codTipoConductoIS: 1, codConductoIS: 0, codigoFEDPA: 'PANAMA TRUST',                   codigoREGIONAL: '81' },
 
   // ── COOPERATIVAS (también en /catalogos/bancos de IS) ─────────
-  { label: 'CACECHI',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 286, codigoFEDPA: 'CACECHI' },
-  { label: 'COOESAN',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 242, codigoFEDPA: 'COOESAN' },
-  { label: 'COOPEDUC',                         tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 241, codigoFEDPA: 'COOPEDUC' },
-  { label: 'COOPEVE',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 244, codigoFEDPA: 'COOPEVE' },
-  { label: 'COOPRAC',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 288, codigoFEDPA: 'COOPRAC' },
-  { label: 'Cooperativa de Servicios Múltiples Profesionales', tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 124, codigoFEDPA: 'COOPERATIVA DE SERVICIOS MULTIPLES PROFESIONALES' },
-  { label: 'EDIOACC',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 293, codigoFEDPA: 'EDIOACC' },
+  { label: 'CACECHI',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 286, codigoFEDPA: 'CACECHI',                      codigoREGIONAL: '81' },
+  { label: 'CACSA',                            tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 0,   codigoFEDPA: 'CACSA',                        codigoREGIONAL: '81' },
+  { label: 'COOACECSS',                        tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 0,   codigoFEDPA: 'COOACECSS',                    codigoREGIONAL: '81' },
+  { label: 'COOESAN',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 242, codigoFEDPA: 'COOESAN',                      codigoREGIONAL: '81' },
+  { label: 'COOPEDUC',                         tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 241, codigoFEDPA: 'COOPEDUC',                     codigoREGIONAL: '81' },
+  { label: 'COOPEVE',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 244, codigoFEDPA: 'COOPEVE',                      codigoREGIONAL: '81' },
+  { label: 'COOPRAC',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 288, codigoFEDPA: 'COOPRAC',                      codigoREGIONAL: '81' },
+  { label: 'Cooperativa Cristobal',            tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 0,   codigoFEDPA: 'COOPERATIVA CRISTOBAL',        codigoREGIONAL: '81' },
+  { label: 'Cooperativa de Servicios Múltiples Profesionales', tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 124, codigoFEDPA: 'COOPERATIVA DE SERVICIOS MULTIPLES PROFESIONALES', codigoREGIONAL: '81' },
+  { label: 'Cooperativa Juan XXIII',           tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 0,   codigoFEDPA: 'COOPERATIVA JUAN XXIII',       codigoREGIONAL: '81' },
+  { label: 'EDIOACC',                          tipo: 'COOPERATIVA', codTipoConductoIS: 1, codConductoIS: 293, codigoFEDPA: 'EDIOACC',                      codigoREGIONAL: '81' },
 
-  // ── OTROS (instituciones en catálogo IS relevantes para financiamiento) ─
-  { label: 'Producbank',                       tipo: 'OTRO', codTipoConductoIS: 1, codConductoIS: 126, codigoFEDPA: 'PRODUCBANK' },
+  // ── OTROS (instituciones relevantes para financiamiento) ──────
+  { label: 'Producbank',                       tipo: 'OTRO', codTipoConductoIS: 1, codConductoIS: 126, codigoFEDPA: 'PRODUCBANK',                    codigoREGIONAL: '81' },
 ];
 
 /**
@@ -99,6 +126,7 @@ export const SIN_ACREEDOR: Acreedor = {
   codTipoConductoIS: 0,
   codConductoIS: 0,
   codigoFEDPA: '',
+  codigoREGIONAL: '81', // 81 = sin acreedor en Regional
 };
 
 /**
@@ -121,4 +149,44 @@ export function getAcreedoresGrouped(): Record<TipoAcreedor, Acreedor[]> {
     groups[a.tipo].push(a);
     return groups;
   }, {} as Record<TipoAcreedor, Acreedor[]>);
+}
+
+// ─────────────────────────────────────────────────────────────
+// PER-INSURER NORMALIZERS
+// Each insurer expects acreedor in a different format.
+// These functions resolve the user-selected label to the correct
+// code/string for each insurer's emission API.
+// ─────────────────────────────────────────────────────────────
+
+/** IS: returns { codTipoConducto, codConducto, txtBenef } */
+export function resolveAcreedorIS(value: string): { codTipoConducto: number; codConducto: number; txtBenef: string } | null {
+  const acreedor = findAcreedor(value);
+  if (!acreedor || acreedor.codConductoIS === 0) return null;
+  return {
+    codTipoConducto: acreedor.codTipoConductoIS,
+    codConducto: acreedor.codConductoIS,
+    txtBenef: acreedor.label.toUpperCase(),
+  };
+}
+
+/** FEDPA: returns free-text string for 'Acreedor' field */
+export function resolveAcreedorFEDPA(value: string): string {
+  const acreedor = findAcreedor(value);
+  return acreedor?.codigoFEDPA || value.toUpperCase();
+}
+
+/** REGIONAL: returns numeric code string ('81' = sin acreedor) */
+export function resolveAcreedorREGIONAL(value: string): string {
+  if (!value || !value.trim()) return '81'; // sin acreedor
+  const acreedor = findAcreedor(value);
+  return acreedor?.codigoREGIONAL || '81';
+}
+
+/** ANCÓN: returns cod_acreedor string (dynamic from API) */
+export function resolveAcreedorANCON(value: string): string {
+  if (!value || !value.trim()) return '';
+  // Ancón acreedores are resolved dynamically via GenerarAcreedores API.
+  // The label is sent as-is; the emission page should resolve against
+  // the ANCÓN catalog. Fallback: send the label uppercase.
+  return value.toUpperCase();
 }

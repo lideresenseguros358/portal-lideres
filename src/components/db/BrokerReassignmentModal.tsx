@@ -62,7 +62,7 @@ export default function BrokerReassignmentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
       <div className="bg-white rounded-2xl max-w-3xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[95vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-4 sm:p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">

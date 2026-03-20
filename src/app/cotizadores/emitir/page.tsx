@@ -21,6 +21,8 @@ import Image from 'next/image';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
+import { mapLesionesACodigo, mapDanosPropiedadACodigo, mapGastosMedicosACodigo } from '@/lib/cotizadores/catalog-normalizer';
+import { resolveAcreedorREGIONAL } from '@/lib/constants/acreedores';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 import EmissionLoadingModal from '@/components/cotizadores/EmissionLoadingModal';
 
@@ -384,9 +386,15 @@ export default function EmitirPage() {
         extFormData.append('emisionData', JSON.stringify({
           ...emisionCommon,
           CodPlan: selectedPlan._planCode || 411,
-          CodLimiteLesiones: quoteData.codLimiteLesiones || '1',
-          CodLimitePropiedad: quoteData.codLimitePropiedad || '7',
-          CodLimiteGastosMedico: quoteData.codLimiteGastosMedico || '16',
+          CodLimiteLesiones: quoteData.codLimiteLesiones || mapLesionesACodigo(
+            quoteData.lesionCorporalPersona || 10000, quoteData.lesionCorporalAccidente || 20000
+          ),
+          CodLimitePropiedad: quoteData.codLimitePropiedad || mapDanosPropiedadACodigo(
+            quoteData.danoPropiedad || 10000
+          ),
+          CodLimiteGastosMedico: quoteData.codLimiteGastosMedico || mapGastosMedicosACodigo(
+            quoteData.gastosMedicosPersona || 2000, quoteData.gastosMedicosAccidente || 10000
+          ),
           EndosoIncluido: 'S',
         }));
 
@@ -894,7 +902,7 @@ export default function EmitirPage() {
           usoveh: 'P',
           peso: 'L',
           // Acreedor
-          acreedor: emissionData.acreedor || '81',
+          acreedor: resolveAcreedorREGIONAL(emissionData.acreedor || ''),
           // Cuotas
           cuotas: installments || 1,
           opcionPrima: 1,

@@ -1583,25 +1583,25 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false, curre
             </button>
           )}
         </div>
-      </div>
 
-      {/* Modal de reasignación de corredor para póliza individual */}
-      {showPolicyReassignmentModal && policy && policyCommissionData && (
-        <BrokerReassignmentModal
-          isOpen={showPolicyReassignmentModal}
-          onClose={() => setShowPolicyReassignmentModal(false)}
-          onConfirm={async (makeAdjustments) => {
-            setShowPolicyReassignmentModal(false);
-            await handlePolicyBrokerReassign(makeAdjustments);
-          }}
-          clientName={`Póliza ${policy.policy_number}`}
-          oldBrokerName={brokers.find(b => b.id === currentBrokerId)?.name || 'Corredor anterior'}
-          newBrokerName={brokers.find(b => b.id === selectedBrokerId)?.name || 'Nuevo corredor'}
-          totalAmount={policyCommissionData.totalAmount}
-          commissionsByFortnight={policyCommissionData.commissionsByFortnight}
-          loading={reassigning}
-        />
-      )}
+        {/* Modal de reasignación de corredor para póliza individual */}
+        {showPolicyReassignmentModal && policy && policyCommissionData && (
+          <BrokerReassignmentModal
+            isOpen={showPolicyReassignmentModal}
+            onClose={() => setShowPolicyReassignmentModal(false)}
+            onConfirm={async (makeAdjustments) => {
+              setShowPolicyReassignmentModal(false);
+              await handlePolicyBrokerReassign(makeAdjustments);
+            }}
+            clientName={`Póliza ${policy.policy_number}`}
+            oldBrokerName={brokers.find(b => b.id === currentBrokerId)?.name || 'Corredor anterior'}
+            newBrokerName={brokers.find(b => b.id === selectedBrokerId)?.name || 'Nuevo corredor'}
+            totalAmount={policyCommissionData.totalAmount}
+            commissionsByFortnight={policyCommissionData.commissionsByFortnight}
+            loading={reassigning}
+          />
+        )}
+      </div>
     </div>
   );
 }
