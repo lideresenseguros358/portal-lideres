@@ -253,7 +253,7 @@ async function runDT(s: Scenario, dryrun: boolean): Promise<any> {
     }
 
     // ── STEP 2: Emission ──
-    const creds = getRegionalCredentials('development');
+    const creds = getRegionalCredentials();
     const emissionBody: RegionalRCEmissionBody = {
       codInter: creds.codInter,
       plan: s.rcPlan || '30',

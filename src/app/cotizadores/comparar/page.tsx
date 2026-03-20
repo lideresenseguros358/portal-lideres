@@ -7,6 +7,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { obtenerPlanPorTipo, resolverPlanCCPorValor } from '@/lib/cotizadores/fedpa-plan-resolver';
+import { resolverCodigoPlanCCIS } from '@/lib/is/plan-cc-resolver';
 import { 
   normalizeAssistanceBenefits, 
   normalizeDeductibles, 
@@ -97,8 +98,15 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     const vcodmodelo = quoteData.modeloCodigo || 2436; // 2436=COROLLA (prod)
     const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo');
     
-    // Plan params: CC Particular defaults (cached 24h server-side, rarely change)
-    const vcodplancobertura = quoteData.vcodplancobertura || 29;  // CC 5/10
+    // Plan params: Resolver plan CC desde los límites del formulario (LC/DP/GM)
+    const vcodplancobertura = resolverCodigoPlanCCIS({
+      lesionCorporalPersona: quoteData.lesionCorporalPersona || 10000,
+      lesionCorporalAccidente: quoteData.lesionCorporalAccidente || 20000,
+      danoPropiedad: quoteData.danoPropiedad || 10000,
+      gastosMedicosPersona: quoteData.gastosMedicosPersona || 2000,
+      gastosMedicosAccidente: quoteData.gastosMedicosAccidente || 10000,
+    });
+    console.log(`[IS] Plan CC resuelto: ${vcodplancobertura} (LC=${quoteData.lesionCorporalPersona}/${quoteData.lesionCorporalAccidente} DP=${quoteData.danoPropiedad} GM=${quoteData.gastosMedicosPersona}/${quoteData.gastosMedicosAccidente})`);
     const vcodgrupotarifa = quoteData.vcodgrupotarifa || 20;      // PARTICULAR
     
     // ── UNA SOLA llamada: quote + coberturas combinados en el backend ──

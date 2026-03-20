@@ -1,0 +1,8 @@
+Accesos WS LRDS
+-----------------------
+
+AMBIENTE DE PRODUCCIÓN
+
+cToken:    4IFWJZJYCBSvnybiddbgxFHBAWKHDRYCIgJEiTfIHV4IO14M06Ic+fiH5Z.P`
+cCodInter: 99
+  

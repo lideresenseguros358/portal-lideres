@@ -7,20 +7,16 @@ import {
   getRegionalBaseUrl,
   getRegionalCredentials,
   RETRY_CONFIG,
-  type RegionalEnvironment,
 } from './config';
 
-const ENV: RegionalEnvironment =
-  (process.env.NODE_ENV === 'production' ? 'production' : 'development') as RegionalEnvironment;
-
 function getBasicAuthHeader(): string {
-  const creds = getRegionalCredentials(ENV);
+  const creds = getRegionalCredentials();
   const encoded = Buffer.from(`${creds.username}:${creds.password}`).toString('base64');
   return `Basic ${encoded}`;
 }
 
 function getDefaultHeaders(): Record<string, string> {
-  const creds = getRegionalCredentials(ENV);
+  const creds = getRegionalCredentials();
   return {
     'Content-Type': 'application/json',
     Authorization: getBasicAuthHeader(),
@@ -57,7 +53,7 @@ export async function regionalRequest<T = unknown>(
   options: RequestOptions = {}
 ): Promise<RegionalResponse<T>> {
   const { method = 'GET', body, params, timeout = 30000, extraHeaders } = options;
-  const baseUrl = getRegionalBaseUrl(ENV);
+  const baseUrl = getRegionalBaseUrl();
 
   let url = `${baseUrl}${endpoint}`;
   if (params) {

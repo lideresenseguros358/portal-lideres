@@ -1,0 +1,12 @@
+Basic Auth Credentials
+-----------------------
+AMBIENTE DE PRODUCCIÓN
+
+Usuario:   LIDERES_EN_SEGUROS_99
+Clave:     EU+jkO.2026*
+codInter:  99
+
+
+
+
+

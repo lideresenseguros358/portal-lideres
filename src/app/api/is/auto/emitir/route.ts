@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       vacreedor,
       // Endoso texto para condiciones especiales
       vendosoTexto,
+      dry_run,
       environment = getISDefaultEnv(),
     } = body;
     
@@ -117,18 +118,27 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Resolver acreedor: buscar código IS de la institución seleccionada
+    // Resolver acreedor: solo aplica para Cobertura Completa (CC), NUNCA para Daños a Terceros (DT)
+    const esCC = tipo_cobertura && (
+      tipo_cobertura.toLowerCase().includes('completa') || 
+      tipo_cobertura.toLowerCase().includes('cc') ||
+      tipo_cobertura === 'Cobertura Completa'
+    );
     let codTipoConducto = 0;
     let codConducto = 0;
-    if (vacreedor && vacreedor.trim() !== '') {
+    let txtBenef = '';
+    if (esCC && vacreedor && vacreedor.trim() !== '') {
       const acreedor = findAcreedor(vacreedor);
       if (acreedor) {
         codTipoConducto = acreedor.codTipoConductoIS;
         codConducto = acreedor.codConductoIS;
-        console.log('[API IS Auto Emitir] ✅ Acreedor resuelto:', acreedor.label, '→ codTipoConducto:', codTipoConducto, 'codConducto:', codConducto);
+        txtBenef = acreedor.label.toUpperCase();
+        console.log('[API IS Auto Emitir] ✅ Acreedor resuelto (CC):', acreedor.label, '→ codTipoConducto:', codTipoConducto, 'codConducto:', codConducto, 'txtBenef:', txtBenef);
       } else {
         console.warn('[API IS Auto Emitir] ⚠️ Acreedor no encontrado en catálogo para valor:', JSON.stringify(vacreedor));
       }
+    } else if (!esCC && vacreedor && vacreedor.trim() !== '') {
+      console.log('[API IS Auto Emitir] ⚠️ Acreedor ignorado para DT (Daños a Terceros no permite acreedor):', vacreedor);
     } else {
       console.log('[API IS Auto Emitir] Sin acreedor');
     }
@@ -174,11 +184,23 @@ export async function POST(request: NextRequest) {
       pjeBexp: parseFloat(pjeBexp) || 0,
       codTipoConducto,
       codConducto,
+      txtBenef,
       endosoTexto: vendosoTexto || '',
     });
     
-    // Intento 1: Emitir con el idPv original
-    let result = await emitirPolizaAuto(buildEmissionParams(vIdPv), environment as ISEnvironment);
+    // Intento 1: Emitir con el idPv original (o dry-run para verificar body)
+    let result = await emitirPolizaAuto(buildEmissionParams(vIdPv), environment as ISEnvironment, { dryRun: !!dry_run });
+    
+    // DRY RUN: Retornar body construido sin emitir
+    if (dry_run && result.dryRunBody) {
+      return NextResponse.json({
+        success: true,
+        dry_run: true,
+        message: 'Body construido correctamente — NO se envió a IS',
+        emission_body: result.dryRunBody,
+        acreedor_info: { codTipoConducto, codConducto, txtBenef, esCC: !!esCC },
+      });
+    }
     
     // Si la cotización ya fue convertida en póliza, regenerar automáticamente
     const isStaleQuote = !result.success && result.error && (

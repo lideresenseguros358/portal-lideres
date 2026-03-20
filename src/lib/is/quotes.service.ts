@@ -154,6 +154,8 @@ export interface EmisionAutoRequest {
   // Acreedor (banco)
   codTipoConducto?: number; // 1=Banco, 0=sin acreedor
   codConducto?: number;     // Código IS del banco
+  // Nombre del acreedor para IS (txtBenef en datosAuto)
+  txtBenef?: string;        // Nombre del banco acreedor (ej: 'BANCO GENERAL, S.A.')
   // Endoso texto para condiciones especiales
   endosoTexto?: string;     // Ej: 'ENDOSO PLUS' o 'ENDOSO PLUS CENTENARIO'
 }
@@ -343,8 +345,9 @@ export async function obtenerCoberturasCotizacion(
  */
 export async function emitirPolizaAuto(
   request: EmisionAutoRequest,
-  env: ISEnvironment = getISDefaultEnv()
-): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; pdfBase64?: string; error?: string }> {
+  env: ISEnvironment = getISDefaultEnv(),
+  options?: { dryRun?: boolean }
+): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; pdfBase64?: string; error?: string; dryRunBody?: any }> {
   if (!request.vIdPv) {
     return { success: false, error: 'Falta ID de cotización (vIdPv) para emitir' };
   }
@@ -452,17 +455,23 @@ export async function emitirPolizaAuto(
       codTipoConducto: request.codTipoConducto || 0,
       codConducto: request.codConducto || 0,
       idPlanCobAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
-      snCargo: 0,
+      snCargo: (request.codTipoConducto && request.codTipoConducto > 0) ? 1 : 0,
       codBenef: 0,
-      txtBenef: '',
+      txtBenef: request.txtBenef || '',
       txtComentarios: request.endosoTexto || '',
-      cntTermino: 0,
+      cntTermino: request.cantCuotas || 0,
       idPlanCobAdicAsiento: 0,
     },
     documentos,
   };
   
   console.log('[IS Emission] POST /getemision FULL BODY:', JSON.stringify(body, null, 2));
+  
+  // DRY RUN: Retornar body sin enviar a IS (para verificación)
+  if (options?.dryRun) {
+    console.log('[IS Emission] 🔍 DRY RUN — body construido pero NO enviado a IS');
+    return { success: true, dryRunBody: body };
+  }
   
   // IS a veces retorna Column1=-1 con "debe presionar el botón emitir nuevamente"
   // Esto es comportamiento conocido — se resuelve con un retry automático

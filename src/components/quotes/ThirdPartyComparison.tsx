@@ -13,7 +13,7 @@ interface ThirdPartyComparisonProps {
 }
 
 // ── Cache helpers ──
-const CACHE_KEY = 'tp_plans_cache_v4';
+const CACHE_KEY = 'tp_plans_cache_v6';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — plans/benefits rarely change
 const API_TIMEOUT = 60_000; // 60s max per API call — IS needs time for token + retries on slow server
 

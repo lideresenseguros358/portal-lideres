@@ -1,27 +1,46 @@
 /**
  * Configuración para La Regional de Seguros
  * ⚠️ SEGURIDAD: Credenciales desde variables de entorno
+ *
+ * Usa REGIONAL_ENV para elegir entre "development" y "production".
+ * Variables con sufijo _DESA / _PROD (ej: REGIONAL_TOKEN_DESA, REGIONAL_TOKEN_PROD).
  */
 
 export type RegionalEnvironment = 'development' | 'production';
 
-// Base URLs
-const BASE_URLS: Record<RegionalEnvironment, string> = {
-  development: 'https://desa.laregionaldeseguros.com:10443/desaw',
-  production: process.env.REGIONAL_BASE_URL_PROD || 'https://desa.laregionaldeseguros.com:10443/desaw',
-};
-
-export function getRegionalBaseUrl(env: RegionalEnvironment): string {
-  return process.env.REGIONAL_BASE_URL || BASE_URLS[env];
+/**
+ * Resuelve el ambiente efectivo:
+ *  1. REGIONAL_ENV explícito → respeta
+ *  2. NODE_ENV === 'production' → 'production'
+ *  3. Fallback → 'development'
+ */
+export function getRegionalEnv(): RegionalEnvironment {
+  const explicit = process.env.REGIONAL_ENV;
+  if (explicit === 'production' || explicit === 'development') return explicit;
+  return process.env.NODE_ENV === 'production' ? 'production' : 'development';
 }
 
-// Credentials
-export function getRegionalCredentials(env: RegionalEnvironment) {
+// Base URLs — defaults for DESA (PROD URL must come from env)
+const DEFAULT_DESA_URL = 'https://desa.laregionaldeseguros.com:10443/desaw';
+
+export function getRegionalBaseUrl(env?: RegionalEnvironment): string {
+  const resolved = env ?? getRegionalEnv();
+  if (resolved === 'production') {
+    return process.env.REGIONAL_BASE_URL_PROD || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL;
+  }
+  return process.env.REGIONAL_BASE_URL_DESA || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL;
+}
+
+// Credentials — read suffixed vars, fall back to unsuffixed legacy vars
+export function getRegionalCredentials(env?: RegionalEnvironment) {
+  const resolved = env ?? getRegionalEnv();
+  const suffix = resolved === 'production' ? 'PROD' : 'DESA';
+
   return {
-    username: process.env.REGIONAL_USERNAME || 'LIDERES_EN_SEGUROS_99',
-    password: process.env.REGIONAL_PASSWORD || 'F?V3pTl*_cPL',
-    codInter: process.env.REGIONAL_COD_INTER || '99',
-    token: process.env.REGIONAL_TOKEN || '6NWEDYFWVCQoaqzppdjswFKPAPGQQPBnxMBTzhzDGTFRG8R4THEDS--X+*ieO',
+    username: process.env[`REGIONAL_USERNAME_${suffix}`] || process.env.REGIONAL_USERNAME || 'LIDERES_EN_SEGUROS_99',
+    password: process.env[`REGIONAL_PASSWORD_${suffix}`] || process.env.REGIONAL_PASSWORD || '',
+    codInter: process.env[`REGIONAL_COD_INTER_${suffix}`] || process.env.REGIONAL_COD_INTER || '99',
+    token:    process.env[`REGIONAL_TOKEN_${suffix}`]    || process.env.REGIONAL_TOKEN    || '',
   };
 }
 

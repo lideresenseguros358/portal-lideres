@@ -27,7 +27,7 @@ export interface RCQuoteInput {
 }
 
 export async function cotizarRC(input: RCQuoteInput): Promise<RegionalRCQuoteResponse> {
-  const creds = getRegionalCredentials('development');
+  const creds = getRegionalCredentials();
 
   const params: Record<string, string> = {
     cToken: creds.token,

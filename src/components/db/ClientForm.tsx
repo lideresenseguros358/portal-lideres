@@ -818,6 +818,8 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           clientId={(client as any).id}
           policy={editingPolicy}
           readOnly={readOnly}
+          currentBrokerId={client.broker_id}
+          clientPoliciesCount={policies.length}
           onClose={() => {
             setShowPolicyForm(false);
             setEditingPolicy(null);
@@ -842,6 +844,11 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             setShowPolicyForm(false);
             setEditingPolicy(null);
             router.refresh();
+          }}
+          onBrokerReassigned={() => {
+            // Cerrar todo y refrescar la página completa
+            onClose();
+            window.location.href = '/db?tab=clients';
           }}
         />
       )}
@@ -915,6 +922,9 @@ interface PolicyFormProps {
   onClose: () => void;
   onSave: (policy: PolicyRow) => void;
   readOnly?: boolean;
+  currentBrokerId?: string | null;
+  clientPoliciesCount?: number;
+  onBrokerReassigned?: () => void;
 }
 
 type PolicyFormState = {
@@ -928,7 +938,8 @@ type PolicyFormState = {
   notas: string;
 };
 
-function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: PolicyFormProps) {
+function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false, currentBrokerId, clientPoliciesCount = 0, onBrokerReassigned }: PolicyFormProps) {
+  const router = useRouter();
   // Obtener fecha de hoy para autocompletar
   const today = getTodayLocalDate();
   
@@ -949,8 +960,21 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
   const [error, setError] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [userRole, setUserRole] = useState<string>('');
+  
+  // Estados para cambio de corredor a nivel de póliza
+  const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedBrokerId, setSelectedBrokerId] = useState<string>(currentBrokerId || '');
+  const [checkingPolicyCommissions, setCheckingPolicyCommissions] = useState(false);
+  const [policyCommissionWarning, setPolicyCommissionWarning] = useState<{
+    show: boolean;
+    totalAmount: number;
+    fortnightCount: number;
+  } | null>(null);
+  const [policyCommissionData, setPolicyCommissionData] = useState<any>(null);
+  const [showPolicyReassignmentModal, setShowPolicyReassignmentModal] = useState(false);
+  const [reassigning, setReassigning] = useState(false);
 
-  // Cargar aseguradoras y rol del usuario
+  // Cargar aseguradoras, rol del usuario y brokers
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -965,6 +989,18 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
             .single();
           if (mounted) {
             setUserRole(profile?.role || '');
+            
+            // Cargar brokers si es Master
+            if (profile?.role === 'master') {
+              const { data: brokersData } = await supabaseClient()
+                .from('brokers')
+                .select('id, name')
+                .eq('active', true)
+                .order('name');
+              if (mounted) {
+                setBrokers((brokersData || []).map(b => ({ id: b.id, name: b.name || '' })));
+              }
+            }
           }
         }
         
@@ -994,6 +1030,54 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
     };
   }, []);
 
+  // Detectar cambio de corredor en póliza y verificar comisiones
+  useEffect(() => {
+    const checkPolicyCommissions = async () => {
+      // Solo verificar si estamos editando una póliza existente, el broker cambió, y es Master
+      if (!policy || !currentBrokerId || selectedBrokerId === currentBrokerId || userRole !== 'master') {
+        setPolicyCommissionWarning(null);
+        setPolicyCommissionData(null);
+        return;
+      }
+
+      console.log('[POLICY BROKER CHANGE] Verificando comisiones para póliza:', policy.policy_number);
+      setCheckingPolicyCommissions(true);
+      try {
+        const response = await fetch('/api/policies/check-commissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            policyNumber: policy.policy_number,
+            oldBrokerId: currentBrokerId
+          })
+        });
+
+        const data = await response.json();
+        console.log('[POLICY BROKER CHANGE] Respuesta de comisiones:', data);
+        
+        if (data.success && data.hasPaidCommissions) {
+          setPolicyCommissionWarning({
+            show: true,
+            totalAmount: data.totalAmount,
+            fortnightCount: data.commissionsByFortnight.length
+          });
+          setPolicyCommissionData(data);
+        } else {
+          setPolicyCommissionWarning(null);
+          setPolicyCommissionData(null);
+        }
+      } catch (err) {
+        console.error('[POLICY BROKER CHANGE] Error checking commissions:', err);
+        setPolicyCommissionWarning(null);
+        setPolicyCommissionData(null);
+      } finally {
+        setCheckingPolicyCommissions(false);
+      }
+    };
+
+    checkPolicyCommissions();
+  }, [selectedBrokerId, policy, currentBrokerId, userRole]);
+
   // Auto-calcular fecha de renovación (1 año después de inicio)
   useEffect(() => {
     if (formData.start_date && !policy?.renewal_date) {
@@ -1020,8 +1104,77 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
     }
   }, [formData.insurer_id, formData.ramo, insurers]);
 
+  // Función para ejecutar la reasignación de corredor a nivel de póliza
+  const handlePolicyBrokerReassign = async (makeAdjustments: boolean) => {
+    if (!policy || !currentBrokerId || !selectedBrokerId) return;
+    
+    setReassigning(true);
+    setError(null);
+    try {
+      console.log('[POLICY BROKER REASSIGN] Iniciando reasignación...');
+      const response = await fetch('/api/policies/reassign-broker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          policyId: policy.id,
+          clientId,
+          oldBrokerId: currentBrokerId,
+          newBrokerId: selectedBrokerId,
+          makeAdjustments,
+          commissionsData: makeAdjustments ? policyCommissionData?.commissionsByFortnight : null
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Error al reasignar póliza');
+      }
+
+      const brokerName = brokers.find(b => b.id === selectedBrokerId)?.name || 'Nuevo corredor';
+      if (data.adjustmentsCreated) {
+        toast.success(`Póliza reasignada a ${brokerName} con ajustes retroactivos`, {
+          description: data.message,
+          duration: 8000
+        });
+      } else {
+        toast.success(`Póliza reasignada a ${brokerName}`, {
+          description: data.isClientLevelReassignment 
+            ? 'Cliente completo reasignado (única póliza)'
+            : 'Póliza movida a nuevo registro de cliente',
+          duration: 5000
+        });
+      }
+
+      onClose();
+      if (onBrokerReassigned) {
+        onBrokerReassigned();
+      }
+      router.refresh();
+    } catch (err) {
+      console.error('[POLICY BROKER REASSIGN] Error:', err);
+      setError(err instanceof Error ? err.message : 'Error al reasignar póliza');
+    } finally {
+      setReassigning(false);
+      setShowPolicyReassignmentModal(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Si hay cambio de broker, manejar la reasignación en vez del guardado normal
+    if (policy && currentBrokerId && selectedBrokerId && selectedBrokerId !== currentBrokerId && userRole === 'master') {
+      // Si hay comisiones pagadas, mostrar modal de confirmación
+      if (policyCommissionWarning?.show) {
+        setShowPolicyReassignmentModal(true);
+        return;
+      }
+      // Sin comisiones, ejecutar directo sin ajustes
+      await handlePolicyBrokerReassign(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -1311,6 +1464,62 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               </div>
             )}
 
+            {/* Corredor Asignado - Solo visible para Master editando póliza existente */}
+            {userRole === 'master' && policy && currentBrokerId && (
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  👔 Corredor Asignado
+                </label>
+                <select
+                  value={selectedBrokerId}
+                  onChange={(e) => setSelectedBrokerId(e.target.value)}
+                  disabled={checkingPolicyCommissions || reassigning}
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                >
+                  {brokers.map((broker) => (
+                    <option key={broker.id} value={broker.id}>
+                      {broker.name || 'Sin nombre'}
+                    </option>
+                  ))}
+                </select>
+                {checkingPolicyCommissions && (
+                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                    <span className="inline-block animate-spin rounded-full h-3 w-3 border-b-2 border-[#8AAA19]"></span>
+                    Verificando comisiones de esta póliza...
+                  </p>
+                )}
+                {selectedBrokerId && selectedBrokerId !== currentBrokerId && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      <strong>ℹ️ Cambio de corredor:</strong>{' '}
+                      {clientPoliciesCount <= 1
+                        ? 'Este cliente solo tiene esta póliza — se reasignará el cliente completo al nuevo corredor.'
+                        : 'Este cliente tiene más pólizas — se creará un registro duplicado del cliente bajo el nuevo corredor y se moverá solo esta póliza.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Advertencia de comisiones pagadas */}
+                {policyCommissionWarning?.show && (
+                  <div className="mt-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <FaExclamationTriangle className="text-yellow-600 text-lg flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-bold text-yellow-800 text-sm mb-1">
+                          Póliza con Comisiones Pagadas
+                        </h4>
+                        <p className="text-xs text-yellow-700">
+                          Esta póliza tiene <strong>{policyCommissionWarning.fortnightCount} quincena(s)</strong> con comisiones pagadas 
+                          al corredor actual por un total de <strong>${policyCommissionWarning.totalAmount.toFixed(2)}</strong>.
+                          Al guardar se abrirá un diálogo para decidir si aplicar ajustes retroactivos.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-bold text-[#010139] mb-2">
                 💬 Notas {formData.ramo === 'OTROS' && <span className="text-red-600">*</span>}
@@ -1356,25 +1565,43 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
             <button
               type="submit"
               form="policy-form"
-              disabled={loading}
+              disabled={loading || reassigning || checkingPolicyCommissions}
               className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-1 sm:gap-2"
             >
-              {loading ? (
+              {(loading || reassigning) ? (
                 <>
                   <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span className="hidden sm:inline">Guardando...</span>
+                  <span className="hidden sm:inline">{reassigning ? 'Reasignando...' : 'Guardando...'}</span>
                   <span className="sm:hidden">...</span>
                 </>
               ) : (
                 <>
                   <FaFolderPlus size={14} className="hidden sm:inline" />
-                  <span>Guardar</span>
+                  <span>{selectedBrokerId && selectedBrokerId !== currentBrokerId ? 'Reasignar Corredor' : 'Guardar'}</span>
                 </>
               )}
             </button>
           )}
         </div>
       </div>
+
+      {/* Modal de reasignación de corredor para póliza individual */}
+      {showPolicyReassignmentModal && policy && policyCommissionData && (
+        <BrokerReassignmentModal
+          isOpen={showPolicyReassignmentModal}
+          onClose={() => setShowPolicyReassignmentModal(false)}
+          onConfirm={async (makeAdjustments) => {
+            setShowPolicyReassignmentModal(false);
+            await handlePolicyBrokerReassign(makeAdjustments);
+          }}
+          clientName={`Póliza ${policy.policy_number}`}
+          oldBrokerName={brokers.find(b => b.id === currentBrokerId)?.name || 'Corredor anterior'}
+          newBrokerName={brokers.find(b => b.id === selectedBrokerId)?.name || 'Nuevo corredor'}
+          totalAmount={policyCommissionData.totalAmount}
+          commissionsByFortnight={policyCommissionData.commissionsByFortnight}
+          loading={reassigning}
+        />
+      )}
     </div>
   );
 }

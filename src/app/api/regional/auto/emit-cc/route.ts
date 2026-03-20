@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Emit policy
     const { getRegionalCredentials } = await import('@/lib/regional/config');
-    const creds = getRegionalCredentials('development');
+    const creds = getRegionalCredentials();
 
     const emissionBody: RegionalCCEmissionBody = {
       codInter: creds.codInter,

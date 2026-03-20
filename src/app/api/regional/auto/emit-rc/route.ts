@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const creds = getRegionalCredentials('development');
+    const creds = getRegionalCredentials();
 
     const {
       plan,

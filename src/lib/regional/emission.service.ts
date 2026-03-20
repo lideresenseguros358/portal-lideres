@@ -135,8 +135,8 @@ export async function imprimirPoliza(
   const cleanPoliza = poliza.replace(/-0$/, '');
   console.log('[REGIONAL Imprimir] Printing policy:', cleanPoliza, poliza !== cleanPoliza ? `(stripped from ${poliza})` : '');
 
-  const { getRegionalBaseUrl, getRegionalCredentials } = await import('./config');
-  const env = (process.env.NODE_ENV === 'production' ? 'production' : 'development') as import('./config').RegionalEnvironment;
+  const { getRegionalBaseUrl, getRegionalCredentials, getRegionalEnv } = await import('./config');
+  const env = getRegionalEnv();
   const creds = getRegionalCredentials(env);
   const baseUrl = getRegionalBaseUrl(env);
   const url = `${baseUrl}${REGIONAL_CC_ENDPOINTS.IMPRIMIR}`;

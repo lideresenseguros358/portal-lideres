@@ -90,12 +90,19 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           
           data.insurers.forEach((ins: any) => {
             // Guardar con múltiples variaciones del nombre
+            const upper = ins.name.toUpperCase();
+            const withoutSeguros = upper.replace(/\s+SEGUROS$/i, '').trim();
+            const withoutDe = upper.replace(/\s+DE\s+/gi, ' ').trim();
+            // Skip articles (LA, EL) for first-word matching
+            const words = upper.split(/\s+/).filter((w: string) => !['LA', 'EL', 'LOS', 'LAS', 'DE'].includes(w));
             const variations = [
-              ins.name.toUpperCase(),
-              ins.name.toUpperCase().replace(/\s+SEGUROS$/i, '').trim(),
-              ins.name.toUpperCase().replace(/\s+DE\s+/gi, ' ').trim(),
-              ins.name.toUpperCase().replace(/PANAMÁ/gi, 'PANAMA').trim(),
-              ins.name.toUpperCase().split(' ')[0], // Primera palabra
+              upper,
+              withoutSeguros,
+              withoutDe,
+              upper.replace(/PANAMÁ/gi, 'PANAMA').trim(),
+              upper.split(' ')[0], // Primera palabra
+              words[0] || '', // Primera palabra significativa (sin artículos)
+              words.join(' '), // Todas las palabras significativas
             ];
             
             variations.forEach(variation => {
@@ -111,6 +118,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
       .catch(err => console.error('Error loading insurer logos:', err));
   }, []);
 
+  // Hardcoded fallback logos for known insurers (in case DB match fails)
+  const FALLBACK_LOGOS: Record<string, string> = {
+    'REGIONAL': '/aseguradoras/regional.png',
+    'INTERNACIONAL': '/aseguradoras/internacional.png',
+    'FEDPA': '/aseguradoras/fedpa.png',
+    'ANCON': '/aseguradoras/ancon.png',
+  };
+
   const getLogoUrl = (insurerName: string): string | null => {
     // Normalizar el nombre buscado
     const normalized = insurerName
@@ -125,17 +140,29 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
     
     // Intentar múltiples variaciones
     const firstWord = normalized.split(' ')[0] || '';
+    // Skip articles for meaningful first word
+    const words = normalized.split(/\s+/).filter(w => !['LA', 'EL', 'LOS', 'LAS', 'DE'].includes(w));
+    const meaningfulFirst = words[0] || '';
     const variations = [
       normalized,
       normalized.replace(/\s+SEGUROS$/i, '').trim(),
       normalized.replace(/\s+DE\s+/gi, ' ').trim(),
       normalized.replace(/\s+SEGUROS$/i, '').replace(/\s+DE\s+/gi, ' ').trim(),
       firstWord,
+      meaningfulFirst,
+      words.join(' '),
     ].filter(Boolean);
 
     for (const variation of variations) {
       if (variation && insurerLogos[variation]) {
         return insurerLogos[variation];
+      }
+    }
+    
+    // Fallback: check known insurer keywords
+    for (const [keyword, url] of Object.entries(FALLBACK_LOGOS)) {
+      if (normalized.includes(keyword)) {
+        return url;
       }
     }
     
