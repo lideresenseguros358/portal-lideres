@@ -643,7 +643,7 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       h.includes('insured') || h.includes('asegurado') || h.includes('nombre') || h.includes('client')
     );
     amountIndex = headersLower.findIndex(h => 
-      h.includes('honorario') || h.includes('amount') || h.includes('gross') || h.includes('bruto') || (h.includes('monto') && !h.includes('gasto'))
+      h.includes('honorario') || h.includes('amount') || h.includes('gross') || h.includes('bruto') || h.includes('comis') || (h.includes('monto') && !h.includes('gasto'))
     );
   }
   

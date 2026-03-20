@@ -1334,7 +1334,44 @@ export async function previewMapping(options: PreviewMappingOptions) {
   };
   
   // Crear mapa de aliases -> campo final
+  // Empezar con aliases por defecto para headers comunes en español
   const aliasMap = new Map<string, string>();
+  const defaultAliases: Record<string, string> = {
+    // policy_number
+    'poliza': 'policy_number',
+    'no. poliza': 'policy_number',
+    'no poliza': 'policy_number',
+    'nro poliza': 'policy_number',
+    'numero poliza': 'policy_number',
+    'numero de poliza': 'policy_number',
+    'no. de poliza': 'policy_number',
+    'policy': 'policy_number',
+    'policy_number': 'policy_number',
+    'policy number': 'policy_number',
+    // client_name
+    'asegurado': 'client_name',
+    'nombre asegurado': 'client_name',
+    'nombre del asegurado': 'client_name',
+    'cliente': 'client_name',
+    'nombre': 'client_name',
+    'insured': 'client_name',
+    'client_name': 'client_name',
+    'client name': 'client_name',
+    // gross_amount
+    'comision': 'gross_amount',
+    'comisiones': 'gross_amount',
+    'monto comision': 'gross_amount',
+    'monto de comision': 'gross_amount',
+    'commission': 'gross_amount',
+    'gross_amount': 'gross_amount',
+    'monto': 'gross_amount',
+    'credito': 'gross_amount',
+    'creditos': 'gross_amount',
+  };
+  for (const [alias, field] of Object.entries(defaultAliases)) {
+    aliasMap.set(alias, field);
+  }
+  
   for (const rule of rules) {
     // Determinar el campo final
     const finalField = targetFieldMap[rule.target_field] || rule.target_field;
