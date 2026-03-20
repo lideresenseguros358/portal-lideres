@@ -7,7 +7,7 @@
  *
  * Plans mapping:
  * - CODPLAN 30 = "SOAT BASICO" → Plan Básico ($145)
- * - CODPLAN 31 = "SOAT PLUS"   → Plan Premium ($162)
+ * - CODPLAN 31 = "EXCESO BASICO" → Plan Premium ($185)
  */
 
 import { NextResponse } from 'next/server';
@@ -21,7 +21,7 @@ let inflightPromise: Promise<any> | null = null;
 
 // Fallback prices from REGIONAL documentation
 const FALLBACK_BASIC_PRICE = 145.00;
-const FALLBACK_PREMIUM_PRICE = 162.00;
+const FALLBACK_PREMIUM_PRICE = 185.00;
 
 // Target plan codes
 const PLAN_BASICO_CODE = '30';
@@ -36,6 +36,7 @@ const REGIONAL_PREMIUM_COVERAGES = [
   { code: 'LC', name: 'Lesiones Corporales', limit: '$10,000.00 / $20,000.00', prima: 0 },
   { code: 'DPA', name: 'Daños a la Propiedad Ajena', limit: '$10,000.00', prima: 0 },
   { code: 'GM', name: 'Gastos Médicos', limit: '$500.00 / $2,500.00', prima: 0 },
+  { code: 'GF', name: 'Gastos Funerarios', limit: '$2,000.00', prima: 0 },
 ];
 const REGIONAL_BASIC_BENEFITS: string[] = [
   'Coordinación de envío de ambulancia por accidente de tránsito',
@@ -45,9 +46,8 @@ const REGIONAL_BASIC_BENEFITS: string[] = [
 const REGIONAL_PREMIUM_BENEFITS: string[] = [
   'Asistencia legal en accidentes de tránsito',
   'Coordinación de envío de ambulancia por accidente de tránsito',
-  'Asistencia vial: cambio de llanta, envío de combustible, pase de corriente (hasta B/.150, máx. 3 eventos/año)',
-  'Cerrajería vial (hasta B/.150, máx. 3 eventos/año)',
-  'Grúa por accidente o desperfectos mecánicos (hasta B/.150, máx. 3 eventos/año)',
+  'Asistencia vial: paso de corriente, cambio de llanta, abasto de combustible, cerrajería',
+  'Grúa por accidente o avería (máximo B/.150)',
   'Transmisión de mensajes urgentes',
   'Inspección "in situ"',
   'Depósito y custodia de vehículos',
@@ -199,7 +199,8 @@ async function fetchAllPlans() {
       name: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
       apiName: plan.DESCPLAN || fallbackName,
       codplan: String(plan.CODPLAN || ''),
-      annualPremium: Number(plan.MT_PRIMA) || fallbackPrice,
+      // For premium, ALWAYS use our defined price ($185 Exceso Básico) regardless of API
+      annualPremium: planType === 'premium' ? fallbackPrice : (Number(plan.MT_PRIMA) || fallbackPrice),
       fromApi: true,
       coverageList: apiCoverages.length > 0 ? apiCoverages : fallbackCoverages,
       endosoBenefits: apiBenefits.length > 0 ? apiBenefits : fallbackBenefits,
@@ -215,7 +216,7 @@ async function fetchAllPlans() {
     timestamp: new Date().toISOString(),
     plans: [
       buildPlanResponse(basic, 'basic', FALLBACK_BASIC_PRICE, 'Soat Basico'),
-      buildPlanResponse(premium, 'premium', FALLBACK_PREMIUM_PRICE, 'Soat Plus'),
+      buildPlanResponse(premium, 'premium', FALLBACK_PREMIUM_PRICE, 'Exceso Basico'),
     ],
   };
 
