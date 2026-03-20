@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       if (clientData.national_id) {
         const { data: existing } = await supabaseAdmin
           .from('clients')
-          .select('id, name')
+          .select('id, name, broker_id')
           .eq('national_id', clientData.national_id)
           .eq('broker_id', newBrokerId)
           .single();
@@ -135,12 +135,16 @@ export async function POST(request: NextRequest) {
         targetClientId = existingClientUnderNewBroker.id;
       } else {
         // Duplicar el cliente bajo el nuevo broker
+        // national_id tiene unique constraint global, así que el duplicado
+        // se crea sin national_id para evitar violación de constraint.
+        // El registro original mantiene el national_id.
         const { id, created_at, ...clientFields } = clientData;
         const { data: newClient, error: newClientError } = await supabaseAdmin
           .from('clients')
           .insert({
             ...clientFields,
             broker_id: newBrokerId,
+            national_id: null, // Evitar violación de unique constraint
           })
           .select()
           .single();
@@ -151,7 +155,7 @@ export async function POST(request: NextRequest) {
         }
 
         targetClientId = newClient.id;
-        console.log(`[POLICY REASSIGN] Cliente duplicado creado: ${targetClientId}`);
+        console.log(`[POLICY REASSIGN] Cliente duplicado creado: ${targetClientId} (sin national_id para evitar constraint)`);
       }
 
       // Mover la póliza al cliente destino con el nuevo broker
