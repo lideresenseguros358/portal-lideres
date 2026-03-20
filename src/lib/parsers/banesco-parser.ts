@@ -35,44 +35,57 @@ export async function parseBanescoPDF(pdfBuffer: ArrayBuffer): Promise<BanescoRo
     
     const rows: BanescoRow[] = [];
     
-    // Regex para detectar líneas de datos de BANESCO
-    // Formato real: "...Factura 2695 1131/01/20251-1-35339-0 45.00JOSE LUIS FERNANDEZ 41.87224862..."
-    // Patrón: Póliza (1-1-35339-0) + Espacio + Porcentaje (45.00) SIN ESPACIO + Nombre (JOSE LUIS FERNANDEZ) + Espacio + Comisión (41.87)
-    // Nota: El nombre está pegado al porcentaje, por eso usamos \s* (0 o más espacios)
-    const policyRegex = /(\d{1,4}-\d{1,5}-\d{1,8}(?:-\d{1,2})?)\s+(\d+\.\d{2})\s*([A-Z][A-Z\s]{8,}?)\s+(\d+\.\d{2})/;
+    // El texto extraído del PDF de BANESCO tiene este formato por línea de datos:
+    // "1-1-41427-0 Factura 19487 28/06/2025 27/06/2025 27/06/2026 10 233608 11/03/2026 82.9745.00184.38JAVIER ALBERTO TOBONRecibos Cobrados PAB"
+    // Estructura: póliza ... comisión(82.97) + %(45.00) + prima(184.38) + NOMBRE + Recibos Cobrados + PAB
+    // Los números están pegados sin espacio entre sí y pegados al nombre
+    
+    // Patrón 1: busca póliza al inicio, luego captura todo lo que viene después de fechas/números
+    // hasta encontrar "Recibos" o "PAB" al final
+    const policyStartRegex = /^(\d{1,4}-\d{1,5}-\d{1,8}(?:-\d{1,2})?)\s+/;
+    
+    // Patrón para extraer: comisión + % + prima + NOMBRE de la parte final de la línea
+    // Los 3 números están pegados: comisión(XX.XX) + %(XX.XX) + prima(X,XXX.XX) + NOMBRE
+    // Buscamos: número.decimal + número.decimal + número(con posibles comas).decimal + TEXTO_MAYÚSCULAS + Recibos|PAB
+    const dataBlockRegex = /(\d[\d,]*\.\d{2})(\d{1,3}\.\d{2})([\d,]+\.\d{2})([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s.,]+?)(?:Recibos|PAB)/;
     
     for (const line of lines) {
       // Saltar headers y totales
       if (line.includes('Póliza') || line.includes('RESUMEN') || 
           line.includes('BALANCE') || line.includes('Total por Ramo') ||
           line.includes('DESCUENTOS') || line.includes('Monto a pagar') ||
-          line.includes('Nombre Asegurado') || line.includes('Prima Cobrada')) {
+          line.includes('Nombre Asegurado') || line.includes('Prima Cobrada') ||
+          line.includes('Comisión') || line.includes('Ramo:')) {
         continue;
       }
       
-      const policyMatch = line.match(policyRegex);
-      if (policyMatch && policyMatch[1] && policyMatch[2] && policyMatch[3] && policyMatch[4]) {
-        const policyNumber = policyMatch[1]; // Número de póliza
-        const percentage = parseFloat(policyMatch[2]); // Porcentaje (no lo usamos pero lo validamos)
-        const clientName = policyMatch[3].trim(); // Nombre del asegurado
-        const commission = parseFloat(policyMatch[4]); // Comisión generada
+      const policyMatch = line.match(policyStartRegex);
+      if (!policyMatch || !policyMatch[1]) continue;
+      
+      const policyNumber = policyMatch[1];
+      
+      // Buscar el bloque de datos (comisión + % + prima + nombre)
+      const dataMatch = line.match(dataBlockRegex);
+      if (dataMatch && dataMatch[1] && dataMatch[2] && dataMatch[3] && dataMatch[4]) {
+        const commission = parseFloat(dataMatch[1].replace(/,/g, ''));
+        const percentage = parseFloat(dataMatch[2]);
+        const prima = parseFloat(dataMatch[3].replace(/,/g, ''));
+        const clientName = dataMatch[4].trim();
         
-        console.log(`[BANESCO PDF] Procesando línea con póliza: ${policyNumber}`);
-        console.log(`[BANESCO PDF] Datos extraídos: Póliza=${policyNumber}, %=${percentage}, Cliente="${clientName}", Comisión=${commission}`);
+        console.log(`[BANESCO PDF] Match: Póliza=${policyNumber}, Comisión=${commission}, %=${percentage}, Prima=${prima}, Cliente="${clientName}"`);
         
-        // Validaciones
-        if (!clientName || clientName.length < 5) {
-          console.log(`[BANESCO PDF] ⏭️ Rechazado (nombre inválido): "${clientName}"`);
+        if (!clientName || clientName.length < 3) {
+          console.log(`[BANESCO PDF] Rechazado (nombre inválido): "${clientName}"`);
           continue;
         }
         
         if (isNaN(commission) || Math.abs(commission) < 0.01) {
-          console.log(`[BANESCO PDF] ⏭️ Rechazado (comisión inválida): ${commission}`);
+          console.log(`[BANESCO PDF] Rechazado (comisión inválida): ${commission}`);
           continue;
         }
         
         if (clientName.includes('TOTAL') || clientName.includes('RESUMEN')) {
-          console.log(`[BANESCO PDF] ⏭️ Rechazado (es total/resumen): ${clientName}`);
+          console.log(`[BANESCO PDF] Rechazado (es total/resumen): ${clientName}`);
           continue;
         }
         
@@ -82,6 +95,8 @@ export async function parseBanescoPDF(pdfBuffer: ArrayBuffer): Promise<BanescoRo
           client_name: clientName,
           gross_amount: commission
         });
+      } else {
+        console.log(`[BANESCO PDF] No match dataBlock para póliza ${policyNumber}: "${line.substring(line.indexOf(policyNumber)).substring(0, 100)}"`);
       }
     }
     
