@@ -29,6 +29,119 @@ function parseAmount(value: string | number): number {
   return hasParentheses ? -Math.abs(num) : num;
 }
 
+export async function parsePaligXLSX(fileBuffer: ArrayBuffer): Promise<PaligRow[]> {
+  console.log('[PALIG XLSX] Iniciando parseo de archivo Excel');
+
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.read(fileBuffer, { type: 'array', cellDates: true, cellNF: false, cellText: false });
+
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    console.log('[PALIG XLSX] No se encontró hoja en el archivo');
+    return [];
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  if (!worksheet) {
+    console.log('[PALIG XLSX] No se pudo leer la hoja');
+    return [];
+  }
+
+  // Leer todas las filas como arrays
+  const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    defval: '',
+    blankrows: false,
+    raw: false
+  });
+
+  console.log('[PALIG XLSX] Total filas en Excel:', jsonData.length);
+  if (jsonData.length < 2) return [];
+
+  // Buscar la fila de headers que contenga "Grupo(Póliza)" o similar
+  let headerRowIndex = -1;
+  let colPolicy = -1;    // Grupo(Póliza)
+  let colName = -1;      // Nombre del Asegurado
+  let colCredit = -1;    // Créditos o Crédito
+
+  for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+    const row = jsonData[i];
+    if (!row) continue;
+
+    for (let j = 0; j < row.length; j++) {
+      const cell = String(row[j] || '').trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+      if (cell.includes('grupo') && cell.includes('poliza')) {
+        colPolicy = j;
+      }
+      if (cell.includes('nombre') && cell.includes('asegurado')) {
+        colName = j;
+      }
+      if (cell === 'creditos' || cell === 'credito' || cell === 'créditos' || cell === 'crédito') {
+        colCredit = j;
+      }
+    }
+
+    // Si encontramos al menos póliza y crédito, tenemos el header
+    if (colPolicy !== -1 && colCredit !== -1) {
+      headerRowIndex = i;
+      break;
+    }
+
+    // Reset si no encontramos todo en esta fila
+    colPolicy = -1;
+    colName = -1;
+    colCredit = -1;
+  }
+
+  if (headerRowIndex === -1 || colPolicy === -1 || colCredit === -1) {
+    console.log('[PALIG XLSX] No se encontraron headers esperados (Grupo(Póliza), Crédito)');
+    console.log('[PALIG XLSX] Primeras 5 filas:', jsonData.slice(0, 5));
+    return [];
+  }
+
+  console.log(`[PALIG XLSX] Headers encontrados en fila ${headerRowIndex}: policy=${colPolicy}, name=${colName}, credit=${colCredit}`);
+
+  const results: PaligRow[] = [];
+
+  // Procesar filas de datos (después del header)
+  for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+    const row = jsonData[i];
+    if (!row) continue;
+
+    const policyRaw = String(row[colPolicy] || '').trim();
+    const nameRaw = colName !== -1 ? String(row[colName] || '').trim() : '';
+    const creditRaw = row[colCredit];
+
+    // Si la celda de póliza está vacía o contiene "Sub Total", "Total", etc. → saltar
+    const policyUpper = policyRaw.toUpperCase();
+    if (!policyRaw || policyUpper.includes('TOTAL') || policyUpper.includes('LINEA DE NEGOCIO')) {
+      // Si es "Linea de Negocio", ya estamos en la sección inferior → parar
+      if (policyUpper.includes('LINEA DE NEGOCIO')) {
+        console.log(`[PALIG XLSX] Fin de datos en fila ${i} (Linea de Negocio detectada)`);
+        break;
+      }
+      continue;
+    }
+
+    // Parsear comisión
+    const commission = parseAmount(creditRaw);
+
+    // Solo incluir filas con póliza válida y comisión != 0
+    if (policyRaw.length >= 2 && commission !== 0) {
+      results.push({
+        policy_number: policyRaw,
+        client_name: nameRaw || 'SIN NOMBRE',
+        gross_amount: commission
+      });
+    }
+  }
+
+  console.log(`[PALIG XLSX] Total filas extraídas: ${results.length}`);
+  return results;
+}
+
 export async function parsePaligPDF(fileBuffer: ArrayBuffer): Promise<PaligRow[]> {
   console.log('[PALIG PDF] Iniciando parseo directo de PDF');
 

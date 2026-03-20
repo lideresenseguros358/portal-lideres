@@ -953,8 +953,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
           const { parsePaligPDF } = await import('@/lib/parsers/palig-parser');
           paligRows = await parsePaligPDF(fileBuffer);
         } else {
-          log('PALIG XLSX detectado - Usando parseo normal');
-          paligRows = [];
+          log('PALIG XLSX/XLS detectado - Usando parser especial de Excel');
+          const { parsePaligXLSX } = await import('@/lib/parsers/palig-parser');
+          paligRows = await parsePaligXLSX(fileBuffer);
         }
 
         log(`PALIG Parser extrajo ${paligRows.length} filas totales`);

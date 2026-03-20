@@ -439,32 +439,36 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
 
-        if (fileExtension !== 'pdf') {
-          console.log('[PALIG] Archivo no PDF - usando previewMapping/manual');
-        } else {
+        let paligRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
           console.log('[PALIG] PDF detectado - Usando parser directo de PDF');
           const { parsePaligPDF } = await import('@/lib/parsers/palig-parser');
-          const paligRows = await parsePaligPDF(arrayBuffer);
-
-          console.log('[PALIG PARSER] Extraídas', paligRows.length, 'filas');
-
-          return paligRows.map(row => {
-            let amount = row.gross_amount;
-            
-            // Aplicar inversión de signos si está configurado
-            if (invertNegatives) {
-              console.log(`[PALIG] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
-              amount = amount * -1;
-            }
-            
-            return {
-              policy_number: row.policy_number,
-              client_name: row.client_name,
-              commission_amount: amount,
-              raw_row: row
-            };
-          });
+          paligRows = await parsePaligPDF(arrayBuffer);
+        } else {
+          console.log('[PALIG] XLSX/XLS detectado - Usando parser especial de Excel');
+          const { parsePaligXLSX } = await import('@/lib/parsers/palig-parser');
+          paligRows = await parsePaligXLSX(arrayBuffer);
         }
+
+        console.log('[PALIG PARSER] Extraídas', paligRows.length, 'filas');
+
+        return paligRows.map(row => {
+          let amount = row.gross_amount;
+          
+          // Aplicar inversión de signos si está configurado
+          if (invertNegatives) {
+            console.log(`[PALIG] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+            amount = amount * -1;
+          }
+          
+          return {
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: amount,
+            raw_row: row
+          };
+        });
       } catch (error) {
         console.error('[PALIG PARSER] Error:', error);
         throw new Error('Error al parsear archivo de PALIG: ' + (error instanceof Error ? error.message : 'Error desconocido'));
