@@ -555,9 +555,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
       }
     }
     
-    // PARSER ESPECIAL PARA ASSA (multi-columna: Monto + Vida 1er. año + Vida Renov.)
+    // PARSER ESPECIAL PARA ASSA (Honorarios Profesionales: Monto + Vida 1er. año + Vida Renov.)
     if (insurer?.name?.toUpperCase().includes('ASSA')) {
-      log('Detectado ASSA - Usando parser especial (multi-columna)');
+      log('Detectado ASSA - Usando parser especial');
       try {
         const fileExtension = fileName.toLowerCase().split('.').pop();
         if (fileExtension === 'xlsx' || fileExtension === 'xls') {
@@ -568,73 +568,116 @@ export async function previewMapping(options: PreviewMappingOptions) {
           const worksheet = workbook.Sheets[firstSheetName];
           if (!worksheet) throw new Error('No se pudo leer la hoja de Excel');
 
-          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, {
-            header: 1, defval: '', blankrows: false, raw: false
+          // Leer como array de arrays (raw) para acceso por índice de columna real
+          const allRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1, defval: '', blankrows: true, raw: true
           });
 
-          // Buscar fila de headers con keywords de ASSA
-          const headerKeywords = ['poliza', 'fecha', 'asegurado', 'monto', 'vida', 'tasa', 'remesa', 'referencia', 'saldo'];
-          let headerRowIndex = 0;
-          let maxScore = 0;
-          for (let i = 0; i < Math.min(15, jsonData.length); i++) {
-            const row = jsonData[i] as any[];
-            const keywordMatches = row.filter(cell => {
-              if (!cell) return false;
-              const cellText = String(cell).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              return headerKeywords.some(kw => cellText.includes(kw));
-            }).length;
-            const score = keywordMatches * 10;
-            if (score > maxScore) { maxScore = score; headerRowIndex = i; }
+          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+          // 1) Buscar la fila que contiene "Honorarios Profesionales" para saber el rango de columnas
+          let honorariosStartCol = -1;
+          for (let r = 0; r < Math.min(20, allRows.length); r++) {
+            const row = allRows[r];
+            if (!row) continue;
+            for (let c = 0; c < row.length; c++) {
+              const cellVal = String(row[c] || '').trim();
+              if (norm(cellVal).includes('honorarios profesionales') || norm(cellVal).includes('honorarios')) {
+                honorariosStartCol = c;
+                log(`Found "Honorarios Profesionales" at row ${r}, col ${c}`);
+                break;
+              }
+            }
+            if (honorariosStartCol >= 0) break;
           }
 
-          const headerRow = jsonData[headerRowIndex] as any[];
-          const assaHeaders = headerRow.map((h: any) => String(h || '').trim());
-          log('ASSA headers:', assaHeaders);
+          // 2) Buscar la fila de headers de datos (Poliza, Asegurado, Monto, etc.)
+          const headerKeywords = ['poliza', 'fecha', 'asegurado', 'monto', 'vida', 'tasa', 'remesa', 'referencia', 'saldo'];
+          let headerRowIndex = -1;
+          let maxScore = 0;
+          for (let i = 0; i < Math.min(20, allRows.length); i++) {
+            const row = allRows[i];
+            if (!row) continue;
+            let keywordMatches = 0;
+            for (const cell of row) {
+              if (!cell) continue;
+              const cellText = norm(String(cell));
+              if (headerKeywords.some(kw => cellText.includes(kw))) keywordMatches++;
+            }
+            if (keywordMatches > maxScore) { maxScore = keywordMatches; headerRowIndex = i; }
+          }
 
-          // Encontrar índices de columnas clave (normalizar para comparar)
-          // ASSA tiene DOS grupos de columnas con los mismos nombres (Prima Cobrada y Honorarios Profesionales).
-          // Los datos de comisión se encuentran en el PRIMER grupo de Monto/Vida 1er./Vida Renov.
-          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-          let polizaIdx = -1, aseguradoIdx = -1;
-          let montoIdx = -1;
-          let vida1Idx = -1;
-          let vidaRenovIdx = -1;
+          if (headerRowIndex < 0) throw new Error('No se encontró la fila de encabezados');
+          const headerRow = allRows[headerRowIndex];
+          const headers = headerRow.map((h: any) => String(h || '').trim());
+          log('ASSA header row index:', headerRowIndex);
+          log('ASSA headers:', headers);
 
-          assaHeaders.forEach((h, i) => {
+          // 3) Identificar columnas: Poliza, Asegurado, y las de Honorarios
+          let polizaCol = -1, aseguradoCol = -1;
+          // Recopilar TODAS las posiciones de Monto, Vida 1er, Vida Renov
+          const allMonto: number[] = [];
+          const allVida1: number[] = [];
+          const allVidaRenov: number[] = [];
+
+          headers.forEach((h, i) => {
             const n = norm(h);
-            if (n === 'poliza' && polizaIdx === -1) polizaIdx = i;
-            if (n === 'asegurado' && aseguradoIdx === -1) aseguradoIdx = i;
-            // Guardar el PRIMER índice de cada columna de comisión
-            if (n === 'monto' && montoIdx === -1) montoIdx = i;
-            if ((n.includes('vida 1er') || n.includes('vida 1er.')) && vida1Idx === -1) vida1Idx = i;
-            if (n.includes('vida renov') && vidaRenovIdx === -1) vidaRenovIdx = i;
+            if (n === 'poliza' && polizaCol === -1) polizaCol = i;
+            if (n === 'asegurado' && aseguradoCol === -1) aseguradoCol = i;
+            if (n === 'monto') allMonto.push(i);
+            if (n.includes('vida') && (n.includes('1er') || n.includes('1er.'))) allVida1.push(i);
+            if (n.includes('vida') && n.includes('renov')) allVidaRenov.push(i);
           });
 
-          log(`ASSA column indices: poliza=${polizaIdx}, asegurado=${aseguradoIdx}, monto=${montoIdx}, vida1=${vida1Idx}, vidaRenov=${vidaRenovIdx}`);
+          // Seleccionar las columnas de Honorarios Profesionales
+          // Si encontramos la cabecera "Honorarios Profesionales", usar columnas >= honorariosStartCol
+          // Si no, usar las ÚLTIMAS ocurrencias (el segundo grupo)
+          let hMontoCol = -1, hVida1Col = -1, hVidaRenovCol = -1;
 
-          // Parsear filas de datos
+          if (honorariosStartCol >= 0) {
+            // Usar columnas que están en el rango de Honorarios (>= honorariosStartCol)
+            hMontoCol = allMonto.find(c => c >= honorariosStartCol) ?? -1;
+            hVida1Col = allVida1.find(c => c >= honorariosStartCol) ?? -1;
+            hVidaRenovCol = allVidaRenov.find(c => c >= honorariosStartCol) ?? -1;
+            log(`ASSA Honorarios columns (by header position >= ${honorariosStartCol}): monto=${hMontoCol}, vida1=${hVida1Col}, vidaRenov=${hVidaRenovCol}`);
+          }
+          
+          // Fallback: si no encontramos Honorarios header o no se mapearon columnas, usar últimas ocurrencias
+          if (hMontoCol < 0 && allMonto.length > 0) hMontoCol = allMonto[allMonto.length - 1]!;
+          if (hVida1Col < 0 && allVida1.length > 0) hVida1Col = allVida1[allVida1.length - 1]!;
+          if (hVidaRenovCol < 0 && allVidaRenov.length > 0) hVidaRenovCol = allVidaRenov[allVidaRenov.length - 1]!;
+
+          // Si solo hay UNA ocurrencia de cada columna (reporte simple sin dos grupos), usar esa
+          if (allMonto.length === 1) hMontoCol = allMonto[0]!;
+          if (allVida1.length === 1) hVida1Col = allVida1[0]!;
+          if (allVidaRenov.length === 1) hVidaRenovCol = allVidaRenov[0]!;
+
+          log(`ASSA final column indices: poliza=${polizaCol}, asegurado=${aseguradoCol}, monto=${hMontoCol}, vida1=${hVida1Col}, vidaRenov=${hVidaRenovCol}`);
+
+          // 4) Parsear filas de datos
+          const parseNum = (val: any) => {
+            if (val == null || val === '') return 0;
+            if (typeof val === 'number') return val;
+            const cleaned = String(val).replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+          };
+
           const assaRows: { policy_number: string; client_name: string; gross_amount: number }[] = [];
-          for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
-            const row = jsonData[i] as any[];
-            if (!row || !row.some(cell => cell && String(cell).trim())) continue;
+          for (let i = headerRowIndex + 1; i < allRows.length; i++) {
+            const row = allRows[i];
+            if (!row) continue;
 
-            const policyNum = polizaIdx >= 0 ? String(row[polizaIdx] || '').trim() : '';
-            const clientName = aseguradoIdx >= 0 ? String(row[aseguradoIdx] || '').trim() : '';
+            const policyNum = polizaCol >= 0 ? String(row[polizaCol] ?? '').trim() : '';
+            const clientName = aseguradoCol >= 0 ? String(row[aseguradoCol] ?? '').trim() : '';
 
             if (!policyNum || policyNum.length < 3) continue;
 
-            // Sumar SOLO las columnas de Honorarios Profesionales (último grupo)
+            // Sumar Monto + Vida 1er. año + Vida Renov. del grupo de Honorarios
             let totalCommission = 0;
-            const parseNum = (val: any) => {
-              if (!val) return 0;
-              const cleaned = String(val).replace(/[^\d.-]/g, '');
-              const num = parseFloat(cleaned);
-              return isNaN(num) ? 0 : num;
-            };
-
-            if (montoIdx >= 0) totalCommission += parseNum(row[montoIdx]);
-            if (vida1Idx >= 0) totalCommission += parseNum(row[vida1Idx]);
-            if (vidaRenovIdx >= 0) totalCommission += parseNum(row[vidaRenovIdx]);
+            if (hMontoCol >= 0) totalCommission += parseNum(row[hMontoCol]);
+            if (hVida1Col >= 0) totalCommission += parseNum(row[hVida1Col]);
+            if (hVidaRenovCol >= 0) totalCommission += parseNum(row[hVidaRenovCol]);
 
             if (Math.abs(totalCommission) > 0.001) {
               assaRows.push({
@@ -650,7 +693,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           return {
             success: true,
             previewRows: assaRows,
-            originalHeaders: ['Póliza', 'Asegurado', 'Monto + Vida 1er. año + Vida Renov.'],
+            originalHeaders: ['Póliza', 'Asegurado', 'Honorarios'],
             normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
             rules: [],
             debugLogs
