@@ -592,22 +592,25 @@ export async function previewMapping(options: PreviewMappingOptions) {
           log('ASSA headers:', assaHeaders);
 
           // Encontrar índices de columnas clave (normalizar para comparar)
+          // ASSA tiene DOS grupos de columnas con los mismos nombres (Prima Cobrada y Honorarios Profesionales).
+          // Los datos de comisión se encuentran en el PRIMER grupo de Monto/Vida 1er./Vida Renov.
           const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
           let polizaIdx = -1, aseguradoIdx = -1;
-          const montoIndices: number[] = [];
-          const vida1Indices: number[] = [];
-          const vidaRenovIndices: number[] = [];
+          let montoIdx = -1;
+          let vida1Idx = -1;
+          let vidaRenovIdx = -1;
 
           assaHeaders.forEach((h, i) => {
             const n = norm(h);
             if (n === 'poliza' && polizaIdx === -1) polizaIdx = i;
             if (n === 'asegurado' && aseguradoIdx === -1) aseguradoIdx = i;
-            if (n === 'monto') montoIndices.push(i);
-            if (n.includes('vida 1er') || n.includes('vida 1er.')) vida1Indices.push(i);
-            if (n.includes('vida renov')) vidaRenovIndices.push(i);
+            // Guardar el PRIMER índice de cada columna de comisión
+            if (n === 'monto' && montoIdx === -1) montoIdx = i;
+            if ((n.includes('vida 1er') || n.includes('vida 1er.')) && vida1Idx === -1) vida1Idx = i;
+            if (n.includes('vida renov') && vidaRenovIdx === -1) vidaRenovIdx = i;
           });
 
-          log(`ASSA column indices: poliza=${polizaIdx}, asegurado=${aseguradoIdx}, monto=${montoIndices}, vida1=${vida1Indices}, vidaRenov=${vidaRenovIndices}`);
+          log(`ASSA column indices: poliza=${polizaIdx}, asegurado=${aseguradoIdx}, monto=${montoIdx}, vida1=${vida1Idx}, vidaRenov=${vidaRenovIdx}`);
 
           // Parsear filas de datos
           const assaRows: { policy_number: string; client_name: string; gross_amount: number }[] = [];
@@ -620,7 +623,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
             if (!policyNum || policyNum.length < 3) continue;
 
-            // Sumar TODAS las columnas de comisión: Monto + Vida 1er. año + Vida Renov.
+            // Sumar SOLO las columnas de Honorarios Profesionales (último grupo)
             let totalCommission = 0;
             const parseNum = (val: any) => {
               if (!val) return 0;
@@ -629,9 +632,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
               return isNaN(num) ? 0 : num;
             };
 
-            for (const idx of montoIndices) totalCommission += parseNum(row[idx]);
-            for (const idx of vida1Indices) totalCommission += parseNum(row[idx]);
-            for (const idx of vidaRenovIndices) totalCommission += parseNum(row[idx]);
+            if (montoIdx >= 0) totalCommission += parseNum(row[montoIdx]);
+            if (vida1Idx >= 0) totalCommission += parseNum(row[vida1Idx]);
+            if (vidaRenovIdx >= 0) totalCommission += parseNum(row[vidaRenovIdx]);
 
             if (Math.abs(totalCommission) > 0.001) {
               assaRows.push({
