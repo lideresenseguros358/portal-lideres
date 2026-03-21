@@ -26,117 +26,185 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
   const rows: RegionalRow[] = [];
 
   const isDigitsOnly = (s: string) => /^\d+$/.test(s);
-  const isMoney = (s: string) => /^\d+\.\d{2}$/.test(s);
+  const isMoney = (s: string) => /^-?\d[\d,]*\.\d{2}$/.test(s);
+  const isMoneyOrComma = (s: string) => /^-?\d{1,3}(?:,?\d{3})*\.\d{2}$/.test(s);
 
   const upper = (s: string) => s.toUpperCase();
-  const findIndex = (predicate: (l: string) => boolean) => lines.findIndex(predicate);
 
-  const extractDigitsListAfterMarker = (marker: (l: string) => boolean, opts?: { minLen?: number; maxLen?: number; skip?: number }) => {
-    const idx = findIndex(marker);
-    if (idx < 0) return [] as string[];
+  // Find ALL indices matching a predicate (for multi-page support)
+  const findAllIndices = (predicate: (l: string) => boolean): number[] => {
+    const indices: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (predicate(lines[i]!)) indices.push(i);
+    }
+    return indices;
+  };
+
+  // Extract digit lists after EVERY occurrence of a marker
+  const extractDigitsAfterAllMarkers = (marker: (l: string) => boolean, opts?: { minLen?: number; maxLen?: number; skip?: number }) => {
+    const indices = findAllIndices(marker);
     const minLen = opts?.minLen ?? 1;
     const maxLen = opts?.maxLen ?? 20;
     const skip = opts?.skip ?? 0;
-
     const out: string[] = [];
-    for (let i = idx + 1 + skip; i < lines.length; i++) {
-      const l = lines[i];
-      if (!l) continue;
-      if (!isDigitsOnly(l)) break;
-      if (l.length >= minLen && l.length <= maxLen) out.push(l);
+    for (const idx of indices) {
+      for (let i = idx + 1 + skip; i < lines.length; i++) {
+        const l = lines[i];
+        if (!l) continue;
+        if (!isDigitsOnly(l)) break;
+        if (l.length >= minLen && l.length <= maxLen) out.push(l);
+      }
     }
     return out;
   };
 
-  const extractDigitsListBeforeMarker = (marker: (l: string) => boolean, opts?: { minLen?: number; maxLen?: number }) => {
-    const idx = findIndex(marker);
-    if (idx < 0) return [] as string[];
+  // Extract digit lists before EVERY occurrence of a marker
+  const extractDigitsBeforeAllMarkers = (marker: (l: string) => boolean, opts?: { minLen?: number; maxLen?: number }) => {
+    const indices = findAllIndices(marker);
     const minLen = opts?.minLen ?? 1;
     const maxLen = opts?.maxLen ?? 20;
-
     const out: string[] = [];
-    for (let i = idx - 1; i >= 0; i--) {
-      const l = lines[i];
-      if (!l) continue;
-      if (!isDigitsOnly(l)) break;
-      if (l.length >= minLen && l.length <= maxLen) out.push(l);
+    for (const idx of indices) {
+      const chunk: string[] = [];
+      for (let i = idx - 1; i >= 0; i--) {
+        const l = lines[i];
+        if (!l) continue;
+        if (!isDigitsOnly(l)) break;
+        if (l.length >= minLen && l.length <= maxLen) chunk.push(l);
+      }
+      out.push(...chunk.reverse());
     }
-    return out.reverse();
+    return out;
   };
 
-  // 1) Extraer pólizas (en el texto extraído, la columna de póliza suele aparecer bajo el marcador "Ramo")
-  const ramoIdx = findIndex(l => upper(l) === 'RAMO');
+  // 1) Extraer pólizas: under "Ramo" header, collect 6-10 digit policy IDs from ALL pages
   const policyList: string[] = [];
-  if (ramoIdx >= 0) {
+  const ramoIndices = findAllIndices(l => upper(l) === 'RAMO');
+  for (const ramoIdx of ramoIndices) {
     for (let i = ramoIdx + 1; i < lines.length; i++) {
       const l = lines[i];
       if (!l) continue;
       if (!isDigitsOnly(l)) break;
-      // En el PDF de REGIONAL, aquí vienen IDs numéricos de póliza (6-10 dígitos)
-      if (l.length >= 6 && l.length <= 10) {
-        policyList.push(l);
-      }
+      if (l.length >= 6 && l.length <= 10) policyList.push(l);
     }
   }
 
-  // Extraer sucursal (1ra sección), ramo (2da sección) y cert (4ta sección)
-  // En el PDF, la primera columna suele ser Suc.=10, la segunda Ramo=29 y el cert suele ser 0.
-  // En el texto extraído, los valores de sucursal aparecen ANTES del label "Suc.".
-  const sucursalList = extractDigitsListBeforeMarker(l => upper(l) === 'SUC.', { minLen: 1, maxLen: 2 });
-  // El "ramo" (29) aparece bajo "Nro." seguido por "Recibo".
-  const ramoList = extractDigitsListAfterMarker(l => upper(l) === 'NRO.', { minLen: 1, maxLen: 3, skip: 1 });
+  // Sucursal: digits BEFORE "Suc." label (all pages)
+  const sucursalList = extractDigitsBeforeAllMarkers(l => upper(l) === 'SUC.', { minLen: 1, maxLen: 2 });
+  // Ramo (29): under "Nro." followed by "Recibo" — skip "Nro." + "Ingreso" sections
+  const ramoList: string[] = [];
+  const nroIndices = findAllIndices(l => upper(l) === 'NRO.');
+  for (const nroIdx of nroIndices) {
+    // Only process if the next line is "Recibo" (not "Ingreso")
+    const nextLine = lines[nroIdx + 1];
+    if (!nextLine || upper(nextLine) !== 'RECIBO') continue;
+    for (let i = nroIdx + 2; i < lines.length; i++) {
+      const l = lines[i];
+      if (!l) continue;
+      if (!isDigitsOnly(l)) break;
+      if (l.length >= 1 && l.length <= 3) ramoList.push(l);
+    }
+  }
 
-  // 2) Extraer montos "Monto C. Pagado" (comisión pagada)
-  const montoCIdx = findIndex(l => upper(l).startsWith('MONTO C.'));
+  // 2) Extraer montos "Monto C. Pagado" from ALL pages
+  // But we need the per-row commission, which is under "Monto Comision" not "Monto C. Pagado"
+  // From the extracted text: "Monto" + "Comision" header, then values
+  // Let's look for both commission columns
   const montoCPagadoList: number[] = [];
-  let montoCScanEndIndex = -1;
-  if (montoCIdx >= 0) {
-    // Suele venir en 2 líneas: "Monto C." y luego "Pagado"
+  const certList: string[] = [];
+
+  // Find "Monto C." sections (all pages)
+  // We use "Monto Comision" column instead — it appears as "Monto" + "Comision" on separate lines
+  // Actually from the text, the correct commission column is "Monto C." + "Pagado"
+  const montoCIndices = findAllIndices(l => upper(l).startsWith('MONTO C.'));
+  let pageNum = 0;
+  for (const montoCIdx of montoCIndices) {
+    pageNum++;
     let start = montoCIdx + 1;
     const maybePagado = lines[start];
     if (maybePagado && upper(maybePagado) === 'PAGADO') start++;
 
+    let lastMoneyIdx = -1;
+    const pageAmounts: number[] = [];
     for (let i = start; i < lines.length; i++) {
       const l = lines[i];
       if (!l) continue;
-      if (!isMoney(l)) break;
-      const n = parseFloat(l);
-      montoCPagadoList.push(isNaN(n) ? 0 : n);
-      montoCScanEndIndex = i;
+      if (!isMoneyOrComma(l)) break;
+      const n = parseFloat(l.replace(/,/g, ''));
+      pageAmounts.push(isNaN(n) ? 0 : n);
+      lastMoneyIdx = i;
+    }
+
+    console.log(`[REGIONAL PDF] Page ${pageNum} Monto C. Pagado: ${pageAmounts.length} amounts, first=${pageAmounts[0]}, last=${pageAmounts[pageAmounts.length-1]}`);
+
+    // Page 1: first value is the page total, then individual values
+    // Page 2+: first 1-2 values are running totals, then individual values
+    // Heuristic: the page total equals the sum of individual values on that page
+    // Simpler: if first amount equals sum of the rest, skip it
+    if (pageAmounts.length > 1) {
+      const first = pageAmounts[0]!;
+      const rest = pageAmounts.slice(1);
+      const sumRest = rest.reduce((a, b) => a + b, 0);
+      // If first ≈ sum of rest, it's a total — skip it
+      if (Math.abs(first - sumRest) < 0.05) {
+        console.log(`[REGIONAL PDF] Page ${pageNum}: skipping total ${first} (sum of rest = ${sumRest.toFixed(2)})`);
+        montoCPagadoList.push(...rest);
+      } else if (pageNum > 1) {
+        // On page 2+, try skipping first 2 values (prev total + running total)
+        const withoutTwo = pageAmounts.slice(2);
+        const sumWithoutTwo = withoutTwo.reduce((a, b) => a + b, 0);
+        if (withoutTwo.length > 0 && pageAmounts.length > 2) {
+          // Check if first two are totals
+          const second = pageAmounts[1]!;
+          if (Math.abs(first - second) < 0.05) {
+            // Both are same total — skip both
+            console.log(`[REGIONAL PDF] Page ${pageNum}: skipping 2 repeated totals ${first}`);
+            montoCPagadoList.push(...withoutTwo);
+          } else {
+            // Just skip the first (prev page total)
+            montoCPagadoList.push(...rest);
+          }
+        } else {
+          montoCPagadoList.push(...rest);
+        }
+      } else {
+        montoCPagadoList.push(...rest);
+      }
+    } else {
+      montoCPagadoList.push(...pageAmounts);
+    }
+
+    // Cert: digits after the money list, until "Cert" label
+    if (lastMoneyIdx >= 0) {
+      for (let i = lastMoneyIdx + 1; i < lines.length; i++) {
+        const l = lines[i];
+        if (!l) continue;
+        const u = upper(l);
+        if (u === 'CERT') break;
+        if (!isDigitsOnly(l)) break;
+        if (l.length >= 1 && l.length <= 4) certList.push(l);
+      }
     }
   }
 
-  // Certificado: en el texto extraído suele venir como una lista de ceros inmediatamente después de Monto C. Pagado
-  // hasta llegar al label "Cert".
-  const certList: string[] = [];
-  if (montoCScanEndIndex >= 0) {
-    for (let i = montoCScanEndIndex + 1; i < lines.length; i++) {
-      const l = lines[i];
-      if (!l) continue;
-      const u = upper(l);
-      if (u === 'CERT') break;
-      if (!isDigitsOnly(l)) break;
-      if (l.length >= 1 && l.length <= 4) certList.push(l);
-    }
-  }
-
-  // 3) Extraer nombres bajo "Operación" (vienen como lista separada; algunos nombres se parten en 2 líneas)
-  const operacionIdx = findIndex(l => upper(l) === 'OPERACIÓN');
+  // 3) Extraer nombres bajo "Operación" from ALL pages
   const namesRaw: string[] = [];
-  if (operacionIdx >= 0) {
+  const operacionIndices = findAllIndices(l => upper(l) === 'OPERACIÓN');
+  for (const operacionIdx of operacionIndices) {
     for (let i = operacionIdx + 1; i < lines.length; i++) {
       const l = lines[i];
       if (!l) continue;
       const u = upper(l);
 
-      // Stop markers al terminar la lista de nombres
       if (u === 'NOMBRE ASEGURADO %IMP.' || u.startsWith('NOMBRE ASEGURADO') || u === 'CERT') break;
 
-      // Ignorar cosas que no son nombres
-      if (!l) continue;
       if (u.includes('PAGO DE')) continue;
       if (u.startsWith('TOTAL ')) continue;
-      if (isMoney(l) || isDigitsOnly(l)) continue;
+      if (u.startsWith('SUB-TOTAL')) continue;
+      if (u.includes('COMISIONES')) continue;
+      if (isMoney(l) || isMoneyOrComma(l) || isDigitsOnly(l)) continue;
+      // Skip lines with comma-formatted totals like "2,491.79Total Reporte: 470.13"
+      if (u.includes('TOTAL REPORTE') || u.includes('REPORTE:')) continue;
 
       namesRaw.push(l);
     }
@@ -147,7 +215,6 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
     const curr = n.trim();
     if (!curr) continue;
 
-    // Si la línea parece “continuación” (1-2 palabras), la pegamos al nombre anterior
     const words = curr.split(/\s+/).filter(Boolean);
     const prev = names[names.length - 1] ?? '';
     const prevUpper = upper(prev);
@@ -175,11 +242,23 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
     certList: certList.length,
   });
 
+  // Debug: show first few of each list
+  console.log('[REGIONAL PDF] First 3 policies:', policyList.slice(0, 3));
+  console.log('[REGIONAL PDF] First 3 names:', names.slice(0, 3));
+  console.log('[REGIONAL PDF] First 3 comisiones:', montoCPagadoList.slice(0, 3));
+  console.log('[REGIONAL PDF] Last 3 policies:', policyList.slice(-3));
+  console.log('[REGIONAL PDF] Last 3 names:', names.slice(-3));
+  console.log('[REGIONAL PDF] Last 3 comisiones:', montoCPagadoList.slice(-3));
+
+  // Align: if montoCPagadoList has more entries than policies (running totals snuck in), trim from end
   const expectedCount = Math.min(policyList.length, names.length);
-  const alignedMontoCPagadoList =
-    expectedCount > 0 && montoCPagadoList.length > expectedCount
-      ? montoCPagadoList.slice(-expectedCount)
-      : montoCPagadoList;
+  let alignedMontoCPagadoList = montoCPagadoList;
+  if (expectedCount > 0 && montoCPagadoList.length > expectedCount) {
+    // Try trimming excess from start (running totals at page breaks)
+    alignedMontoCPagadoList = montoCPagadoList.slice(montoCPagadoList.length - expectedCount);
+  }
+
+  console.log(`[REGIONAL PDF] Expected rows: ${expectedCount}, aligned comisiones: ${alignedMontoCPagadoList.length}`);
 
   const count = Math.min(policyList.length, names.length, alignedMontoCPagadoList.length);
   for (let i = 0; i < count; i++) {
