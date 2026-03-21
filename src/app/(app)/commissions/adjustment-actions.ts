@@ -1131,3 +1131,312 @@ export async function actionUnifyAdjustmentReports(reportIds: string[]) {
     };
   }
 }
+
+/**
+ * Obtener lista de quincenas pagadas para dropdown de ajustes manuales
+ */
+export async function actionGetPaidFortnightsList() {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false as const, error: 'No autorizado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase
+      .from('fortnights')
+      .select('id, period_start, period_end, status')
+      .in('status', ['PAID', 'READY', 'DRAFT'])
+      .order('period_start', { ascending: false })
+      .limit(24);
+
+    if (error) {
+      return { ok: false as const, error: error.message };
+    }
+
+    const formatted = (data || []).map((f: any) => {
+      const parts = f.period_start.split('-');
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const dateObj = new Date(Date.UTC(year, month - 1, day));
+      const monthName = dateObj.toLocaleDateString('es-ES', { month: 'long', timeZone: 'UTC' });
+      const monthCapitalized = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      const quarter = day <= 15 ? 'Q1' : 'Q2';
+      return {
+        id: f.id,
+        label: `${quarter} ${monthCapitalized} ${year}`,
+        status: f.status,
+      };
+    });
+
+    return { ok: true as const, data: formatted };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+/**
+ * Obtener lista de aseguradoras para dropdown de ajustes manuales
+ */
+export async function actionGetInsurersList() {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false as const, error: 'No autorizado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase
+      .from('insurers')
+      .select('id, name')
+      .order('name');
+
+    if (error) {
+      return { ok: false as const, error: error.message };
+    }
+
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+/**
+ * Crear un reporte de ajuste manual (Master)
+ * Crea pending_items con status='close' y los enlaza a un nuevo reporte
+ */
+export async function actionCreateManualAdjustmentReport(
+  targetBrokerId: string,
+  items: Array<{
+    fortnight_id: string;
+    insurer_id: string;
+    policy_number: string;
+    insured_name: string;
+    commission_raw: number;
+  }>
+) {
+  try {
+    const { role, userId } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false as const, error: 'No autorizado' };
+    }
+
+    if (!targetBrokerId || items.length === 0) {
+      return { ok: false as const, error: 'Debe especificar broker e items' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Obtener porcentaje del broker
+    const { data: brokerData } = await supabase
+      .from('brokers')
+      .select('percent_default, name')
+      .eq('id', targetBrokerId)
+      .single();
+
+    const brokerPercent = brokerData?.percent_default || 0;
+
+    // 1. Crear pending_items con status='close' (ya identificados desde su ingreso)
+    const pendingInserts = items.map(item => ({
+      policy_number: item.policy_number,
+      insured_name: item.insured_name,
+      commission_raw: item.commission_raw,
+      insurer_id: item.insurer_id,
+      fortnight_id: item.fortnight_id,
+      status: 'in_review',
+      assigned_broker_id: targetBrokerId,
+      assigned_by: userId,
+      assigned_at: new Date().toISOString(),
+      assignment_notes: 'Ingreso manual por Master',
+    }));
+
+    const { data: newPendingItems, error: pendingError } = await supabase
+      .from('pending_items')
+      .insert(pendingInserts)
+      .select();
+
+    if (pendingError || !newPendingItems) {
+      console.error('[actionCreateManualAdjustmentReport] Error creando pending_items:', pendingError);
+      return { ok: false as const, error: 'Error al crear items pendientes' };
+    }
+
+    // 2. Calcular comisiones y crear el reporte
+    let totalBrokerCommission = 0;
+    const reportItems = newPendingItems.map((pi: any, idx: number) => {
+      const itemData = items[idx];
+      const commissionRaw = itemData ? Number(itemData.commission_raw) || 0 : 0;
+      const brokerCommission = commissionRaw * brokerPercent;
+      totalBrokerCommission += brokerCommission;
+      return {
+        pending_item_id: pi.id,
+        commission_raw: commissionRaw,
+        broker_commission: brokerCommission,
+      };
+    });
+
+    const { data: report, error: reportError } = await supabase
+      .from('adjustment_reports')
+      .insert({
+        broker_id: targetBrokerId,
+        status: 'pending',
+        total_amount: totalBrokerCommission,
+        broker_notes: `Reporte manual creado por administración para ${brokerData?.name || 'broker'}`,
+      })
+      .select()
+      .single();
+
+    if (reportError || !report) {
+      console.error('[actionCreateManualAdjustmentReport] Error creando reporte:', reportError);
+      return { ok: false as const, error: 'Error al crear reporte' };
+    }
+
+    // 3. Insertar items del reporte
+    const itemsToInsert = reportItems.map(ri => ({
+      ...ri,
+      report_id: report.id,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('adjustment_report_items')
+      .insert(itemsToInsert);
+
+    if (itemsError) {
+      console.error('[actionCreateManualAdjustmentReport] Error insertando items:', itemsError);
+      await supabase.from('adjustment_reports').delete().eq('id', report.id);
+      return { ok: false as const, error: 'Error al crear items del reporte' };
+    }
+
+    revalidatePath('/commissions');
+
+    return {
+      ok: true as const,
+      message: `Reporte manual creado con ${items.length} item(s) por ${totalBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+      reportId: report.id,
+    };
+  } catch (error) {
+    console.error('[actionCreateManualAdjustmentReport] Error:', error);
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+/**
+ * Agregar items manuales a un reporte existente (Master)
+ * Crea pending_items con status='close' y los enlaza al reporte
+ */
+export async function actionAddManualItemsToReport(
+  reportId: string,
+  items: Array<{
+    fortnight_id: string;
+    insurer_id: string;
+    policy_number: string;
+    insured_name: string;
+    commission_raw: number;
+  }>
+) {
+  try {
+    const { role, userId } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false as const, error: 'No autorizado' };
+    }
+
+    if (items.length === 0) {
+      return { ok: false as const, error: 'Debe agregar al menos un item' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Obtener el reporte
+    const { data: report, error: reportError } = await supabase
+      .from('adjustment_reports')
+      .select('broker_id, status')
+      .eq('id', reportId)
+      .single();
+
+    if (reportError || !report) {
+      return { ok: false as const, error: 'Reporte no encontrado' };
+    }
+
+    if (report.status !== 'pending') {
+      return { ok: false as const, error: 'Solo se pueden editar reportes pendientes' };
+    }
+
+    // Obtener porcentaje del broker
+    const { data: brokerData } = await supabase
+      .from('brokers')
+      .select('percent_default')
+      .eq('id', report.broker_id)
+      .single();
+
+    const brokerPercent = brokerData?.percent_default || 0;
+
+    // 1. Crear pending_items
+    const pendingInserts = items.map(item => ({
+      policy_number: item.policy_number,
+      insured_name: item.insured_name,
+      commission_raw: item.commission_raw,
+      insurer_id: item.insurer_id,
+      fortnight_id: item.fortnight_id,
+      status: 'in_review',
+      assigned_broker_id: report.broker_id,
+      assigned_by: userId,
+      assigned_at: new Date().toISOString(),
+      assignment_notes: 'Ingreso manual por Master (agregado a reporte existente)',
+    }));
+
+    const { data: newPendingItems, error: pendingError } = await supabase
+      .from('pending_items')
+      .insert(pendingInserts)
+      .select();
+
+    if (pendingError || !newPendingItems) {
+      return { ok: false as const, error: 'Error al crear items pendientes' };
+    }
+
+    // 2. Crear items del reporte
+    const reportItems = newPendingItems.map((pi: any, idx: number) => {
+      const itemData = items[idx];
+      const commissionRaw = itemData ? Number(itemData.commission_raw) || 0 : 0;
+      const brokerCommission = commissionRaw * brokerPercent;
+      return {
+        report_id: reportId,
+        pending_item_id: pi.id,
+        commission_raw: commissionRaw,
+        broker_commission: brokerCommission,
+      };
+    });
+
+    const { error: itemsError } = await supabase
+      .from('adjustment_report_items')
+      .insert(reportItems);
+
+    if (itemsError) {
+      return { ok: false as const, error: 'Error al agregar items al reporte' };
+    }
+
+    // 3. Recalcular total del reporte
+    const { data: allItems } = await supabase
+      .from('adjustment_report_items')
+      .select('broker_commission')
+      .eq('report_id', reportId);
+
+    const newTotal = (allItems || []).reduce((sum, i: any) => sum + Number(i.broker_commission || 0), 0);
+
+    await supabase
+      .from('adjustment_reports')
+      .update({ total_amount: newTotal })
+      .eq('id', reportId);
+
+    revalidatePath('/commissions');
+
+    return {
+      ok: true as const,
+      message: `${items.length} item(s) manual(es) agregado(s) al reporte`,
+    };
+  } catch (error) {
+    console.error('[actionAddManualItemsToReport] Error:', error);
+    return { ok: false as const, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}

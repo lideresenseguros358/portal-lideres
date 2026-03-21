@@ -18,10 +18,12 @@ import {
   FaDollarSign,
   FaInfoCircle,
   FaObjectGroup,
-  FaPercent
+  FaPercent,
+  FaPlus
 } from 'react-icons/fa';
 import { toast } from 'sonner';
 import AdjustmentItemEditor from './AdjustmentItemEditor';
+import ManualAdjustmentModal from './ManualAdjustmentModal';
 import { actionUnifyAdjustmentReports, actionUpdateItemsOverridePercent } from '@/app/(app)/commissions/adjustment-actions';
 
 interface AdjustmentReport {
@@ -55,6 +57,7 @@ interface Props {
   onReject: (reportId: string, reason: string) => Promise<void>;
   onEdit: (reportId: string, itemIds: string[]) => Promise<void>;
   onReload: () => void;
+  brokers?: { id: string; name: string }[];
 }
 
 export default function MasterAdjustmentReportReview({ 
@@ -62,7 +65,8 @@ export default function MasterAdjustmentReportReview({
   onApprove, 
   onReject, 
   onEdit,
-  onReload 
+  onReload,
+  brokers = []
 }: Props) {
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
@@ -77,6 +81,8 @@ export default function MasterAdjustmentReportReview({
   const [editingReport, setEditingReport] = useState<AdjustmentReport | null>(null);
   const [editingItemsReport, setEditingItemsReport] = useState<AdjustmentReport | null>(null);
   const [unifying, setUnifying] = useState(false);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualEditReport, setManualEditReport] = useState<AdjustmentReport | null>(null);
 
   const toggleReport = (reportId: string) => {
     setExpandedReports(prev => {
@@ -280,22 +286,48 @@ export default function MasterAdjustmentReportReview({
 
   if (reports.length === 0) {
     return (
-      <Card className="shadow-lg">
-        <CardContent className="p-12 text-center">
-          <FaInfoCircle className="text-6xl text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-600 mb-2">
-            No hay reportes de ajustes pendientes
-          </h3>
-          <p className="text-gray-500">
-            Los reportes enviados por brokers aparecerán aquí
-          </p>
-        </CardContent>
-      </Card>
+      <>
+        <Card className="shadow-lg">
+          <CardContent className="p-12 text-center">
+            <FaInfoCircle className="text-6xl text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No hay reportes de ajustes pendientes
+            </h3>
+            <p className="text-gray-500">
+              Los reportes enviados por brokers aparecerán aquí
+            </p>
+            <button
+              onClick={() => setShowManualModal(true)}
+              className="mt-4 p-2 text-gray-400 hover:text-[#8AAA19] hover:bg-gray-100 rounded-full transition-all duration-200"
+              title="Crear Reporte Manual"
+            >
+              <FaPlus size={18} />
+            </button>
+          </CardContent>
+        </Card>
+        <ManualAdjustmentModal
+          isOpen={showManualModal}
+          onClose={() => setShowManualModal(false)}
+          onSuccess={() => { setShowManualModal(false); onReload(); }}
+          brokers={brokers}
+        />
+      </>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* Botón '+' para crear reporte manual */}
+      <div className="flex items-center justify-end">
+        <button
+          onClick={() => setShowManualModal(true)}
+          className="p-2 text-gray-400 hover:text-[#8AAA19] hover:bg-gray-100 rounded-full transition-all duration-200"
+          title="Crear Reporte Manual"
+        >
+          <FaPlus size={18} />
+        </button>
+      </div>
+
       {/* Batch Actions Bar - Ocultar cuando hay modales abiertos */}
       {selectedReports.size > 0 && !reviewingReport && !rejectingReport && !editingReport && !editingItemsReport && (
         <Card className="bg-gradient-to-r from-blue-50 to-white border-2 border-blue-500">
@@ -399,51 +431,35 @@ export default function MasterAdjustmentReportReview({
               </div>
               
               {report.status === 'pending' && (
-                <div className="flex flex-nowrap gap-1.5 sm:gap-2">
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingItemsReport(report);
-                    }}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1.5 h-auto flex-shrink-0"
-                    title="Ajustar override percent por item"
+                <div className="flex flex-nowrap gap-1">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingItemsReport(report); }}
+                    className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-all duration-200"
+                    title="Ajustar porcentaje"
                   >
                     <FaPercent size={14} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingReport(report);
-                    }}
-                    className="bg-[#010139] hover:bg-[#020270] text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setManualEditReport(report); }}
+                    className="p-2 text-gray-400 hover:text-[#010139] hover:bg-blue-50 rounded-full transition-all duration-200"
+                    title="Editar"
                   >
-                    <FaEdit className="sm:mr-1.5" size={12} />
-                    <span className="hidden sm:inline text-xs font-semibold">Editar</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRejectingReport(report);
-                    }}
-                    className="bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
+                    <FaEdit size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRejectingReport(report); }}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all duration-200"
+                    title="Rechazar"
                   >
-                    <FaTimesCircle className="sm:mr-1.5" size={12} />
-                    <span className="hidden sm:inline text-xs font-semibold">Rechazar</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setReviewingReport(report);
-                    }}
-                    className="bg-[#8AAA19] hover:bg-[#7a9617] text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
+                    <FaTimesCircle size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setReviewingReport(report); }}
+                    className="p-2 text-gray-400 hover:text-[#8AAA19] hover:bg-green-50 rounded-full transition-all duration-200"
+                    title="Aprobar"
                   >
-                    <FaCheckCircle className="sm:mr-1.5" size={12} />
-                    <span className="hidden sm:inline text-xs font-semibold">Aprobar</span>
-                  </Button>
+                    <FaCheckCircle size={14} />
+                  </button>
                 </div>
               )}
 
@@ -690,6 +706,27 @@ export default function MasterAdjustmentReportReview({
           isSaving={savingItems}
         />
       )}
+
+      {/* Modal Manual - Crear nuevo reporte */}
+      <ManualAdjustmentModal
+        isOpen={showManualModal}
+        onClose={() => setShowManualModal(false)}
+        onSuccess={() => { setShowManualModal(false); onReload(); }}
+        brokers={brokers}
+      />
+
+      {/* Modal Manual - Editar reporte existente (agregar items) */}
+      <ManualAdjustmentModal
+        isOpen={!!manualEditReport}
+        onClose={() => setManualEditReport(null)}
+        onSuccess={() => { setManualEditReport(null); onReload(); }}
+        brokers={brokers}
+        editReportId={manualEditReport?.id || null}
+        editBrokerId={manualEditReport?.broker_id || null}
+        editBrokerName={manualEditReport?.broker_name || null}
+        editBrokerPercent={manualEditReport?.broker_percent || 0}
+        editExistingItems={manualEditReport?.items || []}
+      />
     </div>
   );
 }

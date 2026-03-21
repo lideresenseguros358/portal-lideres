@@ -1371,7 +1371,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               </div>
               <button
                 onClick={() => setShowSuccessModal(false)}
-                className="w-full bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9617] hover:to-[#5c7311] text-white font-semibold py-3 px-6 text-base rounded-lg shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                className="w-full bg-[#8AAA19] hover:bg-[#7a9617] text-white font-semibold py-3 px-6 text-base rounded-lg shadow-md hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 ease-in-out cursor-pointer"
               >
                 Entendido
               </button>
@@ -1549,6 +1549,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
                 onReject={handleReject}
                 onEdit={handleEdit}
                 onReload={loadReports}
+                brokers={brokers}
               />
             ) : (
               // BROKER VIEW - Solo lectura, sin botones ni checkboxes
