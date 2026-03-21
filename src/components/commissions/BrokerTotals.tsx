@@ -66,10 +66,11 @@ interface Props {
   brokerTotals?: Array<{ broker_id: string; is_retained?: boolean }>;
   onRetentionChange?: () => void;
   onTotalNetChange?: (totalNet: number) => void;
+  onBrokerCountChange?: (count: number) => void;
   recalculationKey?: number;
 }
 
-export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quincena', fortnightStart, fortnightEnd, totalImported = 0, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
+export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quincena', fortnightStart, fortnightEnd, totalImported = 0, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, onBrokerCountChange, recalculationKey = 0 }: Props) {
   const [details, setDetails] = useState<CommItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true); // Solo mostrar spinner en primera carga
@@ -228,16 +229,19 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
 
   // Calcular y emitir total neto (EXCLUIR LISSA y RETENIDOS) - Debe coincidir con TXT banco
   useEffect(() => {
+    const payableBrokers = Object.entries(groupedData)
+      .filter(([, broker]) => 
+        broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com' &&
+        !broker.is_retained &&
+        broker.total_net > 0
+      );
+
     if (onTotalNetChange) {
-      const totalNet = Object.keys(groupedData).length > 0
-        ? Object.entries(groupedData)
-            .filter(([, broker]) => 
-              broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com' &&
-              !broker.is_retained
-            )
-            .reduce((sum, [, broker]) => sum + broker.total_net, 0)
-        : 0;
+      const totalNet = payableBrokers.reduce((sum, [, broker]) => sum + broker.total_net, 0);
       onTotalNetChange(totalNet);
+    }
+    if (onBrokerCountChange) {
+      onBrokerCountChange(payableBrokers.length);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupedData]);

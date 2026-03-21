@@ -233,6 +233,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   // State para totales de brokers
   const [brokerCommissionsTotal, setBrokerCommissionsTotal] = useState(0);
   const [totalNetToPay, setTotalNetToPay] = useState(0);
+  const [brokerPayableCount, setBrokerPayableCount] = useState(0);
   const [brokerTotalsData, setBrokerTotalsData] = useState<Array<{
     broker_id: string;
     gross_amount: number;
@@ -712,16 +713,28 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       {/* Sticky Bar - Acciones principales */}
       <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-blue-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg mb-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
-          {/* Info de total neto */}
-          <div className="flex-1">
-            <p className="font-bold text-[#010139] text-base sm:text-lg">
-              Total Neto a Pagar
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="font-bold text-2xl text-[#8AAA19]">
-                ${totalNetToPay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </p>
+          {/* Info de total neto + cantidad de corredores */}
+          <div className="flex items-center gap-4 sm:gap-6 flex-1">
+            <div>
+              <p className="font-bold text-[#010139] text-base sm:text-lg">
+                Total Neto a Pagar
+              </p>
+              <p className="text-sm text-gray-600">
+                <span className="font-bold text-2xl text-[#8AAA19]">
+                  ${totalNetToPay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </p>
+            </div>
+            <div className="border-l-2 border-gray-200 pl-4 sm:pl-6">
+              <p className="font-bold text-[#010139] text-base sm:text-lg">
+                Corredores
+              </p>
+              <p className="text-sm text-gray-600">
+                <span className="font-bold text-2xl text-[#010139]">
+                  {brokerPayableCount}
+                </span>
+              </p>
+            </div>
           </div>
 
           {/* Botones de acción */}
@@ -915,6 +928,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               forceRecalculate();
             }}
             onTotalNetChange={setTotalNetToPay}
+            onBrokerCountChange={setBrokerPayableCount}
             recalculationKey={recalculationKey}
           />
         </CardContent>
