@@ -721,6 +721,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
           brokerId={managementModal.brokerId}
           brokerName={managementModal.brokerName}
           fortnightId={draftFortnightId}
+          fortnightStart={fortnightStart}
           grossAmount={managementModal.grossAmount}
           onDiscountsApplied={async () => {
             // Recargar descuentos temporales inmediatamente

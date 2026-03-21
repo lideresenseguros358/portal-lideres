@@ -29,6 +29,7 @@ interface Props {
   brokerId: string;
   brokerName: string;
   fortnightId: string;
+  fortnightStart?: string; // YYYY-MM-DD to determine Q1/Q2
   grossAmount: number;
   onDiscountsApplied: () => void;
 }
@@ -39,6 +40,7 @@ export function AdvancesManagementModal({
   brokerId,
   brokerName,
   fortnightId,
+  fortnightStart,
   grossAmount,
   onDiscountsApplied
 }: Props) {
@@ -79,20 +81,55 @@ export function AdvancesManagementModal({
         setAllAdvances((result.data || []) as Advance[]);
         
         // Filtrar adelantos activos: con saldo > 0 Y que no estén en status 'paid'
-        // Esto asegura que se muestren todos los adelantos pendientes y parciales con deuda
-        const filteredAdvances = (result.data || []).filter(
-          (a: any) => {
-            // Mostrar si tiene saldo > 0 Y no está completamente pagado
-            const hasPendingBalance = a.amount > 0;
-            const isNotFullyPaid = a.status !== 'paid';
-            return hasPendingBalance && isNotFullyPaid;
-          }
+        const activeAdvances = (result.data || []).filter(
+          (a: any) => a.amount > 0 && a.status !== 'paid'
         );
         
-        console.log('[AdvancesManagementModal] Filtered advances (active with balance):', filteredAdvances.length);
-        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances.map((a: any) => ({ id: a.id.substring(0, 8), status: a.status, amount: a.amount, paid: a.total_paid })));
+        // Determinar Q1/Q2 de la quincena actual
+        const startDay = fortnightStart ? parseInt(fortnightStart.split('-')[2] || '1') : 1;
+        const currentQ = startDay <= 15 ? 'Q1' : 'Q2';
+        console.log('[AdvancesManagementModal] Current fortnight Q:', currentQ, 'from start:', fortnightStart);
         
-        setAdvances(filteredAdvances as Advance[]);
+        // Deduplicar adelantos recurrentes con mismo recurrence_id
+        // y filtrar por Q1/Q2 de la quincena actual
+        const recurrenceMap: Record<string, any[]> = {};
+        const nonRecurrent: any[] = [];
+        
+        activeAdvances.forEach((a: any) => {
+          if (a.is_recurring && a.recurrence_id) {
+            if (!recurrenceMap[a.recurrence_id]) {
+              recurrenceMap[a.recurrence_id] = [];
+            }
+            recurrenceMap[a.recurrence_id]!.push(a);
+          } else {
+            nonRecurrent.push(a);
+          }
+        });
+        
+        const deduped: any[] = [...nonRecurrent];
+        
+        Object.values(recurrenceMap).forEach(group => {
+          if (!group || group.length === 0) return;
+          
+          // Obtener fortnight_type de la recurrencia
+          const fortnightType = group[0]?.advance_recurrences?.fortnight_type || 
+                                group[0]?.fortnight_type || 'BOTH';
+          
+          // Filtrar: solo mostrar si aplica a esta quincena
+          if (fortnightType !== 'BOTH' && fortnightType !== currentQ) {
+            console.log('[AdvancesManagementModal] Skipping recurrence (type:', fortnightType, ', current:', currentQ, ')');
+            return; // No aplica a esta quincena
+          }
+          
+          // Consolidar: usar solo 1 entrada del grupo
+          // Si es BOTH, buscar el advance específico de esta Q, o usar el primero
+          const representative = group[0];
+          deduped.push(representative);
+        });
+        
+        console.log('[AdvancesManagementModal] Active:', activeAdvances.length, '-> Deduped:', deduped.length, '(removed', activeAdvances.length - deduped.length, 'duplicates)');
+        
+        setAdvances(deduped as Advance[]);
       } else {
         console.error('[AdvancesManagementModal] Error loading advances:', result.error);
         toast.error('Error al cargar adelantos');
@@ -123,7 +160,7 @@ export function AdvancesManagementModal({
     } finally {
       setLoading(false);
     }
-  }, [brokerId, fortnightId]);
+  }, [brokerId, fortnightId, fortnightStart]);
 
   useEffect(() => {
     if (isOpen) {
