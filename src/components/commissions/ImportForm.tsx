@@ -285,10 +285,12 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       );
       
       if (result.ok) {
+        const batchIsAssaCodigos = pendingReports[0]?.insurerId === 'ASSA_CODIGOS';
+        const batchLabelTotal = batchIsAssaCodigos ? 'Total extraídos' : 'Total clientes extraídos';
         await success(
           `✅ ${pendingReports.length} reportes consolidados exitosamente\n\n` +
-          `Total filas: ${result.data?.total_rows || 0}\n` +
-          `Identificadas: ${result.data?.identified || 0}\n` +
+          `${batchLabelTotal}: ${result.data?.total_rows || 0}\n` +
+          `Identificados: ${result.data?.identified || 0}\n` +
           `Sin identificar: ${result.data?.unidentified || 0}`,
           'Importación Consolidada Completa'
         );
@@ -510,9 +512,11 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       if (result.ok) {
         // Modal unificado con estadísticas detalladas
         const data = result.data as any;
+        const isAssaCodigos = selectedInsurer === 'ASSA_CODIGOS';
+        const labelTotal = isAssaCodigos ? 'Total extraídos' : 'Total clientes extraídos';
         await success(
           `✅ Reporte importado exitosamente\n\n` +
-          `Total clientes extraídos: ${data?.total_rows || 0}\n` +
+          `${labelTotal}: ${data?.total_rows || 0}\n` +
           `Identificados: ${data?.identified || 0}\n` +
           `Sin identificar: ${data?.unidentified || 0}`,
           'Importación Completa'
