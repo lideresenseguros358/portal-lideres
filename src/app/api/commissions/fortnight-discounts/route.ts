@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     for (const discount of discounts) {
       const { data: advance } = await supabase
         .from('advances')
-        .select('amount, status')
+        .select('amount, status, is_recurring')
         .eq('id', discount.advance_id)
         .single();
 
@@ -73,14 +73,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // amount en BD ya es el saldo actual
-      const remainingBalance = advance.amount;
-
-      if (discount.amount > remainingBalance) {
-        return NextResponse.json(
-          { ok: false, error: `El monto excede el saldo del adelanto (${remainingBalance.toFixed(2)})` },
-          { status: 400 }
-        );
+      // Para adelantos recurrentes, permitir montos mayores al saldo
+      // (el excedente se generará como adelanto normal al cerrar la quincena)
+      if (!advance.is_recurring) {
+        const remainingBalance = advance.amount;
+        if (discount.amount > remainingBalance) {
+          return NextResponse.json(
+            { ok: false, error: `El monto excede el saldo del adelanto (${remainingBalance.toFixed(2)})` },
+            { status: 400 }
+          );
+        }
       }
     }
 

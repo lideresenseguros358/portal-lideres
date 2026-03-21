@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { FaPlus, FaTrash, FaHistory, FaCheckCircle, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaHistory, FaCheckCircle, FaTimes, FaExclamationTriangle, FaEdit } from 'react-icons/fa';
 import { actionCreateAdvance, actionDeleteAdvance, actionGetAdvances } from '@/app/(app)/commissions/actions';
 import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 
@@ -53,6 +53,11 @@ export function AdvancesManagementModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedAdvanceForHistory, setSelectedAdvanceForHistory] = useState<string | null>(null);
+
+  // Estado para editar monto de adelanto recurrente (solo afecta esta quincena)
+  const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
+  const [editingRecurringAmount, setEditingRecurringAmount] = useState<string>('');
+  const [overriddenAmounts, setOverriddenAmounts] = useState<Map<string, number>>(new Map());
 
   // Estado para crear nuevo adelanto
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -518,9 +523,12 @@ export function AdvancesManagementModal({
                         const isSelected = temporaryDiscounts.has(advance.id);
                         const selectedAmount = temporaryDiscounts.get(advance.id) || 0;
                         const inputValue = inputValues.get(advance.id) || '';
+                        // Si se editó el monto para esta quincena, usar el override
+                        const hasOverride = overriddenAmounts.has(advance.id);
+                        const effectiveAmount = hasOverride ? overriddenAmounts.get(advance.id)! : advance.amount;
                         // Usar misma lógica que historial: Total = amount + total_paid, Saldo = amount
                         const initialAmount = advance.amount + (advance.total_paid || 0);
-                        const remainingBalance = advance.amount;
+                        const remainingBalance = effectiveAmount;
 
                         return (
                           <div
@@ -553,6 +561,11 @@ export function AdvancesManagementModal({
                                             Recurrente
                                           </span>
                                         )}
+                                        {advance.is_recurring && hasOverride && (
+                                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded font-semibold">
+                                            Monto editado para esta quincena
+                                          </span>
+                                        )}
                                         {advance.status === 'paid' && (
                                           <span className="inline-flex items-center gap-1 text-xs bg-green-600 text-white px-2.5 py-1 rounded-full font-bold shadow-sm">
                                             ✓ PAGADO
@@ -567,8 +580,83 @@ export function AdvancesManagementModal({
                                     <p className="text-sm text-gray-600 mt-1">
                                       Total: ${initialAmount.toFixed(2)} | 
                                       Pagado: ${(advance.total_paid || 0).toFixed(2)} | 
-                                      Saldo: <span className="font-semibold">${remainingBalance.toFixed(2)}</span>
+                                      Saldo: <span className={`font-semibold ${hasOverride ? 'text-orange-600' : ''}`}>${remainingBalance.toFixed(2)}</span>
+                                      {hasOverride && (
+                                        <span className="text-xs text-gray-400 ml-1">(original: ${advance.amount.toFixed(2)})</span>
+                                      )}
                                     </p>
+                                    {/* Editor inline para monto recurrente */}
+                                    {advance.is_recurring && editingRecurringId === advance.id && (
+                                      <div className="flex items-center gap-2 mt-2">
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={editingRecurringAmount}
+                                          onChange={(e) => setEditingRecurringAmount(e.target.value)}
+                                          className="w-28 border-2 border-orange-400 rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-400"
+                                          placeholder="Nuevo monto"
+                                          autoFocus
+                                        />
+                                        <button
+                                          onClick={() => {
+                                            const val = parseFloat(editingRecurringAmount);
+                                            if (isNaN(val) || val <= 0) {
+                                              toast.error('Ingresa un monto válido mayor a 0');
+                                              return;
+                                            }
+                                            const newMap = new Map(overriddenAmounts);
+                                            newMap.set(advance.id, val);
+                                            setOverriddenAmounts(newMap);
+                                            // Si estaba seleccionado, actualizar el descuento al nuevo monto
+                                            if (temporaryDiscounts.has(advance.id)) {
+                                              const newDiscounts = new Map(temporaryDiscounts);
+                                              const newInputs = new Map(inputValues);
+                                              newDiscounts.set(advance.id, val);
+                                              newInputs.set(advance.id, val.toFixed(2));
+                                              setTemporaryDiscounts(newDiscounts);
+                                              setInputValues(newInputs);
+                                            }
+                                            setEditingRecurringId(null);
+                                            toast.success(`Monto ajustado a $${val.toFixed(2)} para esta quincena`);
+                                          }}
+                                          className="text-green-600 hover:text-green-800 p-1"
+                                          title="Confirmar"
+                                        >
+                                          <FaCheckCircle size={16} />
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingRecurringId(null)}
+                                          className="text-gray-400 hover:text-gray-600 p-1"
+                                          title="Cancelar"
+                                        >
+                                          <FaTimes size={14} />
+                                        </button>
+                                        {hasOverride && (
+                                          <button
+                                            onClick={() => {
+                                              const newMap = new Map(overriddenAmounts);
+                                              newMap.delete(advance.id);
+                                              setOverriddenAmounts(newMap);
+                                              // Reset discount to original if selected
+                                              if (temporaryDiscounts.has(advance.id)) {
+                                                const newDiscounts = new Map(temporaryDiscounts);
+                                                const newInputs = new Map(inputValues);
+                                                newDiscounts.set(advance.id, advance.amount);
+                                                newInputs.set(advance.id, advance.amount.toFixed(2));
+                                                setTemporaryDiscounts(newDiscounts);
+                                                setInputValues(newInputs);
+                                              }
+                                              setEditingRecurringId(null);
+                                              toast.success('Monto restaurado al original');
+                                            }}
+                                            className="text-orange-500 hover:text-orange-700 text-xs underline"
+                                          >
+                                            Restaurar
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
                                     {advance.status === 'partial' && advance.last_payment_date && (
                                       <p className="text-xs text-gray-500 mt-1">
                                         Último pago: {new Date(advance.last_payment_date).toLocaleDateString('es-PA')}
@@ -581,6 +669,18 @@ export function AdvancesManagementModal({
 
                                   {/* Botones de acción */}
                                   <div className="flex gap-2">
+                                    {advance.is_recurring && (
+                                      <button
+                                        onClick={() => {
+                                          setEditingRecurringId(advance.id);
+                                          setEditingRecurringAmount(hasOverride ? overriddenAmounts.get(advance.id)!.toString() : advance.amount.toString());
+                                        }}
+                                        className="text-orange-500 hover:text-orange-700 p-2"
+                                        title="Editar monto para esta quincena"
+                                      >
+                                        <FaEdit size={16} />
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => setSelectedAdvanceForHistory(advance.id)}
                                       className="text-[#010139] hover:text-[#020270] p-2"

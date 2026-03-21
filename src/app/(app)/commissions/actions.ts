@@ -5981,15 +5981,32 @@ export async function actionPayFortnight(fortnight_id: string) {
           const step7NewAmount = step7Advance.amount - adv.amount;
           const step7FullyPaid = step7NewAmount <= 0;
           
-          if (step7FullyPaid && step7Advance.is_recurring && step7Advance.recurrence_id) {
-            // Recurrente: resetear al monto original
+          if (step7Advance.is_recurring && step7Advance.recurrence_id) {
+            // Recurrente: siempre resetear al monto original
             const { data: step7Rec } = await (supabase as any)
               .from('advance_recurrences')
-              .select('amount, is_active')
+              .select('amount, is_active, reason')
               .eq('id', step7Advance.recurrence_id)
               .single();
             
             if (step7Rec && step7Rec.is_active) {
+              // Si NO se pagó el 100%, crear adelanto normal por el restante
+              if (!step7FullyPaid && step7NewAmount > 0) {
+                const { error: remError } = await supabase
+                  .from('advances')
+                  .insert({
+                    broker_id: bt.broker_id,
+                    amount: step7NewAmount,
+                    reason: `Saldo pendiente de recurrente: ${step7Rec.reason || 'Sin motivo'}`,
+                    status: 'PENDING',
+                    created_by: userId,
+                    is_recurring: false,
+                    recurrence_id: null,
+                  });
+                if (!remError) {
+                  console.log(`[actionPayFortnight]   📋 Nuevo adelanto normal por restante: $${step7NewAmount.toFixed(2)}`);
+                }
+              }
               await supabase.from('advances').update({ amount: step7Rec.amount, status: 'PENDING' }).eq('id', adv.advance_id);
               console.log(`[actionPayFortnight]   🔄 Advance recurrente ${adv.advance_id.substring(0, 8)} reseteado a $${step7Rec.amount}`);
             } else {
@@ -6084,16 +6101,38 @@ export async function actionPayFortnight(fortnight_id: string) {
           const newAmount = currentAdvance.amount - discount.amount;
           const isFullyPaid = newAmount <= 0;
           
-          // ADELANTOS RECURRENTES: resetear al monto original cuando se pagan completamente
-          if (isFullyPaid && currentAdvance.is_recurring && currentAdvance.recurrence_id) {
+          // ADELANTOS RECURRENTES: siempre resetear al monto original
+          if (currentAdvance.is_recurring && currentAdvance.recurrence_id) {
             const { data: recurrence } = await (supabase as any)
               .from('advance_recurrences')
-              .select('amount, is_active')
+              .select('amount, is_active, reason')
               .eq('id', currentAdvance.recurrence_id)
               .single();
             
             if (recurrence && recurrence.is_active) {
-              // Resetear a monto original y mantener PENDING para la próxima quincena
+              // Si NO se pagó el 100%, crear un adelanto NORMAL por el restante
+              if (!isFullyPaid && newAmount > 0) {
+                const remainderAmount = newAmount; // Lo que faltó por pagar
+                const { error: remainderError } = await supabase
+                  .from('advances')
+                  .insert({
+                    broker_id: discount.broker_id,
+                    amount: remainderAmount,
+                    reason: `Saldo pendiente de recurrente: ${recurrence.reason || 'Sin motivo'}`,
+                    status: 'PENDING',
+                    created_by: userId,
+                    is_recurring: false,
+                    recurrence_id: null,
+                  });
+                
+                if (remainderError) {
+                  console.error(`[actionPayFortnight]   ❌ Error creando adelanto por restante:`, remainderError);
+                } else {
+                  console.log(`[actionPayFortnight]   📋 Nuevo adelanto normal creado por restante: $${remainderAmount.toFixed(2)} (de recurrente ${discount.advance_id.substring(0, 8)})`);
+                }
+              }
+              
+              // Siempre resetear el recurrente a su monto original para la próxima quincena
               const { error: updateAdvError } = await supabase
                 .from('advances')
                 .update({
