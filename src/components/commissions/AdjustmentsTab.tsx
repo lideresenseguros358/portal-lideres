@@ -1356,25 +1356,25 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               <p className="text-lg font-semibold text-[#010139] mb-3">
                 Tu reporte ha sido enviado con éxito
               </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-left mb-4">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-left mb-5">
                 <div className="flex items-start gap-3">
-                  <FaInfoCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
-                  <div className="text-sm text-blue-800">
+                  <FaInfoCircle className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={16} />
+                  <div className="text-sm text-gray-700">
                     <p className="mb-2">
                       El cuerpo administrativo estará trabajando tu reporte.
                     </p>
-                    <p className="font-semibold">
-                      Los pagos de ajustes se realizan los días <span className="text-blue-900 font-bold">10</span> y <span className="text-blue-900 font-bold">25</span> de cada mes, o el día hábil más cercano a estas fechas.
+                    <p className="font-semibold text-gray-800">
+                      Los pagos de ajustes se realizan los días <span className="text-[#010139] font-bold">10</span> y <span className="text-[#010139] font-bold">25</span> de cada mes, o el día hábil más cercano a estas fechas.
                     </p>
                   </div>
                 </div>
               </div>
-              <Button
+              <button
                 onClick={() => setShowSuccessModal(false)}
-                className="w-full bg-gradient-to-r from-[#010139] to-[#020270] text-white font-semibold py-3 text-base"
+                className="w-full bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9617] hover:to-[#5c7311] text-white font-semibold py-3 px-6 text-base rounded-lg shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 Entendido
-              </Button>
+              </button>
             </div>
           </div>
         </div>
