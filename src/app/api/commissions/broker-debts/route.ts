@@ -83,44 +83,59 @@ export async function GET(request: NextRequest) {
 
     console.log('[broker-debts] Applicable recurrences for', fortnightType, ':', applicableRecurrences.length);
 
-    // 4. Agrupar por broker_id
-    const brokerDebtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean; recurrence_count: number }>();
+    // 4. Construir set de recurrence_ids que aplican en esta quincena
+    const applicableRecurrenceIds = new Set(applicableRecurrences.map(r => r.id));
 
-    // Contar adelantos activos por broker
+    // 5. Agrupar por broker_id
+    const brokerDebtsMap = new Map<string, {
+      has_regular_debts: boolean;
+      regular_debt_count: number;
+      has_recurring: boolean;
+      recurrence_count: number;
+    }>();
+
+    // Contar adelantos activos por broker — separar regulares de recurrentes
     (advances || []).forEach(adv => {
       if (!brokerDebtsMap.has(adv.broker_id)) {
-        brokerDebtsMap.set(adv.broker_id, { has_debts: false, debt_count: 0, has_recurring: false, recurrence_count: 0 });
+        brokerDebtsMap.set(adv.broker_id, { has_regular_debts: false, regular_debt_count: 0, has_recurring: false, recurrence_count: 0 });
       }
       const brokerData = brokerDebtsMap.get(adv.broker_id)!;
-      brokerData.has_debts = true;
-      brokerData.debt_count += 1;
-      
-      // Marcar si tiene recurrencia
+
       if (adv.is_recurring && adv.recurrence_id) {
-        brokerData.has_recurring = true;
+        // Solo contar si la recurrencia aplica en esta quincena (Q1/Q2/BOTH)
+        if (applicableRecurrenceIds.has(adv.recurrence_id)) {
+          brokerData.has_recurring = true;
+          // No incrementar recurrence_count aquí — se hace abajo desde applicableRecurrences
+        }
+        // No contar como deuda regular
+      } else {
+        // Deuda regular (no recurrente)
+        brokerData.has_regular_debts = true;
+        brokerData.regular_debt_count += 1;
       }
     });
 
-    // Agregar brokers con recurrencias aplicables (aunque no tengan adelantos aún)
+    // Agregar recurrencias aplicables (ya filtradas por Q1/Q2/BOTH)
     applicableRecurrences.forEach(rec => {
       if (!brokerDebtsMap.has(rec.broker_id)) {
-        brokerDebtsMap.set(rec.broker_id, { has_debts: true, debt_count: 0, has_recurring: true, recurrence_count: 1 });
+        brokerDebtsMap.set(rec.broker_id, { has_regular_debts: false, regular_debt_count: 0, has_recurring: true, recurrence_count: 1 });
       } else {
         const brokerData = brokerDebtsMap.get(rec.broker_id)!;
         brokerData.has_recurring = true;
-        brokerData.has_debts = true;
         brokerData.recurrence_count += 1;
       }
     });
 
-    // 5. Convertir a array
-    const result = Array.from(brokerDebtsMap.entries()).map(([broker_id, data]) => ({
-      broker_id,
-      has_debts: data.has_debts,
-      debt_count: data.debt_count,
-      has_recurring: data.has_recurring,
-      recurrence_count: data.recurrence_count,
-    }));
+    // 6. Convertir a array — mantener compatibilidad con campos existentes
+    const result = Array.from(brokerDebtsMap.entries())
+      .filter(([_, data]) => data.has_regular_debts || data.has_recurring)
+      .map(([broker_id, data]) => ({
+        broker_id,
+        has_debts: data.has_regular_debts || data.has_recurring,
+        debt_count: data.regular_debt_count, // Solo deudas regulares
+        has_recurring: data.has_recurring,
+        recurrence_count: data.recurrence_count,
+      }));
 
     console.log('[broker-debts] Brokers with debts:', result.length);
     console.log('[broker-debts] Sample:', result.slice(0, 3));

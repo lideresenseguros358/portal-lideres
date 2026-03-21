@@ -433,9 +433,29 @@ export function AdvancesManagementModal({
 
                   {/* Botón crear adelanto */}
                   <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-[#010139]">
-                      Adelantos Activos ({advances.length})
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-[#010139]">
+                        Adelantos Activos ({advances.length})
+                      </h3>
+                      {(() => {
+                        const regularCount = advances.filter(a => !a.is_recurring).length;
+                        const recurringCount = advances.filter(a => a.is_recurring).length;
+                        return (
+                          <>
+                            {regularCount > 0 && (
+                              <span className="text-xs bg-yellow-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                                {regularCount} regular{regularCount !== 1 ? 'es' : ''}
+                              </span>
+                            )}
+                            {recurringCount > 0 && (
+                              <span className="text-xs bg-pink-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                                {recurringCount} recurrente{recurringCount !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                     <button
                       onClick={() => setShowCreateForm(true)}
                       disabled={showCreateForm}
@@ -557,7 +577,7 @@ export function AdvancesManagementModal({
                                           {advance.reason}
                                         </p>
                                         {advance.is_recurring && (
-                                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-semibold">
+                                          <span className="text-xs bg-pink-100 text-pink-800 px-2 py-1 rounded font-semibold">
                                             Recurrente
                                           </span>
                                         )}

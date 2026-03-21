@@ -402,21 +402,22 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">RET</span>
                       )}
-                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (() => {
-                        const bd = brokerDebts.get(brokerId)!;
-                        const parts: string[] = [];
-                        if (bd.debt_count > 0) parts.push(`${bd.debt_count} adelanto(s)`);
-                        if (bd.has_recurring) parts.push(`${bd.recurrence_count} recurrente(s)`);
-                        const total = bd.debt_count + bd.recurrence_count;
-                        return (
-                          <span 
-                            className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"
-                            title={parts.join(' + ')}
-                          >
-                            {bd.debt_count > 0 && bd.has_recurring ? `${bd.debt_count}+${bd.recurrence_count}` : total}
-                          </span>
-                        );
-                      })()}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.debt_count && brokerDebts.get(brokerId)!.debt_count > 0 && (
+                        <span 
+                          className="text-xs bg-yellow-500 text-white px-2 py-0.5 rounded-full font-semibold"
+                          title={`${brokerDebts.get(brokerId)!.debt_count} adelanto(s) pendiente(s)`}
+                        >
+                          {brokerDebts.get(brokerId)!.debt_count}
+                        </span>
+                      )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_recurring && (
+                        <span 
+                          className="text-xs bg-pink-500 text-white px-2 py-0.5 rounded-full font-semibold"
+                          title={`${brokerDebts.get(brokerId)!.recurrence_count} recurrencia(s) activa(s)`}
+                        >
+                          {brokerDebts.get(brokerId)!.recurrence_count}R
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="relative flex-shrink-0 overflow-visible">
@@ -580,21 +581,22 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm">RETENIDO</span>
                       )}
-                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (() => {
-                        const bd = brokerDebts.get(brokerId)!;
-                        const parts: string[] = [];
-                        if (bd.debt_count > 0) parts.push(`${bd.debt_count} adelanto(s) pendiente(s)`);
-                        if (bd.has_recurring) parts.push(`${bd.recurrence_count} recurrencia(s) activa(s)`);
-                        const total = bd.debt_count + bd.recurrence_count;
-                        return (
-                          <span 
-                            className="text-xs bg-orange-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm flex items-center gap-1"
-                            title={parts.join(' + ')}
-                          >
-                            {bd.debt_count > 0 && bd.has_recurring ? `${bd.debt_count}+${bd.recurrence_count}` : total}
-                          </span>
-                        );
-                      })()}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)!.debt_count > 0 && (
+                        <span 
+                          className="text-xs bg-yellow-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm"
+                          title={`${brokerDebts.get(brokerId)!.debt_count} adelanto(s) pendiente(s)`}
+                        >
+                          {brokerDebts.get(brokerId)!.debt_count} adelanto{brokerDebts.get(brokerId)!.debt_count !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_recurring && (
+                        <span 
+                          className="text-xs bg-pink-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm"
+                          title={`${brokerDebts.get(brokerId)!.recurrence_count} recurrencia(s) activa(s) en esta quincena`}
+                        >
+                          {brokerDebts.get(brokerId)!.recurrence_count} recurrente{brokerDebts.get(brokerId)!.recurrence_count !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-gray-800 text-base py-4">
