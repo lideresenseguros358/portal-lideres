@@ -11,6 +11,7 @@
 
 import { GoogleAuth } from 'google-auth-library';
 import type { ClassificationResult, ThreadCategory, ThreadSeverity } from '@/types/chat.types';
+import { SYSTEM_PROMPT } from '@/lib/ai/vertex';
 
 // ── Auth ──
 
@@ -171,47 +172,47 @@ ${msgContext}`;
 // 2. AI REPLY GENERATOR
 // ════════════════════════════════════════════
 
-const REPLY_SYSTEM_PROMPT = `Eres Lissa, la asistente virtual de Líderes en Seguros, una correduría de seguros en Panamá. Respondes por WhatsApp.
+/**
+ * Call Vertex AI with proper Gemini conversation turns (user/model alternation).
+ * Unlike callVertex() which sends a single user prompt with JSON response,
+ * this sends the full conversation history as Gemini contents for natural chat.
+ */
+async function callVertexChat(
+  systemPrompt: string,
+  contents: { role: string; parts: { text: string }[] }[],
+): Promise<{ text: string; tokens: number }> {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+  const model = process.env.VERTEX_MODEL_CHAT || 'gemini-2.0-flash';
 
-Tu personalidad:
-- Cálida, empática, profesional y orientada a resultados
-- Usas emojis con moderación (💚 👋 😊 📋)
-- Respuestas concisas (2-5 oraciones) ideales para WhatsApp
-- NUNCA suenas como robot ni repites plantillas
-- Siempre en español
+  if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID not configured');
 
-Flujo de conversación:
-- SOLO saluda en el PRIMER mensaje (cuando no hay historial)
-- En mensajes siguientes, NO repitas "Hola soy Lissa" — ya te conocen
-- NO firmes "— Lissa 💚" en cada mensaje, solo en despedidas
-- Mantén el hilo natural de la conversación
+  const auth = createAuthClient();
+  const client = await auth.getClient();
 
-Conocimiento:
-- Cotizador Auto CC: https://portal.lideresenseguros.com/cotizadores/auto
-- Cotizador Daños a Terceros: https://portal.lideresenseguros.com/cotizadores/third-party
-- Para Vida/Salud: Lucía Nieto (lucianieto@lideresenseguros.com)
-- Para Ramos Generales: Yira Ramos (yiraramos@lideresenseguros.com)
-- Contacto: contacto@lideresenseguros.com / 223-2373
-- Horario: L-V 9am-5pm (Panamá)
+  const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
 
-Reglas para casos URGENTES:
-- Si el caso es urgente, NO minimices la queja
-- Indica que un superior ya fue notificado y contactará al cliente
-- Ofrece email de contacto para seguimiento: contacto@lideresenseguros.com
-- Sé empático y reconoce la frustración del cliente
-- NUNCA uses tono defensivo
+  const response = await client.request({
+    url: endpoint,
+    method: 'POST',
+    data: {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.9,
+        topK: 40,
+        maxOutputTokens: 1024,
+      },
+    },
+  });
 
-Reglas para LEADS:
-- Dirige al cotizador del portal como primera opción
-- Menciona que pueden emitir póliza en minutos
-- Solo ofrece especialista si el cliente lo pide explícitamente
+  const data: any = response.data;
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const tokens = data?.usageMetadata?.totalTokenCount || 0;
 
-Reglas generales:
-- No inventes datos de pólizas
-- No des asesoría legal
-- Siempre cierra con pregunta o siguiente paso
-- NO uses formato markdown [texto](url) — escribe URLs directas
-- Para WhatsApp, mantén mensajes cortos y legibles`;
+  return { text, tokens };
+}
 
 interface ReplyInput {
   currentMessage: string;
@@ -230,37 +231,66 @@ export interface AiReplyResult {
 export async function generateAiReply(input: ReplyInput): Promise<AiReplyResult> {
   const start = Date.now();
 
-  // Build conversation context
-  const historyText = input.conversationHistory
-    .map(m => `${m.direction === 'inbound' ? 'Cliente' : 'Lissa'}: ${m.body}`)
-    .join('\n');
+  // Build system prompt with WhatsApp-specific addendum and client context
+  let fullSystemPrompt = SYSTEM_PROMPT;
 
-  const userPrompt = `${historyText ? `Historial:\n${historyText}\n\n` : ''}Categoría actual: ${input.category} | Severidad: ${input.severity}
-Cliente: ${input.clientName || 'Desconocido'}
+  // Add WhatsApp channel context
+  fullSystemPrompt += `\n\n<channel>
+CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para móvil (2-5 oraciones, máximo 8 si el tema lo requiere). No uses formato markdown.
+</channel>`;
 
-Nuevo mensaje del cliente:
-${input.currentMessage}
+  // Add client name context if available
+  if (input.clientName) {
+    fullSystemPrompt += `\n\n--- CONTEXTO DE ESTA CONVERSACIÓN ---\nCliente: se llama ${input.clientName}.`;
+  }
 
-Responde como Lissa (solo el texto de respuesta, sin prefijo):`;
+  // Add category context for urgent cases
+  if (input.category === 'urgent') {
+    fullSystemPrompt += `\n\nNOTA INTERNA: Este caso fue clasificado como URGENTE (severidad: ${input.severity}). Un superior ya fue notificado por email. Sé empática, reconoce la frustración, indica que un superior contactará al cliente, y ofrece contacto@lideresenseguros.com para seguimiento.`;
+  }
+
+  // Build proper Gemini contents array with alternating user/model turns
+  const contents: { role: string; parts: { text: string }[] }[] = [];
+
+  if (input.conversationHistory?.length) {
+    let lastRole = '';
+    for (const msg of input.conversationHistory) {
+      const role = msg.direction === 'inbound' ? 'user' : 'model';
+      // Gemini requires strict user/model alternation — skip duplicates
+      if (role === lastRole) continue;
+      contents.push({ role, parts: [{ text: msg.body }] });
+      lastRole = role;
+    }
+    // If last history entry was user, add a model placeholder to maintain alternation
+    if (lastRole === 'user') {
+      contents.push({ role: 'model', parts: [{ text: 'Entendido, ¿en qué más te ayudo?' }] });
+    }
+  }
+
+  // Always end with the current user message
+  contents.push({ role: 'user', parts: [{ text: input.currentMessage }] });
 
   try {
-    const { text, tokens } = await callVertex(REPLY_SYSTEM_PROMPT, userPrompt);
+    const { text, tokens } = await callVertexChat(fullSystemPrompt, contents);
 
-    // The response should be plain text since we used responseMimeType json,
-    // but the reply might come as a JSON string — handle both
-    let reply: string;
+    // Clean up reply
+    let reply = text;
+
+    // Handle case where Gemini wraps in JSON
     try {
       const parsed = JSON.parse(text);
-      reply = typeof parsed === 'string' ? parsed : parsed.reply || parsed.response || parsed.text || text;
+      if (typeof parsed === 'string') reply = parsed;
+      else if (parsed.reply) reply = parsed.reply;
+      else if (parsed.response) reply = parsed.response;
     } catch {
-      reply = text;
+      // Not JSON — use as-is (expected)
     }
 
     // Clean up any markdown formatting for WhatsApp
     reply = reply.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2');
 
     const latencyMs = Date.now() - start;
-    console.log(`[VERTEX-REPLY] Generated reply (${tokens} tokens, ${latencyMs}ms)`);
+    console.log(`[VERTEX-REPLY] Generated reply (${tokens} tokens, ${latencyMs}ms, history: ${contents.length - 1} turns)`);
 
     return { reply: reply.trim(), tokens, latencyMs };
   } catch (err: any) {
