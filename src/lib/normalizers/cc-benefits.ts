@@ -66,11 +66,14 @@ interface MatchRule {
   extractDetail?: (raw: string) => string | undefined;
 }
 
-/** Pull parenthesized or "hasta/por" detail from a string */
+/** Pull parenthesized, "hasta/por", or colon-separated detail from a string */
 function extractGenericDetail(raw: string): string | undefined {
   // Match parenthesized portion
   const paren = raw.match(/\(([^)]+)\)/);
   if (paren) return paren[1];
+  // Match colon-separated detail (e.g., "🚛 Grúa: Por colisión y avería — Máx. 2 eventos/año")
+  const colonDetail = raw.match(/:\s*(.+)/);
+  if (colonDetail) return colonDetail[1].trim();
   // Match "hasta B/. ..." or "Hasta $..."
   const hasta = raw.match(/hasta\s+[\w/.]+\s*[\d,.]+/i);
   if (hasta) return hasta[0];

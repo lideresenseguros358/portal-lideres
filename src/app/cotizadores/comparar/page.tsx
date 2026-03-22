@@ -1113,27 +1113,102 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
       const totalKey = `total${dedSuffix}` as 'totalA' | 'totalB' | 'totalC';
       const primaTotal = option.totals?.[totalKey] || option.totals?.totalA || 0;
 
-      // Build coverage list
+      // ═══ NORMALIZE COVERAGE NAMES ═══
+      // Map raw Ancón names to standard names matching other insurers
+      const COVERAGE_NAME_MAP: Record<string, { name: string; emoji: string }> = {
+        'COMPRENSIVO': { name: 'Comprensivo', emoji: '🔥' },
+        'COLISION O VUELCO': { name: 'Colisión y Vuelco', emoji: '💥' },
+        'COLISION Y VUELCO': { name: 'Colisión y Vuelco', emoji: '💥' },
+        'R.C. LESIONES CORPORALES': { name: 'Lesiones Corporales (RC)', emoji: '🩹' },
+        'LESIONES CORPORALES': { name: 'Lesiones Corporales (RC)', emoji: '🩹' },
+        'R.C. DAÑOS A LA PROPIEDAD': { name: 'Daños a la Propiedad (RC)', emoji: '🏠' },
+        'DAÑOS A LA PROPIEDAD AJENA': { name: 'Daños a la Propiedad (RC)', emoji: '🏠' },
+        'DAÑOS A LA PROPIEDAD': { name: 'Daños a la Propiedad (RC)', emoji: '🏠' },
+        'ASISTENCIA MEDICA': { name: 'Gastos Médicos', emoji: '🏥' },
+        'GASTOS MEDICOS': { name: 'Gastos Médicos', emoji: '🏥' },
+        'GASTOS MÉDICOS': { name: 'Gastos Médicos', emoji: '🏥' },
+        'MUERTE ACCIDENTAL': { name: 'Muerte Accidental', emoji: '🛡️' },
+        'ACCIDENTES PERSONALES': { name: 'Accidentes Personales', emoji: '👥' },
+        'AUTO SUSTITUTO': { name: 'Auto Sustituto', emoji: '🚗' },
+        'ASISTENCIA VIAL': { name: 'Asistencia Vial', emoji: '🔧' },
+        'GRUA': { name: 'Grúa', emoji: '🚛' },
+        'EXTENSION TERRITORIAL': { name: 'Extensión Territorial', emoji: '🌎' },
+      };
+
+      const normalizeName = (rawName: string): { name: string; emoji: string } => {
+        const upper = (rawName || '').toUpperCase().trim();
+        // Exact match first
+        if (COVERAGE_NAME_MAP[upper]) return COVERAGE_NAME_MAP[upper];
+        // Partial match
+        for (const [key, val] of Object.entries(COVERAGE_NAME_MAP)) {
+          if (upper.includes(key) || key.includes(upper)) return val;
+        }
+        return { name: rawName, emoji: '✦' };
+      };
+
+      // ═══ FORMAT LIMIT: combine limite1 + limite2 into "per-person / per-event" ═══
+      const formatAnconLimit = (c: any): string => {
+        const lim1 = c.limite1 && c.limite1 !== '0.00' && c.limite1 !== '0' ? c.limite1 : null;
+        const lim2 = c.limite2 && c.limite2 !== '0.00' && c.limite2 !== '0' ? c.limite2 : null;
+        if (lim1 && lim2) {
+          // Dual limit: e.g., "5000.00" + "10000.00" → "$5,000 / $10,000"
+          const fmt1 = `$${Number(lim1).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+          const fmt2 = `$${Number(lim2).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+          return `${fmt1} / ${fmt2}`;
+        }
+        if (lim1) {
+          return `$${Number(lim1).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+        }
+        return 'INCLUIDO';
+      };
+
+      // Build coverage list with normalized names and combined limits
       const coverageList = (option.coverages || []).map((c: any) => {
         const primaKey = `prima${dedSuffix}` as 'primaA' | 'primaB' | 'primaC';
         const dedKeyFull = `deducible${dedSuffix}` as 'deducibleA' | 'deducibleB' | 'deducibleC';
+        const normalized = normalizeName(c.name);
         return {
           code: c.name?.substring(0, 3)?.toUpperCase() || '',
-          name: c.name || '',
-          limit: c.limite1 && c.limite1 !== '0.00' ? `$${c.limite1}` : 'INCLUIDO',
+          name: normalized.name,
+          rawName: c.name || '',
+          emoji: normalized.emoji,
+          limit: formatAnconLimit(c),
           prima: c[primaKey] || 0,
           deducible: c[dedKeyFull] || 0,
         };
       });
 
-      // Extract endoso benefits
+      // ═══ ENDOSO BENEFITS — Detailed with grúa info, emojis ═══
       const endosoBenefits: string[] = [];
-      const hasAutoSustituto = coverageList.some((c: any) => c.name?.includes('AUTO SUSTITUTO'));
-      const hasAsistVial = coverageList.some((c: any) => c.name?.includes('ASISTENCIA VIAL'));
-      if (hasAutoSustituto) endosoBenefits.push('Reembolso para auto sustituto ANCON Plus');
-      if (hasAsistVial) endosoBenefits.push('Asistencia vial limitada incluida');
-      endosoBenefits.push('Coordinación de envío de ambulancia');
-      endosoBenefits.push('Transmisión de mensajes urgentes');
+      const isPremium = planType === 'premium';
+
+      // Grúa details
+      const hasGrua = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('GRUA'));
+      if (hasGrua || isPremium) {
+        endosoBenefits.push('🚛 Grúa: Por colisión y avería — Máx. 2 eventos/año, hasta B/.150 por evento');
+      } else {
+        endosoBenefits.push('🚛 Grúa: Solo por colisión — Máx. 1 evento/año, hasta B/.100 por evento');
+      }
+
+      // Asistencia Vial
+      const hasAsistVial = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('ASISTENCIA VIAL'));
+      if (hasAsistVial || isPremium) {
+        endosoBenefits.push('🔧 Asistencia Vial: Paso de corriente, cambio de llanta, cerrajería, combustible');
+      }
+
+      // Auto Sustituto
+      const hasAutoSustituto = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('AUTO SUSTITUTO'));
+      if (hasAutoSustituto) {
+        endosoBenefits.push('🚗 Auto Sustituto: Reembolso para auto de reemplazo ANCON Plus');
+      }
+
+      // Standard benefits
+      endosoBenefits.push('🚑 Ambulancia: Coordinación de envío por accidente de tránsito');
+      endosoBenefits.push('📋 Transmisión de mensajes urgentes a familiares');
+      if (isPremium) {
+        endosoBenefits.push('⚖️ Asistencia Legal: Asesoría en accidentes de tránsito');
+        endosoBenefits.push('🌎 Extensión Territorial: Cobertura fuera del territorio nacional');
+      }
 
       // Build deducibles array from CC coverages
       const deducibles = coverageList
@@ -1147,13 +1222,13 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
       const annualPremium = Math.round(primaTotal * 100) / 100;
 
       // Extract comprensivo + colision deducibles for display
-      const dedComprensivo = coverageList.find((c: any) => c.name?.toUpperCase()?.includes('COMPRENSIV'));
-      const dedColision = coverageList.find((c: any) => c.name?.toUpperCase()?.includes('COLISI') || c.name?.toUpperCase()?.includes('VUELCO'));
+      const dedComprensivo = coverageList.find((c: any) => c.rawName?.toUpperCase()?.includes('COMPRENSIV'));
+      const dedColision = coverageList.find((c: any) => c.rawName?.toUpperCase()?.includes('COLISI') || c.rawName?.toUpperCase()?.includes('VUELCO'));
       const minDeductible = deducibles.length > 0
         ? Math.min(...deducibles.map((d: any) => Number(d.monto) || 0))
         : 0;
 
-      // Build beneficios list
+      // Build beneficios list with emojis
       const anconBeneficios = [
         ...endosoBenefits.map((b: string) => ({ nombre: b, descripcion: b, incluido: true })),
       ];
@@ -1167,16 +1242,47 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
         subBeneficios: endosoBenefits,
       }];
 
-      // Build coberturas detalladas from coverageList
+      // Build coberturas detalladas with emoji prefix and normalized names
       const coberturasDetalladas = coverageList.map((c: any) => ({
         codigo: c.code || '',
-        nombre: c.name || '',
+        nombre: `${c.emoji} ${c.name}`,
         descripcion: c.name || '',
         limite: c.limit || 'Incluido',
         prima: c.prima || 0,
         deducible: c.deducible ? `$${Number(c.deducible).toFixed(2)}` : '',
         incluida: true,
       }));
+
+      // Build _limites array for RC coverages (consistent with IS/FEDPA)
+      const anconLimites: any[] = [];
+      const lesionesItem = coverageList.find((c: any) => c.rawName?.toUpperCase()?.includes('LESIONES'));
+      if (lesionesItem) {
+        const parts = lesionesItem.limit?.split('/') || [];
+        anconLimites.push({
+          tipo: 'lesiones_corporales',
+          limitePorPersona: parts[0]?.trim() || lesionesItem.limit || '',
+          limitePorAccidente: parts[1]?.trim() || '',
+          descripcion: 'Lesiones Corporales',
+        });
+      }
+      const propiedadItem = coverageList.find((c: any) => c.rawName?.toUpperCase()?.includes('PROPIEDAD') || c.rawName?.toUpperCase()?.includes('DAÑOS'));
+      if (propiedadItem) {
+        anconLimites.push({
+          tipo: 'daños_propiedad',
+          limitePorPersona: propiedadItem.limit || '',
+          descripcion: 'Daños a la Propiedad',
+        });
+      }
+      const gmItem = coverageList.find((c: any) => c.rawName?.toUpperCase()?.includes('ASISTENCIA MEDICA') || c.rawName?.toUpperCase()?.includes('GASTOS MED'));
+      if (gmItem) {
+        const gmParts = gmItem.limit?.split('/') || [];
+        anconLimites.push({
+          tipo: 'gastos_medicos',
+          limitePorPersona: gmParts[0]?.trim() || gmItem.limit || '',
+          limitePorAccidente: gmParts[1]?.trim() || '',
+          descripcion: 'Gastos Médicos',
+        });
+      }
 
       const deducibleInfo = {
         valor: minDeductible,
@@ -1217,6 +1323,7 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
             ? { amount: Number(dedColision.deducible), label: 'Colisión/Vuelco' } : null,
         },
         _coberturasDetalladas: coberturasDetalladas,
+        _limites: anconLimites,
         _deducibleInfo: deducibleInfo,
         _beneficios: anconBeneficios,
         _endosos: anconEndosos,
