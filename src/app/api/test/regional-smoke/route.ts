@@ -20,6 +20,7 @@ import { cotizarRC, cotizarCC } from '@/lib/regional/quotes.service';
 import { emitirPolizaRC, emitirPolizaCC, actualizarPlanPago } from '@/lib/regional/emission.service';
 import { getRegionalCredentials } from '@/lib/regional/config';
 import type { RegionalRCEmissionBody, RegionalCCEmissionBody } from '@/lib/regional/types';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const maxDuration = 300; // 5 min
 
@@ -505,6 +506,9 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
 // ══════════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const t0 = Date.now();
   const params = request.nextUrl.searchParams;
   const limit = Math.min(parseInt(params.get('limit') || '20'), 20);

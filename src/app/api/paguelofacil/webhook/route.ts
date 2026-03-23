@@ -21,20 +21,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { type PFWebhookPayload } from '@/lib/paguelofacil/config';
 import { sendZeptoEmail } from '@/lib/email/zepto-api';
+import { rateLimit, RATE_LIMITS, getClientIp } from '@/lib/security/rate-limit';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const PAYMENT_BASE_URL = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://portal.lideresenseguros.com'}/cotizadores?pagar=true`;
+
+const webhookLimiter = rateLimit(RATE_LIMITS.WEBHOOK);
 
 function getSb() {
   return createClient(supabaseUrl, supabaseServiceKey);
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const rl = webhookLimiter(request);
+  if (!rl.ok) return rl.response;
+
+  // PagueloFacil does NOT send a webhook secret — authentication is based on
+  // payload structure validation + codOper matching against our DB records.
+  // Log the source IP for audit purposes.
+  const clientIp = getClientIp(request);
+  console.log(`[PF WEBHOOK] Incoming from IP: ${clientIp}`);
+
+  // Validate Content-Type
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.includes('application/json') && !contentType.includes('application/x-www-form-urlencoded')) {
+    return NextResponse.json({ error: 'Invalid content type' }, { status: 415 });
+  }
+
   const sb = getSb();
 
   try {
     const payload: PFWebhookPayload = await request.json();
+
+    // Validate required PF webhook fields — reject malformed payloads
+    if (
+      typeof payload.codOper !== 'string' ||
+      typeof payload.operationType !== 'string' ||
+      typeof payload.status !== 'number' ||
+      !payload.codOper
+    ) {
+      console.warn(`[PF WEBHOOK] ❌ Malformed payload from IP ${clientIp}:`, JSON.stringify(payload).substring(0, 300));
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
 
     const isApproved = payload.status === 1;
     const logPrefix = isApproved ? '✅' : '❌';

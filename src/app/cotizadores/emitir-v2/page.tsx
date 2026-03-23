@@ -364,12 +364,35 @@ export default function EmitirV2Page() {
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
 
-        // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
-        // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
-        // El codOper se guarda en adm_cot_recurrences y el cron /api/cron/process-recurrences
-        // ejecuta el cobro en cada fecha de vencimiento del schedule.
-        if (installments > 1) {
-          console.log(`[PAGUELOFACIL] ℹ️ ${installments - 1} cuota(s) restante(s) se cobrarán automáticamente en sus fechas de vencimiento.`);
+        // ═══ PAGUELOFACIL: Registrar recurrencia para cuotas futuras ═══
+        if (installments > 1 && pfCodOper) {
+          toast.info('Registrando pagos recurrentes...');
+          try {
+            const recRes = await fetch('/api/paguelofacil/recurrent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                codOper: pfCodOper,
+                amount: monthlyPayment,
+                description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${insuredData.primerNombre} ${insuredData.primerApellido}`,
+                concept: `Cuota recurrente - Cobertura Completa`,
+                email: insuredData.email,
+                phone: insuredData.celular || insuredData.telefono,
+                totalInstallments: installments,
+                policyNumber: '', // Will be set after emission
+              }),
+            });
+            const recData = await recRes.json();
+            if (recData.success) {
+              pfRecCodOper = recData.codOper;
+              console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper);
+            } else {
+              console.error('[PAGUELOFACIL] ⚠️ Error registrando recurrencia:', recData.error);
+              // Non-blocking: first charge succeeded, recurrence can be set up manually
+            }
+          } catch (recErr: any) {
+            console.error('[PAGUELOFACIL] ⚠️ Recurrent registration error:', recErr.message);
+          }
         }
       }
 

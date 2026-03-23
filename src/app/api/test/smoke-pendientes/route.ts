@@ -28,6 +28,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { emailService } from '@/lib/email/emailService';
+import { requireCronSecret } from '@/lib/security/api-guard';
 import { checkImapEnvStatusTramites } from '@/lib/email/zohoImapConfigTramites';
 
 export const runtime = 'nodejs';
@@ -279,18 +280,12 @@ interface TestResult {
 // ════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const { searchParams } = new URL(request.url);
   const phase = searchParams.get('phase') || 'all';
   const dryRun = searchParams.get('dry_run') === 'true';
-
-  // Auth check
-  const authHeader = request.headers.get('authorization');
-  const xCronSecret = request.headers.get('x-cron-secret');
-  const cronSecret = process.env.CRON_SECRET;
-  const provided = authHeader?.replace('Bearer ', '') || xCronSecret;
-  if (cronSecret && provided !== cronSecret) {
-    return NextResponse.json({ error: 'Unauthorized. Pass Authorization: Bearer <CRON_SECRET>' }, { status: 401 });
-  }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const scenarios = buildScenarios(timestamp);

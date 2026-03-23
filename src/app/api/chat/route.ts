@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processMessage } from '@/lib/chatProcessor';
+import { sanitizeText, sanitizeCedula } from '@/lib/security/sanitize';
 
 // Simple in-memory rate limiter (per IP, 30 msgs/min)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -58,14 +59,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Mensaje demasiado largo (máximo 2000 caracteres)' }, { status: 400 });
     }
 
+    // Sanitize inputs
+    const cleanMessage = sanitizeText(message, 2000);
+    const cleanCedula = cedula ? sanitizeCedula(String(cedula)) : null;
+    const cleanSessionId = typeof sessionId === 'string' ? sessionId.slice(0, 100) : null;
+    // Limit conversation history to prevent payload abuse
+    const cleanHistory = Array.isArray(conversationHistory)
+      ? conversationHistory.slice(-20)
+      : undefined;
+
     // Process through shared pipeline
     const result = await processMessage({
-      message,
+      message: cleanMessage,
       channel: 'portal',
-      cedula: cedula || null,
-      sessionId: sessionId || null,
+      cedula: cleanCedula,
+      sessionId: cleanSessionId,
       ipAddress: ip,
-      conversationHistory: Array.isArray(conversationHistory) ? conversationHistory : undefined,
+      conversationHistory: cleanHistory,
     });
 
     return NextResponse.json({

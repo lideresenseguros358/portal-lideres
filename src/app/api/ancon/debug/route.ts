@@ -4,10 +4,14 @@
  *
  * Tests: token generation + Estandar CC + Estandar DT quotes
  */
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const t0 = Date.now();
   const cc = await cotizarEstandar({
     cod_marca: '00122', cod_modelo: '10393', ano: '2023',

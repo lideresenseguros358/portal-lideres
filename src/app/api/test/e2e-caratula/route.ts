@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const maxDuration = 300;
 
@@ -518,6 +519,9 @@ async function runFedpaDT(idx: number, person: PersonData, veh: ISVehicle, year:
 // ══════════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const t0 = Date.now();
   const params = request.nextUrl.searchParams;
   const delayMs = parseInt(params.get('delay') || '3000');

@@ -10,7 +10,7 @@
  */
 
 import { GoogleAuth } from 'google-auth-library';
-import type { ClassificationResult, ThreadCategory, ThreadSeverity } from '@/types/chat.types';
+import type { ClassificationResult, ThreadCategory, ThreadSeverity, Sentiment } from '@/types/chat.types';
 import { SYSTEM_PROMPT } from '@/lib/ai/vertex';
 
 // ── Auth ──
@@ -169,7 +169,71 @@ ${msgContext}`;
 }
 
 // ════════════════════════════════════════════
-// 2. AI REPLY GENERATOR
+// 2. SENTIMENT ANALYZER
+// ════════════════════════════════════════════
+
+const SENTIMENT_SYSTEM_PROMPT = `Eres un analizador de sentimiento para conversaciones de WhatsApp con una correduría de seguros en Panamá.
+
+Analiza el ÚLTIMO mensaje del usuario y devuelve un JSON con:
+1. "sentiment": La emoción predominante del usuario. Valores: "neutral", "happy", "angry", "confused"
+2. "is_closing": true si el usuario se está despidiendo o dando por terminada la conversación.
+
+Palabras/frases que indican is_closing=true:
+- "gracias", "listo", "hasta luego", "ok ya", "perfecto gracias", "eso era todo", "bueno gracias", "chao", "bye", "nos vemos", "ya con eso", "genial gracias", "excelente gracias"
+
+Palabras que indican sentiment="angry":
+- Quejas fuertes, insultos, amenazas, frustración evidente, "esto es una falta de respeto", "no sirven", "pésimo servicio", "estoy harto", "voy a denunciar", groserías
+
+Palabras que indican sentiment="confused":
+- "no entiendo", "me confundí", "¿cómo?", "no me queda claro", "explícame otra vez", "¿qué significa?"
+
+Palabras que indican sentiment="happy":
+- "excelente", "genial", "perfecto", "me encanta", "qué bueno", entusiasmo, emojis positivos abundantes
+
+Si no hay señales claras → "neutral".
+Si el usuario dice "gracias" pero sigue haciendo preguntas → is_closing=false.
+
+Responde SOLO JSON:
+{"sentiment": "neutral"|"happy"|"angry"|"confused", "is_closing": true|false}`;
+
+export interface SentimentResult {
+  sentiment: Sentiment;
+  is_closing: boolean;
+}
+
+export async function analyzeSentiment(
+  lastMessages: { direction: string; body: string }[],
+): Promise<SentimentResult> {
+  const msgContext = lastMessages
+    .slice(-4)
+    .map(m => `[${m.direction === 'inbound' ? 'USUARIO' : 'LISSA'}]: ${m.body}`)
+    .join('\n');
+
+  try {
+    const { text } = await callVertex(SENTIMENT_SYSTEM_PROMPT, `Analiza el sentimiento:\n\n${msgContext}`);
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      else throw new Error('Invalid JSON from sentiment analyzer');
+    }
+
+    const validSentiments: Sentiment[] = ['neutral', 'happy', 'angry', 'confused'];
+    return {
+      sentiment: validSentiments.includes(parsed.sentiment) ? parsed.sentiment : 'neutral',
+      is_closing: parsed.is_closing === true,
+    };
+  } catch (err: any) {
+    console.error('[VERTEX-SENTIMENT] Error:', err.message);
+    return { sentiment: 'neutral', is_closing: false };
+  }
+}
+
+// ════════════════════════════════════════════
+// 3. AI REPLY GENERATOR
 // ════════════════════════════════════════════
 
 /**
@@ -220,12 +284,15 @@ interface ReplyInput {
   clientName?: string | null;
   category: string;
   severity: string;
+  sentiment?: Sentiment | null;
 }
 
 export interface AiReplyResult {
   reply: string;
   tokens: number;
   latencyMs: number;
+  sentiment: Sentiment;
+  is_closing: boolean;
 }
 
 export async function generateAiReply(input: ReplyInput): Promise<AiReplyResult> {
@@ -249,6 +316,11 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     fullSystemPrompt += `\n\nNOTA INTERNA: Este caso fue clasificado como URGENTE (severidad: ${input.severity}). Un superior ya fue notificado por email. Sé empática, reconoce la frustración, indica que un superior contactará al cliente, y ofrece contacto@lideresenseguros.com para seguimiento.`;
   }
 
+  // Add empathy instructions for angry users
+  if (input.sentiment === 'angry') {
+    fullSystemPrompt += `\n\n<empathy_mode>\nIMPORTANTE: El usuario está frustrado o enojado. Aplica estas técnicas de empatía:\n1. Valida su emoción primero: "Entiendo tu frustración y la tomo muy en serio."\n2. No te pongas a la defensiva ni minimices su queja.\n3. Muestra compromiso genuino de resolver la situación.\n4. Si es una queja de servicio, ofrece escalar con un supervisor.\n5. Mantén tu tono cálido pero profesional, nunca condescendiente.\n</empathy_mode>`;
+  }
+
   // Build proper Gemini contents array with alternating user/model turns
   const contents: { role: string; parts: { text: string }[] }[] = [];
 
@@ -270,8 +342,19 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
   // Always end with the current user message
   contents.push({ role: 'user', parts: [{ text: input.currentMessage }] });
 
+  // Run sentiment analysis in parallel with reply generation
+  const sentimentMessages = [
+    ...(input.conversationHistory || []).slice(-3).map(m => ({ direction: m.direction, body: m.body })),
+    { direction: 'inbound', body: input.currentMessage },
+  ];
+
   try {
-    const { text, tokens } = await callVertexChat(fullSystemPrompt, contents);
+    const [replyResult, sentimentResult] = await Promise.all([
+      callVertexChat(fullSystemPrompt, contents),
+      analyzeSentiment(sentimentMessages),
+    ]);
+
+    const { text, tokens } = replyResult;
 
     // Clean up reply
     let reply = text;
@@ -290,9 +373,15 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     reply = reply.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2');
 
     const latencyMs = Date.now() - start;
-    console.log(`[VERTEX-REPLY] Generated reply (${tokens} tokens, ${latencyMs}ms, history: ${contents.length - 1} turns)`);
+    console.log(`[VERTEX-REPLY] Generated reply (${tokens} tokens, ${latencyMs}ms, history: ${contents.length - 1} turns, sentiment: ${sentimentResult.sentiment}, is_closing: ${sentimentResult.is_closing})`);
 
-    return { reply: reply.trim(), tokens, latencyMs };
+    return {
+      reply: reply.trim(),
+      tokens,
+      latencyMs,
+      sentiment: sentimentResult.sentiment,
+      is_closing: sentimentResult.is_closing,
+    };
   } catch (err: any) {
     console.error('[VERTEX-REPLY] Error:', err.message);
     const latencyMs = Date.now() - start;
@@ -300,6 +389,8 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
       reply: '¡Hola! Disculpa, estoy teniendo un pequeño problema técnico. Puedes escribirnos a contacto@lideresenseguros.com o llamar al 223-2373 y te atendemos con gusto. 💚',
       tokens: 0,
       latencyMs,
+      sentiment: 'neutral',
+      is_closing: false,
     };
   }
 }

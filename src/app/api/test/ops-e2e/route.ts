@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { emailService } from '@/lib/email/emailService';
 import { buildPaymentLinkEmail, buildCaseNotificationEmail } from '@/lib/email/templates/OpsEmailTemplates';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -47,17 +48,13 @@ interface TestResult {
 }
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const { searchParams } = new URL(request.url);
   const phase = searchParams.get('phase') || 'all';
   const testEmail = searchParams.get('send_test_email') || '';
   const dryRun = searchParams.get('dry_run') === 'true';
-
-  // Auth check
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized. Pass Authorization: Bearer <CRON_SECRET>' }, { status: 401 });
-  }
 
   const allResults: TestResult[] = [];
   const startTotal = Date.now();

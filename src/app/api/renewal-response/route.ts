@@ -10,8 +10,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendEmail as sendEmailTramites } from '@/server/email/sendEmail';
 import { renderEmailTemplate } from '@/server/email/renderer';
+import { escapeHtml, isValidUUID } from '@/lib/security/sanitize';
+import { rateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
+
+const limiter = rateLimit(RATE_LIMITS.PUBLIC_API);
 
 export async function GET(request: NextRequest) {
+  const rl = limiter(request);
+  if (!rl.ok) return rl.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const response = searchParams.get('response'); // 'yes' or 'no'
@@ -29,6 +36,14 @@ export async function GET(request: NextRequest) {
     if (!['yes', 'no'].includes(response)) {
       return NextResponse.json(
         { error: 'Respuesta inválida' },
+        { status: 400 }
+      );
+    }
+
+    // Validate UUID format to prevent injection
+    if (!isValidUUID(clientId) || !isValidUUID(policyId)) {
+      return NextResponse.json(
+        { error: 'Identificadores inválidos' },
         { status: 400 }
       );
     }
@@ -210,17 +225,17 @@ export async function GET(request: NextRequest) {
         </div>
 
         <div class="policy-info">
-          <p><strong>Póliza:</strong> ${policy.policy_number}</p>
-          <p><strong>Aseguradora:</strong> ${insurer?.name || 'N/A'}</p>
-          <p><strong>Ramo:</strong> ${policy.ramo || 'N/A'}</p>
-          <p><strong>Vence:</strong> ${policy.renewal_date || 'N/A'}</p>
+          <p><strong>Póliza:</strong> ${escapeHtml(policy.policy_number || 'N/A')}</p>
+          <p><strong>Aseguradora:</strong> ${escapeHtml(insurer?.name || 'N/A')}</p>
+          <p><strong>Ramo:</strong> ${escapeHtml(policy.ramo || 'N/A')}</p>
+          <p><strong>Vence:</strong> ${escapeHtml(policy.renewal_date || 'N/A')}</p>
         </div>
 
         <div class="policy-info">
           <p style="margin: 0 0 8px 0;"><strong>Su Corredor:</strong></p>
-          <p><strong>Nombre:</strong> ${broker?.name || 'N/A'}</p>
-          ${broker?.email ? `<p><strong>Email:</strong> ${broker.email}</p>` : ''}
-          ${broker?.phone ? `<p><strong>Teléfono:</strong> ${broker.phone}</p>` : ''}
+          <p><strong>Nombre:</strong> ${escapeHtml(broker?.name || 'N/A')}</p>
+          ${broker?.email ? `<p><strong>Email:</strong> ${escapeHtml(broker.email)}</p>` : ''}
+          ${broker?.phone ? `<p><strong>Teléfono:</strong> ${escapeHtml(broker.phone)}</p>` : ''}
         </div>
 
         <div style="background:#010139;padding:16px;border-radius:8px;text-align:center;margin-top:30px;">

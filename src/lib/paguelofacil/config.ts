@@ -139,35 +139,35 @@ export interface PFReturnParams {
 
 /** Webhook payload sent by PagueloFacil */
 export interface PFWebhookPayload {
-  date: string;                // yyyy-MM-ddTHH:mm:ss
-  relatedTx: string;          // Related transaction (3DS auth)
+  date: string;                     // yyyy-MM-ddTHH:mm:ss
+  relatedTx: string;               // Related transaction (e.g. 3DS auth codOper)
   description: string;
   merchantDescriptor: string;
-  type: string;                // VISA / MC
+  type: string;                     // VISA / MC
   cardToken: string;
   userLogn: string;
-  idUsr: string;
-  revisionLevel: string;
-  totalPay: string;
-  binInfo: any;                // JSON — fraud/BIN info
-  displayNum: string;          // Last 4 digits
+  idUsr: string | number;           // PF internal user ID
+  revisionLevel: string | null;
+  totalPay: string;                 // e.g. "1356.25"
+  binInfo: any;                     // JSON — fraud/BIN/geo info
+  displayNum: string;               // Last digits of card
   returnUrl: string;
-  requestPayAmount: string;
+  requestPayAmount: number;          // Numeric — original requested amount
   email: string;
   isExternalUrl: boolean;
-  authStatus: string;          // ISO auth code
-  cardType: string;            // VISA / MC
-  userName: string;
-  idtx: string;
+  authStatus: string;               // ISO auth code (e.g. "00" = approved)
+  cardType: string;                 // VISA / MC
+  userName: string;                 // Cardholder name
+  idtx: string | number;           // PF internal transaction ID
   inRevision: boolean;
   isTxCampaign: boolean;
-  name: string;
-  operationType: string;       // AUTH | CAPTURE | AUTH_CAPTURE | 3DS | RECURRENT | REVERSE | REVERSE_CAPTURE
+  name: string;                     // Cardholder name
+  operationType: string;            // AUTH | CAPTURE | AUTH_CAPTURE | 3DS | RECURRENT | REVERSE | REVERSE_CAPTURE
   txDescriptor: string;
-  revisionOptions: string;
-  codOper: string;             // Transaction reference code
-  status: number;              // 1 = approved, 0 = declined
-  messageSys: string;          // Auth message from card brand
+  revisionOptions: string | null;
+  codOper: string;                  // Transaction reference code
+  status: number;                   // 1 = approved, 0 = declined
+  messageSys: string;               // Auth message from card brand
 }
 
 /** Transaction query response */

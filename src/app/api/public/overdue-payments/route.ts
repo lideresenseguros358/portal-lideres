@@ -14,6 +14,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeCedula, isValidUUID } from '@/lib/security/sanitize';
+import { rateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
+
+const publicLimiter = rateLimit(RATE_LIMITS.PUBLIC_API);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -27,11 +31,15 @@ function getSb() {
 // ════════════════════════════════════════════
 
 export async function GET(req: NextRequest) {
+  const rl = publicLimiter(req);
+  if (!rl.ok) return rl.response;
+
   try {
     const { searchParams } = new URL(req.url);
-    const cedula = searchParams.get('cedula')?.trim();
+    const rawCedula = searchParams.get('cedula') || '';
+    const cedula = sanitizeCedula(rawCedula);
 
-    if (!cedula || cedula.length < 3) {
+    if (!cedula) {
       return NextResponse.json({ error: 'Cédula inválida' }, { status: 400 });
     }
 
@@ -47,7 +55,8 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (recErr) {
-      return NextResponse.json({ error: recErr.message }, { status: 500 });
+      console.error('[PUBLIC overdue-payments GET] DB error:', recErr.message);
+      return NextResponse.json({ error: 'Error al consultar datos' }, { status: 500 });
     }
 
     if (!recurrences || recurrences.length === 0) {
@@ -148,7 +157,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error('[PUBLIC overdue-payments GET]', err);
-    return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
 
@@ -157,9 +166,17 @@ export async function GET(req: NextRequest) {
 // ════════════════════════════════════════════
 
 export async function POST(req: NextRequest) {
+  const rl = publicLimiter(req);
+  if (!rl.ok) return rl.response;
+
   try {
     const body = await req.json();
     const { action } = body;
+
+    // Validate action is a known value
+    if (!action || !['confirm_payment', 'update_recurrence_card'].includes(action)) {
+      return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
+    }
 
     const sb = getSb();
 
@@ -338,6 +355,9 @@ export async function POST(req: NextRequest) {
         if (!recurrence_id || !pf_cod_oper) {
           return NextResponse.json({ error: 'recurrence_id y pf_cod_oper requeridos' }, { status: 400 });
         }
+        if (!isValidUUID(recurrence_id)) {
+          return NextResponse.json({ error: 'recurrence_id inválido' }, { status: 400 });
+        }
 
         const { error } = await sb
           .from('adm_cot_recurrences')
@@ -348,7 +368,8 @@ export async function POST(req: NextRequest) {
           .eq('id', recurrence_id);
 
         if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          console.error('[PUBLIC overdue-payments POST] DB error:', error.message);
+          return NextResponse.json({ error: 'Error al actualizar datos' }, { status: 500 });
         }
 
         await sb.from('adm_cot_audit_log').insert({
@@ -363,10 +384,10 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: `Acción desconocida: ${action}` }, { status: 400 });
+        return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
     }
   } catch (err: any) {
     console.error('[PUBLIC overdue-payments POST]', err);
-    return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

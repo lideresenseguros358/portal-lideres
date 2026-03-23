@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { isValidUUID } from '@/lib/security/sanitize';
 
 /**
  * GET /api/agenda/rsvp?eventId=xxx&response=yes|no
@@ -12,16 +13,21 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const eventId = searchParams.get('eventId');
   const response = searchParams.get('response');
-  const appUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://portal.lideresenseguros.com';
+
+  // Build redirect from request origin to prevent open redirect
+  const origin = request.nextUrl.origin;
 
   if (!eventId || !response) {
-    return NextResponse.redirect(`${appUrl}/agenda`);
+    return NextResponse.redirect(`${origin}/agenda`);
   }
 
-  // Redirigir a la agenda con parámetros para que el frontend procese el RSVP
-  // El usuario necesita sesión iniciada, así que redirigimos a la agenda
-  // con query params que el frontend puede usar para confirmar
-  const redirectUrl = `${appUrl}/agenda?rsvp=${eventId}&response=${response}`;
+  // Validate inputs to prevent injection in redirect URL
+  if (!isValidUUID(eventId) || !['yes', 'no'].includes(response)) {
+    return NextResponse.redirect(`${origin}/agenda`);
+  }
+
+  // Safe redirect: origin is always the app itself, params are validated
+  const redirectUrl = `${origin}/agenda?rsvp=${eventId}&response=${response}`;
   
   return NextResponse.redirect(redirectUrl);
 }

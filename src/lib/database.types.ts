@@ -3154,14 +3154,19 @@ export type Database = {
           channel: string
           client_id: string | null
           client_name: string | null
+          consecutive_angry_count: number
           created_at: string | null
           external_thread_key: string | null
+          followup_sent_at: string | null
           id: string
+          last_ai_message_at: string | null
           last_message_at: string | null
           last_message_preview: string | null
+          last_user_message_at: string | null
           metadata: Json | null
           phone_e164: string
           region: string | null
+          sentiment: string | null
           severity: string | null
           status: string
           tags: Json | null
@@ -3176,14 +3181,19 @@ export type Database = {
           channel?: string
           client_id?: string | null
           client_name?: string | null
+          consecutive_angry_count?: number
           created_at?: string | null
           external_thread_key?: string | null
+          followup_sent_at?: string | null
           id?: string
+          last_ai_message_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_user_message_at?: string | null
           metadata?: Json | null
           phone_e164: string
           region?: string | null
+          sentiment?: string | null
           severity?: string | null
           status?: string
           tags?: Json | null
@@ -3198,14 +3208,19 @@ export type Database = {
           channel?: string
           client_id?: string | null
           client_name?: string | null
+          consecutive_angry_count?: number
           created_at?: string | null
           external_thread_key?: string | null
+          followup_sent_at?: string | null
           id?: string
+          last_ai_message_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_user_message_at?: string | null
           metadata?: Json | null
           phone_e164?: string
           region?: string | null
+          sentiment?: string | null
           severity?: string | null
           status?: string
           tags?: Json | null

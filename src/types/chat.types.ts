@@ -5,7 +5,8 @@
  */
 
 // ── Thread ──
-export type ThreadStatus = 'open' | 'pending' | 'urgent' | 'closed';
+export type ThreadStatus = 'open' | 'pending' | 'urgent' | 'closed' | 'human_intervention' | 'urgent_human';
+export type Sentiment = 'neutral' | 'happy' | 'angry' | 'confused';
 export type ThreadCategory = 'simple' | 'lead' | 'urgent';
 export type ThreadSeverity = 'low' | 'medium' | 'high';
 export type AssignedType = 'ai' | 'master';
@@ -26,6 +27,11 @@ export interface ChatThread {
   ai_enabled: boolean;
   last_message_at: string;
   last_message_preview: string | null;
+  last_ai_message_at: string | null;
+  last_user_message_at: string | null;
+  sentiment: Sentiment | null;
+  consecutive_angry_count: number;
+  followup_sent_at: string | null;
   unread_count_master: number;
   tags: string[];
   metadata: Record<string, any>;

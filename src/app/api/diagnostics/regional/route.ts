@@ -7,11 +7,14 @@
 
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getRegionalEnv, getRegionalBaseUrl, getRegionalCredentials, REGIONAL_RC_ENDPOINTS } from '@/lib/regional/config';
 import { regionalGet } from '@/lib/regional/http-client';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
   const env = getRegionalEnv();
   const baseUrl = getRegionalBaseUrl();
   const creds = getRegionalCredentials();

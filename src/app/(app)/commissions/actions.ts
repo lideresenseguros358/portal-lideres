@@ -4660,6 +4660,30 @@ export async function actionExportBankCsv(fortnightId: string) {
       broker: fullBrokersMap.get(t.broker_id) || t.broker,
     }));
 
+    // ═══════════════════════════════════════════════════════════════════
+    // SPLIT: Banco General vs VARIOS
+    // Fetch ach_banks to get bank_name for each broker's bank_route
+    // ═══════════════════════════════════════════════════════════════════
+    const uniqueRoutes = [...new Set(totalsWithFullBroker.map(t => t.broker?.bank_route).filter(Boolean))];
+    const { data: achBanks } = await supabase
+      .from('ach_banks')
+      .select('route_code, bank_name')
+      .in('route_code', uniqueRoutes);
+
+    const bankNameByRoute = new Map((achBanks || []).map(b => [b.route_code, b.bank_name]));
+
+    // Determine Banco General: match by bank_name containing "BANCO GENERAL" (case-insensitive)
+    const isBancoGeneral = (bankRoute: string | null | undefined): boolean => {
+      if (!bankRoute) return false;
+      const bankName = bankNameByRoute.get(bankRoute) || '';
+      return bankName.toUpperCase().includes('BANCO GENERAL');
+    };
+
+    const totalsBG = totalsWithFullBroker.filter(t => isBancoGeneral(t.broker?.bank_route));
+    const totalsVARIOS = totalsWithFullBroker.filter(t => !isBancoGeneral(t.broker?.bank_route));
+
+    console.log(`[actionExportBankCsv] Split: BG=${totalsBG.length} brokers, VARIOS=${totalsVARIOS.length} brokers`);
+
     // Generar label: Q1/Q2 MES AÑO - DD/MM/YYYY
     const endDate = new Date(fortnight.period_end);
     const day = endDate.getDate();
@@ -4675,21 +4699,36 @@ export async function actionExportBankCsv(fortnightId: string) {
     
     const fortnightLabel = `${quincena} ${mesNombre} ${year} - ${fechaDescarga}`;
     console.log('[actionExportBankCsv] Generando ACH con label:', fortnightLabel);
-    const achResult = await buildBankACH(totalsWithFullBroker as any, fortnightLabel);
 
-    console.log('[actionExportBankCsv] ACH generado:', {
-      contentLength: achResult.content.length,
-      validCount: achResult.validCount,
-      errors: achResult.errors.length,
-      totalAmount: achResult.totalAmount
+    // Generate both ACH files
+    const [achBG, achVARIOS] = await Promise.all([
+      buildBankACH(totalsBG as any, fortnightLabel),
+      buildBankACH(totalsVARIOS as any, fortnightLabel),
+    ]);
+
+    console.log('[actionExportBankCsv] ACH BG:', {
+      validCount: achBG.validCount, totalAmount: achBG.totalAmount, errors: achBG.errors.length
+    });
+    console.log('[actionExportBankCsv] ACH VARIOS:', {
+      validCount: achVARIOS.validCount, totalAmount: achVARIOS.totalAmount, errors: achVARIOS.errors.length
     });
 
     return {
       ok: true as const,
-      bankACH: achResult.content,
-      achErrors: achResult.errors,
-      achValidCount: achResult.validCount,
-      achTotalAmount: achResult.totalAmount,
+      // Legacy fields (combined) — keep for backward compat
+      bankACH: achBG.content + (achBG.content && achVARIOS.content ? '\n' : '') + achVARIOS.content,
+      achErrors: [...achBG.errors, ...achVARIOS.errors],
+      achValidCount: achBG.validCount + achVARIOS.validCount,
+      achTotalAmount: achBG.totalAmount + achVARIOS.totalAmount,
+      // New split fields
+      bgContent: achBG.content,
+      bgValidCount: achBG.validCount,
+      bgTotalAmount: achBG.totalAmount,
+      bgErrors: achBG.errors,
+      variosContent: achVARIOS.content,
+      variosValidCount: achVARIOS.validCount,
+      variosTotalAmount: achVARIOS.totalAmount,
+      variosErrors: achVARIOS.errors,
     };
   } catch (error) {
     console.error('[actionExportBankCsv] Error:', error);

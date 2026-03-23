@@ -37,9 +37,9 @@ export function getRegionalCredentials(env?: RegionalEnvironment) {
   const suffix = resolved === 'production' ? 'PROD' : 'DESA';
 
   return {
-    username: process.env[`REGIONAL_USERNAME_${suffix}`] || process.env.REGIONAL_USERNAME || 'LIDERES_EN_SEGUROS_99',
+    username: process.env[`REGIONAL_USERNAME_${suffix}`] || process.env.REGIONAL_USERNAME || '',
     password: process.env[`REGIONAL_PASSWORD_${suffix}`] || process.env.REGIONAL_PASSWORD || '',
-    codInter: process.env[`REGIONAL_COD_INTER_${suffix}`] || process.env.REGIONAL_COD_INTER || '99',
+    codInter: process.env[`REGIONAL_COD_INTER_${suffix}`] || process.env.REGIONAL_COD_INTER || '',
     token:    process.env[`REGIONAL_TOKEN_${suffix}`]    || process.env.REGIONAL_TOKEN    || '',
   };
 }

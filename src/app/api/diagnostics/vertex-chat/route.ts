@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleAuth } from 'google-auth-library';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 function json(data: any, status = 200) {
   return NextResponse.json(data, { status });
@@ -386,7 +387,10 @@ async function testLissaGeminiApi(userMessage: string, model: string) {
 }
 
 // ── GET handler — run all tests ──
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   console.log('[VERTEX-TEST] Running diagnostic tests...');
   const results: any[] = [];
 
@@ -455,6 +459,9 @@ export async function GET() {
 
 // ── POST handler — test with custom message ──
 export async function POST(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   try {
     const body = await request.json();
     const message = body.message || 'Hola, ¿qué servicios ofrecen?';

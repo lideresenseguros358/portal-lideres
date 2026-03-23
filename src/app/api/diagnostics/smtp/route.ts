@@ -7,20 +7,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getTransport } from '@/server/email/mailer';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 export async function POST(request: NextRequest) {
-  // Verificar autorización
-  const authHeader = request.headers.get('authorization');
-  const xCronSecret = request.headers.get('x-cron-secret');
-  const cronSecret = process.env.CRON_SECRET;
-  const providedSecret = authHeader?.replace('Bearer ', '') || xCronSecret;
-
-  if (cronSecret && providedSecret !== cronSecret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
 
   const startTime = Date.now();
   const timestamp = new Date().toISOString();

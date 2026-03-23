@@ -1,14 +1,12 @@
 // =====================================================
-// ZOHO MAIL WEBHOOK - SKELETON
+// ZOHO WEBHOOK
 // =====================================================
-// This is a skeleton/template for Zoho Mail webhook integration.
-// Complete this when Zoho Mail API credentials are available.
+// Receives webhook events from Zoho (Mail / Assist).
 //
-// SETUP REQUIRED:
-// 1. Configure webhook in Zoho Mail admin panel
-// 2. Set webhook URL: https://your-domain.com/api/zoho/webhook
-// 3. Add ZOHO_WEBHOOK_SECRET to .env.local
-// 4. Uncomment and complete the implementation below
+// SETUP:
+// 1. Configure webhook in Zoho admin panel
+// 2. Set callback URL: https://portal.lideresenseguros.com/api/zoho/webhook
+// 3. Zoho does NOT send a secret header — validation is by payload structure
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,6 +14,9 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { classifyEmail, guessClientName } from '@/lib/cases/classifier';
 import { calculateSlaDate } from '@/lib/cases/sla';
 import { actionCreateCase } from '@/app/(app)/cases/actions';
+import { rateLimit, RATE_LIMITS, getClientIp } from '@/lib/security/rate-limit';
+
+const zohoLimiter = rateLimit(RATE_LIMITS.WEBHOOK);
 
 // Types for Zoho webhook payload
 interface ZohoAttachment {
@@ -42,17 +43,21 @@ interface ZohoWebhookPayload {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    // TODO: Verify webhook secret
-    // const webhookSecret = request.headers.get('x-zoho-webhook-secret');
-    // if (webhookSecret !== process.env.ZOHO_WEBHOOK_SECRET) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // }
+  // Rate limiting
+  const rl = zohoLimiter(request);
+  if (!rl.ok) return rl.response;
 
+  // Zoho does NOT send a webhook secret — authentication is based on
+  // payload structure validation + rate limiting. Log IP for audit.
+  const clientIp = getClientIp(request);
+  console.log(`[ZOHO WEBHOOK] Incoming from IP: ${clientIp}`);
+
+  try {
     const payload: ZohoWebhookPayload = await request.json();
 
-    // Validate required fields
+    // Validate required fields — reject malformed payloads
     if (!payload.message_id || !payload.from || !payload.subject) {
+      console.warn(`[ZOHO WEBHOOK] ❌ Malformed payload from IP ${clientIp}:`, JSON.stringify(payload).substring(0, 300));
       return NextResponse.json(
         { ok: false, error: 'Invalid payload' },
         { status: 400 }

@@ -14,11 +14,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runIngestionCycle } from '@/lib/imap/imapIngestor';
 import { generateTestId, logImapDebug } from '@/lib/debug/imapLogger';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const testId = generateTestId();
   const timestamp = new Date().toISOString();
 

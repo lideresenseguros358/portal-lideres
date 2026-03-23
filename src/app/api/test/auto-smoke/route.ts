@@ -23,6 +23,7 @@ import { emitirPoliza } from '@/lib/fedpa/emision.service';
 import { generarCotizacionAuto, emitirPolizaAuto } from '@/lib/is/quotes.service';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import { getMarcas, getModelos } from '@/lib/is/catalogs.service';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 export const maxDuration = 300; // 5 min
 
@@ -500,6 +501,9 @@ async function runISScenario(s: Scenario, dryrun: boolean): Promise<any> {
 // ══════════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const t0 = Date.now();
   const params = request.nextUrl.searchParams;
   const limit = Math.min(parseInt(params.get('limit') || '50'), 50);

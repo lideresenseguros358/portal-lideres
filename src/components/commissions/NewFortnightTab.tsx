@@ -229,6 +229,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   const router = useRouter();
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
+
+  // State for TXT download confirmation modal (BG vs VARIOS split)
+  const [showTxtConfirm, setShowTxtConfirm] = useState(false);
+  const [txtDownloadData, setTxtDownloadData] = useState<{
+    bgContent: string; bgValidCount: number; bgTotalAmount: number;
+    variosContent: string; variosValidCount: number; variosTotalAmount: number;
+    achErrors: any[];
+  } | null>(null);
   
   // State para totales de brokers
   const [brokerCommissionsTotal, setBrokerCommissionsTotal] = useState(0);
@@ -530,9 +538,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       console.log('Resultado de actionExportBankCsv:', {
         ok: result.ok,
-        hasContent: !!(result.bankACH),
-        contentLength: result.bankACH?.length || 0,
-        validCount: result.achValidCount,
+        bgCount: result.bgValidCount,
+        bgTotal: result.bgTotalAmount,
+        variosCount: result.variosValidCount,
+        variosTotal: result.variosTotalAmount,
         errors: result.achErrors?.length || 0,
         error: result.error
       });
@@ -544,54 +553,27 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         return;
       }
       
-      const content = result.bankACH || '';
-      const errors = result.achErrors || [];
-      const validCount = result.achValidCount || 0;
-      const totalAmount = result.achTotalAmount || 0;
+      const bgContent = result.bgContent || '';
+      const variosContent = result.variosContent || '';
       
-      if (!content || content.trim().length === 0) {
+      if (!bgContent.trim() && !variosContent.trim()) {
         console.warn('Contenido vacío generado');
         toast.warning('No hay pagos para generar. Verifica que haya brokers con monto neto > 0 y no retenidos.');
         setIsGeneratingCSV(false);
         return;
       }
       
-      // Método alternativo de descarga usando data URL
-      console.log('Generando descarga con', content.length, 'caracteres');
-      const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
-      const fileName = `PAGOS_COMISIONES_${fecha}.txt`;
-      
-      // Crear elemento de descarga
-      const element = document.createElement('a');
-      const file = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      element.href = URL.createObjectURL(file);
-      element.download = fileName;
-      element.style.display = 'none';
-      
-      // Agregar al DOM, hacer click y remover
-      document.body.appendChild(element);
-      console.log('Ejecutando descarga...');
-      element.click();
-      
-      // Limpiar después de un delay
-      setTimeout(() => {
-        document.body.removeChild(element);
-        URL.revokeObjectURL(element.href);
-        console.log('Descarga completada y limpieza realizada');
-      }, 100);
-      
-      // Mostrar mensaje de éxito
-      if (errors.length > 0) {
-        toast.warning(`Archivo TXT generado con ${validCount} pago(s). ${errors.length} broker(s) excluidos.`, {
-          duration: 5000
-        });
-      } else {
-        toast.success(`✅ TXT descargado: ${validCount} pago(s) por $${totalAmount.toFixed(2)}`, {
-          duration: 4000
-        });
-      }
-      
-      console.log('=== FIN DESCARGA TXT ===');
+      // Store data and show confirmation modal
+      setTxtDownloadData({
+        bgContent,
+        bgValidCount: result.bgValidCount || 0,
+        bgTotalAmount: result.bgTotalAmount || 0,
+        variosContent,
+        variosValidCount: result.variosValidCount || 0,
+        variosTotalAmount: result.variosTotalAmount || 0,
+        achErrors: result.achErrors || [],
+      });
+      setShowTxtConfirm(true);
       
     } catch (err) {
       console.error('ERROR CRÍTICO en handleExportACH:', err);
@@ -599,6 +581,57 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     } finally {
       setIsGeneratingCSV(false);
     }
+  };
+
+  const handleConfirmTxtDownload = () => {
+    if (!txtDownloadData) return;
+    
+    const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
+    
+    const downloadFile = (content: string, fileName: string) => {
+      if (!content || !content.trim()) return;
+      const element = document.createElement('a');
+      const file = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      element.href = URL.createObjectURL(file);
+      element.download = fileName;
+      element.style.display = 'none';
+      document.body.appendChild(element);
+      element.click();
+      setTimeout(() => {
+        document.body.removeChild(element);
+        URL.revokeObjectURL(element.href);
+      }, 100);
+    };
+
+    // Download BG file
+    if (txtDownloadData.bgContent.trim()) {
+      downloadFile(txtDownloadData.bgContent, `CTA_BG_COMISIONES_${fecha}.txt`);
+    }
+
+    // Download VARIOS file with slight delay to avoid browser blocking
+    if (txtDownloadData.variosContent.trim()) {
+      setTimeout(() => {
+        downloadFile(txtDownloadData.variosContent, `CTA_VARIOS_COMISIONES_${fecha}.txt`);
+      }, 300);
+    }
+
+    const totalFiles = (txtDownloadData.bgContent.trim() ? 1 : 0) + (txtDownloadData.variosContent.trim() ? 1 : 0);
+    const totalBrokers = txtDownloadData.bgValidCount + txtDownloadData.variosValidCount;
+    const totalAmount = txtDownloadData.bgTotalAmount + txtDownloadData.variosTotalAmount;
+
+    if (txtDownloadData.achErrors.length > 0) {
+      toast.warning(`${totalFiles} archivo(s) TXT generados con ${totalBrokers} pago(s). ${txtDownloadData.achErrors.length} broker(s) excluidos.`, {
+        duration: 5000
+      });
+    } else {
+      toast.success(`${totalFiles} archivo(s) TXT descargados: ${totalBrokers} pago(s) por $${totalAmount.toFixed(2)}`, {
+        duration: 4000
+      });
+    }
+
+    setShowTxtConfirm(false);
+    setTxtDownloadData(null);
+    console.log('=== FIN DESCARGA TXT ===');
   };
 
   const handleCloseFortnight = async () => {
@@ -1008,6 +1041,104 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isDiscarding ? 'Eliminando...' : 'Confirmar Eliminación'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* TXT Download Confirmation Modal (BG vs VARIOS) */}
+      <Dialog open={showTxtConfirm} onOpenChange={(open) => { if (!open) { setShowTxtConfirm(false); setTxtDownloadData(null); } }}>
+        <DialogContent className="z-[150] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-[#010139] flex items-center gap-2">
+              <FaFileDownload className="text-[#8AAA19]" />
+              Confirmar Descarga de Archivos TXT
+            </DialogTitle>
+            <DialogDescription>
+              Se descargarán 2 archivos TXT separados por tipo de banco.
+            </DialogDescription>
+          </DialogHeader>
+
+          {txtDownloadData && (
+            <div className="py-3 space-y-4">
+              {/* CTA BG */}
+              <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-[#010139] text-white text-xs font-bold px-2 py-0.5 rounded">CTA BG</span>
+                  <span className="text-sm font-semibold text-[#010139]">Banco General</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">Corredores</p>
+                    <p className="text-lg font-bold text-[#010139]">{txtDownloadData.bgValidCount}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Monto Total</p>
+                    <p className="text-lg font-bold text-[#8AAA19]">
+                      ${txtDownloadData.bgTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTA VARIOS */}
+              <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded">CTA VARIOS</span>
+                  <span className="text-sm font-semibold text-amber-800">Otros Bancos</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">Corredores</p>
+                    <p className="text-lg font-bold text-amber-800">{txtDownloadData.variosValidCount}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Monto Total</p>
+                    <p className="text-lg font-bold text-amber-600">
+                      ${txtDownloadData.variosTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total combinado */}
+              <div className="rounded-lg border-2 border-gray-300 bg-gray-50 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FaUsers className="text-[#010139]" />
+                  <span className="text-sm font-semibold text-[#010139]">
+                    Total: {txtDownloadData.bgValidCount + txtDownloadData.variosValidCount} corredores
+                  </span>
+                </div>
+                <span className="text-sm font-bold text-[#010139]">
+                  ${(txtDownloadData.bgTotalAmount + txtDownloadData.variosTotalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              {/* Errores si los hay */}
+              {txtDownloadData.achErrors.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
+                    <FaExclamationTriangle size={12} />
+                    {txtDownloadData.achErrors.length} broker(s) excluidos por datos bancarios incompletos
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => { setShowTxtConfirm(false); setTxtDownloadData(null); }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmTxtDownload}
+              className="bg-[#010139] hover:bg-[#020270] text-white"
+            >
+              <FaFileDownload className="mr-2 text-white" size={14} />
+              Descargar Archivos
             </Button>
           </DialogFooter>
         </DialogContent>

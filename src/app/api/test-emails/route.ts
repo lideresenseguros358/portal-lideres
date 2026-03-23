@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/server/email/sendEmail';
 import { renderEmailTemplate } from '@/server/email/renderer';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 const TEST_EMAIL = 'javiersamudio@lideresenseguros.com';
 
@@ -275,6 +276,9 @@ function getSubject(template: string): string {
  * Enviar correo de prueba de un tipo específico
  */
 export async function POST(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   try {
     const body = await request.json();
     const { template, fromType = 'PORTAL' } = body;
@@ -352,7 +356,10 @@ export async function POST(request: NextRequest) {
  * GET /api/test-emails
  * Verificar estado de conexiones SMTP
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   try {
     const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
     const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';

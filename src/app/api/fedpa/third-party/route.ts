@@ -12,8 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
-const USUARIO = process.env.USUARIO_FEDPA || 'SLIDERES';
-const CLAVE = process.env.CLAVE_FEDPA || 'lider836';
+const USUARIO = process.env.USUARIO_FEDPA || '';
+const CLAVE = process.env.CLAVE_FEDPA || '';
 
 // Cache en memoria (1 hora)
 let cache: { data: any; timestamp: number } | null = null;

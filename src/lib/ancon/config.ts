@@ -15,12 +15,12 @@ export const ANCON_REST_URL =
 // ═══ Credentials ═══
 export function getAnconCredentials() {
   return {
-    usuario: process.env.ANCON_USUARIO || '01009',
-    password: process.env.ANCON_PASSWORD || '750840840940840',
-    codAgente: process.env.ANCON_COD_AGENTE || '01009',
-    codCompania: '001',
-    codSucursal: '009',
-    nroLicencia: '750',
+    usuario: process.env.ANCON_USUARIO || '',
+    password: process.env.ANCON_PASSWORD || '',
+    codAgente: process.env.ANCON_COD_AGENTE || '',
+    codCompania: process.env.ANCON_COD_COMPANIA || '',
+    codSucursal: process.env.ANCON_COD_SUCURSAL || '',
+    nroLicencia: process.env.ANCON_NRO_LICENCIA || '',
   };
 }
 

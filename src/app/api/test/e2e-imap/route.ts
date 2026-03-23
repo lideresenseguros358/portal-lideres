@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import nodemailer from 'nodemailer';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 /**
  * TEST E2E: SMTP → IMAP → IA → CASE
@@ -14,15 +15,10 @@ import nodemailer from 'nodemailer';
  * 6. Verifica resultados
  */
 export async function POST(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   try {
-    // Validar CRON_SECRET
-    const authHeader = request.headers.get('x-cron-secret');
-    if (authHeader !== process.env.CRON_SECRET) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized - Invalid CRON_SECRET' },
-        { status: 401 }
-      );
-    }
 
     const supabase = await getSupabaseServer();
     const testId = `TEST-${Date.now()}`;

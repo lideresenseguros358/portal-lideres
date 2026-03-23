@@ -7,10 +7,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
-const USUARIO = process.env.USUARIO_FEDPA || 'SLIDERES';
-const CLAVE = process.env.CLAVE_FEDPA || 'lider836';
+const USUARIO = process.env.USUARIO_FEDPA || '';
+const CLAVE = process.env.CLAVE_FEDPA || '';
 
 // Minimal valid JPEG (1x1 pixel)
 function createTestJpeg(filename: string): File {
@@ -58,6 +59,9 @@ function formatDateOracle(date: Date): string {
 }
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const cuotas = parseInt(request.nextUrl.searchParams.get('cuotas') || '1');
   const dryRun = request.nextUrl.searchParams.get('dry') === '1';
   const results: any = { timestamp: new Date().toISOString(), cuotas, steps: [] };

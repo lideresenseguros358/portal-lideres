@@ -326,12 +326,34 @@ export default function EmitirDanosTercerosPage() {
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
         setPaymentCharged(true);
 
-        // ═══ PAGUELOFACIL: Cuotas futuras se cobran por cron job ═══
-        // PF Recurrent cobra de inmediato (tokenización), NO programa pagos futuros.
-        // El codOper se guarda en adm_cot_recurrences y el cron /api/cron/process-recurrences
-        // ejecuta el cobro en cada fecha de vencimiento del schedule.
-        if (selectedPaymentMode === 'cuotas' && selectedInstallmentsCount > 1) {
-          console.log(`[PAGUELOFACIL] ℹ️ ${selectedInstallmentsCount - 1} cuota(s) restante(s) se cobrarán automáticamente en sus fechas de vencimiento.`);
+        // ═══ PAGUELOFACIL: Registrar recurrencia para cuotas futuras ═══
+        if (selectedPaymentMode === 'cuotas' && selectedInstallmentsCount > 1 && pfCodOper) {
+          setEmissionStep('Registrando pagos recurrentes...');
+          try {
+            const recRes = await fetch('/api/paguelofacil/recurrent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                codOper: pfCodOper,
+                amount: selectedInstallmentAmount,
+                description: `Póliza DT - ${selectedPlan?.insurerName || 'Seguro'} - ${emissionData.primerNombre} ${emissionData.primerApellido}`,
+                concept: `Cuota recurrente - Daños a Terceros`,
+                email: emissionData.email,
+                phone: emissionData.celular || emissionData.telefono,
+                totalInstallments: selectedInstallmentsCount,
+                policyNumber: '',
+              }),
+            });
+            const recData = await recRes.json();
+            if (recData.success) {
+              pfRecCodOper = recData.codOper;
+              console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper);
+            } else {
+              console.error('[PAGUELOFACIL] ⚠️ Error registrando recurrencia:', recData.error);
+            }
+          } catch (recErr: any) {
+            console.error('[PAGUELOFACIL] ⚠️ Recurrent registration error:', recErr.message);
+          }
         }
       }
 

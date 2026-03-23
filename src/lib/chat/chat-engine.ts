@@ -361,12 +361,14 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
     phone: thread.phone_e164,
   });
 
-  // 6. Update thread with classification
+  // 6. Update thread with classification + user timestamp
+  const now = new Date().toISOString();
   const threadUpdate: Record<string, any> = {
     category: classification.category,
     severity: classification.severity,
     tags: classification.tags,
-    last_message_at: new Date().toISOString(),
+    last_message_at: now,
+    last_user_message_at: now,
     last_message_preview: body.substring(0, 200),
     metadata: {
       ...(thread.metadata || {}),
@@ -374,7 +376,7 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
         intent: classification.intent,
         executive_summary: classification.executive_summary,
         suggested_next_step: classification.suggested_next_step,
-        classified_at: new Date().toISOString(),
+        classified_at: now,
       },
     },
   };
@@ -404,10 +406,13 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
   }
 
   // 8. Generate AI reply if ai_enabled=true and assigned_type=ai
+  //    SKIP if thread is in human_intervention — Lissa stays silent
   let aiReply: string | null = null;
   let aiReplySent = false;
 
-  if (thread.ai_enabled && thread.assigned_type === 'ai') {
+  const isHumanIntervention = thread.status === 'human_intervention' || thread.status === 'urgent_human';
+
+  if (thread.ai_enabled && thread.assigned_type === 'ai' && !isHumanIntervention) {
     const replyResult = await generateAiReply({
       currentMessage: body,
       conversationHistory: lastMessages.slice(0, -1).map(m => ({
@@ -417,6 +422,7 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
       clientName: thread.client_name,
       category: classification.category,
       severity: classification.severity,
+      sentiment: (thread.sentiment as any) || null,
     });
 
     aiReply = replyResult.reply;
@@ -434,11 +440,67 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
     });
 
     aiReplySent = true;
-    console.log(`[CHAT-ENGINE] AI reply saved for thread ${thread.id}`);
+    console.log(`[CHAT-ENGINE] AI reply saved for thread ${thread.id} (sentiment: ${replyResult.sentiment}, is_closing: ${replyResult.is_closing})`);
+
+    // 9. Post-reply: update sentiment, angry count, timestamps, and handle is_closing / angry escalation
+    const sentimentUpdate: Record<string, any> = {
+      sentiment: replyResult.sentiment,
+      last_ai_message_at: new Date().toISOString(),
+      followup_sent_at: null, // Reset follow-up tracker since we just replied
+    };
+
+    // Track consecutive angry count
+    if (replyResult.sentiment === 'angry') {
+      sentimentUpdate.consecutive_angry_count = (thread.consecutive_angry_count || 0) + 1;
+    } else {
+      sentimentUpdate.consecutive_angry_count = 0;
+    }
+
+    // Escalate to urgent_human if 2+ consecutive angry messages
+    const newAngryCount = sentimentUpdate.consecutive_angry_count;
+    if (newAngryCount >= 2 && thread.status !== 'urgent_human') {
+      sentimentUpdate.status = 'urgent_human';
+      console.log(`[CHAT-ENGINE] Thread ${thread.id} escalated to urgent_human (${newAngryCount} consecutive angry)`);
+
+      // Create urgent notification for operaciones dashboard
+      await notifyMasters(sb, {
+        type: 'chat_urgent',
+        title: `🔴 CLIENTE ENOJADO: ${thread.client_name || thread.phone_e164}`,
+        body: `El cliente lleva ${newAngryCount} mensajes consecutivos con tono enojado. Requiere intervención humana inmediata.`,
+        link: `${PORTAL_BASE_URL}/adm-cot/chats?thread=${thread.id}`,
+        target_role: 'master',
+        target_user_id: null,
+      });
+
+      // Log escalation event
+      await sb.from('chat_events').insert({
+        thread_id: thread.id,
+        event_type: 'escalated',
+        payload: {
+          reason: 'consecutive_angry',
+          consecutive_angry_count: newAngryCount,
+          sentiment: replyResult.sentiment,
+        },
+      });
+    }
+
+    // Auto-close session if user is saying goodbye
+    if (replyResult.is_closing) {
+      sentimentUpdate.status = 'closed';
+      console.log(`[CHAT-ENGINE] Thread ${thread.id} auto-closed (is_closing=true)`);
+
+      await sb.from('chat_events').insert({
+        thread_id: thread.id,
+        event_type: 'status_changed',
+        payload: { from: thread.status, to: 'closed', reason: 'user_farewell' },
+      });
+    }
+
+    await sb.from('chat_threads').update(sentimentUpdate).eq('id', thread.id);
   } else {
     // Not AI-handled: increment unread for master
-    if (thread.assigned_type === 'master') {
-      console.log(`[CHAT-ENGINE] Thread ${thread.id} assigned to master — no AI reply`);
+    if (thread.assigned_type === 'master' || isHumanIntervention) {
+      console.log(`[CHAT-ENGINE] Thread ${thread.id} under human control — Lissa silent`);
     }
   }
 
@@ -476,11 +538,13 @@ export async function assignThread(
   if (fetchErr || !thread) return { success: false, error: 'Thread not found' };
 
   if (assignTo === 'ai') {
-    // Reassign to LISSA AI
+    // Reassign to LISSA AI — clear human intervention status
     await sb.from('chat_threads').update({
       assigned_type: 'ai',
       assigned_master_user_id: null,
       ai_enabled: true,
+      status: 'open',
+      consecutive_angry_count: 0,
     }).eq('id', threadId);
 
     await sb.from('chat_events').insert({
@@ -511,6 +575,7 @@ export async function assignThread(
     assigned_type: 'master',
     assigned_master_user_id: userId,
     ai_enabled: false,
+    status: 'human_intervention',
     unread_count_master: 0,
   }).eq('id', threadId);
 

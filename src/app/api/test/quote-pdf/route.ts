@@ -4,10 +4,13 @@
  * Returns the PDF directly in the browser for visual inspection.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { generateISQuotePdf } from '@/lib/is/quote-pdf';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
   try {
     // Sample coberturas data mimicking IS API response
     const sampleCoberturas = {

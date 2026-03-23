@@ -19,6 +19,7 @@ import { obtenerToken } from '@/lib/fedpa/auth.service';
 import { subirDocumentos } from '@/lib/fedpa/documentos.service';
 import { emitirPoliza } from '@/lib/fedpa/emision.service';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
+import { requireCronSecret } from '@/lib/security/api-guard';
 
 // Minimal valid JPEG (1x1 pixel)
 function createTestJpeg(filename: string): File {
@@ -110,6 +111,9 @@ function buildCCPayload(idDoc: string): EmitirPolizaRequest {
 }
 
 export async function GET(request: NextRequest) {
+  const authErr = requireCronSecret(request);
+  if (authErr) return authErr;
+
   const type = request.nextUrl.searchParams.get('type') || 'DT';
   const waitAttempts = parseInt(request.nextUrl.searchParams.get('wait') || '0');
   const dtPlanOverride = parseInt(request.nextUrl.searchParams.get('dtPlan') || '0') || 0;

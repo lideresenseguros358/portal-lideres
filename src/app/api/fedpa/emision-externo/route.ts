@@ -25,8 +25,8 @@ const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
 function getCredentials() {
   return {
-    Usuario: process.env.USUARIO_FEDPA || 'SLIDERES',
-    Clave: process.env.CLAVE_FEDPA || 'lider836',
+    Usuario: process.env.USUARIO_FEDPA || '',
+    Clave: process.env.CLAVE_FEDPA || '',
   };
 }
 
