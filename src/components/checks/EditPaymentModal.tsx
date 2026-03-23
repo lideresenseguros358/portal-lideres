@@ -104,18 +104,15 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadPaymentReferences = async () => {
-    const client = supabaseClient();
-    const { data, error } = await client
-      .from('payment_references')
-      .select('*')
-      .eq('payment_id', payment.id);
-    
-    if (!error && data && data.length > 0) {
-      setReferences(data.map(ref => ({
+  const loadPaymentReferences = () => {
+    // Use payment.payment_references already loaded by parent (via admin client)
+    // instead of re-querying with browser client which may be blocked by RLS.
+    const refs = payment.payment_references;
+    if (refs && refs.length > 0) {
+      setReferences(refs.map((ref: any) => ({
         reference_number: ref.reference_number || '',
         date: (ref.date || new Date().toISOString().split('T')[0]) as string,
-        amount: ref.amount?.toString() || ''
+        amount: (ref.amount_to_use ?? ref.amount)?.toString() || ''
       })));
     } else {
       setReferences([{
