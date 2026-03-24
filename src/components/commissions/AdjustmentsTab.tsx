@@ -519,6 +519,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showHelpTooltip, setShowHelpTooltip] = useState(false);
   const helpTooltipRef = useRef<HTMLDivElement>(null);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
 
   const loadPendingItems = useCallback(async (silentRefresh = false) => {
     if (silentRefresh) {
@@ -1024,14 +1025,22 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               {/* Tooltip de ayuda */}
               <div className="relative" ref={helpTooltipRef}>
                 <button
+                  ref={helpButtonRef}
                   onClick={() => setShowHelpTooltip(!showHelpTooltip)}
                   className="p-1 text-gray-400 hover:text-[#8AAA19] transition-colors rounded-full hover:bg-gray-100"
                   title="Instrucciones"
                 >
                   <FaQuestionCircle size={16} />
                 </button>
-                {showHelpTooltip && (
-                  <div className="absolute left-0 top-full mt-2 w-[320px] sm:w-[380px] bg-white border-2 border-[#8AAA19] rounded-xl shadow-2xl z-50 p-4">
+                {showHelpTooltip && (() => {
+                  const btnRect = helpButtonRef.current?.getBoundingClientRect();
+                  const rawTop = (btnRect?.bottom ?? 0) + 8;
+                  const clampedTop = Math.min(rawTop, window.innerHeight - 20);
+                  return (
+                  <div
+                    className="fixed left-3 right-3 sm:absolute sm:left-0 sm:right-auto sm:w-[380px] sm:top-full sm:mt-2 bg-white border-2 border-[#8AAA19] rounded-xl shadow-2xl z-[9999] p-4 max-h-[80vh] overflow-y-auto"
+                    style={{ top: clampedTop }}
+                  >
                     <div className="flex items-start gap-3">
                       <FaInfoCircle className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={18} />
                       <div>
@@ -1055,7 +1064,8 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                       <FaTimes size={12} />
                     </button>
                   </div>
-                )}
+                  );
+                })()}
               </div>
               {loading && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
