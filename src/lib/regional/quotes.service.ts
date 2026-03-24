@@ -147,7 +147,8 @@ export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteRes
 
   const res = await regionalPost<RegionalCCQuoteResponse>(
     REGIONAL_CC_ENDPOINTS.COTIZACION,
-    body
+    body,
+    { useTokenCC: true }
   );
 
   if (!res.success) {

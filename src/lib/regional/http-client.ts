@@ -15,13 +15,13 @@ function getBasicAuthHeader(): string {
   return `Basic ${encoded}`;
 }
 
-function getDefaultHeaders(): Record<string, string> {
+function getDefaultHeaders(useTokenCC = false): Record<string, string> {
   const creds = getRegionalCredentials();
   return {
     'Content-Type': 'application/json',
     Authorization: getBasicAuthHeader(),
     codInter: creds.codInter,
-    token: creds.token,
+    token: useTokenCC ? creds.tokenCC : creds.token,
   };
 }
 
@@ -31,6 +31,8 @@ interface RequestOptions {
   params?: Record<string, string>;
   timeout?: number;
   extraHeaders?: Record<string, string>;
+  /** Use the CC-specific token (tokenCC) instead of the default RC token */
+  useTokenCC?: boolean;
 }
 
 export interface RegionalResponse<T = unknown> {
@@ -52,7 +54,7 @@ export async function regionalRequest<T = unknown>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<RegionalResponse<T>> {
-  const { method = 'GET', body, params, timeout = 30000, extraHeaders } = options;
+  const { method = 'GET', body, params, timeout = 30000, extraHeaders, useTokenCC } = options;
   const baseUrl = getRegionalBaseUrl();
 
   let url = `${baseUrl}${endpoint}`;
@@ -61,7 +63,7 @@ export async function regionalRequest<T = unknown>(
     url += (url.includes('?') ? '&' : '?') + qs;
   }
 
-  const headers = { ...getDefaultHeaders(), ...extraHeaders };
+  const headers = { ...getDefaultHeaders(useTokenCC), ...extraHeaders };
 
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     try {
@@ -177,9 +179,10 @@ export async function regionalGet<T = unknown>(
  */
 export async function regionalPost<T = unknown>(
   endpoint: string,
-  body: unknown
+  body: unknown,
+  opts?: { useTokenCC?: boolean }
 ): Promise<RegionalResponse<T>> {
-  return regionalRequest<T>(endpoint, { method: 'POST', body });
+  return regionalRequest<T>(endpoint, { method: 'POST', body, ...opts });
 }
 
 /**
@@ -187,7 +190,8 @@ export async function regionalPost<T = unknown>(
  */
 export async function regionalPut<T = unknown>(
   endpoint: string,
-  body: unknown
+  body: unknown,
+  opts?: { useTokenCC?: boolean }
 ): Promise<RegionalResponse<T>> {
-  return regionalRequest<T>(endpoint, { method: 'PUT', body });
+  return regionalRequest<T>(endpoint, { method: 'PUT', body, ...opts });
 }

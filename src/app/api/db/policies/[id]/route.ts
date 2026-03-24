@@ -92,6 +92,19 @@ export async function DELETE(
 
     const { id } = await params;
 
+    // Limpiar referencias FK en tablas dependientes antes de eliminar
+    const { error: tempErr } = await supabase
+      .from('temp_client_import')
+      .update({ policy_id: null })
+      .eq('policy_id', id);
+    if (tempErr) console.error('Error limpiando temp_client_import.policy_id:', tempErr);
+
+    const { error: fdErr } = await supabase
+      .from('fortnight_details')
+      .update({ policy_id: null })
+      .eq('policy_id', id);
+    if (fdErr) console.error('Error limpiando fortnight_details.policy_id:', fdErr);
+
     // Eliminar póliza
     const { error } = await supabase
       .from('policies')

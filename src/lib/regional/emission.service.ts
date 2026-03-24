@@ -65,7 +65,8 @@ export async function emitirPolizaCC(
 
   const res = await regionalPost<RegionalCCEmissionResponse>(
     REGIONAL_CC_ENDPOINTS.EMITIR,
-    body
+    body,
+    { useTokenCC: true }
   );
 
   if (!res.success) {
@@ -104,7 +105,8 @@ export async function actualizarPlanPago(
 
   const res = await regionalPut<RegionalPlanPagoResponse>(
     REGIONAL_CC_ENDPOINTS.PLAN_PAGO,
-    body
+    body,
+    { useTokenCC: true }
   );
 
   if (!res.success) {
@@ -152,7 +154,7 @@ export async function imprimirPoliza(
         'Content-Type': 'application/json',
         Authorization: auth,
         codInter: creds.codInter,
-        token: creds.token,
+        token: creds.tokenCC,
       },
       body: JSON.stringify({ poliza: cleanPoliza }),
       signal: controller.signal,
