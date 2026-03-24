@@ -366,7 +366,7 @@ export async function POST(request: NextRequest) {
       nroPoliza: polizaNumber,
       noCotizacion: no_cotizacion,
       insurer: 'ANCON',
-      pdfUrl: pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(polizaNumber)}`,
+      pdfUrl: pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(polizaNumber)}&no_cotizacion=${encodeURIComponent(no_cotizacion)}`,
       _timing: { totalMs: elapsed },
     });
   } catch (error: unknown) {
