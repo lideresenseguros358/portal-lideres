@@ -7,14 +7,14 @@
  *   - cedulaFile, licenciaFile, registroVehicularFile: document files
  *
  * Backend flow (confirmed by ANCON 2026-03-24):
- *   1. Upload documents via REST API (SubirDocumentos + post_add_documentos_polizas_emision)
- *   2. GenerarNoDocumento → policy number
- *   3. ListadoInspeccion → EnlazarInspeccion (soft-fail — ANCON working on API alternative)
- *   4. EmitirDatos → EmisionServer handles client creation internally (no GuardarCliente needed)
- *   5. ImpresionPoliza → carátula PDF link
+ *   1. GenerarNoDocumento → policy number
+ *   2. Upload documents via REST API (cédula, licencia, registro)
+ *   3. EmitirDatos → EmisionServer handles client creation internally (no GuardarCliente needed)
+ *   4. ImpresionPoliza → carátula PDF link
  *
  * NOTE: GuardarCliente is NOT called. ANCON confirmed EmitirDatos/EmisionServer
- *       handles client creation internally. GuardarCliente is for a separate flow.
+ *       handles client creation internally.
+ * NOTE: Inspection (ListadoInspeccion/EnlazarInspeccion) is CC-only. DT does NOT require inspection.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -210,60 +210,25 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    log('1/5', `Póliza generada: ${polizaNumber}`);
+    log('1/4', `Póliza generada: ${polizaNumber}`);
 
     // ═══ STEP 2: Upload documents (cédula, licencia, registro) via REST ═══
     const hasFiles = Object.keys(files).length > 0;
     if (hasFiles) {
-      log('2/5', `Subiendo ${Object.keys(files).length} archivo(s)...`);
+      log('2/4', `Subiendo ${Object.keys(files).length} archivo(s)...`);
       const uploadResult = await uploadInspectionAndDocuments(
         tipo_de_cliente || 'N',
         files
       );
-      log('2/5', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
+      log('2/4', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
     } else {
-      log('2/5', 'Sin archivos adjuntos — continuando sin documentos');
+      log('2/4', 'Sin archivos adjuntos — continuando sin documentos');
     }
 
-    // ═══ STEP 3: Inspection (soft-fail) ═══
-    // ANCON is working on an API alternative for inspection creation.
-    // For DT: try to link if an inspection exists, but never block emission.
-    let inspectionLinked = false;
-    log('3/5', 'Verificando inspecciones disponibles (ListadoInspeccion)...');
-    try {
-      const token2 = await getFreshToken();
-      const inspRaw = await rawSoap('ListadoInspeccion', { cod_agente: creds.codAgente, token: token2 });
-      const inspections = Array.isArray(inspRaw) ? inspRaw as Array<Record<string, string>> : [];
-      log('3/5', `Inspecciones encontradas: ${inspections.length}`);
-
-      if (inspections.length > 0) {
-        const matchingInsp = inspections.find(
-          (i) => i.no_cotizacion === no_cotizacion || i.cotizacion === no_cotizacion
-        ) || inspections[0];
-        const inspId = matchingInsp?.inspeccion || matchingInsp?.no_inspeccion || matchingInsp?.id;
-        if (inspId) {
-          log('3/5', `Enlazando inspección ${inspId} a cotización ${no_cotizacion}...`);
-          const linkRaw = await rawSoap('EnlazarInspeccion', {
-            inspeccion: inspId,
-            cotizacion: no_cotizacion,
-            token: token2,
-          });
-          const linkMsg = typeof linkRaw === 'string' ? linkRaw : JSON.stringify(linkRaw);
-          log('3/5', `EnlazarInspeccion: ${linkMsg.substring(0, 200)}`);
-          inspectionLinked = !linkMsg.includes('no coincide') && !linkMsg.includes('Verificar');
-        } else {
-          log('3/5', 'Inspección sin ID válido — continuando sin enlazar');
-        }
-      } else {
-        log('3/5', 'Sin inspecciones disponibles — continuando (ANCON gestionará alternativa)');
-      }
-    } catch (inspErr) {
-      log('3/5', `Inspección omitida (soft-fail): ${inspErr}`);
-    }
-
-    // ═══ STEP 4: Emit policy ═══
+    // ═══ STEP 3: Emit policy ═══
     // EmitirDatos/EmisionServer handles client creation internally.
-    log('4/5', 'Emitiendo póliza (EmisionServer)...');
+    // Inspection is CC-only — not called for DT.
+    log('3/4', 'Emitiendo póliza (EmisionServer)...');
     const emitToken = await getFreshToken();
 
     const today = new Date();
@@ -344,7 +309,7 @@ export async function POST(request: NextRequest) {
 
     // Parse EmitirDatos response
     const emitStr = typeof emitRaw === 'string' ? emitRaw : JSON.stringify(emitRaw);
-    log('4/5', `EmitirDatos response: ${emitStr.substring(0, 300)}`);
+    log('3/4', `EmitirDatos response: ${emitStr.substring(0, 300)}`);
 
     const emitObj = typeof emitRaw === 'object' && emitRaw !== null ? emitRaw as Record<string, unknown> : null;
     const emitError = emitObj?.Respuesta
@@ -370,16 +335,15 @@ export async function POST(request: NextRequest) {
           success: false,
           error: emitError,
           poliza: polizaNumber,
-          inspectionLinked,
         },
         { status: 500 }
       );
     }
 
-    log('4/5', `Póliza emitida: ${polizaNumber}`);
+    log('3/4', `Póliza emitida: ${polizaNumber}`);
 
-    // ═══ STEP 5: Get carátula PDF link ═══
-    log('5/5', 'Obteniendo carátula PDF...');
+    // ═══ STEP 4: Get carátula PDF link ═══
+    log('4/4', 'Obteniendo carátula PDF...');
     let pdfUrl: string | null = null;
     try {
       const printRaw = await rawSoap('ImpresionPoliza', { poliza: polizaNumber, token: emitToken });
@@ -388,9 +352,9 @@ export async function POST(request: NextRequest) {
       } else if (typeof printRaw === 'object' && printRaw !== null) {
         pdfUrl = (printRaw as Record<string, string>).enlace_poliza || null;
       }
-      log('5/5', pdfUrl ? `PDF: ${pdfUrl}` : `PDF no disponible: ${JSON.stringify(printRaw).substring(0, 200)}`);
+      log('4/4', pdfUrl ? `PDF: ${pdfUrl}` : `PDF no disponible: ${JSON.stringify(printRaw).substring(0, 200)}`);
     } catch (printErr) {
-      log('5/5', `Error obteniendo PDF: ${printErr}`);
+      log('4/4', `Error obteniendo PDF: ${printErr}`);
     }
 
     const elapsed = Date.now() - t0;
@@ -403,7 +367,6 @@ export async function POST(request: NextRequest) {
       noCotizacion: no_cotizacion,
       insurer: 'ANCON',
       pdfUrl: pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(polizaNumber)}`,
-      inspectionLinked,
       _timing: { totalMs: elapsed },
     });
   } catch (error: unknown) {
