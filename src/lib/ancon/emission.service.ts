@@ -366,12 +366,21 @@ export async function uploadDocumentREST(
 }
 
 // ═══ Upload all required documents for a cotización ═══
+//
+// ANCON Natural docs (id_archivo):
+//   1 = Solicitud de seguros   (requerida) ← generated PDF from portal
+//   2 = Conoce a tu cliente    (opcional)
+//   3 = Cédula del contratante (requerida)
+//   4 = Cédula del asegurado   (requerida) ← same person as contratante for Natural
+//   5 = Licencia del asegurado (requerida)
+//   6 = Licencia conductor habitual (opcional)
+//   7 = Registro vehicular     (opcional)
 
 export async function uploadInspectionAndDocuments(
   tipoPersona: string,
-  files: Record<string, { buffer: Buffer; name: string; type: string }>
+  files: Record<string, { buffer: Buffer; name: string; type: string }>,
+  solicitudBuffer?: Buffer  // Pre-generated Solicitud de Seguros PDF (doc id=1)
 ): Promise<{ success: boolean; uploaded: number; failed: number; errors: string[] }> {
-  // 1. Get the required document list (which gives us nombre_archivo paths)
   const docsResult = await getRequiredDocuments(tipoPersona);
   if (!docsResult.success || !docsResult.data?.listado?.length) {
     return { success: false, uploaded: 0, failed: 0, errors: ['No se pudo obtener lista de documentos'] };
@@ -382,35 +391,27 @@ export async function uploadInspectionAndDocuments(
   let failed = 0;
   const errors: string[] = [];
 
-  // Map our file keys to ANCON document IDs
-  // ANCON Natural docs: 1=Solicitud, 2=Conoce cliente, 3=Cédula contratante,
-  //   4=Cédula asegurado, 5=Licencia asegurado, 6=Licencia conductor, 7=Registro vehicular
-  const fileMapping: Record<string, string[]> = {
-    '3': ['cedula', 'cedulaFile'],           // Cédula contratante
-    '4': ['cedula', 'cedulaFile'],           // Cédula asegurado (same person for individual)
-    '5': ['licencia', 'licenciaFile'],       // Licencia asegurado
-    '7': ['registroVehicular', 'registroVehicularFile'], // Registro vehicular
-  };
-
-  // Upload inspection photos as part of document 1 (Solicitud - we combine photos)
-  // Or upload individual photos to available slots
-
   for (const doc of docList) {
-    const mapping = fileMapping[doc.id_archivo];
-    if (!mapping) continue;
-
-    // Find a matching file
+    const id = doc.id_archivo;
     let fileData: { buffer: Buffer; name: string; type: string } | undefined;
-    for (const key of mapping) {
-      if (files[key]) {
-        fileData = files[key];
-        break;
-      }
+
+    if (id === '1' && solicitudBuffer) {
+      // Solicitud de Seguros — generated PDF
+      fileData = { buffer: solicitudBuffer, name: 'solicitud_ancon.pdf', type: 'application/pdf' };
+    } else if (id === '3' || id === '4') {
+      // Cédula contratante (3) and cédula asegurado (4) — same person for Natural
+      fileData = files['cedulaFile'] || files['cedula'];
+    } else if (id === '5') {
+      // Licencia del asegurado
+      fileData = files['licenciaFile'] || files['licencia'];
+    } else if (id === '7') {
+      // Registro vehicular
+      fileData = files['registroVehicularFile'] || files['registroVehicular'];
     }
 
     if (!fileData) {
       if (doc.requerida === '1') {
-        console.warn(`[ANCON Upload] Required doc ${doc.id_archivo} (${doc.nombre}) - no file provided`);
+        console.warn(`[ANCON Upload] Doc requerido ${id} (${doc.nombre}) — sin archivo`);
       }
       continue;
     }
@@ -424,11 +425,11 @@ export async function uploadInspectionAndDocuments(
 
     if (result.success) {
       uploaded++;
-      console.log(`[ANCON Upload] ✅ ${doc.nombre} uploaded`);
+      console.log(`[ANCON Upload] ✅ doc ${id} (${doc.nombre}) subido`);
     } else {
       failed++;
-      errors.push(`${doc.nombre}: ${result.message}`);
-      console.warn(`[ANCON Upload] ❌ ${doc.nombre}: ${result.message}`);
+      errors.push(`doc ${id} ${doc.nombre}: ${result.message}`);
+      console.warn(`[ANCON Upload] ❌ doc ${id} (${doc.nombre}): ${result.message}`);
     }
   }
 

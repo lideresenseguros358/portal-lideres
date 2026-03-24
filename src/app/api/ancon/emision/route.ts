@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   uploadInspectionAndDocuments,
 } from '@/lib/ancon/emission.service';
+import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 
 export const maxDuration = 120;
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest) {
     let body: Record<string, string>;
     const files: Record<string, { buffer: Buffer; name: string; type: string }> = {};
     const pendingFiles: { key: string; file: File }[] = [];
+    let firmaDataUrl: string | undefined;
 
     const contentType = request.headers.get('content-type') || '';
 
@@ -86,6 +88,10 @@ export async function POST(request: NextRequest) {
       const formData = await request.formData();
       const emissionDataRaw = formData.get('emissionData');
       body = emissionDataRaw ? JSON.parse(emissionDataRaw as string) : {};
+
+      // Extract firma data URL (base64 PNG)
+      const firmaRaw = formData.get('firmaDataUrl');
+      if (firmaRaw && typeof firmaRaw === 'string') firmaDataUrl = firmaRaw;
 
       // Extract file entries
       formData.forEach((value, key) => {
@@ -212,13 +218,86 @@ export async function POST(request: NextRequest) {
     }
     log('1/4', `Póliza generada: ${polizaNumber}`);
 
-    // ═══ STEP 2: Upload documents (cédula, licencia, registro) via REST ═══
-    const hasFiles = Object.keys(files).length > 0;
+    // ═══ STEP 2: Generate Solicitud de Seguros PDF + upload all documents ═══
+    log('2/4', 'Generando y subiendo documentos...');
+
+    // Build solicitud PDF data from emission body
+    const nombreCompleto = [
+      primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, apellido_casada
+    ].filter(Boolean).join(' ').toUpperCase();
+
+    // Parse fecha_nacimiento (format: DD/MM/YYYY or YYYY-MM-DD)
+    let fnDia = '', fnMes = '', fnAnio = '';
+    if (fecha_nacimiento) {
+      const parts = fecha_nacimiento.includes('/') ? fecha_nacimiento.split('/') : fecha_nacimiento.split('-');
+      if (fecha_nacimiento.includes('/')) {
+        fnDia  = parts[0] || '';
+        fnMes  = parts[1] || '';
+        fnAnio = parts[2] || '';
+      } else {
+        fnAnio = parts[0] || '';
+        fnMes  = parts[1] || '';
+        fnDia  = parts[2] || '';
+      }
+    }
+
+    // Map nivelIngreso from ANCON catalog code or portal label
+    const nivelIngresoRaw = (body as Record<string, string>).nivel_ingreso || (body as Record<string, string>).nivelIngreso || '';
+    const INGRESO_LABEL_MAP: Record<string, string> = {
+      '001': 'Menos de $10,000', 'menos_10k': 'Menos de $10,000',
+      '002': 'De $10,000 a $30,000', '10k_30k': 'De $10,000 a $30,000',
+      '003': 'De $30,000 a $50,000', '30k_50k': 'De $30,000 a $50,000',
+      '004': 'Más de $50,000', 'mas_50k': 'Más de $50,000',
+    };
+    const nivelIngresoLabel = INGRESO_LABEL_MAP[nivelIngresoRaw] || nivelIngresoRaw;
+
+    // Only fill valor_vehiculo for CC products
+    const valorVehiculo = isCC ? (suma_asegurada || '') : '';
+
+    let solicitudBuffer: Buffer | undefined;
+    try {
+      solicitudBuffer = await generateAnconSolicitudPdf({
+        nombreCompleto,
+        genero: (sexo === 'M' || sexo === 'MASCULINO' || sexo === '1') ? 'M' : 'F',
+        fechaNacDia: fnDia || '',
+        fechaNacMes: fnMes || '',
+        fechaNacAnio: fnAnio || '',
+        cedula: cedula || pasaporte || ruc || '',
+        paisNacimiento: 'PANAMÁ',
+        nacionalidad: nacionalidad || 'PANAMEÑA',
+        paisResidencia: pais_residencia || 'PANAMÁ',
+        direccionResidencial: direccion || '',
+        email: email || '',
+        telResidencia: telefono_residencial || '',
+        celular: telefono_celular || '',
+        estadoCivil: (body as Record<string, string>).estado_civil || '',
+        profesion: profesion || '',
+        ocupacion: ocupacion || '',
+        empresa: (body as Record<string, string>).empresa || '',
+        nivelIngreso: nivelIngresoLabel,
+        anioVehiculo: ano || '',
+        marcaVehiculo: nombre_marca || '',
+        modeloVehiculo: nombre_modelo || '',
+        placa: placa || '',
+        motor: no_motor || '',
+        chasis: no_chasis || vin || '',
+        valorVehiculo,
+        acreedorHipotecario: nombre_acreedor || '',
+        firmaDataUrl,
+        fechaEmision: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      });
+      log('2/4', `Solicitud PDF generada: ${solicitudBuffer.length} bytes`);
+    } catch (solicitudErr) {
+      log('2/4', `Error generando solicitud PDF (soft-fail): ${solicitudErr}`);
+    }
+
+    const hasFiles = Object.keys(files).length > 0 || !!solicitudBuffer;
     if (hasFiles) {
-      log('2/4', `Subiendo ${Object.keys(files).length} archivo(s)...`);
+      log('2/4', `Subiendo ${Object.keys(files).length} archivo(s) + solicitud PDF...`);
       const uploadResult = await uploadInspectionAndDocuments(
         tipo_de_cliente || 'N',
-        files
+        files,
+        solicitudBuffer
       );
       log('2/4', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
     } else {

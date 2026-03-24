@@ -1116,6 +1116,15 @@ export default function EmitirDanosTercerosPage() {
         setEmissionProgress(20);
         setEmissionStep('Subiendo documentos...');
 
+        // Map nivelIngresos portal label → ANCON-friendly label for solicitud PDF
+        const nivelIngresoMap: Record<string, string> = {
+          'menos de 10mil': 'Menos de $10,000',
+          '10mil a 30mil':  'De $10,000 a $30,000',
+          '30mil a 50mil':  'De $30,000 a $50,000',
+          'mas de 50mil':   'Más de $50,000',
+        };
+        const nivelIngresoLabel = nivelIngresoMap[emissionData.nivelIngresos || ''] || emissionData.nivelIngresos || '';
+
         const anconEmitBody = {
           no_cotizacion: noCotizacion,
           opcion: 'A',
@@ -1147,11 +1156,22 @@ export default function EmitirDanosTercerosPage() {
           cantidad_de_pago: '1',
           nacionalidad: emissionData.nacionalidad || 'PANAMA',
           pep: '0',
+          // Extra fields for Solicitud de Seguros PDF
+          estado_civil: emissionData.estadoCivil || '',
+          ocupacion: emissionData.actividadEconomica || '',
+          profesion: emissionData.actividadEconomica || '',
+          empresa: emissionData.dondeTrabaja || '',
+          nivel_ingreso: nivelIngresoLabel,
         };
 
-        // Build FormData with emission data + documents
+        // Build FormData with emission data + documents + firma
         const anconForm = new FormData();
         anconForm.append('emissionData', JSON.stringify(anconEmitBody));
+
+        // Firma digital para la Solicitud de Seguros PDF
+        if (signatureRef.current) {
+          anconForm.append('firmaDataUrl', signatureRef.current);
+        }
 
         // Attach document files
         if (emissionData.cedulaFile) {
