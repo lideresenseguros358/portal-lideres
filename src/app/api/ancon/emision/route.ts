@@ -1,24 +1,20 @@
 /**
- * API Endpoint: Emisión ANCON (CC + DT)
+ * API Endpoint: Emisión ANCON (DT + CC)
  * POST /api/ancon/emision
  *
  * Accepts FormData with:
  *   - emissionData (JSON string): all client/vehicle/quote fields
- *   - photo_* files: inspection photos
  *   - cedulaFile, licenciaFile, registroVehicularFile: document files
  *
- * Full backend flow (single button click):
- *   1. GuardarCliente → register client for cotización (may fail — WSDL bug)
- *   2. ClienteIgualContratante → confirm insured = policyholder
- *   3. Upload inspection photos + documents via REST API
- *   4. GenerarNoDocumento → policy number
- *   5. ListadoInspeccion → EnlazarInspeccion (ALL products, ANCON requires before emission)
- *   6. EmitirDatos → emit policy (cod_grupo=00001, nombre_grupo=SIN GRUPO)
- *   7. ImpresionPoliza → get carátula PDF link
+ * Backend flow (confirmed by ANCON 2026-03-24):
+ *   1. Upload documents via REST API (SubirDocumentos + post_add_documentos_polizas_emision)
+ *   2. GenerarNoDocumento → policy number
+ *   3. ListadoInspeccion → EnlazarInspeccion (soft-fail — ANCON working on API alternative)
+ *   4. EmitirDatos → EmisionServer handles client creation internally (no GuardarCliente needed)
+ *   5. ImpresionPoliza → carátula PDF link
  *
- * NOTE: GuardarCliente has a server-side WSDL bug — the PHP code requires
- *       pais_residencia but the WSDL doesn't expose it. Adding non-WSDL params
- *       causes "Token Inactivo". See docs/ANCON_DIAGNOSTICO_EMISION.md
+ * NOTE: GuardarCliente is NOT called. ANCON confirmed EmitirDatos/EmisionServer
+ *       handles client creation internally. GuardarCliente is for a separate flow.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -182,98 +178,13 @@ export async function POST(request: NextRequest) {
     const log = (step: string, msg: string) =>
       console.log(`[API ANCON Emisión] [${step}] ${msg}`);
 
-    // ═══ STEP 1: GuardarCliente → register client for this cotización ═══
-    // Each step gets a FRESH token because GuardarCliente's ~48 params
-    // exhaust the token's call limit (~5-8 sequential SOAP calls).
-    // Required before EmitirDatos — creates the client FK reference.
-    // Uses cod_producto='41' (internal code) and figura='1'.
-    // Catalog values discovered via exhaustive testing (March 2026).
-    log('1/7', 'Registrando cliente (GuardarCliente)...');
+    // Normalize pep: accept '0', 'N', false → canonical ANCON catalog code '002|campo_pep'
+    const pepNormalized = (pep && pep !== '0' && pep !== 'N' && pep !== 'false')
+      ? pep
+      : '002|campo_pep';
 
-    // Parse cedula parts (format: X-XXX-XXXX)
-    const cedulaParts = (cedula || '').split('-');
-    const cedProv = cedulaParts[0] || '';
-    const cedInicial = cedulaParts[1] || '';
-    const cedTomo = cedulaParts[2] || '';
-
-    const gcResult = await rawSoap('GuardarCliente', {
-      tipo_persona: tipo_de_cliente || 'N',
-      cod_producto: '41', // Internal code — NOT the actual product code
-      pasaporte: pasaporte || '',
-      primer_nombre: (primer_nombre || '').toUpperCase(),
-      segundo_nombre: (segundo_nombre || '').toUpperCase(),
-      primer_apellido: (primer_apellido || '').toUpperCase(),
-      segundo_apellido: (segundo_apellido || '').toUpperCase(),
-      casada: (apellido_casada || '').toUpperCase(),
-      fecha_nac: fecha_nacimiento || '',
-      sexo: sexo || 'M',
-      presidencia: 'PANAMA',
-      nacionalidad: 'PANAMA',
-      direccion_laboral: direccion || 'PANAMA',
-      calle: '',
-      casa: '',
-      barriada: '',
-      corregimiento: '',
-      direccion_cobros: direccion_cobros || direccion || 'PANAMA',
-      telefono1: telefono_residencial || '',
-      telefono2: telefono_oficina || '',
-      celular: telefono_celular || '',
-      celular2: '',
-      email: email || '',
-      apartado: '',
-      ced_prov: cedProv,
-      ced_inicial: cedInicial,
-      tomo: cedTomo,
-      folio: '',
-      asiento: '',
-      ocupacion: ocupacion || '001',
-      pais_nacimiento: 'PANAMA',
-      ofondo: '001', // Asalariado (ListaOrigenFondo)
-      monto_ingreso: '001', // Menor a 10,000 (ListaMontoIngreso)
-      prov_residencia: '008', // PANAMÁ (ListaProvincia)
-      // NOTE: pais_residencia should go here once ANCON fixes WSDL
-      cli_forpago: '002', // ListaFormaPago
-      cli_frepago: '002', // ListaFrecuenciaPago
-      cli_lista: '002|campo_lista_neg', // NO (ListaNegativas)
-      cli_fundacion: '002|campo_fundongzon', // NO (ListaOngFrancas)
-      cli_pep1: pep || '002|campo_pep', // NO (ListaPep)
-      asegurado_igual: '001', // SI (ListaAseguradoContratante)
-      asegurado_benef: '005', // NO (BeneficiarioContratante)
-      asegurado_tercero: '006', // NO (TerceroContratante)
-      cli_coa: '0',
-      dv: '',
-      rlegal: representante_legal || '',
-      ncomercial: nombre_comercial || '',
-      aoperacion: aviso_operacion || '',
-      cod_actividad: actividad_economica || '001', // NO DEFINIDA (ListaActividad)
-      cod_clianiocon: '001', // 0-5 años (ListaAnioConstitucion)
-      razon_social: '',
-      token: await getFreshToken(),
-      no_cotizacion,
-      figura: '1',
-    });
-
-    // Log GC result (currently fails with "PAÍS DE RESIDENCIA obligatorio" — ANCON WSDL bug)
-    const gcMsg = Array.isArray(gcResult) ? (gcResult[0] as Record<string, string>)?.Mensaje : String(gcResult);
-    if (gcMsg && !String(gcMsg).includes('Exito') && !String(gcMsg).includes('xito')) {
-      log('1/7', `GuardarCliente: ${String(gcMsg).substring(0, 200)}`);
-      // Don't fail here — continue flow (CIC or EmitirDatos might still work)
-    } else {
-      log('1/7', 'Cliente registrado OK');
-    }
-
-    // ═══ STEP 2: ClienteIgualContratante → confirm insured = policyholder ═══
-    log('2/7', 'Confirmando asegurado = contratante...');
-    const cicToken = await getFreshToken();
-    const cicResult = await rawSoap('ClienteIgualContratante', {
-      token: cicToken,
-      no_cotizacion,
-      respuesta: '001', // SI (numeric code from ListaAseguradoContratante)
-    });
-    log('2/7', `CIC result: ${JSON.stringify(cicResult).substring(0, 200)}`);
-
-    // ═══ STEP 3: Generate policy number ═══
-    log('3/7', 'Generando número de póliza...');
+    // ═══ STEP 1: Generate policy number ═══
+    log('1/5', 'Generando número de póliza...');
     const currentYear = new Date().getFullYear().toString();
     // CC products use ramo 001, DT/RC products use ramo 002
     const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
@@ -299,61 +210,60 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    log('3/7', `Póliza: ${polizaNumber}`);
+    log('1/5', `Póliza generada: ${polizaNumber}`);
 
-    // ═══ STEP 4: Upload documents (cédula, licencia, photos) via REST ═══
+    // ═══ STEP 2: Upload documents (cédula, licencia, registro) via REST ═══
     const hasFiles = Object.keys(files).length > 0;
     if (hasFiles) {
-      log('4/7', `Subiendo ${Object.keys(files).length} archivo(s)...`);
+      log('2/5', `Subiendo ${Object.keys(files).length} archivo(s)...`);
       const uploadResult = await uploadInspectionAndDocuments(
         tipo_de_cliente || 'N',
         files
       );
-      log('4/7', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
+      log('2/5', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
     } else {
-      log('4/7', 'Sin archivos adjuntos');
+      log('2/5', 'Sin archivos adjuntos — continuando sin documentos');
     }
 
-    // ═══ STEP 5: Inspection flow (ALL products — ANCON requires before emission) ═══
-    // Per ANCON: inspection must happen via cotización number BEFORE emission.
-    // ListadoInspeccion lists inspections done in ANCON app → EnlazarInspeccion links to cotización.
+    // ═══ STEP 3: Inspection (soft-fail) ═══
+    // ANCON is working on an API alternative for inspection creation.
+    // For DT: try to link if an inspection exists, but never block emission.
     let inspectionLinked = false;
-    log('5/7', 'Buscando inspecciones disponibles (ListadoInspeccion)...');
+    log('3/5', 'Verificando inspecciones disponibles (ListadoInspeccion)...');
     try {
-      // Get fresh token for inspection + emission steps
       const token2 = await getFreshToken();
       const inspRaw = await rawSoap('ListadoInspeccion', { cod_agente: creds.codAgente, token: token2 });
       const inspections = Array.isArray(inspRaw) ? inspRaw as Array<Record<string, string>> : [];
-      log('5/7', `Inspecciones encontradas: ${inspections.length}`);
+      log('3/5', `Inspecciones encontradas: ${inspections.length}`);
 
       if (inspections.length > 0) {
-        // Find inspection matching this cotización or use the first available
         const matchingInsp = inspections.find(
           (i) => i.no_cotizacion === no_cotizacion || i.cotizacion === no_cotizacion
         ) || inspections[0];
         const inspId = matchingInsp?.inspeccion || matchingInsp?.no_inspeccion || matchingInsp?.id;
         if (inspId) {
-          log('5/7', `Enlazando inspección ${inspId} a cotización ${no_cotizacion}...`);
+          log('3/5', `Enlazando inspección ${inspId} a cotización ${no_cotizacion}...`);
           const linkRaw = await rawSoap('EnlazarInspeccion', {
             inspeccion: inspId,
             cotizacion: no_cotizacion,
             token: token2,
           });
           const linkMsg = typeof linkRaw === 'string' ? linkRaw : JSON.stringify(linkRaw);
-          log('5/7', `EnlazarInspeccion: ${linkMsg.substring(0, 200)}`);
+          log('3/5', `EnlazarInspeccion: ${linkMsg.substring(0, 200)}`);
           inspectionLinked = !linkMsg.includes('no coincide') && !linkMsg.includes('Verificar');
         } else {
-          log('5/7', 'Inspección encontrada pero sin ID válido');
+          log('3/5', 'Inspección sin ID válido — continuando sin enlazar');
         }
       } else {
-        log('5/7', 'Sin inspecciones disponibles — emisión puede fallar con "pendiente de inspección"');
+        log('3/5', 'Sin inspecciones disponibles — continuando (ANCON gestionará alternativa)');
       }
     } catch (inspErr) {
-      log('5/7', `Error en inspección: ${inspErr}`);
+      log('3/5', `Inspección omitida (soft-fail): ${inspErr}`);
     }
 
-    // ═══ STEP 6: Emit policy (fresh token to avoid expiry) ═══
-    log('6/7', 'Emitiendo póliza...');
+    // ═══ STEP 4: Emit policy ═══
+    // EmitirDatos/EmisionServer handles client creation internally.
+    log('4/5', 'Emitiendo póliza (EmisionServer)...');
     const emitToken = await getFreshToken();
 
     const today = new Date();
@@ -422,7 +332,7 @@ export async function POST(request: NextRequest) {
       nombre_grupo: nombre_grupo || 'SIN GRUPO',
       token: emitToken,
       nacionalidad: nacionalidad || 'PANAMÁ',
-      pep: pep || '002|campo_pep',
+      pep: pepNormalized,
       ocupacion: ocupacion || '001',
       profesion: profesion || '1',
       pais_residencia: pais_residencia || 'PANAMÁ',
@@ -434,7 +344,7 @@ export async function POST(request: NextRequest) {
 
     // Parse EmitirDatos response
     const emitStr = typeof emitRaw === 'string' ? emitRaw : JSON.stringify(emitRaw);
-    log('6/7', `EmitirDatos response: ${emitStr.substring(0, 300)}`);
+    log('4/5', `EmitirDatos response: ${emitStr.substring(0, 300)}`);
 
     const emitObj = typeof emitRaw === 'object' && emitRaw !== null ? emitRaw as Record<string, unknown> : null;
     const emitError = emitObj?.Respuesta
@@ -461,16 +371,15 @@ export async function POST(request: NextRequest) {
           error: emitError,
           poliza: polizaNumber,
           inspectionLinked,
-          gcMessage: gcMsg || null,
         },
         { status: 500 }
       );
     }
 
-    log('6/7', `Póliza emitida: ${polizaNumber}`);
+    log('4/5', `Póliza emitida: ${polizaNumber}`);
 
-    // ═══ STEP 7: Get carátula PDF link ═══
-    log('7/7', 'Obteniendo carátula PDF...');
+    // ═══ STEP 5: Get carátula PDF link ═══
+    log('5/5', 'Obteniendo carátula PDF...');
     let pdfUrl: string | null = null;
     try {
       const printRaw = await rawSoap('ImpresionPoliza', { poliza: polizaNumber, token: emitToken });
@@ -479,9 +388,9 @@ export async function POST(request: NextRequest) {
       } else if (typeof printRaw === 'object' && printRaw !== null) {
         pdfUrl = (printRaw as Record<string, string>).enlace_poliza || null;
       }
-      log('7/7', pdfUrl ? `PDF: ${pdfUrl}` : `PDF no disponible: ${JSON.stringify(printRaw).substring(0, 200)}`);
+      log('5/5', pdfUrl ? `PDF: ${pdfUrl}` : `PDF no disponible: ${JSON.stringify(printRaw).substring(0, 200)}`);
     } catch (printErr) {
-      log('7/7', `Error obteniendo PDF: ${printErr}`);
+      log('5/5', `Error obteniendo PDF: ${printErr}`);
     }
 
     const elapsed = Date.now() - t0;
