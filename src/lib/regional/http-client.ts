@@ -15,6 +15,27 @@ import {
 // Regional PROD server uses a self-signed TLS cert on port 7443.
 // Node.js global fetch (undici) does NOT respect NODE_TLS_REJECT_UNAUTHORIZED at runtime,
 // so we use node:https directly with rejectUnauthorized:false.
+/**
+ * Node.js http module rejects certain characters in header values (e.g. backtick `).
+ * Sanitize each header value to only printable ASCII 0x20–0x7E, minus the chars
+ * that Node considers "invalid" (\r \n \x00 and chars ≥0x7F).
+ * Note: We keep backtick by encoding it as %60 so the token arrives intact on the server.
+ */
+function sanitizeHeaderValue(val: string): string {
+  // Replace backtick with %60 (URL-safe) and strip true control chars
+  return val
+    .replace(/`/g, '%60')                    // backtick → %60
+    .replace(/[\x00-\x1F\x7F]/g, '');       // strip control chars
+}
+
+function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    result[k] = sanitizeHeaderValue(v);
+  }
+  return result;
+}
+
 function nodeHttpsRequest(
   url: string,
   method: string,
@@ -26,12 +47,16 @@ function nodeHttpsRequest(
     const parsed = new URL(url);
     const isHttps = parsed.protocol === 'https:';
     const lib = isHttps ? https : http;
+    const safeHeaders = sanitizeHeaders({
+      ...headers,
+      ...(body ? { 'Content-Length': Buffer.byteLength(body).toString() } : {}),
+    });
     const options: https.RequestOptions = {
       hostname: parsed.hostname,
       port: parsed.port || (isHttps ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method,
-      headers: { ...headers, ...(body ? { 'Content-Length': Buffer.byteLength(body).toString() } : {}) },
+      headers: safeHeaders,
       rejectUnauthorized: false,  // Regional PROD self-signed cert
     };
     const req = lib.request(options, (res) => {
