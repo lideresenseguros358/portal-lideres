@@ -7,28 +7,12 @@
 
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { FaSignOutAlt, FaCreditCard } from 'react-icons/fa';
+import { FaSignOutAlt } from 'react-icons/fa';
 import MobileBottomNav from '@/components/cotizadores/mobile/MobileBottomNav';
-import PayOverdueModal from '@/components/cotizadores/PayOverdueModal';
 
 export default function CotizadoresLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const isRootCotizadores = pathname === '/cotizadores';
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showPayModal, setShowPayModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Auto-open pay modal when ?pagar=true (from morosidad email link)
-  // Optionally pre-fill cedula from ?cedula=XXX
-  const prefillCedula = searchParams.get('cedula') || '';
-  useEffect(() => {
-    if (searchParams.get('pagar') === 'true') {
-      setShowPayModal(true);
-    }
-  }, [searchParams]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -57,16 +41,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
       <header className="bg-white shadow-md border-b-2 border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            {/* Botón Realiza tu pago — solo visible en /cotizadores raíz */}
-            {isRootCotizadores ? (
-              <button
-                onClick={() => setShowPayModal(true)}
-                className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all duration-200 cursor-pointer"
-              >
-                <FaCreditCard className="text-white/90" />
-                <span>Realiza tu pago</span>
-              </button>
-            ) : <div />}
+            <div />
             
             {/* Contenedor derecho con avatar y texto */}
             <div className="flex items-center gap-2 sm:gap-3">
@@ -164,8 +139,6 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav />
 
-      {/* Pay Overdue Modal */}
-      <PayOverdueModal isOpen={showPayModal} onClose={() => setShowPayModal(false)} prefillCedula={prefillCedula} />
     </div>
   );
 }

@@ -908,28 +908,51 @@ function buildWelcomeEmail(data: {
       <div style="background:linear-gradient(135deg,#e3f2fd,#dbeafe);border:2px solid #1976d2;border-radius:12px;padding:20px 22px;margin:20px 0;">
         <h4 style="margin:0 0 12px;color:#0d47a1;font-size:15px;font-weight:700;">&#x2139;&#xFE0F; Información Importante sobre sus Cuotas</h4>
         <p style="margin:0 0 10px;font-size:14px;color:#1a237e;line-height:1.6;">
-          Su póliza fue contratada en <strong>${data.cantidadCuotas} cuotas</strong>. La <strong>primera cuota ya fue cobrada</strong> exitosamente al momento de la emisión.
+          Su póliza fue contratada en <strong>${data.cantidadCuotas} cuotas</strong>. La <strong>primera cuota ya fue cobrada</strong> exitosamente hoy al momento de la emisión.
         </p>
         <p style="margin:0 0 12px;font-size:14px;color:#1a237e;line-height:1.6;">
-          Las <strong>cuotas restantes (${data.cantidadCuotas - 1} cuota${data.cantidadCuotas - 1 !== 1 ? 's' : ''})</strong> deberán pagarse <strong>directamente en el portal de ${data.insurerName}</strong> según las fechas de vencimiento. Le enviaremos recordatorios 10 días antes de cada vencimiento.
+          Las <strong>${data.cantidadCuotas - 1} cuota${data.cantidadCuotas - 1 !== 1 ? 's' : ''} restante${data.cantidadCuotas - 1 !== 1 ? 's' : ''}</strong> deberá pagarlas <strong>directamente en el portal de ${data.insurerName}</strong> en las fechas indicadas a continuación. Le enviaremos un recordatorio automático <strong>10 días antes</strong> de cada vencimiento.
         </p>
         ${data.montoCuota ? `
-        <div style="background:white;border-radius:8px;padding:12px 16px;margin:12px 0;">
-          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;padding:4px 0;">
-            <span>Monto por cuota:</span>
-            <strong style="color:#0d47a1;">$${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;padding:4px 0;">
-            <span>Total de cuotas:</span>
-            <strong style="color:#0d47a1;">${data.cantidadCuotas}</strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:14px;color:#333;padding:6px 0 0;border-top:1px solid #e0e0e0;margin-top:6px;">
-            <span>Cuotas pendientes de pago directo:</span>
-            <strong style="color:#0d47a1;">${data.cantidadCuotas - 1}</strong>
-          </div>
+        <div style="background:white;border-radius:8px;padding:14px 16px;margin:12px 0;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#e3f2fd;">
+                <th style="padding:8px 10px;text-align:center;color:#0d47a1;font-weight:700;border:1px solid #bbdefb;">Cuota</th>
+                <th style="padding:8px 10px;text-align:left;color:#0d47a1;font-weight:700;border:1px solid #bbdefb;">Fecha de Vencimiento</th>
+                <th style="padding:8px 10px;text-align:right;color:#0d47a1;font-weight:700;border:1px solid #bbdefb;">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#f0fdf4;">
+                <td style="padding:8px 10px;text-align:center;border:1px solid #bbdefb;font-weight:700;color:#166534;">1</td>
+                <td style="padding:8px 10px;border:1px solid #bbdefb;color:#166534;">Hoy — ✅ Ya pagada por PagueloFácil</td>
+                <td style="padding:8px 10px;text-align:right;border:1px solid #bbdefb;font-weight:700;color:#166534;">$${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              ${Array.from({ length: data.cantidadCuotas - 1 }, (_, i) => {
+                const baseDay = new Date().getDate();
+                const targetYear = new Date().getFullYear();
+                const targetMonth = new Date().getMonth() + 2 + i; // +1 for next month (0-indexed), +1 for installment num
+                const absYear = targetYear + Math.floor((targetMonth - 1) / 12);
+                const absMonth = ((targetMonth - 1) % 12) + 1;
+                const daysInMonth = new Date(absYear, absMonth, 0).getDate();
+                const day = Math.min(baseDay, daysInMonth);
+                const dateStr = new Date(absYear, absMonth - 1, day).toLocaleDateString('es-PA', { day: '2-digit', month: 'long', year: 'numeric' });
+                const rowBg = i % 2 === 0 ? '#f9fafb' : 'white';
+                return `<tr style="background:${rowBg};">
+                  <td style="padding:8px 10px;text-align:center;border:1px solid #bbdefb;font-weight:700;color:#0d47a1;">${i + 2}</td>
+                  <td style="padding:8px 10px;border:1px solid #bbdefb;color:#374151;">${dateStr}</td>
+                  <td style="padding:8px 10px;text-align:right;border:1px solid #bbdefb;font-weight:700;color:#0d47a1;">$${Number(data.montoCuota).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <p style="margin:10px 0 0;font-size:11px;color:#555;line-height:1.5;">
+            * Las fechas pueden variar si el día de vencimiento no existe en ese mes (ej: 31 de febrero se ajusta al 28/29).
+          </p>
         </div>` : ''}
         <div style="text-align:center;margin:16px 0 8px;">
-          <a href="${getInsurerPortalUrl(data.insurerName)}" target="_blank" style="display:inline-block;padding:13px 30px;background:#010139;color:white;text-decoration:none;font-weight:700;font-size:14px;border-radius:10px;letter-spacing:0.3px;">Pagar cuotas en ${data.insurerName}</a>
+          <a href="${getInsurerPortalUrl(data.insurerName)}" target="_blank" style="display:inline-block;padding:13px 30px;background:#010139;color:white;text-decoration:none;font-weight:700;font-size:14px;border-radius:10px;letter-spacing:0.3px;">Pagar mis cuotas en ${data.insurerName}</a>
         </div>
         <p style="margin:10px 0 0;font-size:12px;color:#1565c0;line-height:1.5;text-align:center;">
           ${getInsurerAutoPayNote(data.insurerName)}
