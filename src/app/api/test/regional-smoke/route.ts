@@ -415,12 +415,12 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
       return result;
     }
 
-    // ── STEP 2: Plan de pago (if cuotas > 1) ──
-    if (s.cuotas && s.cuotas > 1 && quoteResult.numcot) {
+    // ── STEP 2: Plan de pago — always call even with cuotas=1 to confirm the quote ──
+    if (quoteResult.numcot) {
       console.log(`[REGIONAL SMOKE CC] Setting plan pago: numcot=${quoteResult.numcot}, cuotas=${s.cuotas}`);
       const pagoResult = await actualizarPlanPago({
         numcot: quoteResult.numcot,
-        cuotas: s.cuotas,
+        cuotas: s.cuotas || 1,
         opcionPrima: 1,
       });
       result.planPagoSuccess = pagoResult.success;
