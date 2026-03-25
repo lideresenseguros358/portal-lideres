@@ -126,16 +126,16 @@ function buildScenarios(): Scenario[] {
   // RC plans: 30=Básico($145), 31=Plus($175), 34=Platinum($245), 35=Exceso Platinum($285)
   // 44=Auto 110($110), 45=Auto 120($120), 41=Buen Conductor Plus($260)
   const dtConfigs: Array<{ rcPlan: string; planLabel: string; endoso: string; lesiones: string; danios: string; gastosMedicos?: string }> = [
-    { rcPlan: '30', planLabel: 'Básico', endoso: '1', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '31', planLabel: 'Plus', endoso: '2', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '34', planLabel: 'Platinum', endoso: '4', lesiones: '10000*20000', danios: '10000', gastosMedicos: '2000*10000' },
-    { rcPlan: '35', planLabel: 'Exceso Plat', endoso: '4', lesiones: '100000*300000', danios: '100000', gastosMedicos: '10000*50000' },
-    { rcPlan: '30', planLabel: 'Básico', endoso: '1', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '44', planLabel: 'Auto 110', endoso: '0', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '45', planLabel: 'Auto 120', endoso: '0', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '31', planLabel: 'Plus', endoso: '2', lesiones: '5000*10000', danios: '5000' },
-    { rcPlan: '34', planLabel: 'Platinum', endoso: '4', lesiones: '10000*20000', danios: '10000', gastosMedicos: '2000*10000' },
-    { rcPlan: '41', planLabel: 'Buen Cond+', endoso: '0', lesiones: '10000*20000', danios: '10000', gastosMedicos: '500*2500' },
+    { rcPlan: '30', planLabel: 'Básico',    endoso: 'BASICO',    lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '31', planLabel: 'Plus',      endoso: 'PLUS',      lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '34', planLabel: 'Platinum',  endoso: 'PLATINUM',  lesiones: '10000*20000',   danios: '10000',  gastosMedicos: '2000*10000' },
+    { rcPlan: '35', planLabel: 'Exceso Pl', endoso: 'PLATINUM',  lesiones: '100000*300000', danios: '100000', gastosMedicos: '10000*50000' },
+    { rcPlan: '30', planLabel: 'Básico',    endoso: 'BASICO',    lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '44', planLabel: 'Auto 110',  endoso: 'BASICO',    lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '45', planLabel: 'Auto 120',  endoso: 'BASICO',    lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '31', planLabel: 'Plus',      endoso: 'PLUS',      lesiones: '5000*10000',    danios: '5000' },
+    { rcPlan: '34', planLabel: 'Platinum',  endoso: 'PLATINUM',  lesiones: '10000*20000',   danios: '10000',  gastosMedicos: '2000*10000' },
+    { rcPlan: '41', planLabel: 'Buen Cond+',endoso: 'PLUS',      lesiones: '10000*20000',   danios: '10000',  gastosMedicos: '500*2500' },
   ];
 
   for (let i = 0; i < 10; i++) {
