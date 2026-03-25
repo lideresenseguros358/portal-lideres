@@ -351,13 +351,13 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
   };
 
   try {
-    // ── STEP 1: CC Quote ──
+    // ── STEP 1: CC Quote — use exact vehicle/params from Regional PROD CURL ──
     const quoteResult = await cotizarCC({
       nombre: 'PRUEBA',
       apellido: 'SMOKECC',
-      edad: 35,
-      sexo: s.id % 2 === 0 ? 'M' : 'F',
-      edocivil: 'S',
+      edad: 53,
+      sexo: 'F',
+      edocivil: 'C',
       tppersona: 'N',
       tpodoc: 'C',
       prov: ced.prov,
@@ -367,12 +367,12 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
       celular: `629${String(s.id).padStart(5, '0')}`,
       email: 'smoketestcc@lideresenseguros.com',
       vehnuevo: 'N',
-      codMarca: s.vehicle.marcaCode,
-      codModelo: s.vehicle.modeloCode,
-      anio: s.year,
-      valorVeh: s.valorVeh || 15000,
+      codMarca: 74,
+      codModelo: 5,
+      anio: 2017,
+      valorVeh: 14000,
       numPuestos: 4,
-      endoso: s.endoso || '1',
+      endoso: s.endoso || 'BASICO',
       lesiones: '10000',
       danios: '20000',
       gastosMedicos: '2000',
