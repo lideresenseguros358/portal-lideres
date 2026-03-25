@@ -51,9 +51,12 @@ export async function cotizarRC(input: RCQuoteInput): Promise<RegionalRCQuoteRes
 
   console.log('[REGIONAL RC Quote] Params:', JSON.stringify(params));
 
+  // Regional cotizar expects all params as REQUEST HEADERS (confirmed by PROD CURL 2026-03-25)
+  // headerParamsOnly=true: skip codInter/token/Content-Type defaults — cotizar only needs Authorization+cToken etc.
   const res = await regionalGet<RegionalRCQuoteResponse>(
     REGIONAL_RC_ENDPOINTS.COTIZAR,
-    params
+    undefined,
+    { headerParams: params, headerParamsOnly: true }
   );
 
   if (!res.success) {
@@ -107,9 +110,9 @@ export interface CCQuoteInput {
 export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteResponse> {
   const creds = getRegionalCredentials();
 
-  // CC cotizar uses the same GET+headers endpoint as RC, with cTipoCobert=CC
-  // Confirmed by Regional PROD CURL 2026-03-25
-  const params: Record<string, string> = {
+  // CC cotizar uses same GET endpoint as RC with cTipoCobert=CC
+  // ALL params sent as REQUEST HEADERS (confirmed by Regional PROD CURL 2026-03-25)
+  const headerParams: Record<string, string> = {
     cToken: creds.token,
     cCodInter: creds.codInter,
     nEdad: input.edad.toString(),
@@ -119,18 +122,20 @@ export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteRes
     cModelo: input.codModelo.toString(),
     nAnio: input.anio.toString(),
     nMontoVeh: input.valorVeh.toString(),
-    nLesiones: input.lesiones || '5000*10000',
-    nDanios: input.danios || '5000',
+    nLesiones: input.lesiones || '10000',
+    nDanios: input.danios || '20000',
     nGastosMed: input.gastosMedicos || '2000',
     cEndoso: input.endoso,
     cTipoCobert: 'CC',
   };
 
-  console.log('[REGIONAL CC Quote] GET params:', JSON.stringify(params));
+  console.log('[REGIONAL CC Quote] GET header params:', JSON.stringify(headerParams));
 
+  // headerParamsOnly=true: skip codInter/token/Content-Type defaults — cotizar only needs Authorization+cToken etc.
   const res = await regionalGet<RegionalCCQuoteResponse>(
     REGIONAL_RC_ENDPOINTS.COTIZAR,
-    params
+    undefined,
+    { headerParams, headerParamsOnly: true }
   );
 
   if (!res.success) {

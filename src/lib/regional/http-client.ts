@@ -67,10 +67,14 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   params?: Record<string, string>;
+  /** Send these as request HEADERS instead of query-string params (required by cotizar endpoint) */
+  headerParams?: Record<string, string>;
   timeout?: number;
   extraHeaders?: Record<string, string>;
   /** Use the CC-specific token (tokenCC) instead of the default RC token */
   useTokenCC?: boolean;
+  /** Skip default headers (Content-Type/codInter/token) — only use Authorization + headerParams */
+  headerParamsOnly?: boolean;
 }
 
 export interface RegionalResponse<T = unknown> {
@@ -92,7 +96,7 @@ export async function regionalRequest<T = unknown>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<RegionalResponse<T>> {
-  const { method = 'GET', body, params, timeout = 30000, extraHeaders, useTokenCC } = options;
+  const { method = 'GET', body, params, headerParams, timeout = 30000, extraHeaders, useTokenCC } = options;
   const baseUrl = getRegionalBaseUrl();
 
   let url = `${baseUrl}${endpoint}`;
@@ -101,7 +105,12 @@ export async function regionalRequest<T = unknown>(
     url += (url.includes('?') ? '&' : '?') + qs;
   }
 
-  const headers = { ...getDefaultHeaders(useTokenCC), ...extraHeaders };
+  // headerParams are merged into the request headers (used by cotizar endpoint)
+  // headerParamsOnly=true: skip default codInter/token/Content-Type — cotizar only needs Authorization+cotizar headers
+  const baseHeaders = options.headerParamsOnly
+    ? { Authorization: getBasicAuthHeader() }
+    : getDefaultHeaders(useTokenCC);
+  const headers = { ...baseHeaders, ...headerParams, ...extraHeaders };
 
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     try {
@@ -200,9 +209,10 @@ export async function regionalRequest<T = unknown>(
  */
 export async function regionalGet<T = unknown>(
   endpoint: string,
-  params?: Record<string, string>
+  params?: Record<string, string>,
+  opts?: { headerParams?: Record<string, string>; useTokenCC?: boolean; headerParamsOnly?: boolean }
 ): Promise<RegionalResponse<T>> {
-  return regionalRequest<T>(endpoint, { method: 'GET', params });
+  return regionalRequest<T>(endpoint, { method: 'GET', params, ...opts });
 }
 
 /**
