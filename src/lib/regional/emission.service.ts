@@ -62,6 +62,7 @@ export async function emitirPolizaCC(
   body: RegionalCCEmissionBody
 ): Promise<RegionalCCEmissionResponse> {
   console.log('[REGIONAL CC Emission] Emitting CC policy, numcot:', body.numcot);
+  console.log('[REGIONAL CC Emission] Full body:', JSON.stringify(body));
 
   const res = await regionalPost<RegionalCCEmissionResponse>(
     REGIONAL_CC_ENDPOINTS.EMITIR,
