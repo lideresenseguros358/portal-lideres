@@ -83,7 +83,6 @@ export async function POST(request: NextRequest) {
     const creds = getRegionalCredentials();
 
     const emissionBody: RegionalCCEmissionBody = {
-      codInter: creds.codInter,
       numcot: parseInt(String(numcot)),
       cliente: {
         direccion: {
