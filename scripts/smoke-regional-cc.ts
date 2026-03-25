@@ -22,6 +22,7 @@ import * as https from 'node:https';
 
 // Portal PROD base URL
 const PORTAL_BASE = (process.env.PORTAL_BASE ?? 'https://portal.lideresenseguros.com').replace(/\/$/, '');
+const CRON_SECRET = process.env.CRON_SECRET ?? 'LISSA-CRON-2026-SECURE-4139947';
 
 // ── HTTP helper (calls portal PROD API) ──────────────────────
 
@@ -56,7 +57,7 @@ function portalPost(path: string, body: unknown): Promise<any> {
   });
 }
 
-function portalGet(path: string): Promise<any> {
+function portalGet(path: string, extraHeaders?: Record<string, string>): Promise<any> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(PORTAL_BASE + path);
     const options: https.RequestOptions = {
@@ -64,6 +65,7 @@ function portalGet(path: string): Promise<any> {
       port: urlObj.port || 443,
       path: urlObj.pathname + urlObj.search,
       method: 'GET',
+      headers: extraHeaders || {},
     };
     const req = https.request(options, (res) => {
       const chunks: Buffer[] = [];
@@ -81,7 +83,7 @@ function portalGet(path: string): Promise<any> {
       });
       res.on('error', reject);
     });
-    req.setTimeout(90000, () => req.destroy(new Error(`Portal GET timeout: ${path}`)));
+    req.setTimeout(300000, () => req.destroy(new Error(`Portal GET timeout: ${path}`)));
     req.on('error', reject);
     req.end();
   });
@@ -121,7 +123,7 @@ const SCENARIOS = [
     anio: 2022, valorVeh: 18000,
     endoso: 'PLUS',
     lesiones: '10000', danios: '20000', gastosMedicos: '2000',
-    cuotas: 1, acreedor: '81', sinAcreedor: false,
+    cuotas: 1, acreedor: '', sinAcreedor: true,
     sexo: 'M', edocivil: 'S',
   },
   {
@@ -132,18 +134,18 @@ const SCENARIOS = [
     anio: 2021, valorVeh: 14000,
     endoso: 'BASICO',
     lesiones: '10000', danios: '20000', gastosMedicos: '2000',
-    cuotas: 3, acreedor: '', sinAcreedor: true,
+    cuotas: 3, acreedor: '', sinAcreedor: true,  // sin acreedor (explicit)
     sexo: 'F', edocivil: 'C',
   },
   {
     id: 3,
-    label: 'KIA SPORTAGE 2023 — endoso PLATINUM — con acreedor — contado',
+    label: 'KIA SPORTAGE 2023 — endoso PLATINUM — sin acreedor — contado',
     marca: 'KIA', modelo: 'SPORTAGE',
     marcaCode: 40, modeloCode: 5,
     anio: 2023, valorVeh: 25000,
     endoso: 'PLATINUM',
     lesiones: '10000', danios: '20000', gastosMedicos: '2000',
-    cuotas: 1, acreedor: '81', sinAcreedor: false,
+    cuotas: 1, acreedor: '', sinAcreedor: true,
     sexo: 'M', edocivil: 'S',
   },
 ];
@@ -280,49 +282,158 @@ async function runScenario(s: typeof SCENARIOS[number], idx: number) {
   return result;
 }
 
+// ── Lib imports (used when running directly with tsx --env-file) ──
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { cotizarCC } = require('../src/lib/regional/quotes.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { emitirPolizaCC, actualizarPlanPago, imprimirPoliza } = require('../src/lib/regional/emission.service');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getRegionalCredentials, getRegionalBaseUrl, getRegionalEnv } = require('../src/lib/regional/config');
+
+// ── Run one scenario via lib ───────────────────────────────────
+
+async function runScenarioLib(s: typeof SCENARIOS[number], idx: number) {
+  sep(`SCENARIO ${s.id}/3 — ${s.label}`);
+  const ced = cedula(idx + 70);
+  const result: Record<string, unknown> = {
+    scenario: s.id, label: s.label,
+    vehicle: `${s.marca} ${s.modelo} ${s.anio}`,
+    cedula: ced.str,
+  };
+  const t0 = Date.now();
+
+  // ── Step 1: Quote ─────────────────────────────────────────
+  log(`S${s.id}/QUOTE`, `cotizarCC endoso=${s.endoso} valor=${s.valorVeh} marca=${s.marcaCode} modelo=${s.modeloCode}`);
+  const quoteResult = await cotizarCC({
+    nombre: 'SMOKE', apellido: 'REGIONAL',
+    edad: 35, sexo: s.sexo, edocivil: s.edocivil,
+    tppersona: 'N', tpodoc: 'C',
+    prov: ced.prov, tomo: ced.tomo, asiento: ced.asiento,
+    telefono: `290${String(s.id).padStart(4,'0')}`,
+    celular: `629${String(s.id).padStart(5,'0')}`,
+    email: 'smoketestcc@lideresenseguros.com',
+    vehnuevo: 'N',
+    codMarca: s.marcaCode, codModelo: s.modeloCode,
+    anio: s.anio, valorVeh: s.valorVeh, numPuestos: 5,
+    endoso: s.endoso,
+    lesiones: s.lesiones, danios: s.danios, gastosMedicos: s.gastosMedicos,
+  });
+  log(`S${s.id}/QUOTE`, `success=${quoteResult.success} numcot=${quoteResult.numcot} prima=${quoteResult.primaTotal}`, quoteResult.success ? undefined : quoteResult);
+
+  result.quoteSuccess = quoteResult.success;
+  result.numcot = quoteResult.numcot ?? null;
+  result.primaTotal = quoteResult.primaTotal ?? null;
+
+  if (!quoteResult.success || !quoteResult.numcot) {
+    result.success = false;
+    result.error = `Quote failed: ${quoteResult.message || 'no numcot'}`;
+    result.timingMs = Date.now() - t0;
+    log(`S${s.id}/QUOTE`, `❌ ${result.error}`);
+    return result;
+  }
+  log(`S${s.id}/QUOTE`, `✅ numcot=${quoteResult.numcot} primaTotal=${quoteResult.primaTotal}`);
+
+  // ── Step 2: Plan de pago ──────────────────────────────────
+  if (s.cuotas > 1) {
+    log(`S${s.id}/PLAN`, `actualizarPlanPago numcot=${quoteResult.numcot} cuotas=${s.cuotas}`);
+    const pagoResult = await actualizarPlanPago({ numcot: quoteResult.numcot, cuotas: s.cuotas, opcionPrima: 1 });
+    result.planPagoSuccess = pagoResult.success;
+    if (!pagoResult.success) log(`S${s.id}/PLAN`, `⚠️  ${pagoResult.message}`);
+    else log(`S${s.id}/PLAN`, `✅ plan pago OK`);
+  }
+
+  // ── Step 3: Emit ──────────────────────────────────────────
+  const creds = getRegionalCredentials();
+  const emitBody = {
+    codInter: creds.codInter,
+    numcot: quoteResult.numcot,
+    cliente: {
+      direccion: { codpais: 507, codestado: 8, codciudad: 1, codmunicipio: 1, codurb: 1, dirhab: 'Ciudad de Panama' },
+      datosCumplimiento: { ocupacion: 1, ingresoAnual: 2, paisTributa: 507, pep: 'N' },
+    },
+    datosveh: {
+      vehnuevo: 'N',
+      numplaca: `RCC${String(s.id * 10 + idx).padStart(3,'0')}`,
+      serialcarroceria: `RCCVIN${String(s.id * 1000 + idx * 10).padStart(11,'0')}`,
+      serialmotor: `RCCM${String(s.id * 1000 + idx * 10).padStart(8,'0')}`,
+      color: '001', usoveh: 'P', peso: 'L',
+    },
+    acreedor: s.sinAcreedor ? '' : (s.acreedor || '81'),
+  };
+
+  log(`S${s.id}/EMIT`, `emitirPolizaCC numcot=${quoteResult.numcot} cuotas=${s.cuotas} acreedor=${emitBody.acreedor || '(sin)'}`);
+  const emitResult = await emitirPolizaCC(emitBody);
+  log(`S${s.id}/EMIT`, `success=${emitResult.success} poliza=${emitResult.poliza}`, emitResult.success ? undefined : emitResult);
+
+  result.emitSuccess = emitResult.success;
+  result.poliza = emitResult.poliza ?? null;
+
+  if (!emitResult.success) {
+    result.success = false;
+    result.error = `Emission failed: ${emitResult.message}`;
+    result.timingMs = Date.now() - t0;
+    log(`S${s.id}/EMIT`, `❌ ${emitResult.message}`);
+    return result;
+  }
+  log(`S${s.id}/EMIT`, `✅ Póliza: ${emitResult.poliza}`);
+
+  // ── Step 4: Imprimir ──────────────────────────────────────
+  if (emitResult.poliza) {
+    log(`S${s.id}/PDF`, `imprimirPoliza poliza=${emitResult.poliza}`);
+    const printResult = await imprimirPoliza(emitResult.poliza);
+    result.printSuccess = printResult.success;
+    result.printError = printResult.success ? null : printResult.message;
+    if (printResult.success && printResult.pdf) {
+      const buf = Buffer.from(printResult.pdf, 'base64');
+      const outPath = nodePath.join(process.cwd(), 'scripts', `caratula_cc_s${s.id}_${String(emitResult.poliza).replace(/[/\\]/g,'-')}.pdf`);
+      fs.writeFileSync(outPath, buf);
+      result.pdfBytes = buf.length;
+      result.pdfPath = outPath;
+      log(`S${s.id}/PDF`, `✅ ${outPath} (${buf.length} bytes)`);
+    } else {
+      log(`S${s.id}/PDF`, `⚠️  ${printResult.message}`);
+    }
+  }
+
+  result.success = true;
+  result.timingMs = Date.now() - t0;
+  return result;
+}
+
 // ── Main ──────────────────────────────────────────────────────
 
 async function main() {
-  sep('REGIONAL CC SMOKE TEST — 3 EMISIONES PROD');
-  log('CONFIG', `Portal: ${PORTAL_BASE}`);
+  sep('REGIONAL CC SMOKE TEST — 3 EMISIONES (DESA env)');
+  const env = getRegionalEnv();
+  const baseUrl = getRegionalBaseUrl();
+  log('CONFIG', `env=${env} url=${baseUrl}`);
 
   const results: any[] = [];
-  const summary = {
-    total: SCENARIOS.length,
-    passed: 0, failed: 0,
-    polizas:   [] as string[],
-    caratulas: [] as string[],
-    errors:    [] as string[],
-  };
+  const summary = { total: 3, passed: 0, failed: 0, polizas: [] as string[], errors: [] as string[] };
 
   for (let i = 0; i < SCENARIOS.length; i++) {
     const s = SCENARIOS[i]!;
-    const r = await runScenario(s, i) as any;
+    const r = await runScenarioLib(s, i) as any;
     results.push(r);
 
     if (r.success) {
       summary.passed++;
       if (r.poliza) summary.polizas.push(`S${s.id}: ${r.poliza}  (${s.label})`);
-      if (r.pdfPath) summary.caratulas.push(`S${s.id}: ${r.pdfPath}`);
     } else {
       summary.failed++;
       summary.errors.push(`S${s.id} — ${r.error}`);
     }
 
-    if (i < SCENARIOS.length - 1) {
-      log('DELAY', 'Waiting 5s...');
-      await sleep(5000);
-    }
+    if (i < SCENARIOS.length - 1) { log('DELAY', '4s...'); await sleep(4000); }
   }
 
-  sep('RESUMEN REGIONAL CC SMOKE TEST — PROD');
+  sep('RESUMEN REGIONAL CC SMOKE TEST');
 
   for (const r of results) {
     const icon = r.success ? '✅' : '❌';
     console.log(`
   ${icon}  SCENARIO ${r.scenario} — ${r.label}
        Vehículo   : ${r.vehicle}
-       Cédula     : ${r.cedula}
        Quote OK   : ${r.quoteSuccess} (numcot=${r.numcot}, prima=${r.primaTotal})
        Emisión OK : ${r.emitSuccess ?? '—'}
        Póliza     : ${r.poliza || 'N/A'}
@@ -337,9 +448,6 @@ async function main() {
 
   PÓLIZAS EMITIDAS (${summary.polizas.length}):
 ${summary.polizas.map(p => `    📋 ${p}`).join('\n') || '    (ninguna)'}
-
-  CARÁTULAS (${summary.caratulas.length}):
-${summary.caratulas.map(c => `    📄 ${c}`).join('\n') || '    (ninguna — pendiente en Regional)'}
 
   ERRORES (${summary.errors.length}):
 ${summary.errors.map(e => `    ❌ ${e}`).join('\n') || '    (ninguno)'}

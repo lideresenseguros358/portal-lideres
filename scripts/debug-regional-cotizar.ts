@@ -56,13 +56,39 @@ async function main() {
   console.log(`TOKEN: ${TOKEN.slice(0,20)}...`);
   console.log(`AUTH: ${basicAuth}`);
 
-  // ── Test 1: Exact CURL from Regional (cMarca=74, cModelo=5, edad=53, F, C, PLUS, CC) ──
-  console.log('\n── TEST 1: Exact Regional PROD CURL ──');
-  const url1 = `${BASE_URL}/regional/auto/cotizar/`;
-  const headers1: Record<string, string> = {
+  // Skip PROD URL tests (port 7443 blocked) — go straight to DESA URL tests
+  console.log('\n(Skipping PROD URL tests — port 7443 blocked from this machine)\n');
+
+  // Use DESA base URL for all tests below
+  const DESA_URL2 = process.env.REGIONAL_BASE_URL_DESA || 'https://desa.laregionaldeseguros.com:10443/desaw';
+  const DESA_USERNAME2 = process.env.REGIONAL_USERNAME_DESA || 'LIDERES_EN_SEGUROS_99';
+  const DESA_PASSWORD2 = process.env.REGIONAL_PASSWORD_DESA || '';
+  const desaAuth2 = `Basic ${Buffer.from(`${DESA_USERNAME2}:${DESA_PASSWORD2}`).toString('base64')}`;
+  const DESA_TOKEN2 = process.env.REGIONAL_TOKEN_DESA || '';
+  console.log(`DESA URL: ${DESA_URL2}`);
+  console.log(`DESA TOKEN: ${DESA_TOKEN2.slice(0,20)}...`);
+  console.log(`PROD TOKEN: ${TOKEN.slice(0,20)}...`);
+
+  // ── Test 5: Lista de endosos (DESA) ──
+  console.log('\n── TEST 5: GET /regional/ws/endosos (DESA catalog) ──');
+  const url5 = `${DESA_URL2}/regional/ws/endosos`;
+  const headers5 = { Authorization: desaAuth2 };
+  const r5 = await nodeHttpsRequest(url5, 'GET', headers5, undefined, 15000);
+  console.log(`Status: ${r5.status}`);
+  console.log(`Response: ${r5.text.slice(0, 500)}`);
+
+  // ── Test 6: CC cotizar on DESA URL with PROD credentials ──
+  console.log('\n── TEST 6: CC cotizar on DESA URL with PROD credentials ──');
+  const DESA_URL = process.env.REGIONAL_BASE_URL_DESA || 'https://desa.laregionaldeseguros.com:10443/desaw';
+  const DESA_USERNAME = process.env.REGIONAL_USERNAME_DESA || 'LIDERES_EN_SEGUROS_99';
+  const DESA_PASSWORD = process.env.REGIONAL_PASSWORD_DESA || '';
+  const desaBasicAuth = `Basic ${Buffer.from(`${DESA_USERNAME}:${DESA_PASSWORD}`).toString('base64')}`;
+  // Use PROD token with DESA URL
+  const url6 = `${DESA_URL}/regional/auto/cotizar/`;
+  const headers6: Record<string, string> = {
     Accept:       'application/json',
-    Authorization: basicAuth,
-    cToken:       TOKEN,
+    Authorization: desaBasicAuth,
+    cToken:       TOKEN,  // PROD token
     cCodInter:    COD_INTER,
     nEdad:        '53',
     cSexo:        'F',
@@ -77,40 +103,37 @@ async function main() {
     cEndoso:      'PLUS',
     cTipoCobert:  'CC',
   };
-  console.log('URL:', url1);
-  console.log('Headers:', JSON.stringify(headers1, null, 2));
-  const r1 = await nodeHttpsRequest(url1, 'GET', headers1, undefined, 15000);
-  console.log(`Status: ${r1.status}`);
-  console.log(`Response: ${r1.text.slice(0, 1000)}`);
+  console.log('URL:', url6);
+  const r6 = await nodeHttpsRequest(url6, 'GET', headers6, undefined, 15000);
+  console.log(`Status: ${r6.status}`);
+  console.log(`Response: ${r6.text.slice(0, 500)}`);
 
-  // ── Test 2: Same but RC ──
-  console.log('\n── TEST 2: Same vehicle, RC instead ──');
-  const headers2 = { ...headers1, cTipoCobert: 'RC', nMontoVeh: '0' };
-  const r2 = await nodeHttpsRequest(url1, 'GET', headers2, undefined, 15000);
-  console.log(`Status: ${r2.status}`);
-  console.log(`Response: ${r2.text.slice(0, 1000)}`);
-
-  // ── Test 3: CC with BASICO endoso ──
-  console.log('\n── TEST 3: CC with BASICO endoso ──');
-  const headers3 = { ...headers1, cEndoso: 'BASICO' };
-  const r3 = await nodeHttpsRequest(url1, 'GET', headers3, undefined, 15000);
-  console.log(`Status: ${r3.status}`);
-  console.log(`Response: ${r3.text.slice(0, 1000)}`);
-
-  // ── Test 4: Try different endpoint format ──
-  console.log('\n── TEST 4: Without trailing slash ──');
-  const url4 = `${BASE_URL}/regional/auto/cotizar`;
-  const r4 = await nodeHttpsRequest(url4, 'GET', headers1, undefined, 15000);
-  console.log(`Status: ${r4.status}`);
-  console.log(`Response: ${r4.text.slice(0, 1000)}`);
-
-  // ── Test 5: Lista de endosos ──
-  console.log('\n── TEST 5: GET /regional/ws/endosos (catalog) ──');
-  const url5 = `${BASE_URL}/regional/ws/endosos`;
-  const headers5 = { Authorization: basicAuth };
-  const r5 = await nodeHttpsRequest(url5, 'GET', headers5, undefined, 15000);
-  console.log(`Status: ${r5.status}`);
-  console.log(`Response: ${r5.text.slice(0, 500)}`);
+  // ── Test 7: CC cotizar on DESA URL with DESA credentials + DESA token ──
+  console.log('\n── TEST 7: CC cotizar on DESA URL with full DESA credentials ──');
+  const DESA_TOKEN = process.env.REGIONAL_TOKEN_DESA || '';
+  const url7 = `${DESA_URL}/regional/auto/cotizar/`;
+  const headers7: Record<string, string> = {
+    Accept:       'application/json',
+    Authorization: desaBasicAuth,
+    cToken:       DESA_TOKEN,
+    cCodInter:    process.env.REGIONAL_COD_INTER_DESA || '99',
+    nEdad:        '53',
+    cSexo:        'F',
+    cEdocivil:    'C',
+    cMarca:       '74',
+    cModelo:      '5',
+    nAnio:        '2017',
+    nMontoVeh:    '14000',
+    nLesiones:    '10000',
+    nDanios:      '20000',
+    nGastosMed:   '2000',
+    cEndoso:      'PLUS',
+    cTipoCobert:  'CC',
+  };
+  console.log('DESA TOKEN:', DESA_TOKEN.slice(0,20) + '...');
+  const r7 = await nodeHttpsRequest(url7, 'GET', headers7, undefined, 15000);
+  console.log(`Status: ${r7.status}`);
+  console.log(`Response: ${r7.text.slice(0, 500)}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
