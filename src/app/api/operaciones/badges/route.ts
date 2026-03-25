@@ -53,25 +53,12 @@ export async function GET() {
       .eq('status', 'pendiente');
     const urgencias = urgCount || 0;
 
-    // ── Morosidad: atrasado rows + ADM COT overdue installments (>15 days PENDIENTE_CONFIRMACION) ──
-    const OVERDUE_DAYS = 15;
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - OVERDUE_DAYS);
-    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
-
-    const [morResult, admCotOverdue] = await Promise.all([
-      supabase
-        .from('ops_morosidad_view')
-        .select('policy_id', { count: 'exact', head: true })
-        .eq('morosidad_status', 'atrasado'),
-      supabase
-        .from('adm_cot_payments')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'PENDIENTE_CONFIRMACION')
-        .eq('is_recurring', true)
-        .lte('payment_date', cutoffStr),
-    ]);
-    const morosidad = (morResult.count || 0) + (admCotOverdue.count || 0);
+    // ── Morosidad: atrasado rows from ops_morosidad_view only ──
+    const { count: morCount } = await supabase
+      .from('ops_morosidad_view')
+      .select('policy_id', { count: 'exact', head: true })
+      .eq('morosidad_status', 'atrasado');
+    const morosidad = morCount || 0;
 
     return NextResponse.json({
       renovaciones,
