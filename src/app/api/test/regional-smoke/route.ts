@@ -372,7 +372,7 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
       anio: 2017,
       valorVeh: 14000,
       numPuestos: 4,
-      endoso: s.endoso || 'BASICO',
+      endoso: 'PLUS',
       lesiones: '10000',
       danios: '20000',
       gastosMedicos: '2000',
