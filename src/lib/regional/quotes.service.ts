@@ -194,18 +194,46 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
     return { success: false, message: 'Invalid response' };
   }
 
-  let obj = data as Record<string, unknown>;
+  const top = data as Record<string, unknown>;
 
-  // PROD response wraps results in { items: [{ numcot, primarc, primacasco, primatotal, ... }] }
-  // Unwrap items[0] if present
-  if (Array.isArray(obj.items) && obj.items.length > 0) {
-    const item = obj.items[0] as Record<string, unknown>;
-    // Check for error: numcot null with null primas usually means API error
-    if (item.numcot === null && item.primatotal === null) {
+  // PROD response: { items: [ {numcot, primatotal:null}, {opcion:"1", primatotal:353.61}, ... ] }
+  // items[0] = numcot row (no prima), items[1..N] = opcion rows (no numcot, have prima)
+  // Combine: numcot from items[0], prima from items[1] (opcion seleccionada = lowest prima)
+  if (Array.isArray(top.items) && top.items.length > 0) {
+    const items = top.items as Record<string, unknown>[];
+
+    // Find the numcot item (item where numcot is present)
+    const numcotItem = items.find(i => i.numcot != null);
+    // Find opcion items (items where opcion is present and primatotal > 0)
+    const opcionItems = items.filter(i => i.opcion != null && ((i.primatotal as number) ?? 0) > 0);
+
+    if (!numcotItem) {
       return { success: false, message: 'Cotización no generada — verifique parámetros (cMarca, cModelo, nAnio, nMontoVeh)' };
     }
-    obj = item;
+
+    const numcot = numcotItem.numcot as number;
+
+    // Use the first opcion (lowest deductible / default selection) for primaTotal
+    const selectedOpcion = opcionItems[0] as Record<string, unknown> | undefined;
+    const primaTotal = selectedOpcion
+      ? ((selectedOpcion.primatotal || selectedOpcion.primaTotal) as number | undefined)
+      : undefined;
+
+    return {
+      success: true,
+      numcot,
+      primaTotal,
+      primaAnual: primaTotal,
+      opciones: opcionItems,
+      coberturas: (numcotItem.coberturas || []) as RegionalCCQuoteResponse['coberturas'],
+      deducibles: (numcotItem.deducibles || []) as RegionalCCQuoteResponse['deducibles'],
+      cuotas: (numcotItem.cuotas || []) as RegionalCCQuoteResponse['cuotas'],
+      ...numcotItem,
+    };
   }
+
+  // Fallback: direct object (DESA or alternate format)
+  let obj = top;
 
   if (obj.success === false || obj.mensaje || (obj.message && !obj.numcot)) {
     return {
