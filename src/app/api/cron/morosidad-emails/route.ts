@@ -1,16 +1,20 @@
 /**
  * CRON: Morosidad Auto-Emails
- * 
- * Runs daily to send staged notification emails for rejected recurring payments.
- * 
- * Schedule:
- *   Day 0  — Immediate: payment rejected notification
- *   Day 7  — Reminder: payment still pending
- *   Day 14 — Warning: urgent payment reminder  
- *   Day 30 — Final: coverage suspended warning
  *
- * Tracks which emails have been sent via the `notes` JSON field on adm_cot_payments:
- *   notes.morosidad_emails = { day0: "2026-03-17", day7: "2026-03-24", ... }
+ * Runs daily and reads from the official `delinquency` table filtered to
+ * broker portal@lideresenseguros.com. Sends emails based on delinquency stage:
+ *
+ *   Stage 30 (bucket_1_30 > 0)    — "Aviso de morosidad" with insurer payment button
+ *   Stage 60 (bucket_31_60 > 0)   — "Urgente: mora de 60 días" with insurer payment button
+ *   Stage 90+ (bucket_61_90 > 0 or bucket_90_plus > 0) — "Cobertura en riesgo" notice
+ *
+ * Delinquency stage = worst non-zero bucket (right-to-left: 90+ > 61-90 > 31-60 > 1-30)
+ * Total pending = sum of all non-zero buckets
+ *
+ * Tracking: delinquency.notes.morosidad_emails = { d30: "YYYY-MM-DD", d60: "...", d90: "..." }
+ * (Uses ops_activity_log for audit; notes stored in delinquency row via update)
+ *
+ * Emails include insurer-specific payment link + auto-pay setup info.
  *
  * Protection: X-CRON-SECRET header or Vercel CRON_SECRET
  * Schedule: "0 9 * * *" (daily 4am Panama = 9am UTC)
@@ -19,18 +23,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendZeptoEmail } from '@/lib/email/zepto-api';
+import { getInsurerPaymentInfo, buildInsurerPaymentBlock } from '@/lib/email/insurer-payment-links';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const PAYMENT_BASE_URL = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://portal.lideresenseguros.com'}/cotizadores?pagar=true`;
 
-// Email stages: days since rejection → stage key
-const EMAIL_STAGES = [
-  { minDays: 0,  key: 'day0',  subject: 'Aviso: pago rechazado — Póliza {{poliza}}', stage: 'rejection' },
-  { minDays: 7,  key: 'day7',  subject: 'Recordatorio: pago pendiente — Póliza {{poliza}}', stage: 'reminder' },
-  { minDays: 14, key: 'day14', subject: '⚠️ Urgente: pago pendiente — Póliza {{poliza}}', stage: 'warning' },
-  { minDays: 30, key: 'day30', subject: '🔴 Cobertura suspendida por falta de pago — Póliza {{poliza}}', stage: 'suspended' },
-] as const;
+type DelinquencyStage = 'd30' | 'd60' | 'd90';
+
+function getDelinquencyStage(row: any): DelinquencyStage | null {
+  if ((row.bucket_61_90 ?? 0) > 0 || (row.bucket_90_plus ?? 0) > 0) return 'd90';
+  if ((row.bucket_31_60 ?? 0) > 0) return 'd60';
+  if ((row.bucket_1_30 ?? 0) > 0) return 'd30';
+  return null;
+}
+
+function getTotalPending(row: any): number {
+  return (row.bucket_1_30 ?? 0) + (row.bucket_31_60 ?? 0) + (row.bucket_61_90 ?? 0) + (row.bucket_90_plus ?? 0);
+}
+
+function getDaysRange(stage: DelinquencyStage): string {
+  if (stage === 'd30') return '1–30 días';
+  if (stage === 'd60') return '31–60 días';
+  return '61+ días';
+}
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.ADM_COT_CRON_SECRET || process.env.CRON_SECRET;
@@ -46,8 +61,7 @@ export async function GET(request: NextRequest) {
   }
 
   const sb = createClient(supabaseUrl, supabaseServiceKey);
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   let sent = 0;
   let skipped = 0;
@@ -57,123 +71,121 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`[CRON MOROSIDAD-EMAILS] Running for date: ${todayStr}`);
 
-    // Fetch all RECHAZADO_PF recurring payments
-    const { data: rejectedPayments, error: fetchErr } = await sb
-      .from('adm_cot_payments')
-      .select('id, client_name, cedula, nro_poliza, insurer, amount, installment_num, payment_date, notes, recurrence_id')
-      .eq('status', 'RECHAZADO_PF')
-      .eq('is_recurring', true)
-      .order('payment_date', { ascending: true });
+    // Resolve broker_id for portal@lideresenseguros.com
+    const { data: brokerRow, error: brokerErr } = await sb
+      .from('brokers')
+      .select('id')
+      .eq('email', 'portal@lideresenseguros.com')
+      .maybeSingle();
 
+    if (brokerErr) throw new Error(`Broker lookup: ${brokerErr.message}`);
+
+    // Fetch delinquency records for this broker with any non-zero bucket
+    let query = sb
+      .from('delinquency')
+      .select('id, client_name, policy_number, insurer_id, broker_id, bucket_1_30, bucket_31_60, bucket_61_90, bucket_90_plus, current, total_debt, cutoff_date, notes')
+      .or('bucket_1_30.gt.0,bucket_31_60.gt.0,bucket_61_90.gt.0,bucket_90_plus.gt.0');
+
+    if (brokerRow) {
+      query = query.eq('broker_id', brokerRow.id);
+    }
+
+    const { data: delinquencies, error: fetchErr } = await query;
     if (fetchErr) throw new Error(fetchErr.message);
-    if (!rejectedPayments || rejectedPayments.length === 0) {
-      console.log('[CRON MOROSIDAD-EMAILS] No rejected payments found');
-      return NextResponse.json({ success: true, sent: 0, message: 'No rejected payments' });
+
+    if (!delinquencies || delinquencies.length === 0) {
+      console.log('[CRON MOROSIDAD-EMAILS] No delinquency records found');
+      return NextResponse.json({ success: true, sent: 0, message: 'No delinquency records' });
     }
 
-    console.log(`[CRON MOROSIDAD-EMAILS] Found ${rejectedPayments.length} rejected payments`);
+    console.log(`[CRON MOROSIDAD-EMAILS] Found ${delinquencies.length} delinquency records`);
 
-    // Build email map: cedula → email via clients.national_id
-    const cedulas = [...new Set(rejectedPayments.map(p => p.cedula).filter(Boolean))];
-    const emailMap: Record<string, string> = {};
-    if (cedulas.length > 0) {
-      const { data: clientRows } = await sb
-        .from('clients')
-        .select('national_id, email')
-        .in('national_id', cedulas)
-        .not('email', 'is', null);
-      (clientRows ?? []).forEach((c: any) => {
-        if (c.email && c.national_id) emailMap[c.national_id] = c.email;
-      });
+    // Resolve insurer names
+    const insurerIds = [...new Set(delinquencies.map((d: any) => d.insurer_id).filter(Boolean))];
+    const insurerMap: Record<string, string> = {};
+    if (insurerIds.length > 0) {
+      const { data: insurers } = await sb.from('insurers').select('id, name').in('id', insurerIds);
+      (insurers ?? []).forEach((i: any) => { insurerMap[i.id] = i.name; });
     }
 
-    for (const payment of rejectedPayments) {
-      try {
-        const notes: any = payment.notes || {};
-        const morosidadEmails: Record<string, string> = notes.morosidad_emails || {};
-        const rejectedAt = notes.rejected_at || payment.payment_date;
+    // Resolve client emails via policy_number → policies → clients
+    const policyNumbers = delinquencies.map((d: any) => d.policy_number).filter(Boolean);
+    const policyEmailMap: Record<string, string> = {};
+    if (policyNumbers.length > 0) {
+      const { data: policyRows } = await sb
+        .from('policies')
+        .select('policy_number, client_id')
+        .in('policy_number', policyNumbers);
 
-        // Calculate days since rejection
-        const rejectionDate = new Date(rejectedAt + (rejectedAt.includes('T') ? '' : 'T12:00:00'));
-        const daysSinceRejection = Math.floor((now.getTime() - rejectionDate.getTime()) / (1000 * 60 * 60 * 24));
+      const clientIds = [...new Set((policyRows ?? []).map((p: any) => p.client_id).filter(Boolean))];
+      if (clientIds.length > 0) {
+        const { data: clientRows } = await sb
+          .from('clients')
+          .select('id, email')
+          .in('id', clientIds)
+          .not('email', 'is', null);
 
-        // Determine which email stage to send (highest applicable not yet sent)
-        let stageToSend: typeof EMAIL_STAGES[number] | null = null;
-        for (const stage of EMAIL_STAGES) {
-          if (daysSinceRejection >= stage.minDays && !morosidadEmails[stage.key]) {
-            stageToSend = stage;
-            break; // Send the earliest unsent stage first
+        const clientEmailMap: Record<string, string> = {};
+        (clientRows ?? []).forEach((c: any) => { if (c.email) clientEmailMap[c.id] = c.email; });
+
+        (policyRows ?? []).forEach((p: any) => {
+          if (p.policy_number && p.client_id && clientEmailMap[p.client_id]) {
+            policyEmailMap[p.policy_number] = clientEmailMap[p.client_id]!;
           }
-        }
+        });
+      }
+    }
 
-        if (!stageToSend) {
-          skipped++;
-          continue;
-        }
+    for (const row of delinquencies) {
+      try {
+        const stage = getDelinquencyStage(row);
+        if (!stage) { skipped++; continue; }
 
-        // Get client email via cedula
-        const cedula = payment.cedula || '';
-        const clientEmail = emailMap[cedula] || null;
-        if (!clientEmail) {
-          noEmail++;
-          continue;
-        }
+        const notes: any = row.notes || {};
+        const morosidadEmails: Record<string, string> = notes.morosidad_emails || {};
 
-        const paymentUrl = `${PAYMENT_BASE_URL}&cedula=${encodeURIComponent(cedula)}`;
+        if (morosidadEmails[stage]) { skipped++; continue; } // already sent for this stage
 
-        // Build email
-        const subject = stageToSend.subject
-          .replace('{{poliza}}', payment.nro_poliza || '—');
+        const clientEmail = policyEmailMap[row.policy_number] || null;
+        if (!clientEmail) { noEmail++; continue; }
 
-        const htmlBody = buildEmailHtml({
-          stage: stageToSend.stage,
-          clientName: payment.client_name,
-          nroPoliza: payment.nro_poliza || '—',
-          insurer: payment.insurer,
-          amount: payment.amount,
-          installmentNum: payment.installment_num || 0,
-          daysSinceRejection,
-          paymentUrl,
-          rejectionReason: notes.rejection_reason || 'Pago rechazado',
+        const insurerName = insurerMap[row.insurer_id] || row.insurer_id || 'su aseguradora';
+        const insurerInfo = getInsurerPaymentInfo(insurerName);
+        const paymentBlock = buildInsurerPaymentBlock(insurerInfo);
+        const totalPending = getTotalPending(row);
+        const fmtTotal = `$${Number(totalPending).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+        const daysRange = getDaysRange(stage);
+
+        const { subject, htmlBody } = buildMorosidadEmail({
+          stage,
+          clientName: row.client_name,
+          nroPoliza: row.policy_number,
+          insurerLabel: insurerInfo.label,
+          totalPending: fmtTotal,
+          daysRange,
+          paymentBlock,
         });
 
-        const textBody = `Estimado/a ${payment.client_name}, su pago de la cuota #${payment.installment_num} de la póliza ${payment.nro_poliza} fue rechazado. Monto: $${Number(payment.amount).toFixed(2)}. Realice su pago en: ${paymentUrl}`;
-
-        const result = await sendZeptoEmail({
-          to: clientEmail,
-          subject,
-          htmlBody,
-          textBody,
-        });
+        const result = await sendZeptoEmail({ to: clientEmail, subject, htmlBody, textBody: subject });
 
         if (result.success) {
           sent++;
+          const updatedNotes = { ...notes, morosidad_emails: { ...morosidadEmails, [stage]: todayStr } };
+          await sb.from('delinquency').update({ notes: updatedNotes }).eq('id', row.id);
 
-          // Update notes with sent stage
-          const updatedMorosidadEmails = { ...morosidadEmails, [stageToSend.key]: todayStr };
-          const updatedNotes = { ...notes, morosidad_emails: updatedMorosidadEmails };
-          await sb.from('adm_cot_payments').update({ notes: updatedNotes }).eq('id', payment.id);
-
-          // Audit log
           await sb.from('adm_cot_audit_log').insert({
             event_type: 'morosidad_auto_email',
-            entity_type: 'payment',
-            entity_id: payment.id,
-            detail: {
-              stage: stageToSend.key,
-              days_since_rejection: daysSinceRejection,
-              client_email: clientEmail,
-              zepto_message_id: result.messageId,
-              nro_poliza: payment.nro_poliza,
-            },
-          });
+            entity_type: 'delinquency',
+            entity_id: row.id,
+            detail: { stage, client_email: clientEmail, nro_poliza: row.policy_number, total_pending: totalPending },
+          }).catch(() => {});
 
-          console.log(`[CRON MOROSIDAD-EMAILS] ✅ ${stageToSend.key} sent: ${payment.nro_poliza} → ${clientEmail}`);
+          console.log(`[CRON MOROSIDAD-EMAILS] ✅ ${stage} sent: ${row.policy_number} → ${clientEmail}`);
         } else {
-          errors.push(`${payment.nro_poliza} ${stageToSend.key}: ${result.error}`);
+          errors.push(`${row.policy_number} ${stage}: ${result.error}`);
         }
-      } catch (payErr: any) {
-        errors.push(`${payment.nro_poliza}: ${payErr.message}`);
+      } catch (rowErr: any) {
+        errors.push(`${row.policy_number}: ${rowErr.message}`);
       }
     }
 
@@ -197,76 +209,63 @@ export async function GET(request: NextRequest) {
 // Email HTML Builder
 // ════════════════════════════════════════════
 
-function buildEmailHtml(params: {
-  stage: string;
+function buildMorosidadEmail(params: {
+  stage: DelinquencyStage;
   clientName: string;
   nroPoliza: string;
-  insurer: string;
-  amount: number;
-  installmentNum: number;
-  daysSinceRejection: number;
-  paymentUrl: string;
-  rejectionReason: string;
-}): string {
-  const { stage, clientName, nroPoliza, insurer, amount, installmentNum, daysSinceRejection, paymentUrl, rejectionReason } = params;
-  const fmtAmount = `$${Number(amount).toFixed(2)}`;
+  insurerLabel: string;
+  totalPending: string;
+  daysRange: string;
+  paymentBlock: string;
+}): { subject: string; htmlBody: string } {
+  const { stage, clientName, nroPoliza, insurerLabel, totalPending, daysRange, paymentBlock } = params;
 
-  const stageConfig: Record<string, { headerBg: string; headerTitle: string; icon: string; bodyText: string; ctaText: string; urgencyBanner?: string }> = {
-    rejection: {
+  const config: Record<DelinquencyStage, { headerBg: string; icon: string; title: string; bodyText: string; subject: string; urgencyBanner?: string }> = {
+    d30: {
       headerBg: '#010139',
-      headerTitle: 'Aviso de Pago Rechazado',
-      icon: '⚠️',
-      bodyText: `Le informamos que el cobro automático de su cuota <strong>#${installmentNum}</strong> por <strong>${fmtAmount}</strong> de la póliza <strong>${nroPoliza}</strong> (${insurer}) ha sido <strong style="color:#dc2626;">rechazado</strong>.<br/><br/>Motivo: <em>${rejectionReason}</em><br/><br/>Le solicitamos realizar el pago manualmente a la mayor brevedad para mantener su cobertura activa.`,
-      ctaText: 'Realizar mi pago ahora',
+      icon: '💰',
+      title: 'Aviso de Morosidad — Cuota Pendiente',
+      subject: `Aviso de morosidad — Póliza ${nroPoliza}`,
+      bodyText: `Le informamos que su póliza <strong>${nroPoliza}</strong> con <strong>${insurerLabel}</strong> presenta un saldo pendiente de <strong>${totalPending}</strong> con <strong>${daysRange}</strong> de atraso.<br/><br/>Le agradecemos realizar su pago directamente en el portal de la aseguradora para mantener su cobertura activa.`,
     },
-    reminder: {
-      headerBg: '#010139',
-      headerTitle: 'Recordatorio de Pago Pendiente',
-      icon: '📋',
-      bodyText: `Le recordamos que el pago de su cuota <strong>#${installmentNum}</strong> por <strong>${fmtAmount}</strong> de la póliza <strong>${nroPoliza}</strong> (${insurer}) se encuentra pendiente desde hace <strong>${daysSinceRejection} días</strong>.<br/><br/>El cobro automático fue rechazado y aún no hemos recibido el pago correspondiente. Le agradecemos regularizar su situación.`,
-      ctaText: 'Pagar ahora',
-    },
-    warning: {
+    d60: {
       headerBg: '#d97706',
-      headerTitle: '⚠️ Pago Urgente Requerido',
       icon: '⚠️',
-      bodyText: `<strong style="color:#d97706;">AVISO IMPORTANTE:</strong> Su cuota <strong>#${installmentNum}</strong> por <strong>${fmtAmount}</strong> de la póliza <strong>${nroPoliza}</strong> (${insurer}) lleva <strong>${daysSinceRejection} días sin pago</strong>.<br/><br/>De no realizar el pago en los próximos días, su cobertura podría verse afectada. Le urgimos realizar el pago de inmediato.`,
-      ctaText: 'Pagar de inmediato',
-      urgencyBanner: `<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:12px 16px;margin:16px 0;text-align:center;"><strong style="color:#92400e;">⚠️ ${daysSinceRejection} días de atraso — Su cobertura está en riesgo</strong></div>`,
+      title: 'Urgente: Mora de 60 Días — Acción Requerida',
+      subject: `⚠️ Urgente: mora de 60 días — Póliza ${nroPoliza}`,
+      bodyText: `<strong style="color:#d97706;">AVISO IMPORTANTE:</strong> Su póliza <strong>${nroPoliza}</strong> con <strong>${insurerLabel}</strong> acumula <strong>${daysRange}</strong> de mora y un saldo pendiente de <strong>${totalPending}</strong>.<br/><br/>De no regularizar su situación a la brevedad posible, su cobertura podría verse comprometida. Le instamos a realizar el pago de inmediato.`,
+      urgencyBanner: `<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:8px;padding:12px 16px;margin:16px 0;text-align:center;"><strong style="color:#92400e;">⚠️ ${daysRange} de atraso — Cobertura en riesgo</strong></div>`,
     },
-    suspended: {
+    d90: {
       headerBg: '#dc2626',
-      headerTitle: '🔴 Cobertura Suspendida por Falta de Pago',
-      icon: '🛑',
-      bodyText: `<strong style="color:#dc2626;">AVISO FINAL:</strong> Debido a que su cuota <strong>#${installmentNum}</strong> por <strong>${fmtAmount}</strong> de la póliza <strong>${nroPoliza}</strong> (${insurer}) no ha sido pagada después de <strong>${daysSinceRejection} días</strong>, le informamos que:<br/><br/><div style="background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:16px;margin:12px 0;"><strong style="color:#dc2626;font-size:16px;">La cobertura de su póliza se encuentra SUSPENDIDA por falta de pago.</strong><br/><br/><span style="color:#991b1b;">Cualquier siniestro ocurrido durante este período NO tendrá cobertura.</span></div>Para reactivar su cobertura, realice el pago pendiente de forma inmediata.`,
-      ctaText: 'Realizar pago y reactivar cobertura',
-      urgencyBanner: `<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:12px 16px;margin:16px 0;text-align:center;"><strong style="color:#991b1b;">🔴 COBERTURA SUSPENDIDA — ${daysSinceRejection} días sin pago</strong></div>`,
+      icon: '🔴',
+      title: 'Aviso Crítico: Mora Mayor a 60 Días',
+      subject: `� Mora crítica: ${daysRange} — Póliza ${nroPoliza}`,
+      bodyText: `<strong style="color:#dc2626;">AVISO CRÍTICO:</strong> Su póliza <strong>${nroPoliza}</strong> con <strong>${insurerLabel}</strong> presenta <strong>${daysRange}</strong> de mora con un saldo total de <strong>${totalPending}</strong>.<br/><br/><div style="background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:14px;margin:12px 0;"><strong style="color:#dc2626;">Su cobertura podría estar SUSPENDIDA.</strong><br/><span style="color:#991b1b;font-size:13px;">Cualquier siniestro durante este período podría no tener cobertura.</span></div>Regularice su situación de inmediato comunicándose con la aseguradora.`,
+      urgencyBanner: `<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:8px;padding:12px 16px;margin:16px 0;text-align:center;"><strong style="color:#991b1b;">🔴 MORA CRÍTICA — ${daysRange} sin pago — Saldo: ${totalPending}</strong></div>`,
     },
   };
 
-  const config = (stageConfig[stage] || stageConfig['rejection'])!;
+  const c = config[stage];
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f9fafb;">
-<div style="max-width:640px;margin:0 auto;background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-<div style="background:${config.headerBg};color:white;padding:24px;">
-<h1 style="margin:0;font-size:20px;">${config.icon} ${config.headerTitle}</h1>
+  const htmlBody = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f0f2f5;">
+<div style="max-width:620px;margin:24px auto;background:white;border-radius:14px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,0.10);">
+<div style="background:${c.headerBg};color:white;padding:28px 24px;">
+<h1 style="margin:0;font-size:20px;">${c.icon} ${c.title}</h1>
 <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">Líderes en Seguros</p>
 </div>
 <div style="padding:24px;font-size:14px;line-height:1.7;color:#374151;">
 <p>Estimado/a <strong>${clientName}</strong>,</p>
-${config.urgencyBanner || ''}
-<p>${config.bodyText}</p>
+${c.urgencyBanner || ''}
+<p>${c.bodyText}</p>
 <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:13px;">
 <tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;width:45%;">Póliza</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${nroPoliza}</td></tr>
-<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Aseguradora</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${insurer}</td></tr>
-<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Cuota</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">#${installmentNum}</td></tr>
-<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Monto pendiente</td><td style="padding:10px 14px;border:1px solid #e5e7eb;color:#dc2626;font-weight:bold;font-size:16px;">${fmtAmount}</td></tr>
-<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Días de atraso</td><td style="padding:10px 14px;border:1px solid #e5e7eb;color:${daysSinceRejection >= 30 ? '#dc2626' : daysSinceRejection >= 14 ? '#d97706' : '#374151'};font-weight:bold;">${daysSinceRejection} días</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Aseguradora</td><td style="padding:10px 14px;border:1px solid #e5e7eb;">${insurerLabel}</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Saldo Pendiente</td><td style="padding:10px 14px;border:1px solid #e5e7eb;color:#dc2626;font-weight:bold;font-size:16px;">${totalPending}</td></tr>
+<tr><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;background:#f9fafb;">Días de Atraso</td><td style="padding:10px 14px;border:1px solid #e5e7eb;font-weight:bold;color:${stage === 'd90' ? '#dc2626' : stage === 'd60' ? '#d97706' : '#374151'};">${daysRange}</td></tr>
 </table>
-</div>
-<div style="padding:0 24px 24px;text-align:center;">
-<a href="${paymentUrl}" style="display:inline-block;padding:16px 40px;background:#8AAA19;color:white;text-decoration:none;font-weight:bold;font-size:16px;border-radius:12px;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(138,170,25,0.3);">${config.ctaText}</a>
-<p style="margin-top:12px;font-size:12px;color:#6b7280;">Haga clic en el botón para pagar de forma rápida y segura.</p>
+${paymentBlock}
 </div>
 <div style="padding:16px 24px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center;">
 <p style="margin:0;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
@@ -274,4 +273,6 @@ ${config.urgencyBanner || ''}
 </div>
 </div>
 </body></html>`;
+
+  return { subject: c.subject, htmlBody };
 }

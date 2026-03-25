@@ -2,16 +2,13 @@
  * POST /api/paguelofacil/webhook
  * ===============================
  * Receives payment confirmation webhooks from PagueloFacil.
- * PagueloFacil sends a POST with transaction details after each payment.
+ * PagueloFacil is used ONLY for the FIRST (initial) policy payment.
  *
- * This endpoint automatically processes:
- * 1. RECURRENT transactions — matches by pf_cod_oper on recurrence,
- *    updates payment status (CONFIRMADO_PF / RECHAZADO_PF) and schedule.
- * 2. AUTH_CAPTURE / SALE — matches by pf_cod_oper on payment record.
+ * Recurring installments are paid directly by the client with the insurer.
+ * RECURRENT webhooks are logged and ignored — we do NOT process them.
  *
- * For REJECTED recurrent charges:
- * - Marks payment as RECHAZADO_PF with rejection reason
- * - Sends portal_notifications to masters
+ * This endpoint processes:
+ * - AUTH_CAPTURE / SALE / CAPTURE — first payment confirmation or rejection.
  *
  * NOTE: Configure this URL in PagueloFacil's webhook settings:
  *   https://portal.lideresenseguros.com/api/paguelofacil/webhook
@@ -89,157 +86,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ════════════════════════════════════════════
-    // RECURRENT transaction — auto-confirm or reject
+    // RECURRENT — ignored. Recurring charges go directly through the insurer.
+    // We log the event for audit purposes only.
     // ════════════════════════════════════════════
     if (opType === 'RECURRENT' || opType === 'recurrent') {
-      // The codOper in a RECURRENT webhook is the NEW transaction codOper.
-      // We need to find the recurrence by its original pf_cod_oper (stored on adm_cot_recurrences)
-      // or by matching the related transaction. PF's `relatedTx` may have the original codOper.
-      //
-      // Strategy: look for PENDIENTE_CONFIRMACION payments created by the cron
-      // that have a matching recurrence whose pf_cod_oper is the original auth.
-      // Since the cron stores its own pf_cod_oper on the payment row when charge succeeds,
-      // and for failed charges it doesn't store one, we match differently:
-      //
-      // 1. If PF charge APPROVED: the cron already marked it CONFIRMADO_PF. 
-      //    But if cron hasn't run yet (webhook arrived first), find the recurrence 
-      //    and create/update the payment.
-      //
-      // 2. If PF charge DECLINED: find PENDIENTE_CONFIRMACION payments whose
-      //    recurrence pf_cod_oper matches the related tx, and mark RECHAZADO_PF.
-
-      // Try to find payment by the new codOper first (cron may have stored it)
-      const { data: directMatch } = await sb
-        .from('adm_cot_payments')
-        .select('id, recurrence_id, status, installment_num, nro_poliza, client_name, insurer, amount')
-        .eq('pf_cod_oper', codOper)
-        .maybeSingle();
-
-      if (directMatch) {
-        // Direct match found — this is likely a cron-initiated charge
-        if (isApproved && directMatch.status !== 'CONFIRMADO_PF') {
-          await sb.from('adm_cot_payments').update({
-            status: 'CONFIRMADO_PF',
-            pf_confirmed_at: now,
-            pf_card_type: payload.cardType || null,
-            pf_card_display: payload.displayNum || null,
-          }).eq('id', directMatch.id);
-
-          // Update recurrence schedule
-          if (directMatch.recurrence_id) {
-            await updateRecurrenceSchedule(sb, directMatch.recurrence_id, directMatch.installment_num!, directMatch.id, true);
-          }
-
-          await logWebhookEvent(sb, 'recurrent_confirmed', directMatch.id, codOper, payload);
-          console.log(`[PF WEBHOOK] ✅ Recurrent confirmed: payment=${directMatch.id}`);
-
-        } else if (!isApproved) {
-          const rejNotes = { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now, pf_codOper: codOper, morosidad_emails: {} as Record<string, string> };
-          await sb.from('adm_cot_payments').update({
-            status: 'RECHAZADO_PF',
-            notes: rejNotes,
-          }).eq('id', directMatch.id);
-
-          await logWebhookEvent(sb, 'recurrent_rejected', directMatch.id, codOper, payload);
-          await notifyRejection(sb, directMatch, payload);
-          // Send immediate day-0 rejection email to client
-          await sendDay0RejectionEmail(sb, directMatch.id, directMatch, payload.messageSys || 'Pago rechazado');
-          console.log(`[PF WEBHOOK] ❌ Recurrent rejected: payment=${directMatch.id}, reason=${payload.messageSys}`);
-        }
-
-        return NextResponse.json({ received: true, action: 'recurrent_processed', paymentId: directMatch.id });
-      }
-
-      // No direct match — try to find by recurrence's original codOper
-      // PF sends the original codOper in the `description` or we match via recurrence
-      const relatedCodOper = payload.relatedTx || '';
-      if (relatedCodOper) {
-        const { data: rec } = await sb
-          .from('adm_cot_recurrences')
-          .select('id, nro_poliza, client_name, insurer, installment_amount, schedule, pf_cod_oper')
-          .eq('pf_cod_oper', relatedCodOper)
-          .eq('status', 'ACTIVA')
-          .maybeSingle();
-
-        if (rec) {
-          // Find the next PENDIENTE installment in schedule
-          const schedule = Array.isArray(rec.schedule) ? rec.schedule : [];
-          const nextPending = schedule.find((s: any) => s.status === 'PENDIENTE');
-
-          if (nextPending) {
-            // Find or create the payment record
-            const { data: existingPay } = await sb
-              .from('adm_cot_payments')
-              .select('id')
-              .eq('recurrence_id', rec.id)
-              .eq('installment_num', nextPending.num)
-              .maybeSingle();
-
-            if (existingPay) {
-              // Update existing
-              const newStatus = isApproved ? 'CONFIRMADO_PF' : 'RECHAZADO_PF';
-              const updateData: Record<string, any> = {
-                status: newStatus,
-                pf_cod_oper: codOper,
-                pf_confirmed_at: isApproved ? now : null,
-                pf_card_type: payload.cardType || null,
-                pf_card_display: payload.displayNum || null,
-              };
-              if (!isApproved) {
-                updateData.notes = { rejection_reason: payload.messageSys || 'Pago rechazado', rejected_at: now, morosidad_emails: {} };
-              }
-              const { error: updateErr } = await sb.from('adm_cot_payments').update(updateData).eq('id', existingPay.id);
-              if (updateErr) console.error(`[PF WEBHOOK] Update error for payment ${existingPay.id}:`, updateErr.message);
-
-              if (isApproved) {
-                await updateRecurrenceSchedule(sb, rec.id, nextPending.num, existingPay.id, true);
-              }
-
-              await logWebhookEvent(sb, isApproved ? 'recurrent_confirmed' : 'recurrent_rejected', existingPay.id, codOper, payload);
-              if (!isApproved) {
-                await notifyRejection(sb, { ...rec, installment_num: nextPending.num, amount: nextPending.amount }, payload);
-                // Send immediate day-0 rejection email
-                await sendDay0RejectionEmail(sb, existingPay.id, { ...rec, installment_num: nextPending.num, amount: nextPending.amount }, payload.messageSys || 'Pago rechazado');
-              }
-
-              return NextResponse.json({ received: true, action: 'recurrent_matched_by_relation', paymentId: existingPay.id });
-
-            } else if (isApproved) {
-              // Create new payment record (webhook arrived before cron)
-              const { data: newPay } = await sb.from('adm_cot_payments').insert({
-                recurrence_id: rec.id,
-                nro_poliza: rec.nro_poliza,
-                client_name: rec.client_name,
-                insurer: rec.insurer,
-                ramo: 'AUTO',
-                amount: nextPending.amount || rec.installment_amount,
-                installment_num: nextPending.num,
-                payment_date: new Date().toISOString().slice(0, 10),
-                status: 'CONFIRMADO_PF',
-                is_recurring: true,
-                is_refund: false,
-                pf_cod_oper: codOper,
-                pf_confirmed_at: now,
-                pf_card_type: payload.cardType || null,
-                pf_card_display: payload.displayNum || null,
-                payment_source: 'PF_WEBHOOK',
-              }).select('id').single();
-
-              if (newPay) {
-                await updateRecurrenceSchedule(sb, rec.id, nextPending.num, newPay.id, true);
-                await logWebhookEvent(sb, 'recurrent_created_confirmed', newPay.id, codOper, payload);
-              }
-
-              return NextResponse.json({ received: true, action: 'recurrent_created', paymentId: newPay?.id });
-            }
-          }
-        }
-      }
-
-      // Fallback: couldn't match — log for manual review
+      // Recurring charges go directly through the insurer — NOT PagueloFacil.
+      // Log for audit and return 200 so PF stops retrying.
       await logWebhookEvent(sb, 'recurrent_unmatched', null, codOper, payload);
-      console.warn(`[PF WEBHOOK] ⚠️ RECURRENT unmatched: codOper=${codOper}`);
-      return NextResponse.json({ received: true, action: 'recurrent_unmatched' });
+      console.log(`[PF WEBHOOK] RECURRENT ignored (insurer direct payment model): codOper=${codOper}`);
+      return NextResponse.json({ received: true, action: 'recurrent_ignored_insurer_direct' });
     }
 
     // ════════════════════════════════════════════
