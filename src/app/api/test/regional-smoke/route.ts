@@ -465,7 +465,7 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
         usoveh: 'P',
         peso: 'L',
       },
-      acreedor: '81',
+      acreedor: '',
     };
 
     result.emissionPayload = {
