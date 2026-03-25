@@ -105,10 +105,13 @@ function sep(title: string) {
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-// Unique cédula per run
+// Unique cédula per run — use timestamp suffix so repeated runs don't collide in PROD DB
+const RUN_SEED = Date.now() % 10000; // last 4 digits of timestamp
 function cedula(idx: number) {
   const prov = (idx % 9) + 1;
-  return { prov, tomo: 900 + idx, asiento: 7000 + idx, str: `${(idx % 9) + 1}-${900 + idx}-${7000 + idx}` };
+  const tomo = 100 + idx;
+  const asiento = RUN_SEED * 10 + idx;
+  return { prov, tomo, asiento, str: `${prov}-${tomo}-${asiento}` };
 }
 
 // ── Scenario definitions ──────────────────────────────────────
@@ -282,175 +285,54 @@ async function runScenario(s: typeof SCENARIOS[number], idx: number) {
   return result;
 }
 
-// ── Lib imports (used when running directly with tsx --env-file) ──
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { cotizarCC } = require('../src/lib/regional/quotes.service');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { emitirPolizaCC, actualizarPlanPago, imprimirPoliza } = require('../src/lib/regional/emission.service');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { getRegionalCredentials, getRegionalBaseUrl, getRegionalEnv } = require('../src/lib/regional/config');
-
-// ── Run one scenario via lib ───────────────────────────────────
-
-async function runScenarioLib(s: typeof SCENARIOS[number], idx: number) {
-  sep(`SCENARIO ${s.id}/3 — ${s.label}`);
-  const ced = cedula(idx + 70);
-  const result: Record<string, unknown> = {
-    scenario: s.id, label: s.label,
-    vehicle: `${s.marca} ${s.modelo} ${s.anio}`,
-    cedula: ced.str,
-  };
-  const t0 = Date.now();
-
-  // ── Step 1: Quote ─────────────────────────────────────────
-  log(`S${s.id}/QUOTE`, `cotizarCC endoso=${s.endoso} valor=${s.valorVeh} marca=${s.marcaCode} modelo=${s.modeloCode}`);
-  const quoteResult = await cotizarCC({
-    nombre: 'SMOKE', apellido: 'REGIONAL',
-    edad: 35, sexo: s.sexo, edocivil: s.edocivil,
-    tppersona: 'N', tpodoc: 'C',
-    prov: ced.prov, tomo: ced.tomo, asiento: ced.asiento,
-    telefono: `290${String(s.id).padStart(4,'0')}`,
-    celular: `629${String(s.id).padStart(5,'0')}`,
-    email: 'smoketestcc@lideresenseguros.com',
-    vehnuevo: 'N',
-    codMarca: s.marcaCode, codModelo: s.modeloCode,
-    anio: s.anio, valorVeh: s.valorVeh, numPuestos: 5,
-    endoso: s.endoso,
-    lesiones: s.lesiones, danios: s.danios, gastosMedicos: s.gastosMedicos,
-  });
-  log(`S${s.id}/QUOTE`, `success=${quoteResult.success} numcot=${quoteResult.numcot} prima=${quoteResult.primaTotal}`, quoteResult.success ? undefined : quoteResult);
-
-  result.quoteSuccess = quoteResult.success;
-  result.numcot = quoteResult.numcot ?? null;
-  result.primaTotal = quoteResult.primaTotal ?? null;
-
-  if (!quoteResult.success || !quoteResult.numcot) {
-    result.success = false;
-    result.error = `Quote failed: ${quoteResult.message || 'no numcot'}`;
-    result.timingMs = Date.now() - t0;
-    log(`S${s.id}/QUOTE`, `❌ ${result.error}`);
-    return result;
-  }
-  log(`S${s.id}/QUOTE`, `✅ numcot=${quoteResult.numcot} primaTotal=${quoteResult.primaTotal}`);
-
-  // ── Step 2: Plan de pago ──────────────────────────────────
-  if (s.cuotas > 1) {
-    log(`S${s.id}/PLAN`, `actualizarPlanPago numcot=${quoteResult.numcot} cuotas=${s.cuotas}`);
-    const pagoResult = await actualizarPlanPago({ numcot: quoteResult.numcot, cuotas: s.cuotas, opcionPrima: 1 });
-    result.planPagoSuccess = pagoResult.success;
-    if (!pagoResult.success) log(`S${s.id}/PLAN`, `⚠️  ${pagoResult.message}`);
-    else log(`S${s.id}/PLAN`, `✅ plan pago OK`);
-  }
-
-  // ── Step 3: Emit ──────────────────────────────────────────
-  const creds = getRegionalCredentials();
-  const emitBody = {
-    codInter: creds.codInter,
-    numcot: quoteResult.numcot,
-    cliente: {
-      direccion: { codpais: 507, codestado: 8, codciudad: 1, codmunicipio: 1, codurb: 1, dirhab: 'Ciudad de Panama' },
-      datosCumplimiento: { ocupacion: 1, ingresoAnual: 2, paisTributa: 507, pep: 'N' },
-    },
-    datosveh: {
-      vehnuevo: 'N',
-      numplaca: `RCC${String(s.id * 10 + idx).padStart(3,'0')}`,
-      serialcarroceria: `RCCVIN${String(s.id * 1000 + idx * 10).padStart(11,'0')}`,
-      serialmotor: `RCCM${String(s.id * 1000 + idx * 10).padStart(8,'0')}`,
-      color: '001', usoveh: 'P', peso: 'L',
-    },
-    acreedor: s.sinAcreedor ? '' : (s.acreedor || '81'),
-  };
-
-  log(`S${s.id}/EMIT`, `emitirPolizaCC numcot=${quoteResult.numcot} cuotas=${s.cuotas} acreedor=${emitBody.acreedor || '(sin)'}`);
-  const emitResult = await emitirPolizaCC(emitBody);
-  log(`S${s.id}/EMIT`, `success=${emitResult.success} poliza=${emitResult.poliza}`, emitResult.success ? undefined : emitResult);
-
-  result.emitSuccess = emitResult.success;
-  result.poliza = emitResult.poliza ?? null;
-
-  if (!emitResult.success) {
-    result.success = false;
-    result.error = `Emission failed: ${emitResult.message}`;
-    result.timingMs = Date.now() - t0;
-    log(`S${s.id}/EMIT`, `❌ ${emitResult.message}`);
-    return result;
-  }
-  log(`S${s.id}/EMIT`, `✅ Póliza: ${emitResult.poliza}`);
-
-  // ── Step 4: Imprimir ──────────────────────────────────────
-  if (emitResult.poliza) {
-    log(`S${s.id}/PDF`, `imprimirPoliza poliza=${emitResult.poliza}`);
-    const printResult = await imprimirPoliza(emitResult.poliza);
-    result.printSuccess = printResult.success;
-    result.printError = printResult.success ? null : printResult.message;
-    if (printResult.success && printResult.pdf) {
-      const buf = Buffer.from(printResult.pdf, 'base64');
-      const outPath = nodePath.join(process.cwd(), 'scripts', `caratula_cc_s${s.id}_${String(emitResult.poliza).replace(/[/\\]/g,'-')}.pdf`);
-      fs.writeFileSync(outPath, buf);
-      result.pdfBytes = buf.length;
-      result.pdfPath = outPath;
-      log(`S${s.id}/PDF`, `✅ ${outPath} (${buf.length} bytes)`);
-    } else {
-      log(`S${s.id}/PDF`, `⚠️  ${printResult.message}`);
-    }
-  }
-
-  result.success = true;
-  result.timingMs = Date.now() - t0;
-  return result;
-}
-
-// ── Main ──────────────────────────────────────────────────────
+// ── Main — calls /api/test/regional-smoke (Vercel, PROD env, avoids vehicle mapper) ──
 
 async function main() {
-  sep('REGIONAL CC SMOKE TEST — 3 EMISIONES (DESA env)');
-  const env = getRegionalEnv();
-  const baseUrl = getRegionalBaseUrl();
-  log('CONFIG', `env=${env} url=${baseUrl}`);
+  sep('REGIONAL CC SMOKE TEST — 3 EMISIONES PROD via Vercel');
+  log('CONFIG', `Portal: ${PORTAL_BASE}`);
 
-  const results: any[] = [];
-  const summary = { total: 3, passed: 0, failed: 0, polizas: [] as string[], errors: [] as string[] };
+  const smokeUrl = `/api/test/regional-smoke?filter=CC&limit=3&delay=4000&dryrun=false`;
+  log('REQUEST', `GET ${smokeUrl}`);
+  console.log('\n⏳ Running 3 CC emissions via portal smoke endpoint (may take 2-3 min)...\n');
 
-  for (let i = 0; i < SCENARIOS.length; i++) {
-    const s = SCENARIOS[i]!;
-    const r = await runScenarioLib(s, i) as any;
-    results.push(r);
+  const res = await portalGet(smokeUrl, { Authorization: `Bearer ${CRON_SECRET}` });
+  log('RESPONSE', `Status: ${res.status}`);
 
-    if (r.success) {
-      summary.passed++;
-      if (r.poliza) summary.polizas.push(`S${s.id}: ${r.poliza}  (${s.label})`);
-    } else {
-      summary.failed++;
-      summary.errors.push(`S${s.id} — ${r.error}`);
-    }
-
-    if (i < SCENARIOS.length - 1) { log('DELAY', '4s...'); await sleep(4000); }
+  if (!res.body || res.status !== 200) {
+    console.error('❌ Smoke endpoint failed:', res.status, JSON.stringify(res.body ?? res).slice(0, 800));
+    process.exit(1);
   }
 
-  sep('RESUMEN REGIONAL CC SMOKE TEST');
+  const data = res.body as any;
+  const results: any[] = data.results || [];
+  const summary = data.summary || {};
+
+  sep('RESUMEN REGIONAL CC SMOKE TEST — PROD');
 
   for (const r of results) {
     const icon = r.success ? '✅' : '❌';
     console.log(`
-  ${icon}  SCENARIO ${r.scenario} — ${r.label}
+  ${icon}  Scenario ${r.scenarioId} — ${r.description}
        Vehículo   : ${r.vehicle}
        Quote OK   : ${r.quoteSuccess} (numcot=${r.numcot}, prima=${r.primaTotal})
-       Emisión OK : ${r.emitSuccess ?? '—'}
+       Emisión OK : ${r.success ? 'sí' : (r.error ? 'no' : '—')}
        Póliza     : ${r.poliza || 'N/A'}
-       Carátula   : ${r.printSuccess ? `✅ ${r.pdfBytes} bytes` : `❌ ${r.printError || '—'}`}
        Error      : ${r.error || '—'}
-       Timing     : ${r.timingMs}ms`);
+       Timing     : ${r.timing}ms`);
   }
 
+  const polizas = summary.polizasEmitidas || [];
   console.log(`
   ─────────────────────────────────────────────────────────
   RESULTADO    : ${summary.passed}/${summary.total} exitosos
 
-  PÓLIZAS EMITIDAS (${summary.polizas.length}):
-${summary.polizas.map(p => `    📋 ${p}`).join('\n') || '    (ninguna)'}
+  PÓLIZAS EMITIDAS (${polizas.length}):
+${polizas.map((p: string) => `    📋 ${p}`).join('\n') || '    (ninguna)'}
 
-  ERRORES (${summary.errors.length}):
-${summary.errors.map(e => `    ❌ ${e}`).join('\n') || '    (ninguno)'}
+  ERRORES (${(summary.errors || []).length}):
+${(summary.errors || []).map((e: string) => `    ❌ ${e}`).join('\n') || '    (ninguno)'}
+
+  Tiempo total : ${data.totalTimeFormatted || '—'}
   ─────────────────────────────────────────────────────────
 `);
 }

@@ -373,9 +373,9 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
       valorVeh: s.valorVeh || 15000,
       numPuestos: 4,
       endoso: s.endoso || '1',
-      lesiones: '5000*10000',
-      danios: '5000',
-      gastosMedicos: '500*2500',
+      lesiones: '10000',
+      danios: '20000',
+      gastosMedicos: '2000',
     });
 
     const tQuote = Date.now();
