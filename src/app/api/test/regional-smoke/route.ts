@@ -158,16 +158,16 @@ function buildScenarios(): Scenario[] {
 
   // ── 10 CC Scenarios — varied endosos, cuotas, vehicle values ──
   const ccConfigs: Array<{ endoso: string; endosoLabel: string; cuotas: number; valorVeh: number }> = [
-    { endoso: '1', endosoLabel: 'Basico', cuotas: 1, valorVeh: 12000 },
-    { endoso: '2', endosoLabel: 'Plus', cuotas: 2, valorVeh: 18000 },
-    { endoso: '4', endosoLabel: 'Platinum', cuotas: 3, valorVeh: 25000 },
-    { endoso: '1', endosoLabel: 'Basico', cuotas: 4, valorVeh: 15000 },
-    { endoso: '2', endosoLabel: 'Plus', cuotas: 6, valorVeh: 30000 },
-    { endoso: '4', endosoLabel: 'Platinum', cuotas: 1, valorVeh: 35000 },
-    { endoso: '1', endosoLabel: 'Basico', cuotas: 2, valorVeh: 20000 },
-    { endoso: '8', endosoLabel: 'Plat Ultra', cuotas: 3, valorVeh: 45000 },
-    { endoso: '2', endosoLabel: 'Plus', cuotas: 4, valorVeh: 22000 },
-    { endoso: '4', endosoLabel: 'Platinum', cuotas: 6, valorVeh: 50000 },
+    { endoso: 'BASICO',    endosoLabel: 'Basico',   cuotas: 1, valorVeh: 12000 },
+    { endoso: 'PLUS',     endosoLabel: 'Plus',     cuotas: 2, valorVeh: 18000 },
+    { endoso: 'PLATINUM', endosoLabel: 'Platinum', cuotas: 3, valorVeh: 25000 },
+    { endoso: 'BASICO',   endosoLabel: 'Basico',   cuotas: 4, valorVeh: 15000 },
+    { endoso: 'PLUS',     endosoLabel: 'Plus',     cuotas: 6, valorVeh: 30000 },
+    { endoso: 'PLATINUM', endosoLabel: 'Platinum', cuotas: 1, valorVeh: 35000 },
+    { endoso: 'BASICO',   endosoLabel: 'Basico',   cuotas: 2, valorVeh: 20000 },
+    { endoso: 'PLUS',     endosoLabel: 'Plus',     cuotas: 4, valorVeh: 22000 },
+    { endoso: 'PLATINUM', endosoLabel: 'Platinum', cuotas: 6, valorVeh: 50000 },
+    { endoso: 'BASICO',   endosoLabel: 'Basico',   cuotas: 1, valorVeh: 45000 },
   ];
 
   for (let i = 0; i < 10; i++) {

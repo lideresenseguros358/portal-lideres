@@ -110,52 +110,32 @@ export interface CCQuoteInput {
 export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteResponse> {
   const creds = getRegionalCredentials();
 
-  // CC cotización: POST /regional/auto/cotizacion with JSON body
-  // Headers: codInter + token + Authorization (per official API documentation)
-  const body: RegionalCCQuoteBody = {
-    cliente: {
-      nomter: input.nombre,
-      apeter: input.apellido,
-      edad: input.edad,
-      sexo: input.sexo,
-      edocivil: input.edocivil,
-      identificacion: {
-        tppersona: input.tppersona || 'N',
-        tpodoc: input.tpodoc || 'C',
-        prov: input.prov ?? null,
-        letra: input.letra ?? null,
-        tomo: input.tomo ?? null,
-        asiento: input.asiento ?? null,
-        dv: input.dv ?? null,
-        pasaporte: input.pasaporte ?? null,
-      },
-      t1numero: input.telefono,
-      t2numero: input.celular,
-      email: input.email,
-    },
-    datosveh: {
-      vehnuevo: input.vehnuevo || 'N',
-      codmarca: input.codMarca,
-      codmodelo: input.codModelo,
-      anio: input.anio,
-      valorveh: input.valorVeh,
-      numpuestos: input.numPuestos || 4,
-    },
-    tpcobert: '1',
-    endoso: input.endoso,
-    limites: {
-      lescor: input.lesiones || '5000*10000',
-      danpro: input.danios || '5000',
-      gasmed: input.gastosMedicos || '500*2500',
-    },
+  // CC cotizar: GET /regional/auto/cotizar/ with ALL params as request HEADERS
+  // Confirmed by Regional PROD CURL (Mar 2026): cToken, cCodInter, nEdad, cSexo, etc.
+  // cEndoso is TEXT (PLUS/BASICO/PLATINUM), cTipoCobert=CC
+  const headerParams: Record<string, string> = {
+    cToken:      creds.tokenCC,
+    cCodInter:   creds.codInter,
+    nEdad:       input.edad.toString(),
+    cSexo:       input.sexo,
+    cEdocivil:   input.edocivil,
+    cMarca:      input.codMarca.toString(),
+    cModelo:     input.codModelo.toString(),
+    nAnio:       input.anio.toString(),
+    nMontoVeh:   input.valorVeh.toString(),
+    nLesiones:   input.lesiones  || '10000',
+    nDanios:     input.danios    || '20000',
+    nGastosMed:  input.gastosMedicos || '2000',
+    cEndoso:     input.endoso,
+    cTipoCobert: 'CC',
   };
 
-  console.log('[REGIONAL CC Quote] POST body:', JSON.stringify(body).slice(0, 500));
+  console.log('[REGIONAL CC Quote] GET headers:', JSON.stringify(headerParams));
 
-  const res = await regionalPost<RegionalCCQuoteResponse>(
-    REGIONAL_CC_ENDPOINTS.COTIZACION,
-    body,
-    { useTokenCC: true }
+  const res = await regionalGet<RegionalCCQuoteResponse>(
+    REGIONAL_RC_ENDPOINTS.COTIZAR,
+    undefined,
+    { headerParams, headerParamsOnly: true }
   );
 
   if (!res.success) {
