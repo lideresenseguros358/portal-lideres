@@ -22,6 +22,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processInboundMessage } from '@/lib/chat/chat-engine';
+import { handleAdminCommand } from '@/lib/chat/admin-commands';
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
@@ -142,6 +143,17 @@ export async function POST(request: NextRequest) {
 
     const messageText = messageData.text.body;
     console.log('[WHATSAPP] From:', phone, '| Name:', contactName, '| Message:', messageText.substring(0, 100));
+
+    // Admin command interception — runs BEFORE rate limiter and chat engine.
+    // Only the ADMIN_PHONE_NUMBER can trigger commands. Clients sending '/'
+    // messages will have them treated as plain text (handled: false).
+    const cmdResult = await handleAdminCommand(phone, messageText);
+    if (cmdResult.handled) {
+      if (cmdResult.reply) {
+        await sendWhatsAppMessage(phone, cmdResult.reply);
+      }
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
 
     // Rate limit
     if (!checkRateLimit(phone)) {

@@ -38,21 +38,61 @@ export async function upsertThread(
   clientName?: string | null,
   channel: string = 'whatsapp',
 ): Promise<ChatThread> {
-  // Try to find existing open thread for this phone
-  const { data: existing } = await sb
+  // Look for the most recent thread for this phone (any status)
+  const { data: latest } = await sb
     .from('chat_threads')
     .select('*')
     .eq('phone_e164', phoneE164)
-    .neq('status', 'closed')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (existing) {
-    return existing as ChatThread;
+  // If active thread exists (not closed), return it as-is
+  if (latest && latest.status !== 'closed') {
+    return latest as ChatThread;
   }
 
-  // Try to find client by phone
+  // LIFECYCLE: If the most recent thread is CLOSED, reactivate it.
+  // Reset to 'open', restore AI control, and clear history context so
+  // Lissa treats the next message as a fresh conversation.
+  if (latest && latest.status === 'closed') {
+    console.log(`[CHAT-ENGINE] Reactivating closed thread ${latest.id} for ${phoneE164}`);
+
+    const { data: reactivated, error: reactivateErr } = await sb
+      .from('chat_threads')
+      .update({
+        status: 'open',
+        assigned_type: 'ai',
+        ai_enabled: true,
+        assigned_master_user_id: null,
+        consecutive_angry_count: 0,
+        unread_count_master: 0,
+        last_message_at: new Date().toISOString(),
+        metadata: {
+          ...(latest.metadata || {}),
+          reactivated_at: new Date().toISOString(),
+          reactivation_count: ((latest.metadata as any)?.reactivation_count || 0) + 1,
+        },
+      })
+      .eq('id', latest.id)
+      .select('*')
+      .single();
+
+    if (reactivateErr) throw new Error(`Failed to reactivate thread: ${reactivateErr.message}`);
+
+    // Log reactivation event
+    await sb.from('chat_events').insert({
+      thread_id: latest.id,
+      event_type: 'status_changed',
+      payload: { from: 'closed', to: 'open', reason: 'user_returned' },
+    });
+
+    // Return with empty conversationHistory signal via metadata
+    // generateAiReply will receive an empty history so Lissa greets fresh
+    return { ...reactivated, _reactivated: true } as unknown as ChatThread;
+  }
+
+  // No thread exists at all — find client and create fresh thread
   let clientId: string | null = null;
   let resolvedName = clientName || null;
   let region: string | null = null;
@@ -306,8 +346,9 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
 
   console.log(`[CHAT-ENGINE] Processing inbound from ${fromPhone}: "${body.substring(0, 80)}..."`);
 
-  // 1. Upsert thread
+  // 1. Upsert thread (may reactivate a previously closed thread)
   const thread = await upsertThread(sb, fromPhone, profileName, channel || 'whatsapp');
+  const isReactivated = !!(thread as any)._reactivated;
 
   // 2. Dedup check by provider_message_id
   if (providerMessageId) {
@@ -413,16 +454,19 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
   const isHumanIntervention = thread.status === 'human_intervention' || thread.status === 'urgent_human';
 
   if (thread.ai_enabled && thread.assigned_type === 'ai' && !isHumanIntervention) {
+    // When a session is reactivated from 'closed', pass empty history so Lissa
+    // treats this as a new conversation and greets the user fresh.
+    const historyForAi = isReactivated
+      ? []
+      : lastMessages.slice(0, -1).map(m => ({ direction: m.direction, body: m.body }));
+
     const replyResult = await generateAiReply({
       currentMessage: body,
-      conversationHistory: lastMessages.slice(0, -1).map(m => ({
-        direction: m.direction,
-        body: m.body,
-      })),
+      conversationHistory: historyForAi,
       clientName: thread.client_name,
       category: classification.category,
       severity: classification.severity,
-      sentiment: (thread.sentiment as any) || null,
+      sentiment: isReactivated ? null : ((thread.sentiment as any) || null),
     });
 
     aiReply = replyResult.reply;

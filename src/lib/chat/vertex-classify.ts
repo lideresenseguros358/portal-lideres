@@ -12,6 +12,7 @@
 import { GoogleAuth } from 'google-auth-library';
 import type { ClassificationResult, ThreadCategory, ThreadSeverity, Sentiment } from '@/types/chat.types';
 import { SYSTEM_PROMPT } from '@/lib/ai/vertex';
+import { getActiveMemory, buildMemoryPromptBlock } from './lissa-memory';
 
 // ── Auth ──
 
@@ -278,6 +279,49 @@ async function callVertexChat(
   return { text, tokens };
 }
 
+// ════════════════════════════════════════════
+// DYNAMIC SYSTEM PROMPT BUILDER
+// ════════════════════════════════════════════
+
+/**
+ * Builds the final system prompt by combining:
+ * 1. Core immutable instructions (SYSTEM_PROMPT) + anti-hallucination + greeting rules
+ * 2. Dynamic memory from lissa_memory table (aprender / error / regla)
+ */
+export async function buildDynamicSystemPrompt(): Promise<string> {
+  const CORE_ADDENDUM = `
+
+<anti_hallucination>
+SI el usuario usa términos ambiguos, jerga propia o conceptos que no existen estrictamente en seguros (ej. "Stop maximo", "póliza total", "cobertura universal"), NUNCA asumas ni inventes una definición. Detente y pide aclaración ofreciendo las opciones técnicas correctas.
+Ejemplo: Si el cliente dice "Stop maximo", responde exactamente: "Para darte la información correcta, ¿te refieres al máximo de suma asegurada de la póliza o al Stop Loss (máximo desembolso en coaseguro)?" Obliga al usuario a aclarar la terminología antes de dar una respuesta definitiva.
+</anti_hallucination>
+
+<greeting_continuity>
+Actúa como en una conversación fluida de WhatsApp. NUNCA repitas el saludo (ej. "¡Hola, Javier!") si ya saludaste en este intercambio de mensajes. Ve directo al punto en respuestas subsecuentes. Solo debes saludar si es el PRIMER mensaje del usuario en esta sesión (historial vacío o sesión recién iniciada) o si se percibe claramente que es una nueva consulta tras una despedida previa.
+</greeting_continuity>`;
+
+  // Fetch active memory records from DB
+  let memoryBlock = '';
+  try {
+    const records = await getActiveMemory();
+    memoryBlock = buildMemoryPromptBlock(records);
+  } catch (err: any) {
+    console.error('[VERTEX-REPLY] Memory fetch error (non-fatal):', err.message);
+  }
+
+  const sections: string[] = [
+    '[INSTRUCCIONES CORE - INMUTABLES]',
+    SYSTEM_PROMPT,
+    CORE_ADDENDUM,
+  ];
+
+  if (memoryBlock) {
+    sections.push('\n' + memoryBlock);
+  }
+
+  return sections.join('\n');
+}
+
 interface ReplyInput {
   currentMessage: string;
   conversationHistory: { direction: string; body: string }[];
@@ -298,8 +342,8 @@ export interface AiReplyResult {
 export async function generateAiReply(input: ReplyInput): Promise<AiReplyResult> {
   const start = Date.now();
 
-  // Build system prompt with WhatsApp-specific addendum and client context
-  let fullSystemPrompt = SYSTEM_PROMPT;
+  // Build system prompt: core + anti-hallucination + greeting rules + dynamic memory
+  let fullSystemPrompt = await buildDynamicSystemPrompt();
 
   // Add WhatsApp channel context
   fullSystemPrompt += `\n\n<channel>

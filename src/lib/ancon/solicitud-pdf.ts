@@ -4,14 +4,12 @@
  * Overlays filled data onto the official 2-page ANCON template:
  *   public/API ANCON/SOLICITUD AUTO.pdf  (612 × 1008 pts per page)
  *
- * Page 1: Datos del Contratante + Perfil Financiero Persona Natural
- * Page 2: Datos del Asegurado (=Contratante) + Vehículo + Firma
+ * All coordinates (x, yFT) extracted directly from the PDF text content
+ * using pdfjs-dist. yFT = distance from top of page in PDF points.
+ * y_pdf = 1008 - yFT.
  *
- * Coordinate system: PDF origin = bottom-left corner.
- * y_pdf = pageHeight - y_from_top
- *
- * Calibration: images are ~612×990px ≈ PDF 612×1008 pts.
- * Scale factor: 1008/990 ≈ 1.018 — negligible, treat 1:1 from image top.
+ * Data values are placed ~8–10 pts to the right of the label's right edge,
+ * on the same yFT baseline as the label.
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
@@ -19,7 +17,6 @@ import fs from 'fs';
 import path from 'path';
 
 export interface AnconSolicitudData {
-  // ── Datos del Contratante / Asegurado ──────────────────────────────────
   nombreCompleto: string;
   genero: 'M' | 'F';
   fechaNacDia: string;
@@ -37,12 +34,7 @@ export interface AnconSolicitudData {
   profesion: string;
   ocupacion: string;
   empresa: string;
-
-  // ── Perfil Financiero ──────────────────────────────────────────────────
-  // nivelIngreso: uno de estos valores del dropdown del portal
-  nivelIngreso: string; // e.g. "menos_10k" | "10k_30k" | "30k_50k" | "mas_50k"
-
-  // ── Descripción del vehículo ──────────────────────────────────────────
+  nivelIngreso: string;
   anioVehiculo: string;
   marcaVehiculo: string;
   modeloVehiculo: string;
@@ -51,36 +43,27 @@ export interface AnconSolicitudData {
   placa: string;
   motor: string;
   chasis: string;
-  valorVehiculo?: string;   // Solo para CC; vacío para DT
-
-  // ── Acreedor hipotecario ──────────────────────────────────────────────
-  acreedorHipotecario?: string; // Solo para CC
-
-  // ── Firma ─────────────────────────────────────────────────────────────
-  firmaDataUrl?: string; // base64 PNG data URL
-
-  // ── Fecha de emisión ──────────────────────────────────────────────────
-  fechaEmision?: string; // e.g. "24/03/2026"
+  valorVehiculo?: string;
+  acreedorHipotecario?: string;
+  firmaDataUrl?: string;
+  fechaEmision?: string;
 }
 
-// ── Ingreso anual mapping → checkbox position on page 1 ──────────────────────
-// Perfil Financiero Natural — Ingreso Anual Actividad Principal row
-// 4 checkboxes in a row. Left to right:
-//   "Menos de 10 mil USD anual"   x≈91,  y_from_top≈453
-//   "De 10 mil a 30 mil USD anual" x≈183, y_from_top≈453
-//   "De 30 mil a 50 mil USD anual" x≈91,  y_from_top≈465
-//   "Más de 50 mil USD anual"      x≈183, y_from_top≈465
-type IngresoCheckbox = { x: number; yFromTop: number };
-const INGRESO_MAP: Record<string, IngresoCheckbox> = {
-  menos_10k:  { x: 91,  yFromTop: 453 },
-  '10k_30k':  { x: 183, yFromTop: 453 },
-  '30k_50k':  { x: 91,  yFromTop: 465 },
-  mas_50k:    { x: 183, yFromTop: 465 },
-  // Alternative label formats from the portal
-  'Menos de $10,000':          { x: 91,  yFromTop: 453 },
-  'De $10,000 a $30,000':      { x: 183, yFromTop: 453 },
-  'De $30,000 a $50,000':      { x: 91,  yFromTop: 465 },
-  'Más de $50,000':            { x: 183, yFromTop: 465 },
+// ── Income checkbox X positions on page 1 ────────────────────────────────────
+// Labels extracted via pdfjs:
+//   "Menos de 10 mil" x=39, "De 10 mil a 30 mil" x=187  yFT=363
+//   "De 30 mil a 50 mil" x=40, "Más 50 mil" x=187       yFT=380
+// Checkbox square is drawn BEFORE each label; square width ~8pts, so center at label_x - 5
+type IngresoPos = { x: number; yFT: number };
+const INGRESO_MAP: Record<string, IngresoPos> = {
+  'Menos de $10,000':     { x: 29, yFT: 363 },
+  'De $10,000 a $30,000': { x: 178, yFT: 363 },
+  'De $30,000 a $50,000': { x: 30, yFT: 380 },
+  'Más de $50,000':       { x: 178, yFT: 380 },
+  menos_10k:              { x: 29, yFT: 363 },
+  '10k_30k':              { x: 178, yFT: 363 },
+  '30k_50k':              { x: 30, yFT: 380 },
+  mas_50k:                { x: 178, yFT: 380 },
 };
 
 export async function generateAnconSolicitudPdf(data: AnconSolicitudData): Promise<Buffer> {
@@ -88,231 +71,168 @@ export async function generateAnconSolicitudPdf(data: AnconSolicitudData): Promi
   const templateBytes = fs.readFileSync(templatePath);
 
   const pdfDoc = await PDFDocument.load(templateBytes);
-  const pages = pdfDoc.getPages();
-  const p1 = pages[0]!;   // Page 1: Contratante + Perfil Financiero
-  const p2 = pages[1]!;   // Page 2: Asegurado + Vehículo + Firma
+  const pages  = pdfDoc.getPages();
+  const p1     = pages[0]!;
+  const p2     = pages[1]!;
 
-  const H = 1008; // page height in pts
-
+  const H        = 1008;
   const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const black    = rgb(0, 0, 0);
-  const FS  = 8;
-  const FSS = 7;
+  const FS       = 7.5;
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
-  /** Draw text at (x, yFromTop) on the given page */
-  const T = (pg: typeof p1, text: string, x: number, yFromTop: number, size = FS, bold = false) => {
+  /** Draw text at exact PDF coordinates; yFT = distance from page top */
+  const T = (pg: typeof p1, text: string, x: number, yFT: number, size = FS) => {
     if (!text) return;
     pg.drawText(String(text).substring(0, 120), {
-      x,
-      y: H - yFromTop,
-      size,
-      font: bold ? fontBold : font,
-      color: black,
+      x, y: H - yFT, size, font, color: black,
     });
   };
 
-  /** Draw an X checkbox mark */
-  const X = (pg: typeof p1, x: number, yFromTop: number) => {
-    pg.drawText('X', { x, y: H - yFromTop, size: 8, font: fontBold, color: black });
+  /** Draw X checkbox mark */
+  const X = (pg: typeof p1, x: number, yFT: number) => {
+    pg.drawText('X', { x, y: H - yFT, size: 7, font: fontBold, color: black });
   };
 
-  const fit = (text: string, max: number) => String(text || '').substring(0, max);
+  const fit = (s: string, max: number) => String(s || '').substring(0, max);
 
-  // ════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
   // PAGE 1 — DATOS DEL CONTRATANTE
-  // ════════════════════════════════════════════════════════════════════════
+  // Coordinates: label_x + widthOfTextAtSize(label, 8pt Helvetica) + 4pt gap
+  // Label positions verified via pdfjs-dist text extraction
+  // ════════════════════════════════════════════════════════════════════════════
 
-  // Row: PERSONA NATURAL checkbox (already pre-checked in template, skip)
-  // Nombre Completo
-  T(p1, fit(data.nombreCompleto, 35), 300, 148, FS);
+  // "Nombre Completo:" end=320 → data x=322
+  T(p1, fit(data.nombreCompleto, 38), 322, 160);
 
-  // Género — M/F checkboxes
-  // "Género: M □  F □"  M checkbox x≈72 y_from_top≈159, F checkbox x≈90
+  // "Género: M" end=66 → M-checkbox at x=65; "F" end=97 → F-checkbox at x=97
   if (data.genero === 'M') {
-    X(p1, 71, 160);
+    X(p1, 65, 181);
   } else {
-    X(p1, 90, 160);
+    X(p1, 97, 181);
   }
 
-  // Fecha de nacimiento: Día / Mes / Año
-  T(p1, fit(data.fechaNacDia,  2), 183, 160, FS);
-  T(p1, fit(data.fechaNacMes,  2), 205, 160, FS);
-  T(p1, fit(data.fechaNacAnio, 4), 225, 160, FS);
+  // Fecha Nacimiento p1 — graphical sub-cells between x=97 and x=365
+  // Visual inspection: label "Fecha de Nac/Const:" occupies ~147pts → ends x=244
+  // Día cell x=244-282, Mes x=285-321, Año x=324-363
+  T(p1, fit(data.fechaNacDia,  2), 248, 181);
+  T(p1, fit(data.fechaNacMes,  2), 291, 181);
+  T(p1, fit(data.fechaNacAnio, 4), 332, 181);
 
-  // R.U.C. / Cédula / Pasaporte
-  T(p1, fit(data.cedula, 20), 430, 160, FS);
+  // "R.U.C. / Cédula / Pasaporte:" end=472 → data x=474
+  T(p1, fit(data.cedula, 18), 474, 182);
 
-  // País de nacimiento / Constitución
-  T(p1, fit(data.paisNacimiento, 20), 30,  172, FS);
+  // "País de Nacimiento o Constitución:" end=151 → data x=153
+  T(p1, fit(data.paisNacimiento, 16), 153, 198);
 
-  // Nacionalidad
-  T(p1, fit(data.nacionalidad, 20),   185, 172, FS);
+  // "Nacionalidad:" end=277 → data x=279
+  T(p1, fit(data.nacionalidad, 14), 279, 198);
 
-  // País de Residencia
-  T(p1, fit(data.paisResidencia, 20), 420, 172, FS);
+  // "País de Residencia:" end=434 → data x=436
+  T(p1, fit(data.paisResidencia, 14), 436, 198);
 
-  // Dirección Residencial
-  T(p1, fit(data.direccionResidencial, 50), 30, 183, FS);
+  // "Dirección Residencial:" end=105 → data x=107
+  T(p1, fit(data.direccionResidencial, 30), 107, 216);
 
-  // Email
-  T(p1, fit(data.email, 35), 420, 183, FS);
+  // "E-mail:" end=388 → data x=390
+  T(p1, fit(data.email, 28), 390, 216);
 
-  // Tel. Residencia
-  T(p1, fit(data.telResidencia, 18), 30,  195, FS);
+  // "Tel. Residencia:" end=81 → data x=83
+  T(p1, fit(data.telResidencia, 16), 83, 234);
 
-  // Celular
-  T(p1, fit(data.celular, 18),       280, 195, FS);
+  // "Celular:" end=254 → data x=256
+  T(p1, fit(data.celular, 16), 256, 232);
 
-  // Estado civil
-  T(p1, fit(data.estadoCivil, 18),   420, 195, FS);
+  // "Estado civil:" end=407 → data x=409
+  T(p1, fit(data.estadoCivil, 16), 409, 232);
 
-  // Profesión/Actividad Económica
-  T(p1, fit(data.profesion, 35), 30,  207, FS);
+  // "Profesión/Actividad Económica:" end=142 → data x=144
+  T(p1, fit(data.profesion, 20), 144, 250);
 
-  // Ocupación Actual
-  T(p1, fit(data.ocupacion, 30), 420, 207, FS);
+  // "Ocupación Actual:" end=382 → data x=384
+  T(p1, fit(data.ocupacion, 18), 384, 251);
 
-  // Empresa donde Trabaja
-  T(p1, fit(data.empresa, 35), 30, 219, FS);
+  // "Empresa donde Trabaja:" end=117 → data x=119
+  T(p1, fit(data.empresa, 22), 119, 270);
 
-  // ── PERFIL FINANCIERO DE PERSONA NATURAL ──────────────────────────────
-  // Mark the correct income checkbox (Ingreso Anual Actividad Principal only)
+  // ── PERFIL FINANCIERO — Ingreso Anual Actividad Principal ─────────────────
+  // Checkboxes are small □ boxes to the LEFT of each label
+  // "Menos de 10 mil" x=39 → checkbox at x=27  yFT=363
+  // "De 10 mil a 30 mil" x=187 → checkbox at x=175  yFT=363
+  // "De 30 mil a 50 mil" x=40 → checkbox at x=27  yFT=380
+  // "Más 50 mil" x=187 → checkbox at x=175  yFT=380
   const ingresoPos = INGRESO_MAP[data.nivelIngreso];
   if (ingresoPos) {
-    X(p1, ingresoPos.x, ingresoPos.yFromTop);
+    X(p1, ingresoPos.x, ingresoPos.yFT);
   }
 
-  // PEP: always "No" (No □ at x≈520 y_from_top≈478)
-  X(p1, 521, 479);
+  // PEP: "No" label x=544, end=556 → checkbox after label at x=558
+  X(p1, 558, 399);
 
-  // Lavado: always "No" (No □ at x≈520 y_from_top≈492)
-  X(p1, 521, 492);
+  // Lavado: same pattern, yFT=422
+  X(p1, 558, 422);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // PAGE 2 — DATOS DEL ASEGURADO (= mismo contratante para persona N)
-  // ════════════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════════
+  // PAGE 2 — DATOS DEL ASEGURADO
+  // NOTE: Per policy, contratante = asegurado for natural persons.
+  // This section is only filled when asegurado differs from contratante.
+  // DO NOT fill this section — leave blank.
+  // ════════════════════════════════════════════════════════════════════════════
 
-  // Persona Natural checkbox (p2 has same header row)
-  // Already pre-printed "X" in template for PERSONA NATURAL — skip
+  // ── DESCRIPCIÓN DEL VEHÍCULO ASEGURADO ───────────────────────────────────
+  // Column headers yFT=266: Año x=37, Marca x=126, Modelo x=261,
+  //                          Tipo x=374, Capacidad x=452, Placa x=544
+  // Data row ≈ 18pts below headers → yFT=284
+  T(p2, fit(data.anioVehiculo,     4),  37, 284);
+  T(p2, fit(data.marcaVehiculo,   14), 126, 284);
+  T(p2, fit(data.modeloVehiculo,  14), 261, 284);
+  if (data.tipoVehiculo)      T(p2, fit(data.tipoVehiculo, 10),     374, 284);
+  if (data.capacidadVehiculo) T(p2, fit(data.capacidadVehiculo, 6), 452, 284);
+  T(p2, fit(data.placa, 10), 544, 284);
 
-  // Nombre Completo (p2)
-  T(p2, fit(data.nombreCompleto, 35), 300, 106, FS);
-
-  // Género (p2)
-  if (data.genero === 'M') {
-    X(p2, 64, 117);
-  } else {
-    X(p2, 84, 117);
-  }
-
-  // Fecha de nacimiento (p2)
-  T(p2, fit(data.fechaNacDia,  2), 175, 117, FS);
-  T(p2, fit(data.fechaNacMes,  2), 196, 117, FS);
-  T(p2, fit(data.fechaNacAnio, 4), 216, 117, FS);
-
-  // R.U.C. / Cédula (p2)
-  T(p2, fit(data.cedula, 20), 430, 117, FS);
-
-  // País de Nacimiento (p2)
-  T(p2, fit(data.paisNacimiento, 20), 30,  128, FS);
-
-  // Nacionalidad (p2)
-  T(p2, fit(data.nacionalidad, 20),   185, 128, FS);
-
-  // País de Residencia (p2)
-  T(p2, fit(data.paisResidencia, 20), 420, 128, FS);
-
-  // Dirección Residencial (p2)
-  T(p2, fit(data.direccionResidencial, 50), 30, 140, FS);
-
-  // Email (p2)
-  T(p2, fit(data.email, 35), 420, 140, FS);
-
-  // Tel. Residencia (p2)
-  T(p2, fit(data.telResidencia, 18), 30,  152, FS);
-
-  // Tel. Oficina (p2) — blank
-  // Celular (p2)
-  T(p2, fit(data.celular, 18), 410, 152, FS);
-
-  // Estado civil (p2)
-  T(p2, fit(data.estadoCivil, 18), 30, 164, FS);
-
-  // Profesión/Actividad Económica (p2)
-  T(p2, fit(data.profesion, 35), 295, 164, FS);
-
-  // Ocupación Actual (p2)
-  T(p2, fit(data.ocupacion, 30), 30, 176, FS);
-
-  // Empresa (p2)
-  T(p2, fit(data.empresa, 35), 295, 176, FS);
-
-  // ── VIGENCIA DE LA PÓLIZA ─────────────────────────────────────────────
-  // Skip — ANCON fills this
-
-  // ── DESCRIPCIÓN DEL VEHÍCULO ASEGURADO ──────────────────────────────────
-  // Row: Año | Marca | Modelo | Tipo | Capacidad | Placa
-  // y_from_top ≈ 265 for the data row (header row ≈ 256)
-  T(p2, fit(data.anioVehiculo,    4),  28, 268, FS);
-  T(p2, fit(data.marcaVehiculo,  12), 100, 268, FS);
-  T(p2, fit(data.modeloVehiculo, 12), 220, 268, FS);
-  if (data.tipoVehiculo)    T(p2, fit(data.tipoVehiculo, 10),    370, 268, FS);
-  if (data.capacidadVehiculo) T(p2, fit(data.capacidadVehiculo, 6), 460, 268, FS);
-  T(p2, fit(data.placa, 10), 540, 268, FS);
-
-  // Row 2: Uso del Vehículo | Número de motor | Número de chasis | Valor del vehículo
-  // y_from_top ≈ 280
-  T(p2, 'PARTICULAR',               28,  283, FSS);
-  T(p2, fit(data.motor,   20),      170, 283, FS);
-  T(p2, fit(data.chasis,  20),      360, 283, FS);
-  // Valor del vehículo — solo CC
+  // Row 2 headers yFT=302: Uso x=29, Motor x=181, Chasis x=356, Valor x=501
+  // Data row ≈ yFT=320
+  T(p2, 'PARTICULAR',              29, 320, 7);
+  T(p2, fit(data.motor,  20),     185, 320);
+  T(p2, fit(data.chasis, 20),     358, 320);
   if (data.valorVehiculo) {
-    T(p2, fit(data.valorVehiculo, 12), 500, 283, FS);
+    T(p2, fit(data.valorVehiculo, 12), 501, 320);
   }
 
-  // Acreedor Hipotecario — solo CC
+  // "Acreedor Hipotecario:" x=23 yFT=359, width≈78 → data_x=105 — solo CC
   if (data.acreedorHipotecario) {
-    T(p2, fit(data.acreedorHipotecario, 30), 130, 296, FS);
+    T(p2, fit(data.acreedorHipotecario, 30), 105, 359);
   }
 
-  // ── FIRMA DEL CONTRATANTE (bottom of page 2) ──────────────────────────
-  // "Contratante" label at y_from_top ≈ 858
-  // Signature area just above — y_from_top ≈ 830-850
+  // ── FIRMA DEL CONTRATANTE ─────────────────────────────────────────────────
+  // "Contratante" label at x=96 yFT=875 (pdfjs confirmed)
+  // Signature LINE is drawn at yFT=875; image goes ABOVE → yFT=855 (20pts above line)
+  // Contratante column: x=30..270 (before "Corredor" at x=289)
   if (data.firmaDataUrl) {
     try {
       const base64Data = data.firmaDataUrl.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
-      const sigBytes = Buffer.from(base64Data, 'base64');
+      const sigBytes   = Buffer.from(base64Data, 'base64');
+      const sigImage   = data.firmaDataUrl.includes('image/jp')
+        ? await pdfDoc.embedJpg(sigBytes)
+        : await pdfDoc.embedPng(sigBytes);
 
-      let sigImage;
-      if (data.firmaDataUrl.includes('image/jpeg') || data.firmaDataUrl.includes('image/jpg')) {
-        sigImage = await pdfDoc.embedJpg(sigBytes);
-      } else {
-        sigImage = await pdfDoc.embedPng(sigBytes);
-      }
-
-      const maxW = 130;
-      const maxH = 22;
+      const maxW = 150;
+      const maxH = 25;
       const dims = sigImage.scaleToFit(maxW, maxH);
-
-      // Center in "Contratante" column (x: 30 → 200)
-      const sigX = 30 + (170 - dims.width) / 2;
       p2.drawImage(sigImage, {
-        x: sigX,
-        y: H - 852,
-        width: dims.width,
+        x: 35,
+        y: H - 858,
+        width:  dims.width,
         height: dims.height,
       });
     } catch (e) {
-      console.error('[ANCON Solicitud PDF] Error embedding signature:', e);
+      console.error('[ANCON Solicitud PDF] Signature embed error:', e);
     }
   }
 
-  // Fecha at bottom
+  // "Fecha" label x=489 yFT=875 → date value just after label, same baseline
   if (data.fechaEmision) {
-    T(p2, data.fechaEmision, 530, 858, FSS);
+    T(p2, data.fechaEmision, 509, 875, 7);
   }
 
   const pdfBytes = await pdfDoc.save();
