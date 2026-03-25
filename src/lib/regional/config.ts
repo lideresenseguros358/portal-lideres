@@ -36,15 +36,16 @@ export function getRegionalCredentials(env?: RegionalEnvironment) {
   const resolved = env ?? getRegionalEnv();
   const suffix = resolved === 'production' ? 'PROD' : 'DESA';
 
-  const token = process.env[`REGIONAL_TOKEN_${suffix}`] || process.env.REGIONAL_TOKEN || '';
+  const trim = (v: string | undefined) => (v || '').trim();
+  const token = trim(process.env[`REGIONAL_TOKEN_${suffix}`] || process.env.REGIONAL_TOKEN);
   return {
-    username: process.env[`REGIONAL_USERNAME_${suffix}`] || process.env.REGIONAL_USERNAME || '',
-    password: process.env[`REGIONAL_PASSWORD_${suffix}`] || process.env.REGIONAL_PASSWORD || '',
-    codInter: process.env[`REGIONAL_COD_INTER_${suffix}`] || process.env.REGIONAL_COD_INTER || '',
+    username: trim(process.env[`REGIONAL_USERNAME_${suffix}`] || process.env.REGIONAL_USERNAME),
+    password: trim(process.env[`REGIONAL_PASSWORD_${suffix}`] || process.env.REGIONAL_PASSWORD),
+    codInter: trim(process.env[`REGIONAL_COD_INTER_${suffix}`] || process.env.REGIONAL_COD_INTER),
     token,
     // CC endpoint uses header-based token auth; PROD "llaves cotizar" token is rejected there.
     // Separate CC token falls back to the main token when not set.
-    tokenCC:  process.env[`REGIONAL_TOKEN_CC_${suffix}`] || token,
+    tokenCC: trim(process.env[`REGIONAL_TOKEN_CC_${suffix}`]) || token,
   };
 }
 
