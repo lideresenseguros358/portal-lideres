@@ -163,8 +163,7 @@ const PAGE_SIZE = 25;
 const emptyCounts: MorosidadCounts = { total: 0, al_dia: 0, atrasado: 0, pago_recibido: 0, cancelado: 0 };
 
 export default function MorosidadPage() {
-  // ── Tab state ──
-  const [activeTab, setActiveTab] = useState<'polizas' | 'cuotas_pf'>('polizas');
+  // ── Tab state (cuotas_pf tab removed — morosidad is tracked via ops_morosidad_view only) ──
 
   // ── Data state ──
   const [rows, setRows] = useState<OpsMorosidadRow[]>([]);
@@ -415,34 +414,6 @@ export default function MorosidadPage() {
 
   return (
     <div className="space-y-4">
-      {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-        <button
-          onClick={() => setActiveTab('polizas')}
-          className={`flex-1 px-4 py-2 text-xs font-semibold rounded-md transition-all duration-150 cursor-pointer ${
-            activeTab === 'polizas'
-              ? 'bg-white text-[#010139] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Morosidad Pólizas
-        </button>
-        <button
-          onClick={() => setActiveTab('cuotas_pf')}
-          className={`flex-1 px-4 py-2 text-xs font-semibold rounded-md transition-all duration-150 cursor-pointer ${
-            activeTab === 'cuotas_pf'
-              ? 'bg-white text-[#010139] shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Cuotas Pendientes PF
-        </button>
-      </div>
-
-      {activeTab === 'cuotas_pf' ? (
-        <AdmCotOverdueTab />
-      ) : (
-      <>
       {/* ── Dashboard Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {CARDS.map((c) => {
@@ -741,8 +712,6 @@ export default function MorosidadPage() {
 
       {/* ── Toasts ── */}
       <ToastContainer toasts={toasts} />
-      </>
-      )}
     </div>
   );
 }

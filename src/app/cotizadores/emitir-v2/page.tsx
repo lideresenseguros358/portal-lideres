@@ -363,37 +363,9 @@ export default function EmitirV2Page() {
 
         console.log('[PAGUELOFACIL] ✅ Pago aprobado:', chargeData.codOper, '- $' + chargeData.totalPay);
         toast.success(`Pago aprobado: $${chargeData.totalPay} USD`);
-
-        // ═══ PAGUELOFACIL: Registrar recurrencia para cuotas futuras ═══
-        if (installments > 1 && pfCodOper) {
-          toast.info('Registrando pagos recurrentes...');
-          try {
-            const recRes = await fetch('/api/paguelofacil/recurrent', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                codOper: pfCodOper,
-                amount: monthlyPayment,
-                description: `Póliza CC - ${selectedPlan?.insurerName || 'Seguro'} - ${insuredData.primerNombre} ${insuredData.primerApellido}`,
-                concept: `Cuota recurrente - Cobertura Completa`,
-                email: insuredData.email,
-                phone: insuredData.celular || insuredData.telefono,
-                totalInstallments: installments,
-                policyNumber: '', // Will be set after emission
-              }),
-            });
-            const recData = await recRes.json();
-            if (recData.success) {
-              pfRecCodOper = recData.codOper;
-              console.log('[PAGUELOFACIL] ✅ Recurrencia registrada:', recData.codOper);
-            } else {
-              console.error('[PAGUELOFACIL] ⚠️ Error registrando recurrencia:', recData.error);
-              // Non-blocking: first charge succeeded, recurrence can be set up manually
-            }
-          } catch (recErr: any) {
-            console.error('[PAGUELOFACIL] ⚠️ Recurrent registration error:', recErr.message);
-          }
-        }
+        // Recurrencia PF eliminada: solo se cobra el pago inicial.
+        // Las cuotas restantes las maneja directamente la aseguradora.
+        // Morosidad se monitorea desde /operaciones/morosidad (ops_morosidad_view).
       }
 
       if (isFedpaReal) {
