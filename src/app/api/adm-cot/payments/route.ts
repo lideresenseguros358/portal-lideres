@@ -822,6 +822,62 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // ── Register manual payment (from peticiones / renovaciones / urgencias) ──
+      // mode: 'cobrado'  → master collected the payment (link sent, policy confirmed) → CONFIRMADO_PF, enters pending queue
+      // mode: 'directo'  → client paid directly to insurer → PAGADO_DIRECTO, informational only (no pending queue)
+      case 'register_manual_payment': {
+        const {
+          mode, // 'cobrado' | 'directo'
+          client_name, cedula, nro_poliza, amount, insurer, ramo,
+          payment_date, source_ref, notes,
+          // only for 'cobrado'
+          source_type, // 'renovacion' | 'peticion' | 'urgencia' | 'otro'
+        } = data;
+
+        if (!mode || !client_name || !nro_poliza || !amount || !insurer || !payment_date) {
+          return NextResponse.json({ error: 'Faltan campos requeridos: mode, client_name, nro_poliza, amount, insurer, payment_date' }, { status: 400 });
+        }
+        if (mode !== 'cobrado' && mode !== 'directo') {
+          return NextResponse.json({ error: 'mode debe ser "cobrado" o "directo"' }, { status: 400 });
+        }
+
+        const paymentStatus = mode === 'cobrado' ? 'CONFIRMADO_PF' : 'PAGADO_DIRECTO';
+        const paymentSource = mode === 'cobrado'
+          ? (source_type ? `MANUAL_${source_type.toUpperCase()}` : 'MANUAL_COBRADO')
+          : 'PAGO_DIRECTO_ASEGURADORA';
+
+        const { data: created, error: insertErr } = await sb.from('adm_cot_payments').insert({
+          client_name,
+          cedula: cedula || null,
+          nro_poliza,
+          amount: Number(amount),
+          insurer,
+          ramo: ramo || 'AUTO',
+          status: paymentStatus,
+          payment_date,
+          is_refund: false,
+          is_recurring: false,
+          payment_source: paymentSource,
+          created_by: userId,
+          notes: notes
+            ? { manual_notes: notes, ...(source_ref ? { source_ref } : {}) }
+            : (source_ref ? { source_ref } : null),
+          ...(mode === 'cobrado' ? { pf_confirmed_at: new Date().toISOString() } : {}),
+        }).select('id').single();
+
+        if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'manual_payment_registered',
+          entity_type: 'payment',
+          entity_id: created.id,
+          user_id: userId,
+          detail: { mode, insurer, nro_poliza, amount, payment_source: paymentSource, client_name },
+        });
+
+        return NextResponse.json({ success: true, data: { id: created.id, status: paymentStatus } });
+      }
+
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }

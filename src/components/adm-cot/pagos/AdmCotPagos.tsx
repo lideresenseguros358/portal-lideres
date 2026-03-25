@@ -19,7 +19,6 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaFilter,
-  FaHourglassHalf,
   FaLock,
   FaUnlock,
   FaTag,
@@ -27,6 +26,8 @@ import {
   FaExclamationTriangle,
   FaFileExport,
   FaHandHoldingUsd,
+  FaPlusCircle,
+  FaBuilding,
 } from 'react-icons/fa';
 import EditCotPaymentModal from './EditCotPaymentModal';
 
@@ -52,6 +53,7 @@ const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDate
 function StatusBadge({ status }: { status: string }) {
   const m: Record<string, { bg: string; text: string; label?: string }> = {
     CONFIRMADO_PF: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'CONFIRMADO PF' },
+    PAGADO_DIRECTO: { bg: 'bg-teal-100', text: 'text-teal-800', label: 'PAGO DIRECTO' },
     PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'POR CONFIRMAR' },
     RECHAZADO_PF: { bg: 'bg-red-100', text: 'text-red-800', label: 'RECHAZADO' },
     EMISION_FALLIDA: { bg: 'bg-purple-100', text: 'text-purple-800', label: '⚠️ EMISIÓN FALLIDA' },
@@ -116,12 +118,11 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [type, setType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedConfirm, setSelectedConfirm] = useState<Set<string>>(new Set());
-  const [confirmingIds, setConfirmingIds] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState<string | null>(null);
   const [refundForm, setRefundForm] = useState({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
   const [showManualWizard, setShowManualWizard] = useState(false);
+  const [showRegisterPayment, setShowRegisterPayment] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
 
@@ -133,7 +134,11 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     if (status) params.status = status;
     if (type) params.type = type;
     const res = await api(params);
-    if (res.success) { setPayments(res.data.rows); setSummary(res.data.summary); }
+    // Exclude PAGADO_DIRECTO from the pending/groupable queue (it's informational only)
+    if (res.success) {
+      setPayments(res.data.rows.filter((r: any) => r.status !== 'PAGADO_DIRECTO'));
+      setSummary(res.data.summary);
+    }
     setLoading(false);
   }, [search, insurer, status, type]);
 
@@ -145,21 +150,6 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const selectAll = () => {
     const groupable = payments.filter(p => p.status === 'PENDIENTE' || p.status === 'CONFIRMADO_PF');
     setSelected(prev => prev.size === groupable.length ? new Set() : new Set(groupable.map(p => p.id)));
-  };
-  const toggleSelectConfirm = (id: string) => {
-    setSelectedConfirm(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  };
-  const selectAllConfirm = () => {
-    const unconfirmed = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
-    setSelectedConfirm(prev => prev.size === unconfirmed.length ? new Set() : new Set(unconfirmed.map(p => p.id)));
-  };
-
-  const handleConfirmRecurring = async () => {
-    if (selectedConfirm.size === 0) return;
-    setConfirmingIds(true);
-    const res = await apiPost('confirm_recurring_payment', { payment_ids: Array.from(selectedConfirm) });
-    if (res.success) { setSelectedConfirm(new Set()); fetchPayments(); }
-    setConfirmingIds(false);
   };
 
   const handleMarkRefund = async () => {
@@ -176,9 +166,9 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     fetchPayments();
   };
 
-  // Split payments into unconfirmed recurring vs rest (groupable)
-  const unconfirmedPayments = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
-  const groupablePayments = payments.filter(p => p.status !== 'PENDIENTE_CONFIRMACION');
+  // All payments are groupable — no PENDIENTE_CONFIRMACION state in new flow
+  const unconfirmedPayments: any[] = [];
+  const groupablePayments = payments;
 
   const selectedPayments = payments.filter(p => selected.has(p.id));
   const selectedTotal = selectedPayments.reduce((s, p) => s + Number(p.amount), 0);
@@ -203,7 +193,6 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         {[
           { label: 'Confirmados PF', count: summary.confirmedPf || 0, amt: summary.confirmedPfAmt || 0, bg: 'bg-emerald-50', border: 'border-emerald-200', color: 'text-emerald-600' },
-          { label: 'Por Confirmar', count: summary.pendingConfirm || 0, amt: summary.pendingConfirmAmt || 0, bg: 'bg-orange-50', border: 'border-orange-200', color: 'text-orange-600' },
           { label: 'Pendientes', count: summary.pending || 0, amt: summary.pendingAmt || 0, bg: 'bg-amber-50', border: 'border-amber-200', color: 'text-amber-600' },
           { label: 'Emisión Fallida', count: summary.emisionFallida || 0, amt: summary.emisionFallidaAmt || 0, bg: 'bg-purple-50', border: 'border-purple-200', color: 'text-purple-600' },
           { label: 'Agrupados', count: summary.grouped || 0, amt: summary.groupedAmt || 0, bg: 'bg-blue-50', border: 'border-blue-200', color: 'text-blue-600' },
@@ -252,8 +241,12 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer flex-shrink-0" title="Refrescar">
             <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
           </button>
+          <button onClick={() => setShowRegisterPayment(true)}
+            className="p-2 rounded-lg bg-[#8AAA19] text-white hover:bg-[#7a9916] transition-colors cursor-pointer flex-shrink-0" title="Registrar Pago Manual">
+            <FaPlusCircle className="text-sm" />
+          </button>
           <button onClick={() => setShowManualWizard(true)}
-            className="p-2 rounded-lg text-[#8AAA19] hover:bg-[#8AAA19]/10 transition-colors cursor-pointer flex-shrink-0" title="Wizard Manual">
+            className="p-2 rounded-lg text-[#8AAA19] hover:bg-[#8AAA19]/10 transition-colors cursor-pointer flex-shrink-0" title="Wizard: Aplicar referencias a pagos">
             <FaHandHoldingUsd className="text-sm" />
           </button>
           {hasActiveFilters && (
@@ -277,61 +270,6 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
         )}
       </div>
 
-      {/* ════════════════════════════════════════════ */}
-      {/* POR CONFIRMAR — Recurring payments awaiting receipt confirmation */}
-      {/* ════════════════════════════════════════════ */}
-      {unconfirmedPayments.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <FaHourglassHalf className="text-orange-500 text-sm" />
-              <h4 className="text-xs font-bold text-orange-700 uppercase tracking-wide">Por Confirmar Recibo ({unconfirmedPayments.length})</h4>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedConfirm.size > 0 && (
-                <button onClick={handleConfirmRecurring} disabled={confirmingIds}
-                  className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-50">
-                  <FaCheck className="text-white text-[10px]" /> <span className="text-white">{confirmingIds ? 'Confirmando...' : `Confirmar (${selectedConfirm.size})`}</span>
-                </button>
-              )}
-              <button onClick={selectAllConfirm}
-                className="px-2 py-1 text-[10px] text-orange-600 hover:bg-orange-50 rounded cursor-pointer font-medium">
-                {selectedConfirm.size === unconfirmedPayments.length ? 'Deseleccionar' : 'Seleccionar todos'}
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-2 space-y-1.5">
-            {unconfirmedPayments.map(p => (
-              <div key={p.id} className="bg-white rounded-lg border border-orange-100 p-2.5 flex items-center gap-2.5">
-                <input type="checkbox" checked={selectedConfirm.has(p.id)} onChange={() => toggleSelectConfirm(p.id)} className="cursor-pointer flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-[#010139] truncate">{p.client_name}</p>
-                    <p className="text-xs font-bold text-[#8AAA19] flex-shrink-0">{fmtMoney(p.amount)}</p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
-                    <span>{p.insurer}</span>
-                    <span>·</span>
-                    <span>{p.nro_poliza || '—'}</span>
-                    <span>·</span>
-                    <span>Cuota {p.installment_num || '—'}</span>
-                    <span>·</span>
-                    <span>{fmtDate(p.payment_date)}</span>
-                  </div>
-                </div>
-                <button onClick={async () => {
-                  await apiPost('confirm_recurring_payment', { payment_ids: [p.id] });
-                  fetchPayments();
-                }} className="p-1.5 text-green-500 hover:text-green-700 hover:bg-green-50 rounded cursor-pointer flex-shrink-0" title="Confirmar recibo">
-                  <FaCheck className="text-xs" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-orange-500 italic">Estos pagos recurrentes requieren confirmación de recibo antes de ser agrupados.</p>
-        </div>
-      )}
 
       {/* ════════════════════════════════════════════ */}
       {/* PAGOS LISTOS — Confirmed payments ready for grouping */}
@@ -507,6 +445,9 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
 
       {/* Export Modal */}
       {showExportModal && <ExportModal payments={selectedPayments} onClose={() => setShowExportModal(false)} />}
+
+      {/* Register Manual Payment Modal */}
+      {showRegisterPayment && <RegisterPaymentModal onClose={() => { setShowRegisterPayment(false); fetchPayments(); onRefresh(); }} />}
 
       {/* Manual Wizard Modal */}
       {showManualWizard && <ManualWizardModal onClose={() => { setShowManualWizard(false); fetchPayments(); onRefresh(); }} />}
@@ -1380,7 +1321,239 @@ function RecurrenciaTab() {
 }
 
 // ════════════════════════════════════════════
-// 4. MANUAL WIZARD — Apply references directly to payments
+// 4. REGISTER PAYMENT MODAL
+// ════════════════════════════════════════════
+// Two modes:
+//   cobrado  — master collected payment (link sent, policy confirmed) → CONFIRMADO_PF in queue
+//   directo  — client paid directly to insurer → PAGADO_DIRECTO (informational, not queued)
+
+function RegisterPaymentModal({ onClose }: { onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [mode, setMode] = useState<'cobrado' | 'directo'>('cobrado');
+  const [form, setForm] = useState({
+    client_name: '',
+    cedula: '',
+    nro_poliza: '',
+    amount: '',
+    insurer: '',
+    ramo: 'AUTO',
+    payment_date: new Date().toISOString().slice(0, 10),
+    source_type: 'renovacion' as 'renovacion' | 'peticion' | 'urgencia' | 'otro',
+    source_ref: '',
+    notes: '',
+  });
+
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.client_name.trim()) { setError('Ingrese el nombre del cliente'); return; }
+    if (!form.nro_poliza.trim()) { setError('Ingrese el número de póliza'); return; }
+    if (!form.amount || Number(form.amount) <= 0) { setError('Ingrese un monto válido'); return; }
+    if (!form.insurer) { setError('Seleccione la aseguradora'); return; }
+
+    setLoading(true); setError('');
+    const res = await apiPost('register_manual_payment', {
+      mode,
+      client_name: form.client_name.trim(),
+      cedula: form.cedula.trim() || undefined,
+      nro_poliza: form.nro_poliza.trim(),
+      amount: Number(form.amount),
+      insurer: form.insurer,
+      ramo: form.ramo,
+      payment_date: form.payment_date,
+      source_type: mode === 'cobrado' ? form.source_type : undefined,
+      source_ref: form.source_ref.trim() || undefined,
+      notes: form.notes.trim() || undefined,
+    });
+    setLoading(false);
+    if (res.success) {
+      setSuccess(true);
+    } else {
+      setError(res.error || 'Error al registrar pago');
+    }
+  };
+
+  if (success) {
+    const isCobrado = mode === 'cobrado';
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
+          <FaCheckCircle className="text-green-500 text-4xl mx-auto" />
+          <div>
+            <p className="text-sm font-bold text-[#010139]">
+              {isCobrado ? 'Pago registrado — listo para agrupar' : 'Pago directo registrado'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {isCobrado
+                ? 'El pago aparece como CONFIRMADO PF en la cola de pendientes para ser agrupado y enviado a la aseguradora.'
+                : 'El pago directo fue registrado como informativo. No genera pendiente en la cola.'}
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="px-6 py-2 bg-[#010139] text-white text-sm font-medium rounded-lg cursor-pointer">
+            <span className="text-white">Cerrar</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full my-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200">
+          <div>
+            <h2 className="text-base font-bold text-[#010139]">💳 Registrar Pago Confirmado</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Peticiones, renovaciones, urgencias — master confirmó pago</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer p-1"><FaTimes size={18} /></button>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+          {/* Mode selector */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setMode('cobrado')}
+              className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                mode === 'cobrado' ? 'border-[#010139] bg-[#010139]/5' : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <FaCheckCircle className={mode === 'cobrado' ? 'text-[#010139]' : 'text-gray-400'} />
+                <span className="text-xs font-bold text-[#010139]">Cobrado por nosotros</span>
+              </div>
+              <p className="text-[10px] text-gray-500 leading-relaxed">Master envió link de pago y el cliente pagó. Entra a la cola de pendientes para agrupar y pagar aseguradora.</p>
+            </button>
+            <button
+              onClick={() => setMode('directo')}
+              className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                mode === 'directo' ? 'border-teal-600 bg-teal-50' : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <FaBuilding className={mode === 'directo' ? 'text-teal-600' : 'text-gray-400'} />
+                <span className="text-xs font-bold text-teal-700">Pago directo a aseguradora</span>
+              </div>
+              <p className="text-[10px] text-gray-500 leading-relaxed">El cliente pagó directamente en el portal de la aseguradora. Solo registro informativo, sin pendiente.</p>
+            </button>
+          </div>
+
+          {/* Context banner */}
+          {mode === 'cobrado' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800">
+              <strong>Flujo:</strong> Póliza emitida/renovada → master confirma pago recibido → pago queda en cola como <strong>CONFIRMADO PF</strong> → se agrupa y se paga a la aseguradora.
+            </div>
+          )}
+          {mode === 'directo' && (
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-2.5 text-xs text-teal-800">
+              <strong>Registro informativo:</strong> El cliente ya pagó en el portal de la aseguradora. Esto solo queda registrado como <strong>PAGO DIRECTO</strong> y no genera pendiente.
+            </div>
+          )}
+
+          {/* Source type (cobrado only) */}
+          {mode === 'cobrado' && (
+            <div>
+              <label className="text-xs text-gray-500 font-medium">Origen del pago *</label>
+              <div className="grid grid-cols-4 gap-1.5 mt-1">
+                {([['renovacion', 'Renovación'], ['peticion', 'Petición'], ['urgencia', 'Urgencia'], ['otro', 'Otro']] as const).map(([val, lbl]) => (
+                  <button key={val} onClick={() => set('source_type', val)}
+                    className={`py-1.5 text-xs rounded-lg border-2 font-medium cursor-pointer transition-colors ${
+                      form.source_type === val ? 'border-[#010139] bg-[#010139] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500">Cliente *</label>
+              <input value={form.client_name} onChange={e => set('client_name', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="Nombre completo" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Cédula / RUC</label>
+              <input value={form.cedula} onChange={e => set('cedula', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="8-123-456" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">N° Póliza *</label>
+              <input value={form.nro_poliza} onChange={e => set('nro_poliza', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="04-04-123456-0" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Monto *</label>
+              <input type="number" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="0.00" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Aseguradora *</label>
+              <select value={form.insurer} onChange={e => set('insurer', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5">
+                <option value="">Seleccione...</option>
+                <option value="INTERNACIONAL">Internacional</option>
+                <option value="FEDPA">FEDPA</option>
+                <option value="REGIONAL">Regional</option>
+                <option value="ANCON">ANCÓN</option>
+                <option value="ASSA">ASSA</option>
+                <option value="MAPFRE">MAPFRE</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Ramo</label>
+              <select value={form.ramo} onChange={e => set('ramo', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5">
+                <option value="AUTO">Auto</option>
+                <option value="VIDA">Vida</option>
+                <option value="SALUD">Salud</option>
+                <option value="INCENDIO">Incendio</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Fecha de pago *</label>
+              <input type="date" value={form.payment_date} onChange={e => set('payment_date', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Referencia interna</label>
+              <input value={form.source_ref} onChange={e => set('source_ref', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="Ticket / caso #" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-gray-500">Notas</label>
+              <input value={form.notes} onChange={e => set('notes', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mt-0.5" placeholder="Observaciones opcionales" />
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        </div>
+
+        <div className="flex gap-2 justify-end p-4 sm:p-5 border-t border-gray-200">
+          <button onClick={onClose} className="px-4 py-2 text-xs text-gray-500 hover:text-gray-700 cursor-pointer">Cancelar</button>
+          <button onClick={handleSubmit} disabled={loading}
+            className={`px-5 py-2 text-white text-xs font-bold rounded-lg disabled:opacity-50 cursor-pointer transition-colors ${
+              mode === 'cobrado' ? 'bg-[#010139] hover:bg-[#020270]' : 'bg-teal-600 hover:bg-teal-700'
+            }`}>
+            <span className="text-white">
+              {loading ? 'Registrando...' : mode === 'cobrado' ? '✓ Registrar pago cobrado' : '✓ Registrar pago directo'}
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// 5. MANUAL WIZARD — Apply references directly to payments
 // ════════════════════════════════════════════
 
 function ManualWizardModal({ onClose }: { onClose: () => void }) {
