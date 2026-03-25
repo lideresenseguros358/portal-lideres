@@ -256,6 +256,16 @@ export interface RegionalCCEmissionBody {
       paisTributa: number;
       pep: string;   // "S" or "N"
     };
+    identificacion?: {
+      tppersona: string;  // "N" natural, "J" juridico
+      tpodoc: string;     // "C" cedula, "R" ruc, "P" pasaporte
+      prov?: number | null;
+      letra?: string | null;
+      tomo?: number | null;
+      asiento?: number | null;
+      dv?: number | null;
+      pasaporte?: string | null;
+    };
   };
   datosveh: {
     vehnuevo: string;
@@ -266,7 +276,13 @@ export interface RegionalCCEmissionBody {
     usoveh: string;  // "P" particular
     peso: string;    // "L" liviano
   };
-  acreedor: string;  // "81" default
+  condHab?: {
+    nomter: string;
+    apeter: string;
+    sexo: string;
+    edocivil: string;
+  };
+  acreedor: string;  // "81" default, "" for no creditor
 }
 
 export interface RegionalCCEmissionResponse {

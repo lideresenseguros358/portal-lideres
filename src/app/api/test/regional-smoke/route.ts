@@ -455,6 +455,16 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
           paisTributa: 507,
           pep: 'N',
         },
+        identificacion: {
+          tppersona: 'N',
+          tpodoc: 'C',
+          prov: ced.prov,
+          letra: null,
+          tomo: ced.tomo,
+          asiento: ced.asiento,
+          dv: null,
+          pasaporte: null,
+        },
       },
       datosveh: {
         vehnuevo: 'N',
@@ -464,6 +474,12 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
         color: COLORS[s.id % COLORS.length]!,
         usoveh: 'P',
         peso: 'L',
+      },
+      condHab: {
+        nomter: 'PRUEBA',
+        apeter: 'SMOKECC',
+        sexo: s.id % 2 === 0 ? 'M' : 'F',
+        edocivil: 'S',
       },
       acreedor: '',
     };
