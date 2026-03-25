@@ -105,50 +105,32 @@ export interface CCQuoteInput {
 }
 
 export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteResponse> {
-  const body: RegionalCCQuoteBody = {
-    cliente: {
-      nomter: input.nombre,
-      apeter: input.apellido,
-      edad: input.edad,
-      sexo: input.sexo,
-      edocivil: input.edocivil,
-      identificacion: {
-        tppersona: input.tppersona || 'N',
-        tpodoc: input.tpodoc || 'C',
-        prov: input.prov || null,
-        letra: input.letra || null,
-        tomo: input.tomo || null,
-        asiento: input.asiento || null,
-        dv: input.dv || null,
-        pasaporte: input.pasaporte || null,
-      },
-      t1numero: input.telefono,
-      t2numero: input.celular,
-      email: input.email,
-    },
-    datosveh: {
-      vehnuevo: input.vehnuevo || 'N',
-      codmarca: input.codMarca,
-      codmodelo: input.codModelo,
-      anio: input.anio,
-      valorveh: input.valorVeh,
-      numpuestos: input.numPuestos || 4,
-    },
-    tpcobert: '1', // CC
-    endoso: input.endoso,
-    limites: {
-      lescor: input.lesiones || '5000*10000',
-      danpro: input.danios || '5000',
-      gasmed: input.gastosMedicos || '500*2500',
-    },
+  const creds = getRegionalCredentials();
+
+  // CC cotizar uses the same GET+headers endpoint as RC, with cTipoCobert=CC
+  // Confirmed by Regional PROD CURL 2026-03-25
+  const params: Record<string, string> = {
+    cToken: creds.token,
+    cCodInter: creds.codInter,
+    nEdad: input.edad.toString(),
+    cSexo: input.sexo,
+    cEdocivil: input.edocivil,
+    cMarca: input.codMarca.toString(),
+    cModelo: input.codModelo.toString(),
+    nAnio: input.anio.toString(),
+    nMontoVeh: input.valorVeh.toString(),
+    nLesiones: input.lesiones || '5000*10000',
+    nDanios: input.danios || '5000',
+    nGastosMed: input.gastosMedicos || '2000',
+    cEndoso: input.endoso,
+    cTipoCobert: 'CC',
   };
 
-  console.log('[REGIONAL CC Quote] Body:', JSON.stringify(body).slice(0, 500));
+  console.log('[REGIONAL CC Quote] GET params:', JSON.stringify(params));
 
-  const res = await regionalPost<RegionalCCQuoteResponse>(
-    REGIONAL_CC_ENDPOINTS.COTIZACION,
-    body,
-    { useTokenCC: true }
+  const res = await regionalGet<RegionalCCQuoteResponse>(
+    REGIONAL_RC_ENDPOINTS.COTIZAR,
+    params
   );
 
   if (!res.success) {
@@ -207,7 +189,18 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
     return { success: false, message: 'Invalid response' };
   }
 
-  const obj = data as Record<string, unknown>;
+  let obj = data as Record<string, unknown>;
+
+  // PROD response wraps results in { items: [{ numcot, primarc, primacasco, primatotal, ... }] }
+  // Unwrap items[0] if present
+  if (Array.isArray(obj.items) && obj.items.length > 0) {
+    const item = obj.items[0] as Record<string, unknown>;
+    // Check for error: numcot null with null primas usually means API error
+    if (item.numcot === null && item.primatotal === null) {
+      return { success: false, message: 'Cotización no generada — verifique parámetros (cMarca, cModelo, nAnio, nMontoVeh)' };
+    }
+    obj = item;
+  }
 
   if (obj.success === false || obj.mensaje || (obj.message && !obj.numcot)) {
     return {
@@ -216,11 +209,16 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
     };
   }
 
+  const numcot = (obj.numcot || obj.numCot) as number | undefined;
+  if (!numcot) {
+    return { success: false, message: 'No se recibió numcot de Regional' };
+  }
+
   return {
     success: true,
-    numcot: obj.numcot as number | undefined,
-    primaTotal: (obj.primaTotal || obj.prima || obj.primatotal) as number | undefined,
-    primaAnual: (obj.primaAnual || obj.primaanual) as number | undefined,
+    numcot,
+    primaTotal: (obj.primatotal || obj.primaTotal || obj.prima) as number | undefined,
+    primaAnual: (obj.primaAnual || obj.primaanual || obj.primatotal || obj.primaTotal) as number | undefined,
     coberturas: (obj.coberturas || []) as RegionalCCQuoteResponse['coberturas'],
     deducibles: (obj.deducibles || []) as RegionalCCQuoteResponse['deducibles'],
     cuotas: (obj.cuotas || []) as RegionalCCQuoteResponse['cuotas'],

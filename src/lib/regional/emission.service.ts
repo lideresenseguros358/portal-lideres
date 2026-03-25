@@ -148,6 +148,8 @@ export async function imprimirPoliza(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
 
+    const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -158,6 +160,9 @@ export async function imprimirPoliza(
       },
       body: JSON.stringify({ poliza: cleanPoliza }),
       signal: controller.signal,
+    }).finally(() => {
+      if (prevTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls;
     });
 
     clearTimeout(timer);
