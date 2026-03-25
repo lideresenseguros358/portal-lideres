@@ -443,11 +443,11 @@ async function runCC(s: Scenario, dryrun: boolean): Promise<any> {
       cliente: {
         direccion: {
           codpais: 507,
-          codestado: 8,
-          codciudad: 1,
-          codmunicipio: 1,
+          codestado: 11,
+          codciudad: 2,
+          codmunicipio: 12,
           codurb: 1,
-          dirhab: 'Ciudad de Panama - Smoke CC Test',
+          dirhab: '12 de octubre',
         },
         datosCumplimiento: {
           ocupacion: 1,
