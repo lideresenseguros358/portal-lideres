@@ -59,6 +59,7 @@ function getDefaultHeaders(useTokenCC = false): Record<string, string> {
     'Content-Type': 'application/json',
     Authorization: getBasicAuthHeader(),
     codInter: creds.codInter,
+    codProv: creds.codInter,   // CC endpoints require codProv (same value as codInter)
     token: useTokenCC ? creds.tokenCC : creds.token,
   };
 }
