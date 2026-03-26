@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
           throw new Error('Error al fusionar pólizas con cliente existente');
         }
 
+        // Mover documentos de expediente al cliente existente
+        await supabaseAdmin
+          .from('expediente_documents')
+          .update({ client_id: existingClient.id })
+          .eq('client_id', clientId);
+
         // Eliminar cliente origen
         await supabaseAdmin.from('clients').delete().eq('id', clientId);
 

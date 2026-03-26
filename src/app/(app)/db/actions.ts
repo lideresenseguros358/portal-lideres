@@ -222,7 +222,13 @@ export async function actionReassignClientAndPolicies(clientId: string, newBroke
           return { ok: false as const, error: `Error moviendo pólizas al cliente existente: ${movePoliciesErr.message}` };
         }
 
-        // Eliminar el cliente origen (ya sin pólizas)
+        // Mover documentos de expediente al cliente existente
+        await supabase
+          .from('expediente_documents')
+          .update({ client_id: existingClient.id })
+          .eq('client_id', clientId);
+
+        // Eliminar el cliente origen (ya sin pólizas ni documentos)
         await supabase.from('clients').delete().eq('id', clientId);
 
         targetClientId = existingClient.id;
