@@ -366,7 +366,14 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               throw new Error(result.error || 'Error reasignando cliente y pólizas');
             }
             
-            toast.success('Cliente y todas sus pólizas reasignadas correctamente');
+            if (result.merged) {
+              toast.success('Pólizas fusionadas con cliente existente del nuevo corredor', {
+                description: 'El cliente ya existía en ese corredor — sus pólizas fueron agregadas a ese registro.',
+                duration: 6000,
+              });
+            } else {
+              toast.success('Cliente y todas sus pólizas reasignadas correctamente');
+            }
           }
         } else {
           // Solo incluir broker_id si el usuario es Master (API rechaza broker_id de no-masters)

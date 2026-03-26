@@ -48,38 +48,80 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 1. Actualizar broker_id en el cliente (usa admin para bypassear RLS)
-    const { error: clientUpdateError } = await supabaseAdmin
+    // 1. Obtener datos del cliente origen para detectar fusión
+    const { data: sourceClient } = await supabaseAdmin
       .from('clients')
-      .update({ 
-        broker_id: newBrokerId
-      })
-      .eq('id', clientId);
+      .select('id, national_id')
+      .eq('id', clientId)
+      .single();
 
-    if (clientUpdateError) {
-      console.error('Error updating client:', clientUpdateError);
-      throw new Error('Error al actualizar cliente');
+    // 1b. Detectar si el nuevo broker ya tiene un cliente con la misma cédula
+    let resolvedClientId = clientId;
+    let merged = false;
+
+    if (sourceClient?.national_id) {
+      const { data: existingClient } = await supabaseAdmin
+        .from('clients')
+        .select('id')
+        .eq('national_id', sourceClient.national_id)
+        .eq('broker_id', newBrokerId)
+        .neq('id', clientId)
+        .maybeSingle();
+
+      if (existingClient) {
+        // Fusión: mover pólizas al cliente existente del nuevo broker
+        const { error: movePoliciesErr } = await supabaseAdmin
+          .from('policies')
+          .update({ client_id: existingClient.id, broker_id: newBrokerId })
+          .eq('client_id', clientId);
+
+        if (movePoliciesErr) {
+          console.error('Error moving policies during merge:', movePoliciesErr);
+          throw new Error('Error al fusionar pólizas con cliente existente');
+        }
+
+        // Eliminar cliente origen
+        await supabaseAdmin.from('clients').delete().eq('id', clientId);
+
+        resolvedClientId = existingClient.id;
+        merged = true;
+        console.log(`[REASSIGN] Fusión automática: cliente ${clientId} → cliente existente ${existingClient.id} del nuevo broker`);
+      }
     }
 
-    // 2. Actualizar broker_id en todas las pólizas del cliente (usa admin para bypassear RLS)
-    const { error: policiesUpdateError } = await supabaseAdmin
-      .from('policies')
-      .update({ 
-        broker_id: newBrokerId 
-      })
-      .eq('client_id', clientId);
+    if (!merged) {
+      // Reasignación normal: actualizar broker_id en cliente y pólizas
+      const { error: clientUpdateError } = await supabaseAdmin
+        .from('clients')
+        .update({ broker_id: newBrokerId })
+        .eq('id', clientId);
 
-    if (policiesUpdateError) {
-      console.error('Error updating policies:', policiesUpdateError);
-      throw new Error('Error al actualizar pólizas');
+      if (clientUpdateError) {
+        console.error('Error updating client:', clientUpdateError);
+        throw new Error('Error al actualizar cliente');
+      }
+
+      const { error: policiesUpdateError } = await supabaseAdmin
+        .from('policies')
+        .update({ broker_id: newBrokerId })
+        .eq('client_id', clientId);
+
+      if (policiesUpdateError) {
+        console.error('Error updating policies:', policiesUpdateError);
+        throw new Error('Error al actualizar pólizas');
+      }
     }
 
     // Si no se requieren ajustes, terminar aquí
     if (!makeAdjustments || !commissionsData || commissionsData.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'Cliente reasignado sin ajustes retroactivos',
-        adjustmentsCreated: false
+        message: merged
+          ? 'Cliente fusionado con registro existente del nuevo corredor'
+          : 'Cliente reasignado sin ajustes retroactivos',
+        adjustmentsCreated: false,
+        merged,
+        resolvedClientId,
       });
     }
 

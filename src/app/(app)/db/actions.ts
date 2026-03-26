@@ -180,33 +180,79 @@ export async function actionMergeClients(sourceClientId: string, targetClientId:
 }
 
 // LÓGICA CORRECTA: CLIENTS manda, POLICIES sigue
-// Cuando se cambia broker de un cliente, TODAS sus pólizas se actualizan automáticamente
+// Cuando se cambia broker de un cliente, TODAS sus pólizas se actualizan automáticamente.
+// Si el nuevo broker ya tiene un cliente con la misma cédula, se fusionan automáticamente:
+// las pólizas se mueven al cliente existente y el cliente origen se elimina.
 export async function actionReassignClientAndPolicies(clientId: string, newBrokerId: string) {
   try {
     const supabase = await getSupabaseServer();
-    
-    // 1. Actualizar broker del cliente
-    const { error: clientError } = await supabase
+
+    // 0. Obtener datos del cliente a reasignar
+    const { data: sourceClient, error: fetchErr } = await supabase
       .from('clients')
-      .update({ broker_id: newBrokerId })
-      .eq('id', clientId);
-    
-    if (clientError) {
-      return { ok: false as const, error: `Error actualizando cliente: ${clientError.message}` };
+      .select('id, national_id, broker_id')
+      .eq('id', clientId)
+      .single();
+
+    if (fetchErr || !sourceClient) {
+      return { ok: false as const, error: 'No se encontró el cliente origen' };
     }
-    
-    // 2. Actualizar broker de TODAS las pólizas del cliente para mantener consistencia
-    const { error: policiesError } = await supabase
-      .from('policies')
-      .update({ broker_id: newBrokerId })
-      .eq('client_id', clientId);
-    
-    if (policiesError) {
-      return { ok: false as const, error: `Error actualizando pólizas: ${policiesError.message}` };
+
+    // 1. Detectar si el nuevo broker ya tiene un cliente con la misma cédula
+    let targetClientId = clientId; // por defecto, reasignar el mismo registro
+    let merged = false;
+
+    if (sourceClient.national_id) {
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('national_id', sourceClient.national_id)
+        .eq('broker_id', newBrokerId)
+        .neq('id', clientId)
+        .maybeSingle();
+
+      if (existingClient) {
+        // Fusión: mover todas las pólizas del origen al cliente existente del nuevo broker
+        const { error: movePoliciesErr } = await supabase
+          .from('policies')
+          .update({ client_id: existingClient.id, broker_id: newBrokerId })
+          .eq('client_id', clientId);
+
+        if (movePoliciesErr) {
+          return { ok: false as const, error: `Error moviendo pólizas al cliente existente: ${movePoliciesErr.message}` };
+        }
+
+        // Eliminar el cliente origen (ya sin pólizas)
+        await supabase.from('clients').delete().eq('id', clientId);
+
+        targetClientId = existingClient.id;
+        merged = true;
+      }
     }
-    
+
+    if (!merged) {
+      // No hay duplicado: reasignación normal
+      const { error: clientError } = await supabase
+        .from('clients')
+        .update({ broker_id: newBrokerId })
+        .eq('id', clientId);
+
+      if (clientError) {
+        return { ok: false as const, error: `Error actualizando cliente: ${clientError.message}` };
+      }
+
+      const { error: policiesError } = await supabase
+        .from('policies')
+        .update({ broker_id: newBrokerId })
+        .eq('client_id', clientId);
+
+      if (policiesError) {
+        return { ok: false as const, error: `Error actualizando pólizas: ${policiesError.message}` };
+      }
+    }
+
     revalidatePath('/(app)/db');
-    return { ok: true as const };
+    return { ok: true as const, merged, targetClientId };
   } catch (error) {
     return {
       ok: false as const,
