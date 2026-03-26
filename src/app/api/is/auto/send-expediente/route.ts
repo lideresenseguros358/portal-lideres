@@ -23,7 +23,10 @@ async function sendZeptoWithAttachments(opts: {
   html: string;
   attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
 }): Promise<{ ok: boolean; messageId: string }> {
-  const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  let apiKey = (process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '').replace(/^["']|["']$/g, '');
+  if (apiKey && !apiKey.startsWith('Zoho-enczapikey')) {
+    apiKey = `Zoho-enczapikey ${apiKey}`;
+  }
   const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
   const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
 
