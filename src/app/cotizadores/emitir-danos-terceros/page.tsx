@@ -698,7 +698,6 @@ export default function EmitirDanosTercerosPage() {
             paymentToken,
             formaPago: 1, // DT = contado
             cantCuotas: 1,
-            vacreedor: emissionData?.acreedor || '',
             tipo_cobertura: 'Daños a Terceros',
           }),
         });
