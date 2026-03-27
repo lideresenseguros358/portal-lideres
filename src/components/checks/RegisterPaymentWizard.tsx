@@ -2380,7 +2380,22 @@ export default function RegisterPaymentWizardNew({
 
                 <div className="border-t pt-4">
                   <h4 className="font-semibold text-sm text-gray-600 mb-1">Monto a Pagar</h4>
-                  <p className="text-2xl font-bold text-[#8AAA19]">${amountToPay.toFixed(2)}</p>
+                  {divideSingle && divisions.length > 0 ? (
+                    <div className="space-y-1 mt-1">
+                      {divisions.map((div, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">Monto a pagar {idx + 1}</span>
+                          <span className="text-xl font-bold text-[#8AAA19]">${parseFloat(div.amount || '0').toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between border-t pt-1 mt-1">
+                        <span className="text-sm font-semibold text-gray-700">Total</span>
+                        <span className="text-2xl font-bold text-[#8AAA19]">${amountToPay.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-bold text-[#8AAA19]">${amountToPay.toFixed(2)}</p>
+                  )}
                 </div>
 
                 {isDeductFromBroker && selectedBrokerId && (
