@@ -1480,8 +1480,12 @@ export async function previewMapping(options: PreviewMappingOptions) {
     'commission': 'gross_amount',
     'DELINQUENCY_POLICY_NUMBER': 'policy_number',
     'DELINQUENCY_CLIENT_NAME': 'client_name',
-    'DELINQUENCY_AMOUNT': 'amount',
-    'DELINQUENCY_BALANCE': 'balance',
+    'DELINQUENCY_DUE_SOON': 'due_soon',
+    'DELINQUENCY_CURRENT': 'current',
+    'DELINQUENCY_BUCKET_1_30': 'bucket_1_30',
+    'DELINQUENCY_BUCKET_31_60': 'bucket_31_60',
+    'DELINQUENCY_BUCKET_61_90': 'bucket_61_90',
+    'DELINQUENCY_BUCKET_90_PLUS': 'bucket_90_plus',
   };
   
   // Crear mapa de aliases -> campo final
@@ -1518,6 +1522,32 @@ export async function previewMapping(options: PreviewMappingOptions) {
     'monto': 'gross_amount',
     'credito': 'gross_amount',
     'creditos': 'gross_amount',
+    // delinquency fields
+    'saldo': 'due_soon',
+    'por vencer': 'due_soon',
+    'por_vencer': 'due_soon',
+    'due_soon': 'due_soon',
+    'corriente': 'current',
+    'al dia': 'current',
+    'current': 'current',
+    'exigible': 'current',
+    '1-30': 'bucket_1_30',
+    '1_30': 'bucket_1_30',
+    'monto_30': 'bucket_1_30',
+    'bucket_1_30': 'bucket_1_30',
+    '31-60': 'bucket_31_60',
+    '31_60': 'bucket_31_60',
+    'monto_60': 'bucket_31_60',
+    'bucket_31_60': 'bucket_31_60',
+    '61-90': 'bucket_61_90',
+    '61_90': 'bucket_61_90',
+    'monto_90': 'bucket_61_90',
+    'bucket_61_90': 'bucket_61_90',
+    '+90': 'bucket_90_plus',
+    '90_plus': 'bucket_90_plus',
+    '90+': 'bucket_90_plus',
+    'bucket_90_plus': 'bucket_90_plus',
+    '90 dias y mas': 'bucket_90_plus',
   };
   for (const [alias, field] of Object.entries(defaultAliases)) {
     aliasMap.set(alias, field);
@@ -1572,10 +1602,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
   });
   
   // Filtrar y procesar filas para mostrar solo campos relevantes
-  const displayFields = targetField === 'COMMISSIONS' 
-    ? ['policy_number', 'client_name', 'gross_amount'] 
+  const displayFields = targetField === 'COMMISSIONS'
+    ? ['policy_number', 'client_name', 'gross_amount']
     : targetField === 'DELINQUENCY'
-    ? ['policy_number', 'client_name', 'amount', 'balance']
+    ? ['policy_number', 'due_soon', 'current', 'bucket_1_30', 'bucket_31_60', 'bucket_61_90', 'bucket_90_plus']
     : [];
   
   // Encontrar todas las columnas que mapean a gross_amount (ANTES del map)
@@ -1637,10 +1667,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
   });
   
   // Verificar campos requeridos según el tipo
-  const requiredFields = targetField === 'COMMISSIONS' 
-    ? ['policy_number', 'gross_amount'] 
+  const requiredFields = targetField === 'COMMISSIONS'
+    ? ['policy_number', 'gross_amount']
     : targetField === 'DELINQUENCY'
-    ? ['policy_number', 'amount']
+    ? ['policy_number']
     : [];
     
   const missingFields = requiredFields.filter(
@@ -1668,41 +1698,53 @@ export async function previewMapping(options: PreviewMappingOptions) {
   log('All required fields found!');
   log(`Returning ${processedRows.length} processed rows with fields:`, displayFields);
   
-  // FILTRAR FILAS INVÁLIDAS (para INTERNACIONAL, SURA y otras aseguradoras)
+  // FILTRAR FILAS INVÁLIDAS
   const validRows = processedRows.filter((row, index) => {
     const policyNum = String(row.policy_number || '').trim();
-    const clientName = String(row.client_name || '').trim();
-    
-    log(`Validando fila ${index + 1}: policy="${policyNum}", client="${clientName}", commission="${row.gross_amount}"`);
-    
-    // Validar que policy_number sea válido
-    const isValidPolicy = policyNum && 
-                         policyNum !== '--' && 
+
+    // Validar que policy_number sea válido (aplica a todos los tipos)
+    const isValidPolicy = policyNum &&
+                         policyNum !== '--' &&
                          policyNum !== 'undefined' &&
                          !policyNum.includes('#') &&
                          policyNum.length > 0;
-    
+
+    if (targetField === 'DELINQUENCY') {
+      log(`Validando fila ${index + 1}: policy="${policyNum}", due_soon="${row.due_soon}", current="${row.current}"`);
+      log(`  isValidPolicy: ${isValidPolicy}`);
+      if (!isValidPolicy) {
+        log(`  ❌ RECHAZADA - policy inválida`);
+        return false;
+      }
+      log(`  ✅ ACEPTADA`);
+      return true;
+    }
+
+    const clientName = String(row.client_name || '').trim();
+
+    log(`Validando fila ${index + 1}: policy="${policyNum}", client="${clientName}", commission="${row.gross_amount}"`);
+
     // Validar que client_name no sea texto descriptivo o vacío
     const invalidTexts = [
       'AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-', 'COMISION AL',
       'SALDADO', 'DEPOSITADO', 'MOVIMIENTOS', 'NEGATIVO', 'POSITIVO',
       'SUBTOTAL', 'SURA', 'ESTADO DE CUENTA', 'PERIODO'
     ];
-    const isValidClient = clientName && 
+    const isValidClient = clientName &&
                          clientName.length > 2 &&
                          !invalidTexts.some(text => clientName.toUpperCase().includes(text));
-    
+
     // Validar que tenga comisión válida (no cero o vacío)
     const commission = Number(row.gross_amount || 0);
     const hasValidCommission = !isNaN(commission) && Math.abs(commission) > 0.01;
-    
+
     log(`  isValidPolicy: ${isValidPolicy}, isValidClient: ${isValidClient}, hasValidCommission: ${hasValidCommission}`);
-    
+
     if (!isValidPolicy || !isValidClient || !hasValidCommission) {
       log(`  ❌ RECHAZADA - Motivos: policy=${!isValidPolicy}, client=${!isValidClient}, commission=${!hasValidCommission}`);
       return false;
     }
-    
+
     log(`  ✅ ACEPTADA`);
     return true;
   });
