@@ -313,7 +313,8 @@ export async function POST(request: NextRequest) {
       // NOTE: Do NOT attach to IS expediente email — carta autorización goes to portal@ only
       console.log('[IS EXPEDIENTE] PDF de autorización generado:', authPdfBuffer.length, 'bytes');
     } catch (authPdfError: any) {
-      console.error('[IS EXPEDIENTE] Error generando PDF de autorización:', authPdfError);
+      console.error('[IS EXPEDIENTE] Error generando PDF de autorización:', authPdfError?.message || authPdfError);
+      console.warn('[IS EXPEDIENTE] ⚠️ authPdfBuffer quedó null — la debida diligencia NO se guardará en el expediente.');
     }
 
     // Build email HTML
@@ -648,7 +649,11 @@ export async function POST(request: NextRequest) {
       try {
         // Download policy PDF from pdfUrl if available
         let polizaPdfBuffer: Buffer | null = null;
-        const pdfUrl = (formData.get('pdfUrl') as string) || '';
+        const _siteUrlBase = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com');
+        let pdfUrl = (formData.get('pdfUrl') as string) || '';
+        if (pdfUrl && pdfUrl.startsWith('/')) {
+          pdfUrl = `${_siteUrlBase}${pdfUrl}`;
+        }
         if (pdfUrl) {
           try {
             console.log('[IS EXPEDIENTE] Descargando carátula de póliza desde:', pdfUrl.substring(0, 80) + '...');
@@ -675,6 +680,13 @@ export async function POST(request: NextRequest) {
           polizaPdf: polizaPdfBuffer ? `${polizaPdfBuffer.length}b` : 'NO',
           firmaDataUrl: firmaDataUrl ? `${firmaDataUrl.length} chars` : 'VACÍO',
         });
+
+        console.log('[IS EXPEDIENTE] 🔍 DIAGNÓSTICO DETALLADO:');
+        console.log('  - registroVehicularFile recibido:', !!registroVehicularFile);
+        console.log('  - registroBuffer convertido:', !!registroBuffer);
+        console.log('  - authPdfBuffer generado:', !!authPdfBuffer);
+        console.log('  - polizaPdfBuffer descargado:', !!polizaPdfBuffer);
+        console.log('  - pdfUrl para descargar:', (formData.get('pdfUrl') as string) || 'VACÍO');
 
         const polizaPdfFilename = `caratula_poliza_${clientData.cedula}${nroPoliza ? `_${nroPoliza}` : ''}.pdf`;
 

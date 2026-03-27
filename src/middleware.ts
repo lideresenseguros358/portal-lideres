@@ -57,9 +57,13 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userResult = await Promise.race([
+    supabase.auth.getUser(),
+    new Promise<{ data: { user: null } }>(resolve =>
+      setTimeout(() => resolve({ data: { user: null } }), 5000)
+    ),
+  ]);
+  const { data: { user } } = userResult as Awaited<ReturnType<typeof supabase.auth.getUser>>;
 
   // If user is authenticated and not on /account, check must_change_password and broker active status
   if (user && !request.nextUrl.pathname.startsWith('/account') && !request.nextUrl.pathname.startsWith('/login')) {
