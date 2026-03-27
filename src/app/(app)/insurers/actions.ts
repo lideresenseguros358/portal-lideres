@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from 'next/cache';
-import { 
+import {
   createInsurer,
-  updateInsurer, 
+  updateInsurer,
   cloneInsurer,
   toggleInsurerActive,
   upsertInsurerMapping,
   upsertMappingRule,
   deleteMappingRule,
+  listMappingRules,
   importAssaCodes,
   previewMapping,
   InsurerInsertSchema,
@@ -86,6 +87,22 @@ export async function actionUpsertInsurerMapping(data: unknown) {
     return { 
       ok: false as const, 
       error: error instanceof Error ? error.message : 'Error desconocido' 
+    };
+  }
+}
+
+export async function actionGetDelinquencyMappingRules(insurerId: string) {
+  try {
+    const rules = await listMappingRules(insurerId);
+    // Return only the DELINQUENCY_* rules
+    const delinquencyRules = rules.filter(r =>
+      (r.target_field as string).startsWith('DELINQUENCY_')
+    );
+    return { ok: true as const, data: delinquencyRules };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
     };
   }
 }

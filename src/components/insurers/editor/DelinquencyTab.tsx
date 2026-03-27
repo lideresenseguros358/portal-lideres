@@ -4,15 +4,18 @@ import { useState, useTransition } from 'react';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 import { actionUpsertMappingRule, actionDeleteMappingRule } from '@/app/(app)/insurers/actions';
 
-const DELINQUENCY_FIELDS = [
-  'DELINQUENCY_POLICY_NUMBER',
-  'DELINQUENCY_CLIENT_NAME',
-  'DELINQUENCY_DUE_SOON',
-  'DELINQUENCY_CURRENT',
-  'DELINQUENCY_BUCKET_1_30',
-  'DELINQUENCY_BUCKET_31_60',
-  'DELINQUENCY_BUCKET_61_90',
-  'DELINQUENCY_BUCKET_90_PLUS',
+// CLIENT_NAME is intentionally excluded: the client name is resolved from DB
+// using the policy number as key — it is never read from the report file.
+// BUCKET_90_PLUS is a filter sentinel: rows with a value > 0 in this column
+// are considered cancelled policies and are skipped entirely on import.
+const DELINQUENCY_FIELDS: { value: string; label: string }[] = [
+  { value: 'DELINQUENCY_POLICY_NUMBER', label: 'Número de Póliza' },
+  { value: 'DELINQUENCY_DUE_SOON',     label: 'Saldo' },
+  { value: 'DELINQUENCY_CURRENT',      label: 'Corriente' },
+  { value: 'DELINQUENCY_BUCKET_1_30',  label: '1-30 días' },
+  { value: 'DELINQUENCY_BUCKET_31_60', label: '31-60 días' },
+  { value: 'DELINQUENCY_BUCKET_61_90', label: '61-90 días' },
+  { value: 'DELINQUENCY_BUCKET_90_PLUS', label: '90+ días (pólizas canceladas — filtro)' },
 ];
 
 interface DelinquencyTabProps {
@@ -63,7 +66,7 @@ export default function DelinquencyTab({ rules, insurerId }: DelinquencyTabProps
         <select value={newRule.target_field} onChange={e => setNewRule({...newRule, target_field: e.target.value})}>
           <option value="">-- Campo Estándar --</option>
           {DELINQUENCY_FIELDS.map(field => (
-            <option key={field} value={field}>{field.replace('DELINQUENCY_', '')}</option>
+            <option key={field.value} value={field.value}>{field.label}</option>
           ))}
         </select>
         <input 
@@ -81,7 +84,7 @@ export default function DelinquencyTab({ rules, insurerId }: DelinquencyTabProps
         {currentRules.map(rule => (
           <div key={rule.id} className="rule-item">
             <div>
-              <p className="rule-target">{rule.target_field.replace('DELINQUENCY_', '')}</p>
+              <p className="rule-target">{DELINQUENCY_FIELDS.find(f => f.value === rule.target_field)?.label ?? rule.target_field.replace('DELINQUENCY_', '')}</p>
               <p className="rule-details">Aliases: {rule.aliases.join(', ')}</p>
             </div>
             <button onClick={() => handleDelete(rule.id)} className="btn-delete" disabled={isPending}><FaTrash /></button>

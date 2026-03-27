@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaUpload, FaCog, FaCheckCircle } from 'react-icons/fa';
 import { actionGetActiveInsurers, actionImportDelinquency } from '@/app/(app)/delinquency/actions';
-import { actionProcessOCR } from '@/app/(app)/insurers/actions';
+import { actionProcessOCR, actionGetDelinquencyMappingRules } from '@/app/(app)/insurers/actions';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export default function ImportTab() {
   const [insurers, setInsurers] = useState<any[]>([]);
   const [selectedInsurer, setSelectedInsurer] = useState('');
+  const [mappingRules, setMappingRules] = useState<any[]>([]);
   const [cutoffDate, setCutoffDate] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -28,6 +29,50 @@ export default function ImportTab() {
     if (result.ok) {
       setInsurers(result.data || []);
     }
+  };
+
+  const handleInsurerChange = async (insurerId: string) => {
+    setSelectedInsurer(insurerId);
+    if (insurerId) {
+      const result = await actionGetDelinquencyMappingRules(insurerId);
+      setMappingRules(result.ok ? result.data : []);
+    } else {
+      setMappingRules([]);
+    }
+  };
+
+  /**
+   * Resolves a raw Excel/CSV row into standardised delinquency fields
+   * using the insurer's configured mapping rules (aliases).
+   * Falls back to known default column names when no rule is configured.
+   */
+  const resolveRow = (row: any) => {
+    // Build a lookup: target_field → first alias that exists as a key in row
+    const findCol = (targetField: string, fallbacks: string[]): string | undefined => {
+      const rule = mappingRules.find(r => r.target_field === targetField);
+      const candidates: string[] = rule?.aliases?.length
+        ? [...rule.aliases, ...fallbacks]
+        : fallbacks;
+      return candidates.find(c => row[c] !== undefined && row[c] !== null && row[c] !== '');
+    };
+
+    const policyCol   = findCol('DELINQUENCY_POLICY_NUMBER', ['N° Póliza', 'Póliza', 'Poliza', 'policy_number', 'POLIZA']);
+    const dueSoonCol  = findCol('DELINQUENCY_DUE_SOON',     ['Saldo', 'Por Vencer', 'due_soon']);
+    const currentCol  = findCol('DELINQUENCY_CURRENT',      ['Corriente', 'current', 'Al día']);
+    const b130Col     = findCol('DELINQUENCY_BUCKET_1_30',  ['1-30', '1_30', 'bucket_1_30']);
+    const b3160Col    = findCol('DELINQUENCY_BUCKET_31_60', ['31-60', '31_60', 'bucket_31_60']);
+    const b6190Col    = findCol('DELINQUENCY_BUCKET_61_90', ['61-90', '61_90', 'bucket_61_90']);
+    const b90pCol     = findCol('DELINQUENCY_BUCKET_90_PLUS', ['+90', '90_plus', '90+', 'bucket_90_plus', '90 días y más']);
+
+    return {
+      policy_number:  policyCol  ? String(row[policyCol]).trim()   : '',
+      due_soon:       dueSoonCol  ? Number(row[dueSoonCol])  || 0   : 0,
+      current:        currentCol  ? Number(row[currentCol])  || 0   : 0,
+      bucket_1_30:    b130Col     ? Number(row[b130Col])     || 0   : 0,
+      bucket_31_60:   b3160Col    ? Number(row[b3160Col])    || 0   : 0,
+      bucket_61_90:   b6190Col    ? Number(row[b6190Col])    || 0   : 0,
+      bucket_90_plus: b90pCol     ? Number(row[b90pCol])     || 0   : 0,
+    };
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,18 +209,14 @@ export default function ImportTab() {
         return;
       }
 
-      // Map parsed data to expected format
-      // TODO: Get mapping from insurer configuration
-      const records = parsedData.map((row: any) => ({
-        policy_number: row['policy_number'] || row['N° Póliza'] || row['Poliza'] || '',
-        client_name: row['client_name'] || row['Cliente'] || row['Nombre'] || '',
-        due_soon: Number(row['due_soon'] || row['Por Vencer'] || 0),
-        current: Number(row['current'] || row['Corriente'] || 0),
-        bucket_1_30: Number(row['bucket_1_30'] || row['1-30'] || row['1_30'] || 0),
-        bucket_31_60: Number(row['bucket_31_60'] || row['31-60'] || row['31_60'] || 0),
-        bucket_61_90: Number(row['bucket_61_90'] || row['61-90'] || row['61_90'] || 0),
-        bucket_90_plus: Number(row['bucket_90_plus'] || row['+90'] || row['90_plus'] || 0),
-      })).filter(r => r.policy_number); // Filter out rows without policy number
+      // Map parsed data using insurer mapping rules (dynamic aliases)
+      // Rows with bucket_90_plus > 0 are cancelled policies — skip them entirely.
+      // client_name is NOT read from the file; the server resolves it from DB
+      // using the policy number as the key.
+      const records = parsedData
+        .map((row: any) => resolveRow(row))
+        .filter(r => r.policy_number)                   // skip rows with no policy number
+        .filter(r => r.bucket_90_plus === 0);           // skip cancelled policies (90+ > 0)
 
       if (records.length === 0) {
         toast.error('No se encontraron registros válidos. Verifica el mapeo de columnas en Aseguradoras');
@@ -221,7 +262,7 @@ export default function ImportTab() {
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Aseguradora <span className="text-red-500">*</span>
             </label>
-            <Select value={selectedInsurer} onValueChange={setSelectedInsurer}>
+            <Select value={selectedInsurer} onValueChange={handleInsurerChange}>
               <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
                 <SelectValue placeholder="SELECCIONA UNA ASEGURADORA" />
               </SelectTrigger>

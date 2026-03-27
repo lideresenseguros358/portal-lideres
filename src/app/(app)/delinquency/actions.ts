@@ -172,42 +172,52 @@ export async function actionImportDelinquency(payload: {
       return { ok: false, error: 'Error al limpiar datos previos: ' + deleteError.message };
     }
     
-    // Look up broker_id for each policy
+    // Look up policies in DB — only import rows whose policy_number exists.
+    // Also fetch the linked client name so we never rely on what the file says.
     const { data: policies } = await supabase
       .from('policies')
-      .select('policy_number, broker_id')
+      .select('policy_number, broker_id, clients(name)')
       .in('policy_number', policyNumbers);
-    
-    const brokerMap = new Map(
-      (policies || []).map(p => [p.policy_number, p.broker_id])
-    );
-    
-    // Prepare records for insertion
-    const recordsToInsert = payload.records.map(record => {
-      const total_debt = 
-        (Number(record.due_soon) || 0) +
-        (Number(record.current) || 0) +
-        (Number(record.bucket_1_30) || 0) +
-        (Number(record.bucket_31_60) || 0) +
-        (Number(record.bucket_61_90) || 0) +
-        (Number(record.bucket_90_plus) || 0);
-      
-      return {
-        insurer_id: payload.insurerId,
-        policy_number: record.policy_number,
-        client_name: record.client_name,
-        broker_id: brokerMap.get(record.policy_number) || null,
-        due_soon: Number(record.due_soon) || 0,
-        current: Number(record.current) || 0,
-        bucket_1_30: Number(record.bucket_1_30) || 0,
-        bucket_31_60: Number(record.bucket_31_60) || 0,
-        bucket_61_90: Number(record.bucket_61_90) || 0,
-        bucket_90_plus: Number(record.bucket_90_plus) || 0,
-        total_debt,
-        cutoff_date: payload.cutoffDate,
-        last_updated: new Date().toISOString(),
-      };
-    });
+
+    // Build lookup maps keyed by policy_number
+    const brokerMap = new Map<string, string | null>();
+    const clientNameMap = new Map<string, string>();
+    for (const p of policies || []) {
+      brokerMap.set(p.policy_number, p.broker_id ?? null);
+      const clientName = (p as any).clients?.name as string | undefined;
+      if (clientName) clientNameMap.set(p.policy_number, clientName);
+    }
+    const knownPolicies = new Set(brokerMap.keys());
+
+    // Prepare records for insertion — skip policies not found in DB
+    const recordsToInsert = payload.records
+      .filter(record => knownPolicies.has(record.policy_number))
+      .map(record => {
+        const total_debt =
+          (Number(record.due_soon) || 0) +
+          (Number(record.current) || 0) +
+          (Number(record.bucket_1_30) || 0) +
+          (Number(record.bucket_31_60) || 0) +
+          (Number(record.bucket_61_90) || 0) +
+          (Number(record.bucket_90_plus) || 0);
+
+        return {
+          insurer_id: payload.insurerId,
+          policy_number: record.policy_number,
+          // Use name from DB; fall back to empty string if somehow not found
+          client_name: clientNameMap.get(record.policy_number) || '',
+          broker_id: brokerMap.get(record.policy_number) || null,
+          due_soon: Number(record.due_soon) || 0,
+          current: Number(record.current) || 0,
+          bucket_1_30: Number(record.bucket_1_30) || 0,
+          bucket_31_60: Number(record.bucket_31_60) || 0,
+          bucket_61_90: Number(record.bucket_61_90) || 0,
+          bucket_90_plus: Number(record.bucket_90_plus) || 0,
+          total_debt,
+          cutoff_date: payload.cutoffDate,
+          last_updated: new Date().toISOString(),
+        };
+      });
     
     // Insert new records
     const { error: insertError } = await supabase
