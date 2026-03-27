@@ -70,11 +70,13 @@ ALTER TABLE public.vacation_config ENABLE ROW LEVEL SECURITY;
 -- ============================================================================
 
 -- ── tramites_catalog ──
+DROP POLICY IF EXISTS "Authenticated can read tramites_catalog" ON public.tramites_catalog;
 CREATE POLICY "Authenticated can read tramites_catalog"
   ON public.tramites_catalog FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Master can manage tramites_catalog" ON public.tramites_catalog;
 CREATE POLICY "Master can manage tramites_catalog"
   ON public.tramites_catalog FOR ALL
   TO authenticated
@@ -94,11 +96,13 @@ CREATE POLICY "Master can manage tramites_catalog"
   );
 
 -- ── ramos_catalog ──
+DROP POLICY IF EXISTS "Authenticated can read ramos_catalog" ON public.ramos_catalog;
 CREATE POLICY "Authenticated can read ramos_catalog"
   ON public.ramos_catalog FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Master can manage ramos_catalog" ON public.ramos_catalog;
 CREATE POLICY "Master can manage ramos_catalog"
   ON public.ramos_catalog FOR ALL
   TO authenticated
@@ -118,11 +122,13 @@ CREATE POLICY "Master can manage ramos_catalog"
   );
 
 -- ── aseguradoras_catalog ──
+DROP POLICY IF EXISTS "Authenticated can read aseguradoras_catalog" ON public.aseguradoras_catalog;
 CREATE POLICY "Authenticated can read aseguradoras_catalog"
   ON public.aseguradoras_catalog FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Master can manage aseguradoras_catalog" ON public.aseguradoras_catalog;
 CREATE POLICY "Master can manage aseguradoras_catalog"
   ON public.aseguradoras_catalog FOR ALL
   TO authenticated
@@ -142,11 +148,13 @@ CREATE POLICY "Master can manage aseguradoras_catalog"
   );
 
 -- ── vacation_config ──
+DROP POLICY IF EXISTS "Authenticated can read vacation_config" ON public.vacation_config;
 CREATE POLICY "Authenticated can read vacation_config"
   ON public.vacation_config FOR SELECT
   TO authenticated
   USING (true);
 
+DROP POLICY IF EXISTS "Master can manage vacation_config" ON public.vacation_config;
 CREATE POLICY "Master can manage vacation_config"
   ON public.vacation_config FOR ALL
   TO authenticated
@@ -174,6 +182,7 @@ CREATE POLICY "Master can manage vacation_config"
 
 -- bank_transfers: el frontend lee con authenticated (PayAdvanceModal, PendingPaymentsTab)
 -- Ya tiene policies de "master", agregar SELECT para authenticated
+DROP POLICY IF EXISTS "Authenticated can read bank_transfers" ON public.bank_transfers;
 CREATE POLICY "Authenticated can read bank_transfers"
   ON public.bank_transfers FOR SELECT
   TO authenticated
