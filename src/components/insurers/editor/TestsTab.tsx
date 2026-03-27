@@ -4,6 +4,21 @@ import { useState, useTransition } from 'react';
 import { FaVial, FaCheckCircle, FaTimesCircle, FaTable, FaFileImage, FaFilePdf, FaMagic } from 'react-icons/fa';
 import { actionPreviewMapping, actionProcessOCR } from '@/app/(app)/insurers/actions';
 
+const DELINQUENCY_FIELD_LABELS: Record<string, string> = {
+  policy_number:   'Póliza',
+  due_soon:        'Saldo',
+  current:         'Corriente',
+  bucket_1_30:     '30 días',
+  bucket_31_60:    '60 días',
+  bucket_61_90:    '90 días',
+  bucket_90_plus:  '+90 días',
+  client_name:     'Cliente',
+  gross_amount:    'Comisión',
+};
+
+const delinquencyFieldLabel = (field: string): string =>
+  DELINQUENCY_FIELD_LABELS[field] ?? field.toUpperCase().replace(/_/g, ' ');
+
 interface TestsTabProps {
   insurerId: string;
 }
@@ -137,7 +152,7 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                             <tr>
                               <th className="row-number">#</th>
                               {(testResult.data.displayHeaders || testResult.data.normalizedHeaders)?.map((header: string, idx: number) => (
-                                <th key={idx}>{header.toUpperCase().replace(/_/g, ' ')}</th>
+                                <th key={idx}>{delinquencyFieldLabel(header)}</th>
                               ))}
                             </tr>
                           </thead>

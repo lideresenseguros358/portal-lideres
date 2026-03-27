@@ -293,15 +293,15 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
               <table className="w-full min-w-[1000px]">
                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">N° Póliza</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Cliente</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Aseguradora</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">N° Póliza</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Nombre del Cliente</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Corredor</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Por Vencer</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Saldo</th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Corriente</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">1-30</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">31-60</th>
-                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">61-90</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">30 días</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">60 días</th>
+                    <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">90 días</th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase bg-red-100">+90</th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-700 uppercase">Total</th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase">Link</th>
@@ -310,13 +310,13 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
                 <tbody className="divide-y divide-gray-200">
                   {records.map((record) => (
                     <tr key={record.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {record.insurers?.name || '-'}
+                      </td>
                       <td className="px-4 py-3 text-sm font-mono font-semibold text-[#010139]">
                         {record.policy_number}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">{record.client_name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {record.insurers?.name || '-'}
-                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {record.brokers?.name || 'Sin asignar'}
                       </td>
@@ -403,7 +403,7 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
                         <span className="font-medium">{record.brokers?.name || 'Sin asignar'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-blue-600">Por Vencer:</span>
+                        <span className="text-blue-600">Saldo:</span>
                         <span className="font-mono font-semibold text-blue-600">
                           {formatCurrency(record.due_soon)}
                         </span>
@@ -415,19 +415,19 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-yellow-600">1-30 días:</span>
+                        <span className="text-yellow-600">30 días:</span>
                         <span className="font-mono font-semibold text-yellow-600">
                           {formatCurrency(record.bucket_1_30)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-orange-600">31-60 días:</span>
+                        <span className="text-orange-600">60 días:</span>
                         <span className="font-mono font-semibold text-orange-600">
                           {formatCurrency(record.bucket_31_60)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-red-600">61-90 días:</span>
+                        <span className="text-red-600">90 días:</span>
                         <span className="font-mono font-semibold text-red-600">
                           {formatCurrency(record.bucket_61_90)}
                         </span>
