@@ -44,49 +44,49 @@ export default function VehicleInspectionSection({
       id: 'frontal',
       name: 'frontal',
       label: 'Parte Frontal',
-      tooltip: 'Toma una foto de la vista frontal completa del vehículo. Debe verse el frente del auto claramente.',
+      tooltip: 'Colócate frente al vehículo y toma la foto de manera que se vea el auto completo. Asegúrate de que la placa delantera y los faros sean visibles.',
       position: 'on-car',
     },
     {
       id: 'trasera',
       name: 'trasera',
       label: 'Parte Trasera',
-      tooltip: 'Toma una foto de la vista trasera completa del vehículo. Debe verse la placa y la parte trasera.',
+      tooltip: 'Colócate detrás del vehículo y captura la parte trasera completa. La placa trasera debe verse claramente en la foto.',
       position: 'on-car',
     },
     {
       id: 'lateral-izq',
       name: 'lateralIzq',
       label: 'Lateral Izquierdo',
-      tooltip: 'Toma una foto del lado izquierdo completo del vehículo. Debe verse toda la carrocería lateral.',
+      tooltip: 'Colócate al lado izquierdo (lado del conductor). Captura todo el lateral del vehículo de punta a punta, asegurándote de que se vea la carrocería completa.',
       position: 'on-car',
     },
     {
       id: 'lateral-der',
       name: 'lateralDer',
       label: 'Lateral Derecho',
-      tooltip: 'Toma una foto del lado derecho completo del vehículo. Debe verse toda la carrocería lateral.',
+      tooltip: 'Colócate al lado derecho (lado del pasajero). Captura todo el lateral del vehículo de punta a punta, asegurándote de que se vea la carrocería completa.',
       position: 'on-car',
     },
     {
       id: 'motor',
       name: 'motor',
       label: 'Parte Motor',
-      tooltip: 'Abre el capó y toma una foto del compartimiento del motor. Debe verse claramente el motor.',
+      tooltip: 'Abre el capó y toma la foto del compartimiento del motor desde arriba. Asegúrate de que el motor sea claramente visible en la imagen.',
       position: 'on-car',
     },
     {
       id: 'tablero',
       name: 'tablero',
       label: 'Parte Tablero',
-      tooltip: 'Toma una foto del tablero donde se vea claramente el kilometraje del vehículo.',
+      tooltip: 'Siéntate frente al tablero y toma la foto mostrando claramente el marcador de kilometraje del vehículo.',
       position: 'on-car',
     },
     {
       id: 'vin',
       name: 'vin',
-      label: 'VIN o Chasis',
-      tooltip: 'Generalmente se encuentra debajo de la puerta del conductor o dentro del compartimiento del motor, justo detrás del mismo. El número VIN/Chasis debe leerse claramente para validar el vehículo.',
+      label: 'Placa de Chasis (VIN)',
+      tooltip: 'Busca la plaquita metálica con el número VIN (número de identificación del vehículo, 17 dígitos). Generalmente se encuentra en el marco interior de la puerta del conductor o del pasajero — es una etiqueta adherida al metal del marco al abrir la puerta. Si no la encuentras ahí, revisa la esquina inferior del parabrisas del lado del conductor, visible desde afuera del vehículo. El número de 17 dígitos debe ser legible claramente en la foto.',
       position: 'below-car',
     },
   ]);
@@ -94,6 +94,8 @@ export default function VehicleInspectionSection({
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [currentPendingIndex, setCurrentPendingIndex] = useState(0);
   const [showFirstPhotoHint, setShowFirstPhotoHint] = useState(true);
+  // Bottom-sheet de instrucciones: se muestra antes de abrir la cámara
+  const [cameraInstruction, setCameraInstruction] = useState<InspectionPhoto | null>(null);
 
   // Restaurar fotos cacheadas al montar
   useEffect(() => {
@@ -134,12 +136,22 @@ export default function VehicleInspectionSection({
     setCurrentPendingIndex(firstPendingIndex >= 0 ? firstPendingIndex : photos.length);
   }, [photos]);
 
-  const handlePhotoCapture = async (photoId: string) => {
+  // Paso 1: mostrar bottom-sheet con instrucciones antes de abrir la cámara
+  const handlePhotoCapture = (photoId: string) => {
+    const photo = photos.find(p => p.id === photoId);
+    if (!photo) return;
+    if (photo.id === 'frontal' && showFirstPhotoHint) setShowFirstPhotoHint(false);
+    setCameraInstruction(photo);
+  };
+
+  // Paso 2: usuario confirmó → abrir cámara real
+  const handleOpenCamera = (photoId: string) => {
+    setCameraInstruction(null);
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.capture = 'environment' as any;
-    
+
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -240,16 +252,16 @@ export default function VehicleInspectionSection({
     return (
       <div className="relative group">
         <button
-          onClick={() => { if (isLocked) return; if (index === 0 && showFirstPhotoHint) setShowFirstPhotoHint(false); handlePhotoCapture(photo.id); }}
+          onClick={() => { if (isLocked) return; handlePhotoCapture(photo.id); }}
           onMouseEnter={() => setActiveTooltip(photo.id)}
           onMouseLeave={() => setActiveTooltip(null)}
           disabled={isLocked}
           className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 font-bold text-sm
             transition-all duration-300 shadow-lg
-            ${isComplete 
-              ? 'bg-[#8AAA19] border-white text-white scale-100' 
+            ${isComplete
+              ? 'bg-[#8AAA19] border-white text-white scale-100'
               : isPending
-                ? 'bg-amber-500 border-white text-white animate-pulseSoft'
+                ? 'bg-amber-500 border-white text-white animate-pulseRing'
                 : isLocked
                   ? 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed opacity-50'
                   : 'bg-amber-500 border-white text-white hover:scale-110'
@@ -424,7 +436,7 @@ export default function VehicleInspectionSection({
                   isComplete
                     ? 'border-[#8AAA19] bg-green-50'
                     : isPending
-                      ? 'border-amber-400 bg-amber-50 animate-pulseSoft'
+                      ? 'border-amber-400 bg-amber-50 animate-pulseRingCard'
                       : isLocked
                         ? 'border-gray-300 bg-gray-50 opacity-50'
                         : 'border-amber-400 bg-amber-50'
@@ -528,20 +540,87 @@ export default function VehicleInspectionSection({
         </button>
       </div>
 
+      {/* Bottom-sheet de instrucciones antes de abrir cámara */}
+      {cameraInstruction && (
+        <div className="fixed inset-0 z-[9990] flex items-end" onClick={() => setCameraInstruction(null)}>
+          {/* Overlay oscuro */}
+          <div className="absolute inset-0 bg-black/50" />
+          {/* Sheet */}
+          <div
+            className="relative w-full bg-white rounded-t-2xl px-5 pt-5 pb-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+
+            {/* Icono + título */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <FaCamera className="text-amber-600 text-lg" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Siguiente foto</p>
+                <h3 className="text-base font-bold text-[#010139]">{cameraInstruction.label}</h3>
+              </div>
+            </div>
+
+            {/* Instrucción */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-5 flex items-start gap-2">
+              <FaInfoCircle className="text-blue-500 flex-shrink-0 mt-0.5 text-sm" />
+              <p className="text-sm text-gray-700 leading-relaxed">{cameraInstruction.tooltip}</p>
+            </div>
+
+            {/* Botones */}
+            <button
+              onClick={() => handleOpenCamera(cameraInstruction.id)}
+              className="w-full py-3.5 rounded-xl bg-[#8AAA19] text-white font-bold text-base flex items-center justify-center gap-2 mb-3 hover:bg-[#6d8814] active:scale-95 transition-all"
+              type="button"
+            >
+              <FaCamera />
+              Abrir Cámara
+            </button>
+            <button
+              onClick={() => setCameraInstruction(null)}
+              className="w-full py-2.5 rounded-xl border border-gray-300 text-gray-600 font-medium text-sm hover:bg-gray-50 transition-colors"
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* CSS Animations */}
       <style jsx>{`
-        @keyframes pulseSoft {
-          0%, 100% { 
-            opacity: 1; 
-            transform: scale(1); 
+        @keyframes pulseRing {
+          0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75), 0 0 0 0 rgba(245, 158, 11, 0.4);
           }
-          50% { 
-            opacity: 0.8; 
-            transform: scale(1.08); 
+          60% {
+            transform: scale(1.06);
+            box-shadow: 0 0 0 10px rgba(245, 158, 11, 0.08), 0 0 0 22px rgba(245, 158, 11, 0);
+          }
+          100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75), 0 0 0 0 rgba(245, 158, 11, 0.4);
           }
         }
-        .animate-pulseSoft {
-          animation: pulseSoft 2s ease-in-out infinite;
+        .animate-pulseRing {
+          animation: pulseRing 1.4s ease-out infinite;
+        }
+        @keyframes pulseRingCard {
+          0%, 100% {
+            border-color: rgb(251, 191, 36);
+            box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5);
+          }
+          50% {
+            border-color: rgb(245, 158, 11);
+            box-shadow: 0 0 0 6px rgba(251, 191, 36, 0);
+          }
+        }
+        .animate-pulseRingCard {
+          animation: pulseRingCard 1.4s ease-out infinite;
         }
       `}</style>
     </div>
