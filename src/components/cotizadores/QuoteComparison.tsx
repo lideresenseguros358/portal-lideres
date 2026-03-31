@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaQuestionCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -78,6 +78,42 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   
   const togglePaymentMode = () => {
     setPaymentMode(prev => prev === 'contado' ? 'tarjeta' : 'contado');
+  };
+
+  // ── Mobile carousel state (CC) ──
+  const [activePlansCC, setActivePlansCC]       = useState<Record<string, 'basico' | 'premium'>>({});
+  const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
+  const [ccTooltip, setCCTooltip]               = useState<{ key: string; top: number; left: number } | null>(null);
+  const ccCarouselRef = useRef<HTMLDivElement>(null);
+
+  // ── Agrupa las cotizaciones por aseguradora para el carrusel mobile ──
+  const insurerGroupsMap = quotes.reduce((acc: Record<string, QuotePlan[]>, q) => {
+    if (!acc[q.insurerName]) acc[q.insurerName] = [];
+    acc[q.insurerName]!.push(q);
+    return acc;
+  }, {});
+  const insurerGroups = Object.entries(insurerGroupsMap);
+
+  // ── Carousel scroll handler (CC) ──
+  const handleCCCarouselScroll = () => {
+    const carousel = ccCarouselRef.current;
+    if (!carousel) return;
+    const center = carousel.scrollLeft + carousel.clientWidth / 2;
+    let closestIdx = 0, closestDist = Infinity;
+    Array.from(carousel.children).forEach((child, idx) => {
+      const el = child as HTMLElement;
+      const cardCenter = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(cardCenter - center);
+      if (dist < closestDist) { closestDist = dist; closestIdx = idx; }
+    });
+    setActiveCCCardIndex(closestIdx);
+  };
+
+  // ── Tooltips de coberturas RC para mobile CC ──
+  const CC_COVERAGE_TOOLTIPS: Record<string, string> = {
+    bodilyInjury:    'Cubre los gastos médicos de los peatones o personas en el otro vehículo afectados en caso de un accidente.',
+    propertyDamage:  'Cubre los daños ocasionados a bienes de terceros ajenos (otros vehículos, muros, postes, propiedad pública o privada).',
+    medicalExpenses: 'Cubre tus propios gastos médicos y los de los pasajeros dentro de tu vehículo al momento del accidente.',
   };
 
   useEffect(() => {
@@ -332,6 +368,111 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
         .benefit-item:nth-child(3) { animation-delay: 0.15s; }
         .benefit-item:nth-child(4) { animation-delay: 0.2s; }
         .benefit-item:nth-child(5) { animation-delay: 0.25s; }
+
+        /* ═══════════════════════════════════════════════════════
+           MOBILE CAROUSEL — Cobertura Completa (CC)
+           Aplica SOLO en pantallas < 768px.
+        ═══════════════════════════════════════════════════════ */
+        .cc-carousel {
+          display: flex;
+          overflow-x: scroll;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          gap: 12px;
+          padding: 8px 20px 14px;
+        }
+        .cc-carousel::-webkit-scrollbar { display: none; }
+
+        .cc-carousel-item {
+          flex-shrink: 0;
+          scroll-snap-align: center;
+          width: calc(90vw);
+          max-width: 360px;
+          transition: transform 0.35s cubic-bezier(.25,.46,.45,.94),
+                      opacity  0.35s ease;
+          will-change: transform, opacity;
+        }
+        .cc-carousel-item.cc-active   { transform: scale(1);   opacity: 1;   }
+        .cc-carousel-item.cc-inactive { transform: scale(0.9); opacity: 0.6; }
+
+        /* Toggle de plan CC */
+        .cc-plan-toggle {
+          display: flex;
+          background: #f3f4f6;
+          border-radius: 10px;
+          padding: 3px;
+          margin: 12px 12px 4px;
+        }
+        .cc-plan-toggle button {
+          flex: 1;
+          padding: 7px 6px;
+          font-size: 11px;
+          font-weight: 700;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          background: transparent;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .cc-plan-toggle button.cc-toggle-basic {
+          background: #010139;
+          color: white;
+          box-shadow: 0 2px 6px rgba(1,1,57,0.25);
+        }
+        .cc-plan-toggle button.cc-toggle-premium {
+          background: linear-gradient(135deg, #8AAA19, #6d8814);
+          color: white;
+          box-shadow: 0 2px 6px rgba(138,170,25,0.35);
+        }
+
+        /* Dot indicators CC */
+        .cc-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: #d1d5db;
+          transition: all 0.3s ease;
+          flex-shrink: 0;
+        }
+        .cc-dot.cc-dot-active {
+          background: #8AAA19;
+          width: 20px;
+          border-radius: 3px;
+        }
+
+        /* Reutiliza los estilos de tooltip y botón info de ThirdParty */
+        .cov-info-btn {
+          background: none; border: none; padding: 0 2px;
+          cursor: pointer; display: inline-flex; align-items: center;
+          vertical-align: middle;
+        }
+        /* position/top/left/transform van inline via JS para escapar overflow:hidden */
+        .cov-tooltip-popup {
+          width: 215px;
+          background: #1f2937;
+          color: #f9fafb;
+          font-size: 10.5px;
+          line-height: 1.5;
+          padding: 8px 10px;
+          border-radius: 8px;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+          pointer-events: none;
+          white-space: normal;
+          text-align: left;
+        }
+        .cov-tooltip-popup::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 5px solid transparent;
+          border-top-color: #1f2937;
+        }
       `}</style>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4 overflow-visible">
       <div className="max-w-7xl mx-auto overflow-visible">
@@ -359,8 +500,12 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           </button>
         </div>
 
+        {/* ═══════════════════════════════════════════════════════
+            DESKTOP — Grid original sin cambios (md y superior).
+            Oculto en mobile con `hidden md:grid`.
+        ═══════════════════════════════════════════════════════ */}
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
+        <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
           {quotes.map((quote) => (
             <div key={quote.id} className={`relative overflow-visible ${quote.isRecommended ? 'md:-mt-2 md:mb-2' : ''}`}>
               {/* Recommended Badge - Flotante ARRIBA del card, centrado */}
@@ -611,6 +756,241 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
             </div>
             </div>
           ))}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════
+            MOBILE CAROUSEL — Solo visible por debajo de md (< 768px).
+            Agrupa las cotizaciones por aseguradora y muestra un
+            toggle Básico / Premium por tarjeta, con tooltips RC.
+        ═══════════════════════════════════════════════════════ */}
+        <div className="md:hidden mt-4">
+          <div
+            ref={ccCarouselRef}
+            onScroll={handleCCCarouselScroll}
+            className="cc-carousel"
+            aria-label="Comparativa de cotizaciones"
+          >
+            {insurerGroups.map(([insurerName, insurerQuotes], idx) => {
+              const isActive   = idx === activeCCCardIndex;
+              const basicPlan  = insurerQuotes.find(q => q.planType === 'basico');
+              const premiumPlan = insurerQuotes.find(q => q.planType === 'premium');
+              const hasBoth    = !!basicPlan && !!premiumPlan;
+              const currentPlanType = activePlansCC[insurerName] ?? (premiumPlan ? 'premium' : 'basico');
+              const currentPlan = currentPlanType === 'premium' ? (premiumPlan ?? basicPlan) : (basicPlan ?? premiumPlan);
+              if (!currentPlan) return null;
+
+              return (
+                /* ── Tarjeta de aseguradora en carrusel CC ── */
+                <div
+                  key={insurerName}
+                  className={`cc-carousel-item ${isActive ? 'cc-active' : 'cc-inactive'} rounded-xl overflow-hidden border-2 ${
+                    currentPlan.isRecommended
+                      ? 'border-[#8AAA19] shadow-xl bg-gradient-to-b from-white to-green-50/30'
+                      : 'border-gray-200 shadow-md bg-white'
+                  }`}
+                >
+                  {/* Header */}
+                  <div className={`p-3 text-white ${
+                    currentPlan.isRecommended
+                      ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#0a0a5c] border-b-4 border-[#8AAA19]'
+                      : 'bg-gradient-to-br from-[#010139] to-[#020270]'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <InsurerLogo logoUrl={getLogoUrl(insurerName)} insurerName={insurerName} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-sm leading-tight truncate">{insurerName}</h3>
+                      </div>
+                      <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold flex-shrink-0 ${
+                        currentPlanType === 'premium'
+                          ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white'
+                          : 'bg-white/20 text-white'
+                      }`}>
+                        {currentPlanType === 'premium' ? '⭐ Premium' : 'Básico'}
+                      </span>
+                    </div>
+                    {currentPlan._endosoIncluido && (
+                      <span className="text-[9px] text-white/75 font-medium">{currentPlan._endosoIncluido}</span>
+                    )}
+                  </div>
+
+                  {/* ── TOGGLE DE PLAN: Básico ↔ Premium ── */}
+                  {hasBoth && (
+                    <div className="cc-plan-toggle">
+                      <button
+                        onClick={() => setActivePlansCC(prev => ({ ...prev, [insurerName]: 'basico' }))}
+                        className={currentPlanType === 'basico' ? 'cc-toggle-basic' : ''}
+                      >
+                        Básico · ${basicPlan!.annualPremium.toFixed(0)}
+                      </button>
+                      <button
+                        onClick={() => setActivePlansCC(prev => ({ ...prev, [insurerName]: 'premium' }))}
+                        className={currentPlanType === 'premium' ? 'cc-toggle-premium' : ''}
+                      >
+                        ⭐ Premium · ${premiumPlan!.annualPremium.toFixed(0)}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Contenido del plan activo */}
+                  <div className="p-4">
+                    {/* Precio */}
+                    <div className="mb-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3">
+                      {currentPlan._priceBreakdown ? (
+                        <>
+                          <div className="flex gap-2 mb-3">
+                            <button
+                              onClick={() => setPaymentMode('contado')}
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'contado' ? 'bg-[#8AAA19] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
+                            >Al Contado</button>
+                            <button
+                              onClick={() => setPaymentMode('tarjeta')}
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'tarjeta' ? 'bg-[#010139] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
+                            >En Cuotas</button>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-3xl font-bold mb-1 ${paymentMode === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'}`}>
+                              ${(paymentMode === 'contado'
+                                ? (currentPlan._priceBreakdown.totalAlContado ?? 0)
+                                : (currentPlan._priceBreakdown.totalConTarjeta ?? 0)
+                              ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            {paymentMode === 'tarjeta' && (
+                              <p className="text-xs text-gray-500">Elige de 2 a 10 cuotas en emisión</p>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          <div className="text-xs text-gray-600 mb-1 font-medium">Prima Anual</div>
+                          <div className="text-3xl font-bold text-[#010139]">
+                            ${(currentPlan.annualPremium ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Deducibles */}
+                      {currentPlan._deduciblesReales?.comprensivo || currentPlan._deduciblesReales?.colisionVuelco ? (
+                        <div className="mt-2 space-y-1">
+                          {currentPlan._deduciblesReales.comprensivo && (
+                            <div className="flex justify-center gap-1 text-xs text-gray-600">
+                              <span className="font-medium">Comprensivo:</span>
+                              <span className="font-semibold text-[#010139]">B/.{currentPlan._deduciblesReales.comprensivo.amount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {currentPlan._deduciblesReales.colisionVuelco && (
+                            <div className="flex justify-center gap-1 text-xs text-gray-600">
+                              <span className="font-medium">Colisión/Vuelco:</span>
+                              <span className="font-semibold text-[#010139]">B/.{currentPlan._deduciblesReales.colisionVuelco.amount.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : currentPlan.deductible > 0 && (
+                        <div className="text-center mt-2 text-xs text-gray-600">
+                          Deducible desde ${currentPlan.deductible.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── COBERTURAS RC con tooltips de información ── */}
+                    {currentPlan._limites && currentPlan._limites.length > 0 && (
+                      <div className="mb-3">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5 px-1">
+                          <FaShieldAlt className="text-[#010139]" size={11} />
+                          Coberturas
+                        </h5>
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                          {currentPlan._limites.map((limite: any, limIdx: number) => {
+                            const tooltipKey =
+                              limite.tipo === 'lesiones_corporales' ? 'bodilyInjury'
+                              : limite.tipo === 'daños_propiedad'   ? 'propertyDamage'
+                              : 'medicalExpenses';
+                            const tooltipText = CC_COVERAGE_TOOLTIPS[tooltipKey];
+                            const icon = limite.tipo === 'lesiones_corporales' ? '🩹'
+                              : limite.tipo === 'daños_propiedad' ? '🚗💥'
+                              : '🏥';
+                            const limiteDisplay = [limite.limitePorPersona, limite.limitePorAccidente]
+                              .filter(Boolean).join(' / ');
+
+                            return (
+                              <div
+                                key={limIdx}
+                                className={`flex items-center gap-2 px-3 py-2 text-xs ${limIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} ${limIdx < currentPlan._limites.length - 1 ? 'border-b border-gray-100' : ''}`}
+                              >
+                                <span className="text-sm flex-shrink-0">{icon}</span>
+                                <div className="flex-1 min-w-0 flex items-center gap-1">
+                                  <span className="font-semibold text-gray-800 text-xs">{limite.descripcion}</span>
+                                  {/* ── Icono de info con tooltip ── */}
+                                  {tooltipText && (
+                                    <span className="inline-flex items-center flex-shrink-0">
+                                      <button
+                                        className="cov-info-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (ccTooltip?.key === tooltipKey) {
+                                            setCCTooltip(null);
+                                          } else {
+                                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                            setCCTooltip({ key: tooltipKey, top: rect.top, left: rect.left + rect.width / 2 });
+                                          }
+                                        }}
+                                      >
+                                        <FaQuestionCircle size={10} className="text-blue-400" />
+                                      </button>
+                                      {ccTooltip?.key === tooltipKey && (
+                                        <>
+                                          <div className="fixed inset-0 z-40" onClick={() => setCCTooltip(null)} />
+                                          {/* position:fixed escapa cualquier overflow:hidden del padre */}
+                                          <span
+                                            className="cov-tooltip-popup"
+                                            style={{
+                                              position: 'fixed',
+                                              top: ccTooltip.top,
+                                              left: ccTooltip.left,
+                                              transform: 'translate(-50%, calc(-100% - 8px))',
+                                              zIndex: 9999,
+                                            }}
+                                          >
+                                            {tooltipText}
+                                          </span>
+                                        </>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="flex-shrink-0 text-[#010139] font-bold text-xs whitespace-nowrap">
+                                  {limiteDisplay || 'Incluido'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Botón de acción — misma lógica que desktop */}
+                    <button
+                      onClick={() => handleSelectPlan(currentPlan.id)}
+                      className={`w-full py-3 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                        currentPlan.isRecommended
+                          ? 'bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white shadow-lg shadow-[#8AAA19]/30'
+                          : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white'
+                      }`}
+                    >
+                      <FaCheckCircle className="text-white" />
+                      Seleccionar Este Plan
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Indicadores de posición (dot pills) ── */}
+          <div className="flex justify-center items-center gap-2 mt-3 pb-1">
+            {insurerGroups.map((_, idx) => (
+              <div key={idx} className={`cc-dot ${idx === activeCCCardIndex ? 'cc-dot-active' : ''}`} />
+            ))}
+          </div>
         </div>
 
         {/* Offline Insurer Cards */}

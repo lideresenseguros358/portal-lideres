@@ -216,6 +216,12 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [conexionTip, setConexionTip] = useState<string | null>(null);
   const fetchingRef = useRef(false);
 
+  // ── Mobile carousel state ──
+  const [activePlans, setActivePlans] = useState<Record<string, 'basic' | 'premium'>>({});
+  const [coverageTooltip, setCoverageTooltip] = useState<{ key: string; top: number; left: number } | null>(null);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
+
   // Silent background refresh — NEVER shows loading/skeleton/banner
   useEffect(() => {
     const refreshPlans = async () => {
@@ -406,6 +412,29 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     setExpandedBenefits(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // ── Definiciones de tooltip por cobertura RC ──
+  const COVERAGE_TOOLTIPS: Record<string, string> = {
+    bodilyInjury:    'Cubre los gastos médicos de los peatones o personas en el otro vehículo afectados en caso de un accidente.',
+    propertyDamage:  'Cubre los daños ocasionados a bienes de terceros ajenos (otros vehículos, muros, postes, propiedad pública o privada).',
+    medicalExpenses: 'Cubre tus propios gastos médicos y los de los pasajeros dentro de tu vehículo al momento del accidente.',
+  };
+
+  // ── Carousel: detecta la tarjeta más centrada al hacer scroll ──
+  const handleCarouselScroll = () => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+    const center = carousel.scrollLeft + carousel.clientWidth / 2;
+    let closestIdx = 0;
+    let closestDist = Infinity;
+    Array.from(carousel.children).forEach((child, idx) => {
+      const el = child as HTMLElement;
+      const cardCenter = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(cardCenter - center);
+      if (dist < closestDist) { closestDist = dist; closestIdx = idx; }
+    });
+    setActiveCardIndex(closestIdx);
+  };
+
   // ── Render a single benefit row (with detail inline) ──
   const renderBenefitRow = (benefit: StandardBenefit, idx: number, isLast: boolean) => {
     const { status } = benefit;
@@ -481,6 +510,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const renderCoverageRow = (benefit: StandardBenefit, idx: number, isLast: boolean) => {
     const { status } = benefit;
     const isExcluded = status.type === 'excluded';
+    const tooltipText = COVERAGE_TOOLTIPS[benefit.key];
 
     return (
       <div
@@ -490,9 +520,50 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         } ${!isLast ? 'border-b border-gray-100' : ''}`}
       >
         <span className="text-base flex-shrink-0 leading-5">{benefit.icon}</span>
-        <span className={`flex-1 font-semibold leading-5 text-xs sm:text-sm ${isExcluded ? 'text-gray-400' : 'text-gray-800'}`}>
-          {benefit.label}
-        </span>
+
+        {/* Label + icono de información con tooltip ── */}
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          <span className={`font-semibold leading-5 text-xs sm:text-sm ${isExcluded ? 'text-gray-400' : 'text-gray-800'}`}>
+            {benefit.label}
+          </span>
+          {tooltipText && (
+            <span className="inline-flex items-center flex-shrink-0">
+              <button
+                className="cov-info-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (coverageTooltip?.key === benefit.key) {
+                    setCoverageTooltip(null);
+                  } else {
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setCoverageTooltip({ key: benefit.key, top: rect.top, left: rect.left + rect.width / 2 });
+                  }
+                }}
+              >
+                <FaQuestionCircle size={10} className="text-blue-400 hover:text-blue-600 transition-colors" />
+              </button>
+              {coverageTooltip?.key === benefit.key && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setCoverageTooltip(null)} />
+                  {/* position:fixed escapa cualquier overflow:hidden del padre */}
+                  <span
+                    className="cov-tooltip-popup"
+                    style={{
+                      position: 'fixed',
+                      top: coverageTooltip.top,
+                      left: coverageTooltip.left,
+                      transform: 'translate(-50%, calc(-100% - 8px))',
+                      zIndex: 9999,
+                    }}
+                  >
+                    {tooltipText}
+                  </span>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+
         <div className="flex-shrink-0 text-right min-w-[80px]">
           {isExcluded ? (
             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-50">
@@ -634,32 +705,236 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-      {insurersData.map((insurer) => {
-        const isOffline = !!offlineInsurers[insurer.id];
-        return (
-          <div key={insurer.id} className={`bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl'}`}>
-            {/* Header */}
-            <div className={`p-6 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
-              <div className="flex items-center gap-4 mb-4">
-                <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
-                <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
-                {isOffline && (
-                  <span className="inline-flex items-center gap-1.5 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
-                    <FaExclamationTriangle className="text-[10px]" /> OFFLINE
-                  </span>
-                )}
-              </div>
-              <div className="text-sm text-white/80 font-medium">
-                {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata • Sin inspección'}
-              </div>
-            </div>
+    <>
+      {/* ═══════════════════════════════════════════════════════════
+          CSS: Carrusel móvil + Toggle de plan + Tooltip de cobertura
+          Todos los estilos aplican ÚNICAMENTE en mobile (< 768px).
+          El desktop NO se ve afectado por estas reglas.
+      ═══════════════════════════════════════════════════════════ */}
+      <style>{`
+        /* ── Contenedor del carrusel horizontal ── */
+        .tp-carousel {
+          display: flex;
+          overflow-x: scroll;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          gap: 12px;
+          padding: 4px 20px 12px;
+        }
+        .tp-carousel::-webkit-scrollbar { display: none; }
 
-            {renderPlanSection(insurer, insurer.basicPlan, 'basic', false)}
-            {renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)}
-          </div>
-        );
-      })}
-    </div>
+        /* ── Tarjeta individual del carrusel ── */
+        .tp-carousel-item {
+          flex-shrink: 0;
+          scroll-snap-align: center;
+          width: calc(88vw);
+          max-width: 340px;
+          transition: transform 0.35s cubic-bezier(.25,.46,.45,.94),
+                      opacity  0.35s ease;
+          will-change: transform, opacity;
+        }
+        /* Efecto coverflow: tarjeta central al 100%, laterales reducidas */
+        .tp-carousel-item.tp-active   { transform: scale(1);   opacity: 1;   }
+        .tp-carousel-item.tp-inactive { transform: scale(0.9); opacity: 0.6; }
+
+        /* ── Toggle segmentado Básico / Premium ── */
+        .tp-plan-toggle {
+          display: flex;
+          background: #f3f4f6;
+          border-radius: 10px;
+          padding: 3px;
+          margin: 0 12px;
+        }
+        .tp-plan-toggle button {
+          flex: 1;
+          padding: 7px 6px;
+          font-size: 11px;
+          font-weight: 700;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          background: transparent;
+          color: #6b7280;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tp-plan-toggle button.tp-toggle-basic {
+          background: #010139;
+          color: white;
+          box-shadow: 0 2px 6px rgba(1,1,57,0.25);
+        }
+        .tp-plan-toggle button.tp-toggle-premium {
+          background: linear-gradient(135deg, #8AAA19, #6d8814);
+          color: white;
+          box-shadow: 0 2px 6px rgba(138,170,25,0.35);
+        }
+
+        /* ── Botón de info de cobertura ── */
+        .cov-info-btn {
+          background: none;
+          border: none;
+          padding: 0 2px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          vertical-align: middle;
+        }
+
+        /* ── Popover del tooltip de cobertura ──
+           position/top/left/transform se aplican inline via JS
+           para escapar cualquier overflow:hidden del padre.        */
+        .cov-tooltip-popup {
+          width: 215px;
+          background: #1f2937;
+          color: #f9fafb;
+          font-size: 10.5px;
+          line-height: 1.5;
+          padding: 8px 10px;
+          border-radius: 8px;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+          pointer-events: none;
+          white-space: normal;
+          text-align: left;
+        }
+        .cov-tooltip-popup::after {
+          content: '';
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 5px solid transparent;
+          border-top-color: #1f2937;
+        }
+
+        /* ── Indicador de posición (dot pills) ── */
+        .tp-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #d1d5db;
+          transition: all 0.3s ease;
+          flex-shrink: 0;
+        }
+        .tp-dot.tp-dot-active {
+          background: #8AAA19;
+          width: 20px;
+          border-radius: 3px;
+        }
+      `}</style>
+
+      {/* ═══════════════════════════════════════════════════════════
+          DESKTOP — Grid original sin ningún cambio (md y superior).
+          Se oculta en mobile con `hidden md:grid`.
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {insurersData.map((insurer) => {
+          const isOffline = !!offlineInsurers[insurer.id];
+          return (
+            <div key={insurer.id} className={`bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl'}`}>
+              {/* Header */}
+              <div className={`p-6 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
+                <div className="flex items-center gap-4 mb-4">
+                  <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
+                  <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
+                  {isOffline && (
+                    <span className="inline-flex items-center gap-1.5 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
+                      <FaExclamationTriangle className="text-[10px]" /> OFFLINE
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-white/80 font-medium">
+                  {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata • Sin inspección'}
+                </div>
+              </div>
+              {renderPlanSection(insurer, insurer.basicPlan, 'basic', false)}
+              {renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          MOBILE CAROUSEL — Solo visible por debajo de md (< 768px).
+          Carrusel horizontal con:
+            • Efecto coverflow (tarjeta central al 100%, laterales 90%)
+            • Toggle Básico / Premium por aseguradora
+            • Indicadores de posición (dots)
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="md:hidden">
+        {/* ── Carrusel horizontal con scroll snap ── */}
+        <div
+          ref={carouselRef}
+          onScroll={handleCarouselScroll}
+          className="tp-carousel"
+          aria-label="Comparativa de aseguradoras"
+        >
+          {insurersData.map((insurer, idx) => {
+            const isOffline  = !!offlineInsurers[insurer.id];
+            const isActive   = idx === activeCardIndex;
+            const currentPlan = activePlans[insurer.id] ?? 'basic';
+
+            return (
+              /* ── Tarjeta de aseguradora (con coverflow) ── */
+              <div
+                key={insurer.id}
+                className={`tp-carousel-item ${isActive ? 'tp-active' : 'tp-inactive'} bg-white rounded-2xl shadow-lg border-2 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100'}`}
+              >
+                {/* Header compacto */}
+                <div className={`px-4 py-3 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
+                  <div className="flex items-center gap-3">
+                    <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
+                    <h3 className="font-bold text-base flex-1 leading-tight">{insurer.name}</h3>
+                    {isOffline && (
+                      <span className="inline-flex items-center gap-1 bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse">
+                        <FaExclamationTriangle size={9} /> OFFLINE
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-white/75 font-medium mt-1">
+                    {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata · Sin inspección'}
+                  </div>
+                </div>
+
+                {/* ── TOGGLE DE PLAN: Básico ↔ Premium ── */}
+                {!isOffline && (
+                  <div className="pt-3 pb-1">
+                    <div className="tp-plan-toggle">
+                      <button
+                        onClick={() => setActivePlans(prev => ({ ...prev, [insurer.id]: 'basic' }))}
+                        className={currentPlan === 'basic' ? 'tp-toggle-basic' : ''}
+                      >
+                        Básico · B/.{insurer.basicPlan.annualPremium.toFixed(0)}
+                      </button>
+                      <button
+                        onClick={() => setActivePlans(prev => ({ ...prev, [insurer.id]: 'premium' }))}
+                        className={currentPlan === 'premium' ? 'tp-toggle-premium' : ''}
+                      >
+                        ⭐ Premium · B/.{insurer.premiumPlan.annualPremium.toFixed(0)}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Solo muestra el plan activo seleccionado en el toggle ── */}
+                {currentPlan === 'basic'
+                  ? renderPlanSection(insurer, insurer.basicPlan,   'basic',   false)
+                  : renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)
+                }
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Indicadores de posición (dot pills) ── */}
+        <div className="flex justify-center items-center gap-2 mt-3 pb-1">
+          {insurersData.map((_, idx) => (
+            <div key={idx} className={`tp-dot ${idx === activeCardIndex ? 'tp-dot-active' : ''}`} />
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

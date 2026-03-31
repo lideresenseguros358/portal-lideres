@@ -136,7 +136,7 @@ function normalizeIS(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium'): N
 
   const coverages: StandardBenefit[] = [
     { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: included(formatLimit(lcLimit)?.amount, formatLimit(lcLimit)?.detail) },
-    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🏠', status: included(formatLimit(dpaLimit)?.amount) },
+    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🚗💥', status: included(formatLimit(dpaLimit)?.amount) },
     { key: 'medicalExpenses', label: 'Gastos Médicos', icon: '🏥', status: included(formatLimit(gmLimit)?.amount, formatLimit(gmLimit)?.detail) },
   ];
 
@@ -175,7 +175,7 @@ function normalizeFEDPA(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium')
 
   const coverages: StandardBenefit[] = [
     { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: included(formatLimit(lcLimit)?.amount, formatLimit(lcLimit)?.detail) },
-    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🏠', status: included(formatLimit(dpaLimit)?.amount) },
+    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🚗💥', status: included(formatLimit(dpaLimit)?.amount) },
     { key: 'medicalExpenses', label: 'Gastos Médicos', icon: '🏥', status: gmLimit ? included(formatLimit(gmLimit)?.amount, formatLimit(gmLimit)?.detail) : excluded() },
   ];
 
@@ -215,7 +215,7 @@ function normalizeRegional(plan: AutoThirdPartyPlan, planType: 'basic' | 'premiu
 
   const coverages: StandardBenefit[] = [
     { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: included(formatLimit(lcLimit)?.amount, formatLimit(lcLimit)?.detail) },
-    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🏠', status: included(formatLimit(dpaLimit)?.amount) },
+    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🚗💥', status: included(formatLimit(dpaLimit)?.amount) },
     { key: 'medicalExpenses', label: 'Gastos Médicos', icon: '🏥', status: gmLimit ? included(formatLimit(gmLimit)?.amount, formatLimit(gmLimit)?.detail) : excluded() },
   ];
 
@@ -250,7 +250,7 @@ function normalizeAncon(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium')
 
   const coverages: StandardBenefit[] = [
     { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: included(formatLimit(lcLimit)?.amount, formatLimit(lcLimit)?.detail) },
-    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🏠', status: included(formatLimit(dpaLimit)?.amount) },
+    { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🚗💥', status: included(formatLimit(dpaLimit)?.amount) },
     { key: 'medicalExpenses', label: 'Gastos Médicos', icon: '🏥', status: gmLimit ? included(formatLimit(gmLimit)?.amount, formatLimit(gmLimit)?.detail) : excluded() },
   ];
 
@@ -297,7 +297,7 @@ export function normalizePlanBenefits(
       return {
         coverages: [
           { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: excluded() },
-          { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🏠', status: excluded() },
+          { key: 'propertyDamage', label: 'Daños a la Propiedad', icon: '🚗💥', status: excluded() },
           { key: 'medicalExpenses', label: 'Gastos Médicos', icon: '🏥', status: excluded() },
         ],
         benefits: [
