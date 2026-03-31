@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FaCheck, FaTimes, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt, FaExclamationTriangle, FaQuestionCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
@@ -221,6 +222,27 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [coverageTooltip, setCoverageTooltip] = useState<{ key: string; top: number; left: number } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
+
+  // ── Portal mounting guard (SSR-safe) ──
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
+  // ── Premium hint: solo muestra la primera visita, dura 2 s ──
+  const [showPremiumHint, setShowPremiumHint] = useState(false);
+  const firstPremiumBtnRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!isMounted) return;
+    try {
+      if (!localStorage.getItem('tp_premium_hint_seen')) {
+        const t1 = setTimeout(() => setShowPremiumHint(true), 900);
+        const t2 = setTimeout(() => {
+          setShowPremiumHint(false);
+          localStorage.setItem('tp_premium_hint_seen', '1');
+        }, 2900);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+      }
+    } catch { /* localStorage bloqueado en algunos browsers */ }
+  }, [isMounted]);
 
   // Silent background refresh — NEVER shows loading/skeleton/banner
   useEffect(() => {
@@ -527,40 +549,23 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
             {benefit.label}
           </span>
           {tooltipText && (
-            <span className="inline-flex items-center flex-shrink-0">
-              <button
-                className="cov-info-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (coverageTooltip?.key === benefit.key) {
-                    setCoverageTooltip(null);
-                  } else {
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    setCoverageTooltip({ key: benefit.key, top: rect.top, left: rect.left + rect.width / 2 });
-                  }
-                }}
-              >
-                <FaQuestionCircle size={10} className="text-blue-400 hover:text-blue-600 transition-colors" />
-              </button>
-              {coverageTooltip?.key === benefit.key && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setCoverageTooltip(null)} />
-                  {/* position:fixed escapa cualquier overflow:hidden del padre */}
-                  <span
-                    className="cov-tooltip-popup"
-                    style={{
-                      position: 'fixed',
-                      top: coverageTooltip.top,
-                      left: coverageTooltip.left,
-                      transform: 'translate(-50%, calc(-100% - 8px))',
-                      zIndex: 9999,
-                    }}
-                  >
-                    {tooltipText}
-                  </span>
-                </>
-              )}
-            </span>
+            /* Solo el botón — el popup se renderiza via portal al final del
+               componente para escapar el transform del carousel (que invalida
+               position:fixed en elementos descendientes).              */
+            <button
+              className="cov-info-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (coverageTooltip?.key === benefit.key) {
+                  setCoverageTooltip(null);
+                } else {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setCoverageTooltip({ key: benefit.key, top: rect.top, left: rect.left + rect.width / 2 });
+                }
+              }}
+            >
+              <FaQuestionCircle size={10} className="text-blue-400 hover:text-blue-600 transition-colors" />
+            </button>
           )}
         </div>
 
@@ -766,10 +771,38 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           color: white;
           box-shadow: 0 2px 6px rgba(1,1,57,0.25);
         }
+        /* Pulse continuo en el botón Premium para invitar al usuario */
+        @keyframes tp-premium-pulse {
+          0%, 100% { box-shadow: 0 2px 6px rgba(138,170,25,0.35); }
+          50%       { box-shadow: 0 0 0 5px rgba(138,170,25,0.18),
+                                  0 2px 8px rgba(138,170,25,0.55); }
+        }
         .tp-plan-toggle button.tp-toggle-premium {
           background: linear-gradient(135deg, #8AAA19, #6d8814);
           color: white;
-          box-shadow: 0 2px 6px rgba(138,170,25,0.35);
+          animation: tp-premium-pulse 2s ease-in-out infinite;
+        }
+        /* Detener pulse cuando ya está seleccionado */
+        .tp-plan-toggle button.tp-toggle-premium:focus,
+        .tp-plan-toggle button.tp-toggle-premium:active {
+          animation: none;
+          box-shadow: 0 2px 8px rgba(138,170,25,0.55);
+        }
+
+        /* Hint tooltip de primera visita */
+        @keyframes tp-hint-in {
+          from { opacity: 0; transform: translate(-50%, calc(-100% - 2px)) scale(0.85); }
+          to   { opacity: 1; transform: translate(-50%, calc(-100% - 8px)) scale(1);    }
+        }
+        @keyframes tp-hint-out {
+          from { opacity: 1; }
+          to   { opacity: 0; }
+        }
+        .tp-hint-bubble {
+          animation: tp-hint-in 0.3s cubic-bezier(.34,1.56,.64,1) forwards;
+        }
+        .tp-hint-bubble.hiding {
+          animation: tp-hint-out 0.25s ease forwards;
         }
 
         /* ── Botón de info de cobertura ── */
@@ -909,6 +942,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                         Básico · B/.{insurer.basicPlan.annualPremium.toFixed(0)}
                       </button>
                       <button
+                        ref={idx === 0 ? firstPremiumBtnRef : undefined}
                         onClick={() => setActivePlans(prev => ({ ...prev, [insurer.id]: 'premium' }))}
                         className={currentPlan === 'premium' ? 'tp-toggle-premium' : ''}
                       >
@@ -935,6 +969,98 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           ))}
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          PORTAL — Tooltip de cobertura
+          Renderizado en document.body para escapar el transform
+          del carousel (transform invalida position:fixed en hijos).
+      ═══════════════════════════════════════════════════════════ */}
+      {isMounted && coverageTooltip && createPortal(
+        <>
+          {/* Overlay cierra el tooltip al tocar fuera */}
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+            onClick={() => setCoverageTooltip(null)}
+          />
+          {/* Popup del tooltip */}
+          <div
+            style={{
+              position: 'fixed',
+              top: coverageTooltip.top,
+              left: coverageTooltip.left,
+              transform: 'translate(-50%, calc(-100% - 8px))',
+              zIndex: 9999,
+              width: '215px',
+              background: '#1f2937',
+              color: '#f9fafb',
+              fontSize: '10.5px',
+              lineHeight: '1.5',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+              pointerEvents: 'none',
+              whiteSpace: 'normal',
+              textAlign: 'left',
+            }}
+          >
+            {COVERAGE_TOOLTIPS[coverageTooltip.key]}
+            {/* Flecha apuntando hacia el botón */}
+            <div style={{
+              position: 'absolute', top: '100%', left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '5px solid #1f2937',
+            }} />
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════
+          PORTAL — Hint de primera visita sobre el botón Premium
+          Solo aparece una vez, durante 2 s, luego queda silenciado
+          en localStorage.
+      ═══════════════════════════════════════════════════════════ */}
+      {isMounted && showPremiumHint && (() => {
+        const rect = firstPremiumBtnRef.current?.getBoundingClientRect();
+        if (!rect) return null;
+        return createPortal(
+          <div
+            className="tp-hint-bubble"
+            style={{
+              position: 'fixed',
+              top: rect.top,
+              left: rect.left + rect.width / 2,
+              transform: 'translate(-50%, calc(-100% - 8px))',
+              zIndex: 9999,
+              background: '#010139',
+              color: '#ffffff',
+              fontSize: '11px',
+              fontWeight: 700,
+              padding: '6px 12px',
+              borderRadius: '20px',
+              boxShadow: '0 4px 16px rgba(1,1,57,0.4)',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              letterSpacing: '0.01em',
+            }}
+          >
+            ¿Necesitas más coberturas? 👆
+            {/* Flecha apuntando hacia el botón */}
+            <div style={{
+              position: 'absolute', top: '100%', left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '5px solid #010139',
+            }} />
+          </div>,
+          document.body
+        );
+      })()}
     </>
   );
 }
