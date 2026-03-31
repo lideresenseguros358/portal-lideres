@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaShieldAlt, FaClock, FaCheckCircle, FaCar } from 'react-icons/fa';
+import { FaShieldAlt, FaClock, FaCheckCircle, FaCar, FaCreditCard } from 'react-icons/fa';
 import ThirdPartyComparison from '@/components/quotes/ThirdPartyComparison';
 import { AutoThirdPartyPlan } from '@/lib/constants/auto-quotes';
 import Breadcrumb from '@/components/ui/Breadcrumb';
@@ -10,29 +10,8 @@ import Breadcrumb from '@/components/ui/Breadcrumb';
 export default function ThirdPartyPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [minPriceDT, setMinPriceDT] = useState<number | null>(null);
-  const [loadingPrice, setLoadingPrice] = useState(true);
   const [fedpaSelection, setFedpaSelection] = useState<{ planType: 'basic' | 'premium'; plan: AutoThirdPartyPlan } | null>(null);
   const [fedpaPaymentMode, setFedpaPaymentMode] = useState<'contado' | 'cuotas'>('contado');
-
-  // Cargar precio mínimo dinámico de Daños a Terceros
-  useEffect(() => {
-    const fetchMinPrice = async () => {
-      try {
-        const response = await fetch('/api/quotes/third-party-min-price');
-        const data = await response.json();
-        if (data.success && data.minPrice) {
-          setMinPriceDT(data.minPrice);
-        }
-      } catch (error) {
-        console.error('Error cargando precio mínimo:', error);
-      } finally {
-        setLoadingPrice(false);
-      }
-    };
-
-    fetchMinPrice();
-  }, []);
 
   const proceedToEmission = (
     insurerId: string,
@@ -182,69 +161,28 @@ export default function ThirdPartyPage() {
             ]}
           />
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mt-6">
-            <div className="flex-1">
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-4">
-                <FaShieldAlt className="text-[#8AAA19]" />
-                <span className="text-sm font-semibold">Seguro Obligatorio</span>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                Daños a Terceros
-              </h1>
-              <p className="text-xl text-white/90 mb-6 max-w-2xl">
-                Compara y elige tu plan. <strong className="text-[#8AAA19]">Emisión inmediata</strong> sin inspección del vehículo.
-              </p>
+          <div className="mt-6">
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-4">
+              <FaShieldAlt className="text-[#8AAA19]" />
+              <span className="text-sm font-semibold">Seguro Obligatorio</span>
             </div>
-
-            <div className="flex-shrink-0">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border-2 border-white/20">
-                {loadingPrice ? (
-                  <div className="text-3xl text-white/60 mb-2">Cargando...</div>
-                ) : (
-                  <div className="text-5xl md:text-6xl font-black text-[#8AAA19] mb-2">
-                    B/.{minPriceDT || 130}
-                  </div>
-                )}
-                <div className="text-sm text-white/80">Desde / año</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Benefits Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-              <FaCheckCircle className="text-[#8AAA19] text-2xl mb-2" />
-              <div className="font-bold mb-1">Cobertura Legal</div>
-              <div className="text-sm text-white/80">Cumple requisitos de tránsito</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-              <FaClock className="text-[#8AAA19] text-2xl mb-2" />
-              <div className="font-bold mb-1">Emisión Inmediata</div>
-              <div className="text-sm text-white/80">Sin inspección previa</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-              <FaShieldAlt className="text-[#8AAA19] text-2xl mb-2" />
-              <div className="font-bold mb-1">4 Aseguradoras</div>
-              <div className="text-sm text-white/80">Compara y elige la mejor</div>
-            </div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">
+              Daños a Terceros
+            </h1>
+            <p className="text-xl text-white/90 max-w-2xl">
+              Compara y elige tu plan. <strong className="text-[#8AAA19]">Emisión inmediata</strong> sin inspección del vehículo.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Payment Notice */}
-      <div className="py-6 px-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-y-2 border-yellow-200">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-start gap-4 bg-white rounded-xl shadow-md p-6 border-2 border-yellow-300">
-            <div className="text-4xl flex-shrink-0">💳</div>
-            <div>
-              <h3 className="text-xl font-bold text-[#010139] mb-2">Forma de Pago</h3>
-              <p className="text-gray-700">
-                Todas las emisiones de <strong>Daños a Terceros</strong> se realizan únicamente mediante 
-                <strong className="text-[#010139]"> pago con Tarjeta de Crédito (TCR)</strong>. 
-                El proceso de emisión es inmediato una vez se procese el pago.
-              </p>
-            </div>
-          </div>
+      {/* Cintillo de forma de pago */}
+      <div className="bg-[#010139] border-b border-white/10 px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
+          <FaCreditCard className="text-[#8AAA19] flex-shrink-0 text-sm" />
+          <p className="text-white/90 text-xs sm:text-sm font-medium text-center leading-snug">
+            El pago de tu seguro se realizará por <strong className="text-white">tarjeta de crédito/débito</strong> — 100% seguro, procesado por <strong className="text-[#8AAA19]">PaguéloFácil</strong>
+          </p>
         </div>
       </div>
 
@@ -283,18 +221,43 @@ export default function ThirdPartyPage() {
                   <div className="border-l-4 border-blue-500 pl-4">
                     <div className="font-bold text-[#010139] mb-2 text-lg">Plan Básico</div>
                     <p className="text-gray-700 text-sm leading-relaxed">
-                      Cumple con los <strong>requisitos legales mínimos</strong>. 
+                      Cumple con los <strong>requisitos legales mínimos</strong>.
                       Perfecto si buscas <strong className="text-blue-600">economía</strong> y solo necesitas la cobertura obligatoria para circular.
                     </p>
                   </div>
                   <div className="border-l-4 border-[#8AAA19] pl-4">
                     <div className="font-bold text-[#010139] mb-2 text-lg">Plan Premium</div>
                     <p className="text-gray-700 text-sm leading-relaxed">
-                      <strong>Coberturas ampliadas</strong> con mayores límites. 
-                      Incluye <strong className="text-[#8AAA19]">grúa y asistencia vial</strong>. 
+                      <strong>Coberturas ampliadas</strong> con mayores límites.
+                      Incluye <strong className="text-[#8AAA19]">grúa y asistencia vial</strong>.
                       Mayor tranquilidad en carretera.
                     </p>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Beneficios reubicados desde el hero */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+              <div className="flex items-center gap-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+                <FaCheckCircle className="text-[#8AAA19] text-2xl flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-[#010139] text-sm">Cobertura Legal</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Cumple requisitos de tránsito</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+                <FaClock className="text-[#8AAA19] text-2xl flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-[#010139] text-sm">Emisión Inmediata</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Sin inspección previa</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-blue-50 rounded-xl p-4 border border-blue-100">
+                <FaShieldAlt className="text-[#8AAA19] text-2xl flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-[#010139] text-sm">4 Aseguradoras</div>
+                  <div className="text-xs text-gray-600 mt-0.5">Compara y elige la mejor</div>
                 </div>
               </div>
             </div>
