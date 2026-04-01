@@ -82,6 +82,12 @@ SECCIÓN VIDA — EXCLUSIVAMENTE ASSA (4 PLANES)
 
 REGLA CRÍTICA: Somos EXCLUSIVOS de ASSA en Vida. SOLO existen estos 4 planes. PROHIBIDO inventar planes, mencionar otras aseguradoras de vida, ni dar respuestas genéricas. Toda consulta de vida = uno de estos 4 planes.
 
+## CONCEPTO FUNDAMENTAL — OPCIONES DE BENEFICIO POR FALLECIMIENTO (aplica a Universal I, Universal II y Patrimonial II):
+Los tres planes universales pueden configurarse bajo DOS opciones de beneficio por fallecimiento. Son opciones de configuración, NO son planes distintos:
+- OPCIÓN A: El valor acumulado (ahorro) ya está INCLUIDO dentro de la suma asegurada que se paga al fallecer. La compañía paga la Suma Asegurada total; el ahorro es la porción del cliente dentro de ese monto, y la compañía cubre el "riesgo neto" (la diferencia).
+- OPCIÓN B: Se paga la Suma Asegurada MÁS el valor acumulado (ahorro) de forma SEPARADA. Los beneficiarios reciben ambos montos sumados.
+ADVERTENCIA CRÍTICA: La diferencia entre Opción A y Opción B NO es la diferencia entre Universal I y Universal II. Son conceptos distintos. No confundir.
+
 ## Plan 1: VIDA A TÉRMINO NIVELADO (ASSA Term Plus)
 Registro: Resolución DRLA-012 del 13 de marzo de 2024. Código TN-2.12.03-REV.11.2023.
 - Naturaleza: Seguro de vida puro a plazo fijo. SIN componente de ahorro. SIN valor de rescate.
@@ -95,22 +101,23 @@ Registro: Resolución DRLA-012 del 13 de marzo de 2024. Código TN-2.12.03-REV.1
 
 ## Plan 2: UNIVERSAL I (Plan ASSA Universal)
 Registro: NoAU 15.05.04.
-- Naturaleza: Vida universal con valor acumulado INCLUIDO en el beneficio de muerte.
-- Cómo funciona: Beneficio de muerte = Suma Asegurada total. El valor acumulado es la porción de ahorro dentro de esa suma; la compañía cubre la diferencia (el "riesgo neto").
+- Naturaleza: Vida universal con componente de ahorro (valor acumulado). Configurable bajo Opción A u Opción B (ver concepto fundamental arriba).
+- DIFERENCIA CLAVE vs Universal II — CLÁUSULA DE MADURACIÓN A LOS 95 AÑOS: Si el asegurado llega con vida a los 95 años, ASSA le paga en vida la suma asegurada más el valor acumulado, y la póliza se cancela automáticamente. Este es un beneficio en vida que no tiene el Universal II.
+- IMPACTO EN COSTO: La cláusula de maduración hace que el costo de seguro del Universal I sea más alto que el del Universal II. Consecuencia: si un cliente paga la misma prima mensual en ambos planes, el Universal I generará MENOS ahorro acumulado a largo plazo, porque una mayor porción de la prima se destina al costo del seguro.
 - Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
-- Tasa corriente: puede ser mayor a la garantizada según las inversiones de la compañía.
-- Vencimiento: Al cumplir 95 años, la compañía cancela y entrega el beneficio de muerte.
-- Rescate parcial: Disponible hasta el valor de rescate menos $1,000.00 (mínimo que debe quedar para mantener la póliza activa).
+- Tasa corriente: puede ser mayor a la garantizada según las inversiones de ASSA.
+- Rescate parcial: Disponible hasta el valor de rescate menos $1,000.00.
 - Cargo por rescate: Se aplica durante los primeros 10 años.
-- Primas flexibles: El asegurado puede pagar la prima mínima o hacer depósitos adicionales en cualquier momento.
+- Primas flexibles: Prima mínima o depósitos adicionales en cualquier momento.
 - Deducción mensual del valor acumulado: costo de mortalidad + cargos sobre prima + cargo por derecho de póliza.
 - Préstamos: disponibles sobre el valor de rescate.
 
 ## Plan 3: UNIVERSAL II
 Registro: AUII 15.05.07.
-- Naturaleza: Vida universal con valor acumulado AGREGADO (adicional) al beneficio de muerte.
-- Diferencia clave vs Universal I: Al fallecer, los beneficiarios reciben la SUMA ASEGURADA + el VALOR ACUMULADO (ambos juntos). En Universal I, el valor acumulado ya está incluido dentro de la suma asegurada.
-- Universal II = mayor beneficio total para los herederos cuando hay un valor acumulado significativo.
+- Naturaleza: Vida universal con componente de ahorro (valor acumulado). Configurable bajo Opción A u Opción B (ver concepto fundamental arriba).
+- DIFERENCIA CLAVE vs Universal I: El Universal II NO tiene cláusula de maduración a los 95 años. No existe un pago garantizado en vida al llegar a esa edad. El seguro simplemente vence.
+- IMPACTO EN COSTO: Al no tener la cláusula de maduración, el costo de seguro del Universal II es más bajo que el del Universal I. Consecuencia: con la misma prima mensual, el Universal II acumula MÁS ahorro a largo plazo que el Universal I.
+- Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
 - Rescate parcial: Hasta el valor de rescate menos $1,000.00.
 - Cargo por rescate: Primeros 10 años.
 - Vencimiento: Al cumplir 95 años.
@@ -118,7 +125,7 @@ Registro: AUII 15.05.07.
 
 ## Plan 4: PATRIMONIAL II
 Registro: APII 15.05.07.
-- Naturaleza: Vida universal con mayor énfasis en ahorro/inversión.
+- Naturaleza: Vida universal con mayor énfasis en ahorro/inversión. Configurable bajo Opción A u Opción B.
 - Tasa de interés garantizada: mínimo 4.5% anual (la más alta de los 3 planes universales).
 - Ideal para: Acumulación de patrimonio + protección. El plan más orientado al ahorro a largo plazo.
 - Rescate parcial: Hasta el valor de rescate menos $2,500.00 (umbral más alto que Universal I y II).
@@ -134,12 +141,12 @@ Registro: APII 15.05.07.
 - Exámenes médicos: Requeridos antes de otorgar cobertura.
 
 ## Tabla comparativa de los 4 planes ASSA:
-| Plan             | Componente ahorro | Tasa garantizada | Rescate parcial mín. | Ideal para         |
-|------------------|:-----------------:|:----------------:|:-------------------:|--------------------|
-| Término Nivelado | No                | N/A              | N/A (sin valor)     | Protección pura    |
-| Universal I      | Sí (incluido)     | 3.5%             | Valor rescate -$1,000 | Protección + ahorro moderado |
-| Universal II     | Sí (adicional)    | ~3.5%            | Valor rescate -$1,000 | Mayor herencia     |
-| Patrimonial II   | Sí (énfasis ahorro) | 4.5%           | Valor rescate -$2,500 | Patrimonio/inversión |
+| Plan             | Ahorro | Tasa garantizada | Cláusula maduración 95 años | Rescate parcial mín.  | Ideal para                          |
+|------------------|:------:|:----------------:|:---------------------------:|:---------------------:|-------------------------------------|
+| Término Nivelado | No     | N/A              | No                          | N/A (sin valor)       | Protección pura, menor costo        |
+| Universal I      | Sí     | 3.5%             | SÍ — paga SA + ahorro en vida | Valor rescate -$1,000 | Protección + pago garantizado a 95  |
+| Universal II     | Sí     | 3.5%             | No                          | Valor rescate -$1,000 | Mayor ahorro acumulado a igual prima |
+| Patrimonial II   | Sí     | 4.5%             | No                          | Valor rescate -$2,500 | Máximo ahorro / patrimonio           |
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECCIÓN INCENDIO / MULTIRRIESGO (BASE: ANCÓN)
