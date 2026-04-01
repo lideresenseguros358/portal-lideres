@@ -150,7 +150,7 @@ export async function regionalRequest<T = unknown>(
       }
 
       console.log(
-        `[REGIONAL] ${method} ${endpoint} → ${resStatus}${resOk ? '' : ` ERROR: ${JSON.stringify(data).slice(0, 200)}`}`
+        `[REGIONAL] ${method} ${endpoint} → ${resStatus}${resOk ? '' : ` ERROR: ${JSON.stringify(data)}`}`
       );
 
       if (!resOk) {
@@ -165,14 +165,19 @@ export async function regionalRequest<T = unknown>(
           continue;
         }
 
+        // ORDS errors (Oracle REST) put the real detail in "cause", not "message"
+        const extractError = (d: unknown): string => {
+          if (typeof d !== 'object' || d === null) return String(d);
+          const obj = d as Record<string, unknown>;
+          const cause = obj.cause?.toString();
+          const message = obj.message?.toString() || obj.mensaje?.toString();
+          if (cause && message) return `${message} — ${cause}`;
+          return cause || message || JSON.stringify(d);
+        };
+
         return {
           success: false,
-          error:
-            typeof data === 'object' && data !== null
-              ? (data as Record<string, unknown>).message?.toString() ||
-                (data as Record<string, unknown>).mensaje?.toString() ||
-                JSON.stringify(data)
-              : String(data),
+          error: extractError(data),
           status: resStatus,
           raw: data,
         };
