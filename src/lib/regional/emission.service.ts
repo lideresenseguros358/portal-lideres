@@ -38,7 +38,7 @@ export async function emitirPolizaRC(
   }
 
   const data = (res.data || res.raw) as Record<string, unknown>;
-  console.log('[REGIONAL RC Emission] Response:', JSON.stringify(data).slice(0, 500));
+  console.log('[REGIONAL RC Emission] Full response:', JSON.stringify(data));
 
   // Normalize response
   if (data.success === false) {

@@ -158,7 +158,28 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log('[REGIONAL RC Emit] Emitting...', JSON.stringify(emissionBody).slice(0, 300));
+    // Validate that at least plate OR chassis is present — Regional registers
+    // the vehicle internally before emitting; sending empty strings causes a
+    // "vehicle already associated" error on every subsequent attempt (Oracle
+    // treats empty string as NULL, so all empty-field requests share the same
+    // phantom vehicle record in their test environment).
+    if (!emissionBody.datosveh.numplaca && !emissionBody.datosveh.serialcarroceria) {
+      return NextResponse.json(
+        { success: false, error: 'Faltan datos del vehículo: la placa o el número de carrocería son obligatorios.' },
+        { status: 400 }
+      );
+    }
+
+    console.log('[REGIONAL RC Emit] Sending to Regional — vehicle data:', {
+      codmarca: emissionBody.datosveh.codmarca,
+      codmodelo: emissionBody.datosveh.codmodelo,
+      anio: emissionBody.datosveh.anio,
+      numplaca: emissionBody.datosveh.numplaca,
+      serialcarroceria: emissionBody.datosveh.serialcarroceria,
+      serialmotor: emissionBody.datosveh.serialmotor,
+      color: emissionBody.datosveh.color,
+    });
+    console.log('[REGIONAL RC Emit] Client:', emissionBody.cliente.nomter, emissionBody.cliente.apeter, '| Plan:', emissionBody.plan);
 
     const result = await emitirPolizaRC(emissionBody);
 
