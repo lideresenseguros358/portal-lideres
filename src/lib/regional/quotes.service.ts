@@ -108,34 +108,58 @@ export interface CCQuoteInput {
 }
 
 export async function cotizarCC(input: CCQuoteInput): Promise<RegionalCCQuoteResponse> {
-  const creds = getRegionalCredentials();
+  // CC cotización: POST /regional/auto/cotizacion with full client + vehicle body.
+  // This is the correct endpoint per the API docs (page 3-4).
+  // The numcot it returns is a CC-type record in Oracle, valid for emitirPoliza.
+  //
+  // ⚠️  Do NOT use GET /regional/auto/cotizar/ with cTipoCobert=CC — that endpoint
+  // creates RC-type cotización records. When emitirPoliza (CC) looks them up via
+  // SELECT INTO it finds the wrong record type, producing ORA-01422.
 
-  // CC cotizar: GET /regional/auto/cotizar/ with ALL params as request HEADERS
-  // Confirmed by Regional PROD CURL (Mar 2026): cToken, cCodInter, nEdad, cSexo, etc.
-  // cEndoso is TEXT (PLUS/BASICO/PLATINUM), cTipoCobert=CC
-  const headerParams: Record<string, string> = {
-    cToken:      creds.tokenCC,
-    cCodInter:   creds.codInter,
-    nEdad:       input.edad.toString(),
-    cSexo:       input.sexo,
-    cEdocivil:   input.edocivil,
-    cMarca:      input.codMarca.toString(),
-    cModelo:     input.codModelo.toString(),
-    nAnio:       input.anio.toString(),
-    nMontoVeh:   input.valorVeh.toString(),
-    nLesiones:   input.lesiones  || '10000',
-    nDanios:     input.danios    || '20000',
-    nGastosMed:  input.gastosMedicos || '2000',
-    cEndoso:     input.endoso,
-    cTipoCobert: 'CC',
+  const body: RegionalCCQuoteBody = {
+    cliente: {
+      nomter: input.nombre.toUpperCase(),
+      apeter: input.apellido.toUpperCase(),
+      edad: input.edad,
+      sexo: input.sexo,
+      edocivil: input.edocivil,
+      identificacion: {
+        tppersona: input.tppersona || 'N',
+        tpodoc: input.tpodoc || 'C',
+        prov: input.prov ?? null,
+        letra: input.letra ?? null,
+        tomo: input.tomo ?? null,
+        asiento: input.asiento ?? null,
+        dv: input.dv ?? null,
+        pasaporte: input.pasaporte ?? null,
+      },
+      t1numero: input.telefono,
+      t2numero: input.celular,
+      email: input.email,
+    },
+    datosveh: {
+      vehnuevo: input.vehnuevo || 'N',
+      codmarca: input.codMarca,
+      codmodelo: input.codModelo,
+      anio: input.anio,
+      valorveh: input.valorVeh,
+      numpuestos: input.numPuestos || 4,
+    },
+    tpcobert: '1',
+    endoso: input.endoso,
+    limites: {
+      lescor: input.lesiones  || '10000*20000',
+      danpro: input.danios    || '20000',
+      gasmed: input.gastosMedicos || '2000',
+    },
   };
 
-  console.log('[REGIONAL CC Quote] GET headers:', JSON.stringify(headerParams));
+  console.log('[REGIONAL CC Quote] POST cotizacion:', JSON.stringify(body).slice(0, 600));
 
-  const res = await regionalGet<RegionalCCQuoteResponse>(
-    REGIONAL_RC_ENDPOINTS.COTIZAR,
-    undefined,
-    { headerParams, headerParamsOnly: true }
+  const res = await regionalPost<RegionalCCQuoteResponse>(
+    REGIONAL_CC_ENDPOINTS.COTIZACION,
+    body,
+    { useTokenCC: true }
   );
 
   if (!res.success) {
@@ -196,15 +220,40 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
 
   const top = data as Record<string, unknown>;
 
-  // PROD response: { items: [ {numcot, primatotal:null}, {opcion:"1", primatotal:353.61}, ... ] }
-  // items[0] = numcot row (no prima), items[1..N] = opcion rows (no numcot, have prima)
-  // Combine: numcot from items[0], prima from items[1] (opcion seleccionada = lowest prima)
+  // Error check first
+  if (top.success === false || (top.mensaje && !top.numcot) || (top.message && !top.numcot)) {
+    return {
+      success: false,
+      message: (top.mensaje || top.message || 'Error desconocido') as string,
+    };
+  }
+
+  // Format 1: POST /cotizacion response — { numcot, opcionSelec, opciones: [{opcion, primaTotal, ...}] }
+  // This is the canonical CC cotización response per API docs page 7.
+  if (top.numcot != null && Array.isArray(top.opciones)) {
+    const opciones = top.opciones as Record<string, unknown>[];
+    const firstOpcion = opciones[0] as Record<string, unknown> | undefined;
+    const primaTotal = firstOpcion
+      ? ((firstOpcion.primaTotal || firstOpcion.primatotal) as number | undefined)
+      : undefined;
+    return {
+      success: true,
+      numcot: top.numcot as number,
+      primaTotal,
+      primaAnual: primaTotal,
+      opciones,
+      coberturas: (top.coberturas || []) as RegionalCCQuoteResponse['coberturas'],
+      deducibles: (top.deducibles || []) as RegionalCCQuoteResponse['deducibles'],
+      cuotas: (top.cuotas || []) as RegionalCCQuoteResponse['cuotas'],
+      ...top,
+    };
+  }
+
+  // Format 2: Legacy items format — { items: [ {numcot, primatotal:null}, {opcion, primatotal:353.61}, ... ] }
+  // Kept for backwards compatibility with possible alternate DESA responses.
   if (Array.isArray(top.items) && top.items.length > 0) {
     const items = top.items as Record<string, unknown>[];
-
-    // Find the numcot item (item where numcot is present)
     const numcotItem = items.find(i => i.numcot != null);
-    // Find opcion items (items where opcion is present and primatotal > 0)
     const opcionItems = items.filter(i => i.opcion != null && ((i.primatotal as number) ?? 0) > 0);
 
     if (!numcotItem) {
@@ -212,8 +261,6 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
     }
 
     const numcot = numcotItem.numcot as number;
-
-    // Use the first opcion (lowest deductible / default selection) for primaTotal
     const selectedOpcion = opcionItems[0] as Record<string, unknown> | undefined;
     const primaTotal = selectedOpcion
       ? ((selectedOpcion.primatotal || selectedOpcion.primaTotal) as number | undefined)
@@ -232,17 +279,8 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
     };
   }
 
-  // Fallback: direct object (DESA or alternate format)
-  let obj = top;
-
-  if (obj.success === false || obj.mensaje || (obj.message && !obj.numcot)) {
-    return {
-      success: false,
-      message: (obj.mensaje || obj.message || 'Error desconocido') as string,
-    };
-  }
-
-  const numcot = (obj.numcot || obj.numCot) as number | undefined;
+  // Format 3: Direct object (DESA or alternate)
+  const numcot = (top.numcot || top.numCot) as number | undefined;
   if (!numcot) {
     return { success: false, message: 'No se recibió numcot de Regional' };
   }
@@ -250,11 +288,11 @@ function normalizeCCQuoteResponse(data: unknown): RegionalCCQuoteResponse {
   return {
     success: true,
     numcot,
-    primaTotal: (obj.primatotal || obj.primaTotal || obj.prima) as number | undefined,
-    primaAnual: (obj.primaAnual || obj.primaanual || obj.primatotal || obj.primaTotal) as number | undefined,
-    coberturas: (obj.coberturas || []) as RegionalCCQuoteResponse['coberturas'],
-    deducibles: (obj.deducibles || []) as RegionalCCQuoteResponse['deducibles'],
-    cuotas: (obj.cuotas || []) as RegionalCCQuoteResponse['cuotas'],
-    ...obj,
+    primaTotal: (top.primatotal || top.primaTotal || top.prima) as number | undefined,
+    primaAnual: (top.primaAnual || top.primaanual || top.primatotal || top.primaTotal) as number | undefined,
+    coberturas: (top.coberturas || []) as RegionalCCQuoteResponse['coberturas'],
+    deducibles: (top.deducibles || []) as RegionalCCQuoteResponse['deducibles'],
+    cuotas: (top.cuotas || []) as RegionalCCQuoteResponse['cuotas'],
+    ...top,
   };
 }
