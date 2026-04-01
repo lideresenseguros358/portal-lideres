@@ -1151,19 +1151,24 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
       };
 
       // ═══ FORMAT LIMIT: combine limite1 + limite2 into "per-person / per-event" ═══
+      // ANCON may return "5,000.00", "B/.5,000.00", "5000.00", etc. — strip non-numeric chars before parsing
+      const parseAnconLimitVal = (v: any): number | null => {
+        if (!v) return null;
+        const n = Number(String(v).replace(/[^0-9.]/g, ''));
+        return (!isNaN(n) && n > 0) ? n : null;
+      };
       const formatAnconLimit = (c: any): string => {
-        const lim1 = c.limite1 && c.limite1 !== '0.00' && c.limite1 !== '0' ? c.limite1 : null;
-        const lim2 = c.limite2 && c.limite2 !== '0.00' && c.limite2 !== '0' ? c.limite2 : null;
+        const lim1 = parseAnconLimitVal(c.limite1);
+        const lim2 = parseAnconLimitVal(c.limite2);
         if (lim1 && lim2) {
-          // Dual limit: e.g., "5000.00" + "10000.00" → "$5,000 / $10,000"
-          const fmt1 = `$${Number(lim1).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-          const fmt2 = `$${Number(lim2).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+          const fmt1 = `$${lim1.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+          const fmt2 = `$${lim2.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
           return `${fmt1} / ${fmt2}`;
         }
         if (lim1) {
-          return `$${Number(lim1).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+          return `$${lim1.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
         }
-        return 'INCLUIDO';
+        return 'Incluido';
       };
 
       // Build coverage list with normalized names and combined limits
@@ -1189,29 +1194,29 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
       // Grúa details
       const hasGrua = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('GRUA'));
       if (hasGrua || isPremium) {
-        endosoBenefits.push('🚛 Grúa: Por colisión y avería — Máx. 2 eventos/año, hasta B/.150 por evento');
+        endosoBenefits.push('Grúa: Por colisión y avería — Máx. 2 eventos/año, hasta B/.150 por evento');
       } else {
-        endosoBenefits.push('🚛 Grúa: Solo por colisión — Máx. 1 evento/año, hasta B/.100 por evento');
+        endosoBenefits.push('Grúa: Solo por colisión — Máx. 1 evento/año, hasta B/.100 por evento');
       }
 
       // Asistencia Vial
       const hasAsistVial = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('ASISTENCIA VIAL'));
       if (hasAsistVial || isPremium) {
-        endosoBenefits.push('🔧 Asistencia Vial: Paso de corriente, cambio de llanta, cerrajería, combustible');
+        endosoBenefits.push('Asistencia Vial: Paso de corriente, cambio de llanta, cerrajería, combustible');
       }
 
       // Auto Sustituto
       const hasAutoSustituto = coverageList.some((c: any) => c.rawName?.toUpperCase()?.includes('AUTO SUSTITUTO'));
       if (hasAutoSustituto) {
-        endosoBenefits.push('🚗 Auto Sustituto: Reembolso para auto de reemplazo ANCON Plus');
+        endosoBenefits.push('Auto Sustituto: Reembolso para auto de reemplazo ANCON Plus');
       }
 
       // Standard benefits
-      endosoBenefits.push('🚑 Ambulancia: Coordinación de envío por accidente de tránsito');
-      endosoBenefits.push('📋 Transmisión de mensajes urgentes a familiares');
+      endosoBenefits.push('Ambulancia: Coordinación de envío por accidente de tránsito');
+      endosoBenefits.push('Transmisión de mensajes urgentes a familiares');
       if (isPremium) {
-        endosoBenefits.push('⚖️ Asistencia Legal: Asesoría en accidentes de tránsito');
-        endosoBenefits.push('🌎 Extensión Territorial: Cobertura fuera del territorio nacional');
+        endosoBenefits.push('Asistencia Legal: Asesoría en accidentes de tránsito');
+        endosoBenefits.push('Extensión Territorial: Cobertura fuera del territorio nacional');
       }
 
       // Build deducibles array from CC coverages
