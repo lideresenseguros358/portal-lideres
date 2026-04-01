@@ -90,6 +90,18 @@ function formatUSD(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+/** Strip commas/formatting and parse to number */
+function parseCurrency(s: string): number {
+  return parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
+}
+
+/** On blur: format raw to "10,000.00" */
+function formatCurrencyBlur(s: string): string {
+  const n = parseCurrency(s);
+  if (!n) return '';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function sanitizeHTML(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -260,7 +272,7 @@ export default function IncendioWizard() {
     }
 
     if (s === 4) {
-      const val = parseFloat(data.valorBien) || 0;
+      const val = parseCurrency(data.valorBien);
       if (val <= 0) e.valorBien = 'Ingresa el valor del bien';
       else if (val < 10000) e.valorBien = 'Valor mínimo: $10,000';
     }
@@ -313,7 +325,7 @@ export default function IncendioWizard() {
       const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
       const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
       const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
-      const valorNum = parseFloat(data.valorBien) || 0;
+      const valorNum = parseCurrency(data.valorBien);
       const seguridadMeta = data.seguridad.map(key => {
         const m = SECURITY_MEASURES.find(o => o.key === key);
         return { key, label: m?.label || key };
@@ -694,15 +706,28 @@ export default function IncendioWizard() {
           </div>
 
           <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.valorBien ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
-            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
+            <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={data.valorBien}
-              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorBien: v }); }}
-              placeholder="Valor de la estructura"
+              onChange={(e) => {
+                // Allow digits and one decimal point while typing
+                const raw = e.target.value.replace(/[^0-9.]/g, '');
+                const parts = raw.split('.');
+                const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                update({ valorBien: cleaned });
+              }}
+              onBlur={() => { const fmt = formatCurrencyBlur(data.valorBien); if (fmt) update({ valorBien: fmt }); }}
+              onFocus={(e) => {
+                // Strip formatting on focus so user can edit the raw number
+                const raw = data.valorBien.replace(/,/g, '');
+                update({ valorBien: raw });
+                setTimeout(() => e.target.select(), 0);
+              }}
+              placeholder="0.00"
               onWheel={(e) => e.currentTarget.blur()}
-              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.valorBien && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorBien}</p>}
@@ -733,7 +758,7 @@ export default function IncendioWizard() {
     const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
     const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
     const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
-    const valorNum = parseFloat(data.valorBien) || 0;
+    const valorNum = parseCurrency(data.valorBien);
 
     const tipoViviendaLabel = data.tipoVivienda === 'casa' ? 'Casa' : 'Apartamento';
     let direccionDetalle = '';

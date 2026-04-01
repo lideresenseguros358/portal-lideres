@@ -97,6 +97,18 @@ function formatUSD(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+/** Strip commas/formatting and parse to number */
+function parseCurrency(s: string): number {
+  return parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
+}
+
+/** On blur: format raw to "10,000.00" */
+function formatCurrencyBlur(s: string): string {
+  const n = parseCurrency(s);
+  if (!n) return '';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function sanitizeHTML(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -290,7 +302,7 @@ export default function ContenidoWizard() {
     }
 
     if (s === 4) {
-      const val = parseFloat(data.valorContenido) || 0;
+      const val = parseCurrency(data.valorContenido);
       if (val <= 0) e.valorContenido = 'Ingresa el valor del contenido';
       else if (val < 5000) e.valorContenido = 'Valor mínimo: $5,000';
 
@@ -303,11 +315,11 @@ export default function ContenidoWizard() {
           for (let i = 0; i < data.articulosAltoValor.length; i++) {
             const item = data.articulosAltoValor[i]!;
             if (!item.descripcion.trim()) { e[`art_desc_${i}`] = 'Descripción requerida'; }
-            const itemVal = parseFloat(item.valor) || 0;
+            const itemVal = parseCurrency(item.valor);
             if (itemVal < 2000) { e[`art_val_${i}`] = 'Valor debe ser mayor a $2,000'; }
           }
           // Soft validation: sum of articles > total content value
-          const sumaArticulos = data.articulosAltoValor.reduce((acc, item) => acc + (parseFloat(item.valor) || 0), 0);
+          const sumaArticulos = data.articulosAltoValor.reduce((acc, item) => acc + parseCurrency(item.valor), 0);
           if (val > 0 && sumaArticulos > val) {
             e.articulos_suma = 'La suma de artículos de alto valor supera el valor total del contenido. Ajusta los valores.';
           }
@@ -365,7 +377,7 @@ export default function ContenidoWizard() {
       const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
       const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
       const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
-      const valorNum = parseFloat(data.valorContenido) || 0;
+      const valorNum = parseCurrency(data.valorContenido);
       const seguridadMeta = data.seguridad.map(key => {
         const m = SECURITY_MEASURES.find(o => o.key === key);
         return { key, label: m?.label || key };
@@ -410,9 +422,9 @@ export default function ContenidoWizard() {
         bodyLines.push('');
         bodyLines.push('── ARTÍCULOS DE ALTO VALOR ──');
         data.articulosAltoValor.forEach((item, i) => {
-          bodyLines.push(`  ${i + 1}. ${sanitizeHTML(item.descripcion)} — $${formatUSD(parseFloat(item.valor) || 0)}`);
+          bodyLines.push(`  ${i + 1}. ${sanitizeHTML(item.descripcion)} — $${formatUSD(parseCurrency(item.valor))}`);
         });
-        const sumaArt = data.articulosAltoValor.reduce((acc, item) => acc + (parseFloat(item.valor) || 0), 0);
+        const sumaArt = data.articulosAltoValor.reduce((acc, item) => acc + (parseCurrency(item.valor)), 0);
         bodyLines.push(`  Total artículos alto valor: $${formatUSD(sumaArt)}`);
       }
 
@@ -425,7 +437,7 @@ export default function ContenidoWizard() {
       const subject = `Petición Contenido/Hogar Web - ${data.nombre} ${data.apellido} - ${new Date().toLocaleDateString('es-PA')}`;
 
       const articulosMeta = data.tieneArticulosAltoValor
-        ? data.articulosAltoValor.map(a => ({ descripcion: a.descripcion, valor: parseFloat(a.valor) || 0 }))
+        ? data.articulosAltoValor.map(a => ({ descripcion: a.descripcion, valor: parseCurrency(a.valor) }))
         : [];
 
       const result = await createPetitionFromQuote({
@@ -683,8 +695,8 @@ export default function ContenidoWizard() {
   }
 
   function renderStep4() {
-    const valorNum = parseFloat(data.valorContenido) || 0;
-    const sumaArticulos = data.articulosAltoValor.reduce((acc, item) => acc + (parseFloat(item.valor) || 0), 0);
+    const valorNum = parseCurrency(data.valorContenido);
+    const sumaArticulos = data.articulosAltoValor.reduce((acc, item) => acc + parseCurrency(item.valor), 0);
 
     return (
       <div className="space-y-5">
@@ -700,15 +712,26 @@ export default function ContenidoWizard() {
             </div>
           </div>
           <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
-            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
+            <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={data.valorContenido}
-              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorContenido: v }); }}
-              placeholder="Valor estimado del contenido"
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9.]/g, '');
+                const parts = raw.split('.');
+                const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                update({ valorContenido: cleaned });
+              }}
+              onBlur={() => { const fmt = formatCurrencyBlur(data.valorContenido); if (fmt) update({ valorContenido: fmt }); }}
+              onFocus={(e) => {
+                const raw = data.valorContenido.replace(/,/g, '');
+                update({ valorContenido: raw });
+                setTimeout(() => e.target.select(), 0);
+              }}
+              placeholder="0.00"
               onWheel={(e) => e.currentTarget.blur()}
-              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.valorContenido && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorContenido}</p>}
@@ -768,15 +791,26 @@ export default function ContenidoWizard() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (USD) <span className="text-red-500">*</span></label>
                   <div className={`flex items-center gap-1.5 px-3 py-2.5 border-2 rounded-lg transition-colors ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
-                    <span className="flex-shrink-0 text-gray-400 font-semibold text-xs sm:text-sm select-none">$</span>
+                    <span className="flex-shrink-0 text-gray-400 font-semibold text-sm select-none">$</span>
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       value={item.valor}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateArticulo(i, 'valor', v); }}
-                      placeholder="2500"
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9.]/g, '');
+                        const parts = raw.split('.');
+                        const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                        updateArticulo(i, 'valor', cleaned);
+                      }}
+                      onBlur={() => { const fmt = formatCurrencyBlur(item.valor); if (fmt) updateArticulo(i, 'valor', fmt); }}
+                      onFocus={(e) => {
+                        const raw = item.valor.replace(/,/g, '');
+                        updateArticulo(i, 'valor', raw);
+                        setTimeout(() => e.target.select(), 0);
+                      }}
+                      placeholder="0.00"
                       onWheel={(e) => e.currentTarget.blur()}
-                      className="flex-1 min-w-0 p-0 border-0 bg-transparent text-sm font-semibold focus:outline-none focus:ring-0 appearance-none"
+                      className="flex-1 min-w-0 p-0 border-0 bg-transparent text-base font-semibold focus:outline-none focus:ring-0 appearance-none"
                     />
                   </div>
                   {errors[`art_val_${i}`] && <p className="text-red-500 text-[11px] mt-0.5">{errors[`art_val_${i}`]}</p>}
@@ -818,7 +852,7 @@ export default function ContenidoWizard() {
     const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
     const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
     const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
-    const valorNum = parseFloat(data.valorContenido) || 0;
+    const valorNum = parseCurrency(data.valorContenido);
 
     const tipoViviendaLabel = data.tipoVivienda === 'casa' ? 'Casa' : 'Apartamento';
     let direccionDetalle = '';
@@ -828,7 +862,7 @@ export default function ContenidoWizard() {
     const artItems: { label: string; value: string }[] = [];
     if (data.tieneArticulosAltoValor && data.articulosAltoValor.length > 0) {
       data.articulosAltoValor.forEach((a, i) => {
-        artItems.push({ label: `${i + 1}. ${a.descripcion}`, value: `$${formatUSD(parseFloat(a.valor) || 0)}` });
+        artItems.push({ label: `${i + 1}. ${a.descripcion}`, value: `$${formatUSD(parseCurrency(a.valor))}` });
       });
     }
 
