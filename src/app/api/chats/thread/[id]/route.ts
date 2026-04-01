@@ -84,6 +84,28 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const userId = await getMasterUserId();
+  if (!userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { id } = await params;
+  const sb = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    // Delete messages first (FK constraint)
+    await sb.from('chat_messages').delete().eq('thread_id', id);
+    await sb.from('chat_events').delete().eq('thread_id', id);
+    const { error } = await sb.from('chat_threads').delete().eq('id', id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

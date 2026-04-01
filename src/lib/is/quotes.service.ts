@@ -411,6 +411,7 @@ export async function emitirPolizaAuto(
     nroPol: 0,
     codTransaccion: '',
     opcion: request.opcion || 1,
+    formaPago: request.formaPago || 1,   // 1=Contado, 2=Financiado (requerido para cuotas CC)
     cantcuotas: request.cantCuotas || 1,
     datosGenerales: {
       nombre: safe(request.nombre, 30),

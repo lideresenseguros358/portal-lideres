@@ -13,6 +13,8 @@ import { GoogleAuth } from 'google-auth-library';
 import type { ClassificationResult, ThreadCategory, ThreadSeverity, Sentiment } from '@/types/chat.types';
 import { SYSTEM_PROMPT } from '@/lib/ai/vertex';
 import { getActiveMemory, buildMemoryPromptBlock } from './lissa-memory';
+import { INSURANCE_KNOWLEDGE_PROMPT } from '@/config/insuranceKnowledge';
+import { LEGAL_KNOWLEDGE_PROMPT } from '@/config/legalKnowledge';
 
 // ── Auth ──
 
@@ -241,10 +243,11 @@ export async function analyzeSentiment(
  * Call Vertex AI with proper Gemini conversation turns (user/model alternation).
  * Unlike callVertex() which sends a single user prompt with JSON response,
  * this sends the full conversation history as Gemini contents for natural chat.
+ * Supports multimodal parts (inlineData) in the last user turn.
  */
 async function callVertexChat(
   systemPrompt: string,
-  contents: { role: string; parts: { text: string }[] }[],
+  contents: { role: string; parts: any[] }[],
 ): Promise<{ text: string; tokens: number }> {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
@@ -263,6 +266,7 @@ async function callVertexChat(
     data: {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents,
+      tools: [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } }],
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
@@ -273,7 +277,10 @@ async function callVertexChat(
   });
 
   const data: any = response.data;
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Grounding responses may split text across multiple parts — join them all
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const textParts = parts.filter((p: any) => typeof p.text === 'string' && p.text.trim().length > 0);
+  const text = textParts.length > 0 ? textParts.map((p: any) => p.text).join('') : '';
   const tokens = data?.usageMetadata?.totalTokenCount || 0;
 
   return { text, tokens };
@@ -313,6 +320,8 @@ Actúa como en una conversación fluida de WhatsApp. NUNCA repitas el saludo (ej
     '[INSTRUCCIONES CORE - INMUTABLES]',
     SYSTEM_PROMPT,
     CORE_ADDENDUM,
+    INSURANCE_KNOWLEDGE_PROMPT,
+    LEGAL_KNOWLEDGE_PROMPT,
   ];
 
   if (memoryBlock) {
@@ -329,6 +338,8 @@ interface ReplyInput {
   category: string;
   severity: string;
   sentiment?: Sentiment | null;
+  /** Base64-encoded media files to send as inlineData parts in the last user turn */
+  mediaParts?: { mimeType: string; base64: string }[];
 }
 
 export interface AiReplyResult {
@@ -383,8 +394,18 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     }
   }
 
-  // Always end with the current user message
-  contents.push({ role: 'user', parts: [{ text: input.currentMessage }] });
+  // Always end with the current user message (may include multimodal inlineData parts)
+  const currentParts: any[] = [];
+
+  // Prepend media inline parts (audio/image/document) before the text
+  if (input.mediaParts?.length) {
+    for (const mp of input.mediaParts) {
+      currentParts.push({ inlineData: { mimeType: mp.mimeType, data: mp.base64 } });
+    }
+  }
+
+  currentParts.push({ text: input.currentMessage });
+  contents.push({ role: 'user', parts: currentParts });
 
   // Run sentiment analysis in parallel with reply generation
   const sentimentMessages = [

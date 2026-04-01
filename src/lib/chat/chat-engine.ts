@@ -330,6 +330,8 @@ export interface ProcessInboundInput {
   profileName?: string;
   providerMessageId?: string;
   channel?: string;
+  /** Base64-encoded media parts (audio/image/document) for Vertex AI multimodal */
+  mediaParts?: { mimeType: string; base64: string }[];
 }
 
 export interface ProcessInboundResult {
@@ -342,7 +344,7 @@ export interface ProcessInboundResult {
 
 export async function processInboundMessage(input: ProcessInboundInput): Promise<ProcessInboundResult> {
   const sb = getSb();
-  const { fromPhone, toPhone, body, profileName, providerMessageId, channel } = input;
+  const { fromPhone, toPhone, body, profileName, providerMessageId, channel, mediaParts } = input;
 
   console.log(`[CHAT-ENGINE] Processing inbound from ${fromPhone}: "${body.substring(0, 80)}..."`);
 
@@ -467,6 +469,7 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
       category: classification.category,
       severity: classification.severity,
       sentiment: isReactivated ? null : ((thread.sentiment as any) || null),
+      mediaParts,
     });
 
     aiReply = replyResult.reply;

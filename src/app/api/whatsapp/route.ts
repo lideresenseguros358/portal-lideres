@@ -23,6 +23,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { processInboundMessage } from '@/lib/chat/chat-engine';
 import { handleAdminCommand } from '@/lib/chat/admin-commands';
+import { downloadWhatsAppMedia } from '@/lib/chat/media-download';
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || '';
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || '';
@@ -135,13 +136,62 @@ export async function POST(request: NextRequest) {
     const messageType = messageData.type; // text, image, audio, etc.
     const contactName = value?.contacts?.[0]?.profile?.name || null;
 
-    // Only process text messages for now
-    if (messageType !== 'text' || !messageData.text?.body?.trim()) {
-      console.log('[WHATSAPP] Non-text message ignored:', messageType);
+    // Supported message types
+    const MEDIA_TYPES = ['audio', 'image', 'document'] as const;
+    type MediaType = typeof MEDIA_TYPES[number];
+
+    if (messageType !== 'text' && !MEDIA_TYPES.includes(messageType as MediaType)) {
+      console.log('[WHATSAPP] Unsupported message type ignored:', messageType);
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
-    const messageText = messageData.text.body;
+    // ── Extract text or build descriptive body for media ──
+    let messageText = '';
+    let mediaParts: { mimeType: string; base64: string }[] | undefined;
+
+    if (messageType === 'text') {
+      const trimmed = messageData.text?.body?.trim();
+      if (!trimmed) return NextResponse.json({ success: true }, { status: 200 });
+      messageText = trimmed;
+    } else {
+      // audio | image | document
+      const mediaObj = messageData[messageType as MediaType] as any;
+      const mediaId: string | undefined = mediaObj?.id;
+      const rawMime: string = mediaObj?.mime_type || 'application/octet-stream';
+      const caption: string = mediaObj?.caption?.trim() || '';
+      const filename: string = mediaObj?.filename || '';
+
+      if (!mediaId) {
+        console.warn('[WHATSAPP] Media message without id — ignored');
+        return NextResponse.json({ success: true }, { status: 200 });
+      }
+
+      // Human-readable body stored in DB / shown in portal
+      if (messageType === 'audio') {
+        messageText = '[Nota de voz]';
+      } else if (messageType === 'image') {
+        messageText = caption ? `[Imagen: ${caption}]` : '[Imagen]';
+      } else {
+        messageText = filename ? `[Documento: ${filename}]` : '[Documento]';
+        if (caption) messageText += ` — ${caption}`;
+      }
+
+      console.log(`[WHATSAPP] Media message — type=${messageType}, id=${mediaId}, mime=${rawMime}`);
+
+      // Download and convert to base64 for Vertex AI
+      const media = await downloadWhatsAppMedia(mediaId, rawMime);
+      if (media) {
+        mediaParts = [{ mimeType: media.mimeType, base64: media.base64 }];
+      } else {
+        // Download failed — Lissa tells the user
+        await sendWhatsAppMessage(
+          phone,
+          'Recibí tu archivo, pero tuve un problema técnico para abrirlo 😅 ¿Podrías enviarlo nuevamente o escribirme tu consulta?',
+        );
+        return NextResponse.json({ success: true }, { status: 200 });
+      }
+    }
+
     console.log('[WHATSAPP] From:', phone, '| Name:', contactName, '| Message:', messageText.substring(0, 100));
 
     // Admin command interception — runs BEFORE rate limiter and chat engine.
@@ -171,6 +221,7 @@ export async function POST(request: NextRequest) {
       profileName: contactName || undefined,
       providerMessageId: messageId || undefined,
       channel: 'whatsapp',
+      mediaParts,
     });
 
     console.log('[WHATSAPP] Thread:', result.threadId, '| Category:', result.classification.category, '| Severity:', result.classification.severity);

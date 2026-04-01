@@ -280,6 +280,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      // ── Delete case ──
+      case 'delete': {
+        const { case_id } = body;
+        if (!case_id) return NextResponse.json({ error: 'case_id requerido' }, { status: 400 });
+        const { error } = await supabase.from('ops_cases').delete().eq('id', case_id).eq('case_type', CASE_TYPE);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      }
+
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
