@@ -1914,7 +1914,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 // Validate references against bank
 export async function actionValidateReferences(references: string[]) {
   try {
-    const supabase = await getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     
     // Optimizado: Solo seleccionar campos necesarios y usar índice
     const { data, error } = await supabase
