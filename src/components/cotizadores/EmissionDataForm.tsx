@@ -919,7 +919,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       disabled={loadingAddr === 'provincias'}
                     >
                       <option value="">{loadingAddr === 'provincias' ? 'Cargando...' : 'Seleccionar provincia'}</option>
-                      {provincias.map(p => (
+                      {[...provincias].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(p => (
                         <option key={p.DATO} value={p.DATO}>{p.TEXTO}</option>
                       ))}
                     </select>
@@ -944,7 +944,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       disabled={!formData.codProvincia || loadingAddr === 'distritos'}
                     >
                       <option value="">{loadingAddr === 'distritos' ? 'Cargando...' : 'Seleccionar distrito'}</option>
-                      {distritos.map(d => (
+                      {[...distritos].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(d => (
                         <option key={d.DATO} value={d.DATO}>{d.TEXTO}</option>
                       ))}
                     </select>
@@ -968,7 +968,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       disabled={!formData.codDistrito || loadingAddr === 'corregimientos'}
                     >
                       <option value="">{loadingAddr === 'corregimientos' ? 'Cargando...' : 'Seleccionar corregimiento'}</option>
-                      {corregimientos.map(c => (
+                      {[...corregimientos].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(c => (
                         <option key={c.DATO} value={c.DATO}>{c.TEXTO}</option>
                       ))}
                     </select>
@@ -989,7 +989,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       className="w-full px-3 py-2.5 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
                     >
                       <option value="">Seleccionar (opcional)</option>
-                      {urbanizaciones.map(u => (
+                      {[...urbanizaciones].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(u => (
                         <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>
                       ))}
                     </select>

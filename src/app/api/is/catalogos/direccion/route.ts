@@ -27,9 +27,8 @@ export async function GET(request: NextRequest) {
 
     switch (tipo) {
       case 'provincias': {
-        // Provincias de Panamá son estáticas — usar fallback local para carga instantánea
-        // y evitar latencia del token IS + API call en cada carga de formulario
-        return NextResponse.json({ success: true, data: PROVINCIAS_FALLBACK, source: 'fallback' });
+        const sorted = [...PROVINCIAS_FALLBACK].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es'));
+        return NextResponse.json({ success: true, data: sorted, source: 'fallback' });
       }
       case 'distritos': {
         const codpais = searchParams.get('codpais') || '1';
@@ -51,9 +50,8 @@ export async function GET(request: NextRequest) {
         break;
       }
       case 'urbanizaciones': {
-        // IS tester API siempre retorna 401 para urbanizaciones.
-        // Usar fallback local directamente para evitar ciclos de token innecesarios.
-        return NextResponse.json({ success: true, data: URBANIZACIONES_FALLBACK, source: 'fallback' });
+        const sorted = [...URBANIZACIONES_FALLBACK].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es'));
+        return NextResponse.json({ success: true, data: sorted, source: 'fallback' });
       }
       default:
         return NextResponse.json({ error: 'tipo inválido. Usar: provincias, distritos, corregimientos, urbanizaciones' }, { status: 400 });
@@ -91,6 +89,9 @@ export async function GET(request: NextRequest) {
       default:
         normalized = rawData;
     }
+
+    // Sort all catalogs alphabetically
+    normalized.sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es'));
 
     // Store in cache for subsequent requests
     addressCache.set(cacheKey, { data: normalized, exp: Date.now() + CACHE_TTL });

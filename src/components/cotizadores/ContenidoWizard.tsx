@@ -562,7 +562,7 @@ export default function ContenidoWizard() {
             disabled={loadingAddr === 'provincias'}
           >
             <option value="">{loadingAddr === 'provincias' ? 'Cargando...' : 'Seleccionar provincia'}</option>
-            {provincias.map(p => <option key={p.DATO} value={p.DATO}>{p.TEXTO}</option>)}
+            {[...provincias].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(p => <option key={p.DATO} value={p.DATO}>{p.TEXTO}</option>)}
           </select>
           {errors.provincia && <p className="text-red-500 text-xs mt-1 font-medium">{errors.provincia}</p>}
         </div>
@@ -577,7 +577,7 @@ export default function ContenidoWizard() {
             disabled={!data.provincia || loadingAddr === 'distritos'}
           >
             <option value="">{loadingAddr === 'distritos' ? 'Cargando...' : 'Seleccionar distrito'}</option>
-            {distritos.map(d => <option key={d.DATO} value={d.DATO}>{d.TEXTO}</option>)}
+            {[...distritos].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(d => <option key={d.DATO} value={d.DATO}>{d.TEXTO}</option>)}
           </select>
           {errors.distrito && <p className="text-red-500 text-xs mt-1 font-medium">{errors.distrito}</p>}
         </div>
@@ -592,7 +592,7 @@ export default function ContenidoWizard() {
             disabled={!data.distrito || loadingAddr === 'corregimientos'}
           >
             <option value="">{loadingAddr === 'corregimientos' ? 'Cargando...' : 'Seleccionar corregimiento'}</option>
-            {corregimientos.map(c => <option key={c.DATO} value={c.DATO}>{c.TEXTO}</option>)}
+            {[...corregimientos].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(c => <option key={c.DATO} value={c.DATO}>{c.TEXTO}</option>)}
           </select>
           {errors.corregimiento && <p className="text-red-500 text-xs mt-1 font-medium">{errors.corregimiento}</p>}
         </div>
@@ -606,8 +606,10 @@ export default function ContenidoWizard() {
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none bg-white focus:border-[#8AAA19] transition-colors"
           >
             <option value="">Seleccionar (opcional)</option>
-            {urbanizaciones.map(u => <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>)}
-            <option value="OTRO">Otro (especificar)</option>
+            <option value="OTRO">✏️ Especificar manualmente</option>
+            {[...urbanizaciones].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(u => (
+              <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>
+            ))}
           </select>
           {data.barriada === 'OTRO' && (
             <input
