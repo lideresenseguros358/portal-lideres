@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaQuestionCircle, FaExclamationTriangle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaExclamationTriangle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -84,7 +84,6 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   const [globalPlanCC, setGlobalPlanCC] = useState<'basico' | 'premium'>('basico');
   const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
   const [expandedBenefitsCC, setExpandedBenefitsCC] = useState<Record<string, boolean>>({});
-  const [ccTooltip, setCCTooltip]               = useState<{ key: string; top: number; left: number } | null>(null);
   const ccCarouselRef = useRef<HTMLDivElement>(null);
   const ccHintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -980,40 +979,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                                   <span className="font-semibold text-gray-800 text-xs">{limite.descripcion}</span>
                                   {/* ── Icono de info con tooltip ── */}
                                   {tooltipText && (
-                                    <span className="inline-flex items-center flex-shrink-0">
-                                      <button
-                                        className="cov-info-btn"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (ccTooltip?.key === tooltipKey) {
-                                            setCCTooltip(null);
-                                          } else {
-                                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                            setCCTooltip({ key: tooltipKey, top: rect.top, left: rect.left + rect.width / 2 });
-                                          }
-                                        }}
-                                      >
-                                        <FaQuestionCircle size={10} className="text-blue-400" />
-                                      </button>
-                                      {ccTooltip?.key === tooltipKey && (
-                                        <>
-                                          <div className="fixed inset-0 z-40" onClick={() => setCCTooltip(null)} />
-                                          {/* position:fixed escapa cualquier overflow:hidden del padre */}
-                                          <span
-                                            className="cov-tooltip-popup"
-                                            style={{
-                                              position: 'fixed',
-                                              top: ccTooltip.top,
-                                              left: ccTooltip.left,
-                                              transform: 'translate(-50%, calc(-100% - 8px))',
-                                              zIndex: 9999,
-                                            }}
-                                          >
-                                            {tooltipText}
-                                          </span>
-                                        </>
-                                      )}
-                                    </span>
+                                    <AutoCloseTooltip content={tooltipText} />
                                   )}
                                 </div>
                                 {/* Monto + subtítulo "por persona / por accidente" */}

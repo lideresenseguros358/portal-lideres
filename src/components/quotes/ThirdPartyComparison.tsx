@@ -8,6 +8,7 @@ import { AUTO_THIRD_PARTY_INSURERS, AutoThirdPartyPlan, AutoInsurer, CoverageIte
 import InsurerLogo from '@/components/shared/InsurerLogo';
 import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 import { normalizePlanBenefits, type StandardBenefit } from '@/lib/normalizers/third-party-benefits';
+import AutoCloseTooltip from '@/components/ui/AutoCloseTooltip';
 
 interface ThirdPartyComparisonProps {
   onSelectPlan: (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => void;
@@ -219,7 +220,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
   // ── Mobile carousel state: single global plan so all cards sync ──
   const [globalPlan, setGlobalPlan] = useState<'basic' | 'premium'>('basic');
-  const [coverageTooltip, setCoverageTooltip] = useState<{ key: string; top: number; left: number } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
   const hintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -579,23 +579,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
             {benefit.label}
           </span>
           {tooltipText && (
-            /* Solo el botón — el popup se renderiza via portal al final del
-               componente para escapar el transform del carousel (que invalida
-               position:fixed en elementos descendientes).              */
-            <button
-              className="cov-info-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (coverageTooltip?.key === benefit.key) {
-                  setCoverageTooltip(null);
-                } else {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setCoverageTooltip({ key: benefit.key, top: rect.top + window.scrollY, left: rect.left + rect.width / 2 + window.scrollX });
-                }
-              }}
-            >
-              <FaQuestionCircle size={10} className="text-blue-400 hover:text-blue-600 transition-colors" />
-            </button>
+            <AutoCloseTooltip content={tooltipText} />
           )}
         </div>
 
@@ -997,54 +981,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           ))}
         </div>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════
-          PORTAL — Tooltip de cobertura
-          Renderizado en document.body para escapar el transform
-          del carousel (transform invalida position:fixed en hijos).
-      ═══════════════════════════════════════════════════════════ */}
-      {isMounted && coverageTooltip && createPortal(
-        <>
-          {/* Overlay cierra el tooltip al tocar fuera */}
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
-            onClick={() => setCoverageTooltip(null)}
-          />
-          {/* Popup del tooltip */}
-          <div
-            style={{
-              position: 'absolute',
-              top: coverageTooltip.top,
-              left: coverageTooltip.left,
-              transform: 'translate(-50%, calc(-100% - 8px))',
-              zIndex: 9999,
-              width: '215px',
-              background: '#1f2937',
-              color: '#f9fafb',
-              fontSize: '10.5px',
-              lineHeight: '1.5',
-              padding: '8px 10px',
-              borderRadius: '8px',
-              boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
-              pointerEvents: 'none',
-              whiteSpace: 'normal',
-              textAlign: 'left',
-            }}
-          >
-            {COVERAGE_TOOLTIPS[coverageTooltip.key]}
-            {/* Flecha apuntando hacia el botón */}
-            <div style={{
-              position: 'absolute', top: '100%', left: '50%',
-              transform: 'translateX(-50%)',
-              width: 0, height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
-              borderTop: '5px solid #1f2937',
-            }} />
-          </div>
-        </>,
-        document.body
-      )}
 
       {/* ═══════════════════════════════════════════════════════════
           PORTAL — Hint de primera visita sobre el botón Premium
