@@ -122,6 +122,16 @@ function formatUSD(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function parseCurrency(s: string): number {
+  return parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
+}
+
+function formatCurrencyBlur(s: string): string {
+  const n = parseCurrency(s);
+  if (!n) return '';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function sanitizeHTML(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -197,7 +207,7 @@ export default function VidaWizard() {
 
   // Computed values
   const edad = calcularEdad(data.fechaNacimiento);
-  const salarioNum = parseFloat(data.salarioMensual) || 0;
+  const salarioNum = parseCurrency(data.salarioMensual);
   const multiplicador = getMultiplicador(edad);
   const ingresoAnual = salarioNum * 12;
   const maximoCalculado = calcularMaximo(salarioNum, edad);
@@ -289,7 +299,7 @@ export default function VidaWizard() {
       if (!data.ocupacion.trim()) e.ocupacion = 'Ocupación es obligatoria';
       if (!data.lugarTrabajo.trim()) e.lugarTrabajo = 'Lugar de trabajo es obligatorio';
       if (!data.funcionesTrabajo.trim()) e.funcionesTrabajo = 'Describe tus funciones';
-      if (!data.salarioMensual || parseFloat(data.salarioMensual) <= 0) e.salarioMensual = 'Salario debe ser mayor a 0';
+      if (!data.salarioMensual || parseCurrency(data.salarioMensual) <= 0) e.salarioMensual = 'Salario debe ser mayor a 0';
     }
 
     if (s === 3) {
@@ -372,7 +382,7 @@ export default function VidaWizard() {
 
     // Backend recalc for anti-manipulation
     const beEdad = calcularEdad(data.fechaNacimiento);
-    const beSalario = parseFloat(data.salarioMensual) || 0;
+    const beSalario = parseCurrency(data.salarioMensual);
     const beMax = calcularMaximo(beSalario, beEdad);
     const beSuma = parseFloat(data.sumaAseguradaSolicitada) || 0;
 
@@ -851,20 +861,31 @@ export default function VidaWizard() {
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
             Salario mensual (USD) <span className="text-red-500">*</span>
           </label>
-          <div className={`flex items-center gap-2 px-3 py-3 border-2 rounded-xl transition-colors ${errors.salarioMensual ? 'border-red-400 bg-red-50 focus-within:border-red-500' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
-            <span className="flex-shrink-0 text-gray-400 font-semibold text-sm sm:text-base select-none">$</span>
+          <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.salarioMensual ? 'border-red-400 bg-red-50 focus-within:border-red-500' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
+            <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
             <input
               type="text"
               inputMode="decimal"
               value={data.salarioMensual}
-              onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); update({ salarioMensual: v }); }}
-              placeholder="1500"
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9.]/g, '');
+                const parts = raw.split('.');
+                const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                update({ salarioMensual: cleaned });
+              }}
+              onBlur={() => { const fmt = formatCurrencyBlur(data.salarioMensual); if (fmt) update({ salarioMensual: fmt }); }}
+              onFocus={(e) => {
+                const raw = data.salarioMensual.replace(/,/g, '');
+                update({ salarioMensual: raw });
+                setTimeout(() => e.target.select(), 0);
+              }}
+              placeholder="0.00"
               onWheel={(e) => e.currentTarget.blur()}
-              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-base focus:outline-none focus:ring-0 appearance-none"
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.salarioMensual && <p className="text-red-500 text-xs mt-1 font-medium">{errors.salarioMensual}</p>}
-          {!errors.salarioMensual && <p className="text-gray-400 text-xs mt-1">Ejemplo: 1500</p>}
+          {!errors.salarioMensual && <p className="text-gray-400 text-xs mt-1">Ingresa tu salario mensual bruto</p>}
         </div>
       </div>
     );
