@@ -263,11 +263,16 @@ HOMBRE/MUJER CLAVE (KEY MAN): Póliza empresarial sobre un directivo/socio clave
 </knowledge>
 
 <internet_search>
-REGLA CRÍTICA: Si el usuario hace preguntas sobre ubicaciones de aseguradoras, números de teléfono, direcciones o datos públicos que no sepas de memoria, ESTÁS OBLIGADA a usar la herramienta de Google Search para darle la respuesta. NUNCA respondas "no tengo la información" sin antes buscar en internet.
+REGLA DE PRIORIDAD 1 — CONOCIMIENTO INTERNO (COTIZACIONES Y REGLAS DE ASEGURADORAS):
+Cuando un usuario pida cotizar (ej. auto, vida, salud, etc.) o pregunte sobre reglas, coberturas o procesos de aseguradoras, DEBES responder usando estrictamente la información de tu Base de Conocimientos y proporcionar el enlace de nuestro portal interno para que se cotice. NUNCA actives Google Search para estas consultas.
+- Cotización auto: https://portal.lideresenseguros.com/cotizadores/auto
+- Cotización DT: https://portal.lideresenseguros.com/cotizadores/third-party
+- Portal general: https://portal.lideresenseguros.com/cotizadores
 
-USO DE BÚSQUEDA EN INTERNET: Tienes acceso a la búsqueda de Google en tiempo real. DEBES usar esta herramienta SIEMPRE que el usuario pregunte por información pública y factual que no conozcas de memoria, como: ubicaciones de sucursales de aseguradoras (ej. ASSA, Mapfre, FEDPA, etc.), números de teléfono públicos, horarios de atención, o requisitos legales y de tránsito actualizados.
+REGLA DE PRIORIDAD 2 — USO DE GOOGLE SEARCH (INFORMACIÓN PÚBLICA EXTERNA):
+SOLO estás autorizada a activar la herramienta de Google Search cuando el usuario te pida explícitamente información pública y externa que no tienes en tu memoria, como ubicaciones físicas de sucursales (ej. FEDPA, ASSA, Mapfre), números de teléfono públicos actualizados, o noticias de último minuto. Para cotizaciones, coberturas y reglas internas: SIEMPRE usa tu Base de Conocimientos.
 
-REGLA DE ORO: La información que obtengas de internet NUNCA debe sobreescribir las reglas de negocio, coberturas o procesos internos que se te hayan inyectado en tu Memoria Dinámica. Si hay un conflicto entre internet y tu Memoria Dinámica, tu Memoria Dinámica SIEMPRE tiene la razón.
+REGLA DE ORO: La información que obtengas de internet NUNCA debe sobreescribir las reglas de negocio, coberturas o procesos internos de tu Base de Conocimientos. Si hay conflicto, tu Base de Conocimientos SIEMPRE tiene la razón.
 
 Cuando uses la búsqueda de Google:
 - Integra la información obtenida de forma natural en tu respuesta, como si lo supieras de memoria.
@@ -440,6 +445,8 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
     // Ensure proper alternation: Gemini requires user/model/user/model...
     let lastRole = '';
     for (const msg of ctx.conversationHistory) {
+      // Skip turns with null, undefined, or empty content — these cause 400 Bad Request
+      if (!msg.content || !msg.content.trim()) continue;
       const role = msg.role === 'user' ? 'user' : 'model';
       // Skip if same role twice in a row (merge or skip)
       if (role === lastRole) continue;
@@ -453,8 +460,15 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
     }
   }
 
+  // Guard against empty incoming message
+  const safeMessage = ctx.message?.trim();
+  if (!safeMessage) {
+    console.warn('[VERTEX-CHAT] Empty message received, skipping Vertex call');
+    return { reply: '¡Hola! ¿En qué te puedo ayudar? 💚', tokensUsed: 0 };
+  }
+
   // Always end with the current user message
-  contents.push({ role: 'user', parts: [{ text: ctx.message }] });
+  contents.push({ role: 'user', parts: [{ text: safeMessage }] });
 
   const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
 
@@ -463,7 +477,7 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
       parts: [{ text: fullSystemPrompt }],
     },
     contents,
-    tools: [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } }],
+    tools: [{ googleSearch: {} }],
     generationConfig: {
       temperature: 0.7,
       topP: 0.9,
