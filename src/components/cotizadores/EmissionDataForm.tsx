@@ -10,6 +10,7 @@ import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'reac
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
 import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
+import type { Acreedor } from '@/lib/constants/acreedores';
 
 interface EmissionDataFormProps {
   quoteData: any;
@@ -93,6 +94,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
+  const [acreedoresList, setAcreedoresList] = useState<Acreedor[]>(ACREEDORES_PANAMA);
 
   // IS Address catalogs — cascading dropdowns
   const isInternacional = quoteData?.insurerName?.includes('INTERNACIONAL') || false;
@@ -116,6 +118,14 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
       if (urbData.data) setUrbanizaciones(urbData.data);
     }).catch(() => {}).finally(() => setLoadingAddr(''));
   }, [isInternacional]);
+
+  // Load full acreedores list from ANCON catalog on mount
+  useEffect(() => {
+    fetch('/api/acreedores')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data?.length) setAcreedoresList(d.data); })
+      .catch(() => {});
+  }, []);
 
   // Fetch distritos when provincia changes
   const fetchDistritos = useCallback((codProvincia: number) => {
@@ -1193,21 +1203,21 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                   className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
                 >
                   <option value="">Sin acreedor (no financiado)</option>
-                  <optgroup label="Bancos">
-                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
-                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Cooperativas">
-                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
-                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Otros">
-                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
-                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                    ))}
-                  </optgroup>
+                  {(['BANCO', 'COOPERATIVA', 'FINANCIERA', 'FIDUCIARIA', 'OTRO'] as const).map(tipo => {
+                    const items = acreedoresList.filter(a => a.tipo === tipo);
+                    if (!items.length) return null;
+                    const labels: Record<string, string> = {
+                      BANCO: 'Bancos', COOPERATIVA: 'Cooperativas',
+                      FINANCIERA: 'Financieras y Leasings', FIDUCIARIA: 'Fiduciarias y Fideicomisos', OTRO: 'Otros',
+                    };
+                    return (
+                      <optgroup key={tipo} label={labels[tipo]}>
+                        {items.map((a, i) => (
+                          <option key={`${tipo}-${i}`} value={a.codigoFEDPA}>{a.label}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
               </div>
             )}

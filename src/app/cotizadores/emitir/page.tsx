@@ -1169,6 +1169,8 @@ export default function EmitirPage() {
           cantidad_de_pago: String(installments || 1),
           nacionalidad: emissionData.nacionalidad || 'PANAMA',
           pep: '0',
+          nombre_acreedor: emissionData.acreedor || '',
+          codigo_acreedor: '', // resolved server-side from nombre_acreedor via GenerarAcreedores
         };
 
         setEmissionProgress(25);

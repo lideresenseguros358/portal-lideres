@@ -5,10 +5,11 @@
 
 'use client';
 
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { FaUser, FaInfoCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { ACREEDORES_PANAMA, getAcreedoresGrouped } from '@/lib/constants/acreedores';
+import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
+import type { Acreedor } from '@/lib/constants/acreedores';
 import type { CedulaQRData } from '@/lib/utils/cedula-qr-parser';
 
 const CedulaQRScanner = lazy(() => import('@/components/cotizadores/CedulaQRScanner'));
@@ -61,6 +62,14 @@ export default function InsuredDataSection({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPEPTooltip, setShowPEPTooltip] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [acreedoresList, setAcreedoresList] = useState<Acreedor[]>(ACREEDORES_PANAMA);
+
+  useEffect(() => {
+    fetch('/api/acreedores')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data?.length) setAcreedoresList(d.data); })
+      .catch(() => {});
+  }, []);
 
   const handleQRScanSuccess = (data: CedulaQRData) => {
     setFormData(prev => ({
@@ -417,21 +426,21 @@ export default function InsuredDataSection({
             className={`${inputClass} ${normalInputClass} bg-white`}
           >
             <option value="">Sin acreedor (no financiado)</option>
-            <optgroup label="Bancos">
-              {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
-                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Cooperativas">
-              {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
-                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Otros">
-              {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
-                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-              ))}
-            </optgroup>
+            {(['BANCO', 'COOPERATIVA', 'FINANCIERA', 'FIDUCIARIA', 'OTRO'] as const).map(tipo => {
+              const items = acreedoresList.filter(a => a.tipo === tipo);
+              if (!items.length) return null;
+              const labels: Record<string, string> = {
+                BANCO: 'Bancos', COOPERATIVA: 'Cooperativas',
+                FINANCIERA: 'Financieras y Leasings', FIDUCIARIA: 'Fiduciarias y Fideicomisos', OTRO: 'Otros',
+              };
+              return (
+                <optgroup key={tipo} label={labels[tipo]}>
+                  {items.map((a, i) => (
+                    <option key={`${tipo}-${i}`} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
           <p className="text-xs text-gray-500 mt-1">
             Solo si el vehículo tiene financiamiento

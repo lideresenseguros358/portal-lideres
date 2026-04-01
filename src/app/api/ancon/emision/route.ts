@@ -24,7 +24,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
-import { resolveAnconVehicleCodes } from '@/lib/ancon/catalogs.service';
+import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 
 export const maxDuration = 120;
 
@@ -190,6 +190,21 @@ export async function POST(request: NextRequest) {
     const pepNormalized = (pep && pep !== '0' && pep !== 'N' && pep !== 'false')
       ? pep
       : '002|campo_pep';
+
+    // Resolve cod_acreedor from nombre_acreedor when not explicitly provided
+    let resolvedCodAcreedor = codigo_acreedor || '';
+    if (!resolvedCodAcreedor && nombre_acreedor) {
+      const acreResult = await getAcreedores();
+      if (acreResult.success && acreResult.data) {
+        const found = acreResult.data.find(
+          a => a.nombre.toUpperCase().trim() === nombre_acreedor.toUpperCase().trim()
+        );
+        if (found) resolvedCodAcreedor = found.cod_acreedor;
+      }
+      if (resolvedCodAcreedor) {
+        log('0/5', `Acreedor resuelto: ${nombre_acreedor} → cod ${resolvedCodAcreedor}`);
+      }
+    }
 
     // ═══ STEP 1: Generate policy number ═══
     log('1/5', 'Generando número de póliza...');
@@ -365,7 +380,7 @@ export async function POST(request: NextRequest) {
       nombre_producto: nombre_producto || 'AUTO COMPLETA',
       Responsable_de_cobro: 'CORREDOR',
       suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',
-      codigo_acreedor: codigo_acreedor || '',
+      codigo_acreedor: resolvedCodAcreedor,
       nombre_acreedor: nombre_acreedor || '',
       cod_marca_agt: String(finalCodMarcaAgt || ''),
       nombre_marca: (nombre_marca || '').toUpperCase(),
