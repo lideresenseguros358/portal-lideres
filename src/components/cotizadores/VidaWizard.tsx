@@ -982,9 +982,85 @@ export default function VidaWizard() {
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <WizardInputField label="Altura (metros)" name="altura" type="number" inputMode="decimal" placeholder="1.75" hint="Ej: 1.75" step="0.01" min="0.5" max="2.5" data={data} errors={errors} onUpdate={update} />
-          <WizardInputField label="Peso (libras)" name="peso" type="number" inputMode="numeric" placeholder="180" hint="Ej: 180" step="1" min="30" max="600" data={data} errors={errors} onUpdate={update} />
+          {/* Altura — auto-decimal after first digit, max 2 decimal places */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              Altura (metros) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={data.altura}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                if (raw === '') { update({ altura: '' }); return; }
+                // First digit becomes "X."
+                const integer = raw[0];
+                const decimals = raw.slice(1, 3); // max 2 decimal digits
+                const formatted = decimals.length > 0 ? `${integer}.${decimals}` : `${integer}.`;
+                update({ altura: formatted });
+              }}
+              placeholder="1.85"
+              maxLength={4}
+              className={`w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors ${
+                errors.altura ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
+              }`}
+            />
+            {errors.altura && <p className="text-red-500 text-xs mt-1 font-medium">{errors.altura}</p>}
+            {!errors.altura && <p className="text-gray-400 text-xs mt-1">Ej: 1.85</p>}
+          </div>
+
+          {/* Peso — integers only, max 3 digits */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              Peso (libras) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={data.peso}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
+                update({ peso: raw });
+              }}
+              placeholder="180"
+              maxLength={3}
+              className={`w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors ${
+                errors.peso ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
+              }`}
+            />
+            {errors.peso && <p className="text-red-500 text-xs mt-1 font-medium">{errors.peso}</p>}
+            {!errors.peso && <p className="text-gray-400 text-xs mt-1">Ej: 180</p>}
+          </div>
         </div>
+
+        {/* IMC Banner */}
+        {(() => {
+          const alturaM = parseFloat(data.altura) || 0;
+          const pesoLb = parseFloat(data.peso) || 0;
+          if (alturaM < 0.5 || pesoLb < 30) return null;
+          const pulgadas = alturaM * 39.37;
+          const imc = (pesoLb * 703) / (pulgadas * pulgadas);
+          const imcStr = imc.toFixed(1);
+          let color = '';
+          let label = '';
+          let warning = false;
+          if (imc < 18.5) { color = 'bg-red-50 border-red-300 text-red-700'; label = 'Bajo peso'; warning = true; }
+          else if (imc < 25) { color = 'bg-green-50 border-green-300 text-green-700'; label = 'Normal'; }
+          else if (imc < 30) { color = 'bg-yellow-50 border-yellow-300 text-yellow-700'; label = 'Sobrepeso'; }
+          else { color = 'bg-red-50 border-red-300 text-red-700'; label = 'Obesidad'; warning = true; }
+          return (
+            <div className={`border rounded-xl px-4 py-3 ${color}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">Índice de Masa Corporal (IMC)</span>
+                <span className="text-lg font-bold">{imcStr} — {label}</span>
+              </div>
+              {warning && (
+                <p className="text-xs mt-1 font-medium">⚠️ Posibilidad de recargo en prima o rechazo para asegurabilidad</p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Enfermedad */}
         <YesNoCards
