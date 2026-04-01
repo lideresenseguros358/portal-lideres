@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaQuestionCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaQuestionCircle, FaExclamationTriangle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -83,6 +83,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   // ── Mobile carousel state (CC) ──
   const [globalPlanCC, setGlobalPlanCC] = useState<'basico' | 'premium'>('basico');
   const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
+  const [expandedBenefitsCC, setExpandedBenefitsCC] = useState<Record<string, boolean>>({});
   const [ccTooltip, setCCTooltip]               = useState<{ key: string; top: number; left: number } | null>(null);
   const ccCarouselRef = useRef<HTMLDivElement>(null);
   const ccHintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1015,15 +1016,72 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                                     </span>
                                   )}
                                 </div>
-                                <span className="flex-shrink-0 text-[#010139] font-bold text-xs whitespace-nowrap">
-                                  {limiteDisplay || 'Incluido'}
-                                </span>
+                                {/* Monto + subtítulo "por persona / por accidente" */}
+                                <div className="flex-shrink-0 text-right">
+                                  <span className="text-[#010139] font-bold text-xs whitespace-nowrap">
+                                    {limiteDisplay || 'Incluido'}
+                                  </span>
+                                  {(limite.tipo === 'lesiones_corporales' || limite.tipo === 'gastos_medicos') &&
+                                    limite.limitePorPersona && limite.limitePorAccidente && (
+                                    <p className="text-[10px] text-gray-400 leading-tight mt-0.5">p.persona / p.accidente</p>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </div>
                     )}
+
+                    {/* ── Beneficios y Endosos (collapsible) ── */}
+                    {currentPlan._isReal && (currentPlan._beneficios?.length > 0 || currentPlan._endosos?.length > 0) && (() => {
+                      const benefKey = `${insurerName}-${currentPlanType}`;
+                      const isExpanded = expandedBenefitsCC[benefKey] || false;
+                      return (
+                        <div className="mb-4">
+                          <button
+                            onClick={() => setExpandedBenefitsCC(prev => ({ ...prev, [benefKey]: !prev[benefKey] }))}
+                            className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            <span className="flex items-center gap-2">
+                              <FaShieldAlt className="text-[#8AAA19]" size={12} />
+                              Beneficios y Asistencia
+                            </span>
+                            {isExpanded ? <FaChevronUp className="text-gray-400" size={11} /> : <FaChevronDown className="text-gray-400" size={11} />}
+                          </button>
+
+                          {isExpanded && (
+                            <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
+                              {/* Beneficios */}
+                              {(currentPlan._beneficios || []).filter((b: any) => b.incluido).map((b: any, bIdx: number) => (
+                                <div key={bIdx} className={`flex items-start gap-2 px-3 py-2 text-xs ${bIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} border-b border-gray-100 last:border-b-0`}>
+                                  <span className="text-[#8AAA19] flex-shrink-0 mt-0.5">✓</span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-medium text-gray-700">{b.nombre}</span>
+                                    {b.descripcion && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{b.descripcion}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Endosos */}
+                              {(currentPlan._endosos || []).filter((e: any) => e.incluido).map((e: any, eIdx: number) => {
+                                const isExclusive = e.codigo === 'PORCELANA' || e.codigo === 'VA' || e.codigo === 'CENTENARIO';
+                                return (
+                                  <div key={`e-${eIdx}`} className={`flex items-start gap-2 px-3 py-2 text-xs ${(currentPlan._beneficios?.filter((b: any) => b.incluido).length + eIdx) % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} border-b border-gray-100 last:border-b-0`}>
+                                    <span className={`flex-shrink-0 mt-0.5 ${isExclusive && currentPlanType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`}>
+                                      {isExclusive && currentPlanType === 'premium' ? '⭐' : '✓'}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="font-medium text-gray-700">{e.nombre}</span>
+                                      {e.descripcion && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{e.descripcion}</p>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Botón de acción — misma lógica que desktop */}
                     <button
