@@ -309,7 +309,7 @@ async function callVertexChat(
     data: {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents,
-      tools: [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } }],
+      tools: [{ googleSearch: {} }],
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
