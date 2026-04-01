@@ -49,17 +49,24 @@ async function getRegionalMarcasCached(): Promise<RegionalMarca[]> {
   if (cachedMarcas && Date.now() - cachedMarcasTimestamp < CACHE_TTL) {
     return cachedMarcas;
   }
+  // If fetch fails and we have stale cache, use it rather than failing
+  const stale = cachedMarcas;
   try {
-    cachedMarcas = await getMarcas();
+    const fresh = await getMarcas();
+    cachedMarcas = fresh;
     cachedMarcasTimestamp = Date.now();
     // Diagnostic: log first 3 entries to verify field names
     const sample = cachedMarcas.slice(0, 3).map(m => ({ codmarca: m.codmarca, descripcion: m.descripcion, keys: Object.keys(m) }));
     const withoutDesc = cachedMarcas.filter(m => !m.descripcion).length;
     console.log(`[REGIONAL Vehicle Mapper] Cached ${cachedMarcas.length} marcas (${withoutDesc} without descripcion). Sample:`, JSON.stringify(sample));
     return cachedMarcas;
-  } catch (err) {
+  } catch (err: any) {
     console.error('[REGIONAL Vehicle Mapper] Error fetching marcas:', err);
-    return cachedMarcas || [];
+    if (stale && stale.length > 0) {
+      console.warn('[REGIONAL Vehicle Mapper] Using stale marcas cache due to API error');
+      return stale;
+    }
+    throw new Error(`No se pudo conectar al catálogo de marcas de La Regional (${err.message || 'error de conexión'}). Intente nuevamente en unos minutos.`);
   }
 }
 
@@ -68,6 +75,7 @@ async function getRegionalModelosCached(codMarcaRegional: number): Promise<Regio
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return cached.data;
   }
+  const stale = cached?.data;
   try {
     const modelos = await getModelos(codMarcaRegional);
     cachedModelos.set(codMarcaRegional, { data: modelos, timestamp: Date.now() });
@@ -75,9 +83,13 @@ async function getRegionalModelosCached(codMarcaRegional: number): Promise<Regio
     const withoutDescM = modelos.filter(m => !m.descripcion).length;
     console.log(`[REGIONAL Vehicle Mapper] Cached ${modelos.length} modelos for marca ${codMarcaRegional} (${withoutDescM} without descripcion). Sample:`, JSON.stringify(sampleM));
     return modelos;
-  } catch (err) {
+  } catch (err: any) {
     console.error(`[REGIONAL Vehicle Mapper] Error fetching modelos for marca ${codMarcaRegional}:`, err);
-    return cached?.data || [];
+    if (stale && stale.length > 0) {
+      console.warn(`[REGIONAL Vehicle Mapper] Using stale modelos cache for marca ${codMarcaRegional} due to API error`);
+      return stale;
+    }
+    throw new Error(`No se pudo conectar al catálogo de modelos de La Regional (${err.message || 'error de conexión'}). Intente nuevamente en unos minutos.`);
   }
 }
 

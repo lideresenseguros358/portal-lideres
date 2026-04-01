@@ -69,9 +69,15 @@ export async function POST(request: NextRequest) {
     let resolvedMarca: number;
     let resolvedModelo: number;
 
-    if (!marca && !modelo) {
+    if (!marca) {
       return NextResponse.json(
-        { success: false, error: 'Faltan nombres de marca/modelo del vehículo para resolver códigos Regional. Verifique los datos del vehículo.' },
+        { success: false, error: 'Falta el nombre de la marca del vehículo. Por favor regrese al paso anterior y complete los datos del vehículo.' },
+        { status: 400 }
+      );
+    }
+    if (!modelo) {
+      return NextResponse.json(
+        { success: false, error: 'Falta el nombre del modelo del vehículo. Por favor regrese al paso anterior y complete los datos del vehículo.' },
         { status: 400 }
       );
     }

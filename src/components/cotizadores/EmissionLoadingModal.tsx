@@ -213,11 +213,19 @@ export default function EmissionLoadingModal({
               </div>
 
               <h3 className="text-xl font-bold text-gray-900 mb-1">
-                Aseguradora fuera de línea
+                Error en la emisión
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Esta aseguradora se encuentra fuera de servicio por el momento.
+              <p className="text-sm text-gray-500 mb-3">
+                No se pudo completar la emisión de la póliza.
               </p>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-left">
+                  <p className="text-xs text-red-700 font-mono break-words leading-relaxed">
+                    {error}
+                  </p>
+                </div>
+              )}
 
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
                 <div
