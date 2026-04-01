@@ -597,6 +597,14 @@ export interface FedpaBeneficioItem {
 /** Beneficios del Endoso Base (Full Extras / K1) */
 export const FEDPA_ENDOSO_BASE_ITEMS: FedpaBeneficioItem[] = [
   {
+    nombre: 'Grúa por Avería',
+    descripcion: '1 evento por avería mecánica — máximo B/.150.00 al año',
+  },
+  {
+    nombre: 'Grúa por Accidente',
+    descripcion: '1 evento por accidente — máximo B/.150.00 al año',
+  },
+  {
     nombre: 'Defensa Penal',
     descripcion: 'Gastos legales en proceso penal derivado de accidente de tránsito — hasta B/.2,000',
   },

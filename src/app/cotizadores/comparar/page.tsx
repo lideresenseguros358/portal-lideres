@@ -390,11 +390,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     };
     
     // ============================================
-    // PREMIUM: Centenario endoso — IS NO cobra extra por Centenario vs Plus.
-    // IS factura al mismo precio para ambos planes (endosoTexto va solo como txtComentarios).
-    // El precio del plan Premium es IGUAL al Básico para que la caratula coincida con el cobro.
+    // PREMIUM: Centenario endoso — delta sobre Básico (Plus).
+    // Centenario cuesta $60/año vs Plus $35/año → diferencia de $25 que se suma al base.
     // ============================================
-    const subtotalPremium = primaBase; // mismo base que Básico — IS no diferencia en precio
+    const endosoDelta = IS_ENDOSOS.CENTENARIO.costoAnual - IS_ENDOSOS.PLUS.costoAnual; // 25.00
+    const subtotalPremium = primaBase + endosoDelta;
     const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
     const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
@@ -402,14 +402,14 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         codigo: IS_ENDOSOS.CENTENARIO.codigo,
         nombre: IS_ENDOSOS.CENTENARIO.nombre,
         incluido: true,
-        descripcion: 'Incluido en la prima',
+        descripcion: `Incluido en la prima (B/.${IS_ENDOSOS.CENTENARIO.costoAnual.toFixed(2)})`,
         subBeneficios: IS_ENDOSOS.CENTENARIO.beneficios,
       },
       {
         codigo: IS_ENDOSOS.PLUS.codigo,
         nombre: IS_ENDOSOS.PLUS.nombre,
         incluido: true,
-        descripcion: 'Incluido en la prima base',
+        descripcion: `Incluido en la prima (B/.${IS_ENDOSOS.PLUS.costoAnual.toFixed(2)})`,
         subBeneficios: IS_ENDOSOS.PLUS.beneficios,
       },
     ];
@@ -430,7 +430,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: 0, // IS no cobra extra por Centenario — mismo precio que Básico
+        costoEndoso: endosoDelta, // $25 diferencia Centenario vs Plus
         impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
