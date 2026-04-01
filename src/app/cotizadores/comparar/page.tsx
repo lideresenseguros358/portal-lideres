@@ -8,11 +8,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { obtenerPlanPorTipo, resolverPlanCCPorValor } from '@/lib/cotizadores/fedpa-plan-resolver';
 import { resolverCodigoPlanCCIS } from '@/lib/is/plan-cc-resolver';
-import { 
-  normalizeAssistanceBenefits, 
-  normalizeDeductibles, 
+import {
+  FEDPA_ENDOSO_BASE_ITEMS,
+  FEDPA_ENDOSO_PORCELANA_ITEMS,
+  normalizeDeductibles,
   calcularDescuentoBuenConductor,
-  formatAsistencia,
   parseEndosoBeneficiosFromAPI,
 } from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
@@ -647,29 +647,14 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     // ============================================
     // BENEFICIOS Y ASISTENCIAS (ya obtenidos en paralelo arriba)
     // ============================================
-    let asistenciasNormalizadas: any[] = [];
     let beneficiosRawTexts: string[] = [];
     const deduciblesReales = normalizeDeductibles([], apiCoberturas, quoteData.deducible as 'bajo' | 'medio' | 'alto');
-    
+
     if (beneficiosData) {
       const beneficiosRaw = beneficiosData.data || [];
       beneficiosRawTexts = beneficiosRaw.map((b: any) => b.beneficio || b.BENEFICIOS || b.BENEFICIO || '').filter((t: string) => t.trim() !== '');
       console.log(`[FEDPA] Beneficios RAW texts (${beneficiosRawTexts.length}):`, JSON.stringify(beneficiosRawTexts));
-      asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
-      console.log(`[FEDPA] Asistencias normalizadas:`, asistenciasNormalizadas.length);
     }
-    
-    const allBeneficios = asistenciasNormalizadas.length > 0
-      ? asistenciasNormalizadas.map(a => ({
-          nombre: formatAsistencia(a),
-          descripcion: a.rawText,
-          incluido: true,
-          tooltip: a.rawText,
-        }))
-      : [
-          { nombre: 'Asistencia vial', descripcion: 'Incluido', incluido: true },
-          { nombre: 'Asistencia médica telefónica', descripcion: '24/7', incluido: true },
-        ];
     
     // Deducible info con valores REALES de la API
     const deducibleInfoReal = {
@@ -738,29 +723,45 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       c.COBERTURA === 'KC' || (c.DESCCOBERTURA || c.descripcion || '').toUpperCase().includes('ASISTENCIA')
     );
     
+    // ─── Build _beneficios from endoso sub-benefits ───────────────
+    // Primary: use items from the API (via parseEndosoBeneficiosFromAPI)
+    // Fallback: static guide constants when API returns nothing useful
+    const toBendef = (texts: string[]) =>
+      texts.map(t => ({ nombre: t, descripcion: '', incluido: true }));
+    const toFallback = (items: { nombre: string; descripcion: string }[]) =>
+      items.map(b => ({ nombre: b.nombre, descripcion: b.descripcion, incluido: true }));
+
+    const baseBendef = fullExtrasBeneficiosAPI.length > 0
+      ? toBendef(fullExtrasBeneficiosAPI)
+      : toFallback(FEDPA_ENDOSO_BASE_ITEMS);
+
+    const porcelanaBendef = porcelanaBeneficiosAPI.length > 0
+      ? toBendef(porcelanaBeneficiosAPI)
+      : toFallback(FEDPA_ENDOSO_PORCELANA_ITEMS);
+
     // ========== PREMIUM: Endoso Porcelana + Full Extras ==========
     // NOTA: FEDPA PACK es solo para Daños a Terceros, NO aplica a Cobertura Completa
+    const porcelanaSubBen = porcelanaBeneficiosAPI.length > 0
+      ? porcelanaBeneficiosAPI
+      : FEDPA_ENDOSO_PORCELANA_ITEMS.map(b => `${b.nombre}: ${b.descripcion}`);
+
+    const fullExtrasSubBen = fullExtrasBeneficiosAPI.length > 0
+      ? fullExtrasBeneficiosAPI
+      : FEDPA_ENDOSO_BASE_ITEMS.map(b => `${b.nombre}: ${b.descripcion}`);
+
     const premiumEndosos = [
-      { 
+      {
         codigo: 'PORCELANA', nombre: 'Endoso Porcelana', incluido: true,
-        descripcion: parsedEndosos.porcelanaDescripcion 
-          || 'Beneficios iguales al Full Extras, con las siguientes mejoras',
-        subBeneficios: porcelanaBeneficiosAPI.length > 0
-          ? porcelanaBeneficiosAPI
-          : [
-              // Mejoras documentadas por FEDPA (puntos que se adicionan y mejoran sobre Full Extras)
-              'Pérdida de Efectos Personales dentro del Auto hasta la suma de B/.300.00',
-              'Auto de Alquiler por Colisión y/o Vuelco hasta por quince (15) días, en caso de que el vehículo sea arriba de 30,000.00 ó un vehículo 4x4',
-              'Descuentos del 20% en pagos de Deducibles, si el vehículo cuenta con sistema de GPS activado al momento del ROBO TOTAL DEL VEHICULO',
-            ],
+        descripcion: parsedEndosos.porcelanaDescripcion || 'Beneficios iguales al Full Extras, con las siguientes mejoras',
+        subBeneficios: porcelanaSubBen,
       },
-      { 
+      {
         codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
         descripcion: 'Beneficios incluidos en el plan',
-        subBeneficios: fullExtrasBeneficiosAPI,
+        subBeneficios: fullExtrasSubBen,
       },
     ];
-    
+
     const premium = {
       ...sharedData,
       id: 'fedpa-premium',
@@ -781,24 +782,21 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       _primaBase: primaBase * (1 + PORCELANA_SURCHARGE),
       _impuesto1: impuesto1 * (1 + PORCELANA_SURCHARGE),
       _impuesto2: impuesto2 * (1 + PORCELANA_SURCHARGE),
-      _beneficios: allBeneficios,
+      _beneficios: [...baseBendef, ...porcelanaBendef],
       _endosos: premiumEndosos,
       _endosoIncluido: 'Endoso Porcelana',
     };
-    
+
     // ========== BÁSICO: Solo Endoso Full Extras ==========
     const basicoEndosos = [
-      { 
+      {
         codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
         descripcion: 'Beneficios incluidos en el plan',
-        subBeneficios: fullExtrasBeneficiosAPI,
+        subBeneficios: fullExtrasSubBen,
       },
     ];
-    
-    // Básico: beneficios estándar limitados
-    const basicoBeneficios = allBeneficios.length > 5 
-      ? allBeneficios.slice(0, 5) 
-      : allBeneficios;
+
+    const basicoBeneficios = baseBendef;
     
     const basico = {
       ...sharedData,
@@ -825,7 +823,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       _endosoIncluido: 'Full Extras',
     };
     
-    console.log(`[FEDPA] ✅ Premium: $${primaPremium} (Porcelana + Full Extras), ${allBeneficios.length} beneficios, ${premiumEndosos.length} endosos`);
+    console.log(`[FEDPA] ✅ Premium: $${primaPremium} (Porcelana + Full Extras), ${baseBendef.length + porcelanaBendef.length} beneficios, ${premiumEndosos.length} endosos`);
     console.log(`[FEDPA] ✅ Básico: $${primaBasico} (Full Extras), ${basicoBeneficios.length} beneficios, ${basicoEndosos.length} endosos`);
     
     return { premium, basico };

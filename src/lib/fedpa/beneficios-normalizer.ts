@@ -583,6 +583,53 @@ export function parseEndosoBeneficiosFromAPI(rawTexts: string[]): ParsedEndosoDa
   return result;
 }
 
+// ============================================
+// FALLBACKS ESTÁTICOS FEDPA
+// Usados cuando la API de beneficios no retorna datos útiles.
+// Refleja la guía oficial de endosos FEDPA CC.
+// ============================================
+
+export interface FedpaBeneficioItem {
+  nombre: string;
+  descripcion: string;
+}
+
+/** Beneficios del Endoso Base (Full Extras / K1) */
+export const FEDPA_ENDOSO_BASE_ITEMS: FedpaBeneficioItem[] = [
+  {
+    nombre: 'Defensa Penal',
+    descripcion: 'Gastos legales en proceso penal derivado de accidente de tránsito — hasta B/.2,000',
+  },
+  {
+    nombre: 'Asistencia Legal Administrativa',
+    descripcion: 'Asesoría en procesos administrativos de tránsito, sin costo para el asegurado',
+  },
+  {
+    nombre: 'Auto de Alquiler (Colisión o Vuelco)',
+    descripcion: 'Vehículo de reemplazo tipo sedán compacto en caso de accidente cubierto — hasta 10 días',
+  },
+  {
+    nombre: 'Muerte Accidental del Conductor',
+    descripcion: 'Indemnización en caso de fallecimiento del conductor por accidente — B/.5,000',
+  },
+];
+
+/** Beneficios adicionales del Endoso Porcelana (mejoras sobre Full Extras) */
+export const FEDPA_ENDOSO_PORCELANA_ITEMS: FedpaBeneficioItem[] = [
+  {
+    nombre: 'Pérdida de Efectos Personales',
+    descripcion: 'Pérdida o daño de objetos personales dentro del vehículo — hasta B/.300',
+  },
+  {
+    nombre: 'Auto de Alquiler Mejorado',
+    descripcion: 'Extensión del beneficio de alquiler — hasta 15 días (vehículos sobre B/.30,000 o 4x4)',
+  },
+  {
+    nombre: 'Descuento en Deducible',
+    descripcion: '20% de reducción en el deducible por robo total si el vehículo tiene GPS activado',
+  },
+];
+
 /**
  * Extrae items numerados de un texto.
  * Formato: "1. texto 2. texto 3. texto"
