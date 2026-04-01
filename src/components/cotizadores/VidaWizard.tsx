@@ -357,13 +357,7 @@ export default function VidaWizard() {
       .finally(() => setLoadingAddr(''));
   }, []);
 
-  // ── Auto-fill suma asegurada when edad + salario change ──
-  useEffect(() => {
-    if (edad > 0 && !data.sumaAseguradaSolicitada) {
-      const max = esMenor ? 25000 : (salarioNum > 0 ? calcularMaximo(salarioNum, edad) : 0);
-      if (max > 0) setData(prev => ({ ...prev, sumaAseguradaSolicitada: formatInteger(max.toString()) }));
-    }
-  }, [edad, salarioNum]);
+  // (no auto-fill for sumaAseguradaSolicitada — user fills it manually)
 
   // ── Update helper ──
   function update(partial: Partial<VidaFormData>) {
@@ -1324,24 +1318,52 @@ export default function VidaWizard() {
             </p>
           )}
 
-          <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
-            <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={data.sumaAseguradaSolicitada}
-              onChange={(e) => { update({ sumaAseguradaSolicitada: formatInteger(e.target.value) }); }}
-              onFocus={(e) => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); update({ sumaAseguradaSolicitada: raw }); setTimeout(() => e.target.select(), 0); }}
-              onBlur={() => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); if (raw) update({ sumaAseguradaSolicitada: formatInteger(raw) }); }}
-              placeholder="Suma asegurada"
-              onWheel={(e) => e.currentTarget.blur()}
-              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
-            />
-          </div>
-          {errors.sumaAseguradaSolicitada && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.sumaAseguradaSolicitada}</p>}
-          {maximoEfectivo > 0 && !errors.sumaAseguradaSolicitada && (
-            <p className="text-xs text-gray-500 mt-1.5">Rango permitido: ${formatUSD(minimoFijo)} – ${formatUSD(maximoEfectivo)}</p>
-          )}
+          {/* Input label */}
+          <p className="text-xs text-gray-500 font-medium mb-1 flex items-center gap-1">
+            Suma asegurada solicitada — ingrese aquí
+            <span className="text-[#8AAA19]">↓</span>
+          </p>
+
+          {(() => {
+            const belowMin = sumaSolicitadaNum > 0 && sumaSolicitadaNum < minimoFijo;
+            const aboveMax = maximoEfectivo > 0 && sumaSolicitadaNum > maximoEfectivo;
+            const inRange = sumaSolicitadaNum >= minimoFijo && (!maximoEfectivo || sumaSolicitadaNum <= maximoEfectivo);
+            const borderClass = belowMin || aboveMax
+              ? 'border-red-400 bg-red-50 focus-within:border-red-500'
+              : inRange
+              ? 'border-[#8AAA19] bg-[#8AAA19]/5 focus-within:border-[#8AAA19]'
+              : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]';
+            return (
+              <>
+                <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${borderClass}`}>
+                  <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={data.sumaAseguradaSolicitada}
+                    onChange={(e) => { update({ sumaAseguradaSolicitada: formatInteger(e.target.value) }); }}
+                    onFocus={(e) => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); update({ sumaAseguradaSolicitada: raw }); setTimeout(() => e.target.select(), 0); }}
+                    onBlur={() => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); if (raw) update({ sumaAseguradaSolicitada: formatInteger(raw) }); }}
+                    placeholder="Ej: 100,000"
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
+                  />
+                </div>
+                {belowMin && (
+                  <p className="text-red-500 text-xs mt-1.5 font-medium">Está por debajo del mínimo permitido (${formatUSD(minimoFijo)})</p>
+                )}
+                {aboveMax && (
+                  <p className="text-red-500 text-xs mt-1.5 font-medium">Supera el máximo calculado para tu perfil (${formatUSD(maximoEfectivo)})</p>
+                )}
+                {!belowMin && !aboveMax && errors.sumaAseguradaSolicitada && (
+                  <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.sumaAseguradaSolicitada}</p>
+                )}
+                {maximoEfectivo > 0 && !belowMin && !aboveMax && (
+                  <p className="text-xs text-gray-500 mt-1.5">Rango permitido: ${formatUSD(minimoFijo)} – ${formatUSD(maximoEfectivo)}</p>
+                )}
+              </>
+            );
+          })()}
 
           {/* Requisitos de Asegurabilidad */}
           {sumaSolicitadaNum >= minimoFijo && (
