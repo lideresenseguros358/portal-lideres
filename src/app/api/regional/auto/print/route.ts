@@ -76,11 +76,22 @@ async function handlePrint(poliza: string, tokenType: 'rc' | 'cc' = 'cc') {
       });
     }
 
-    // No PDF data — return info
+    // If we got an HTML document, return it for browser rendering/printing
+    if (result.html) {
+      return new NextResponse(result.html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="poliza-regional-${poliza}.html"`,
+        },
+      });
+    }
+
+    // No document data — return info
     return NextResponse.json({
       success: true,
       requestId,
-      message: 'Póliza solicitada pero no se recibió PDF.',
+      message: 'Póliza solicitada pero no se recibió documento.',
     });
   } catch (error: any) {
     console.error(`[API REGIONAL Print] ${requestId} Error:`, error);

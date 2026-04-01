@@ -6,11 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { emitirPolizaRC } from '@/lib/regional/emission.service';
+import { emitirPolizaRC, imprimirPoliza } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import { getRegionalCredentials } from '@/lib/regional/config';
 import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { RegionalRCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -193,8 +194,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build print URL for the confirmation page / expediente
-    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}&type=rc` : null;
+    // ── Capture policy document from Regional immediately after emission ──
+    // Regional's imprimirPoliza endpoint can be called anytime, but we capture
+    // it now and store in Supabase Storage so it's permanently accessible.
+    let documentStorageUrl: string | null = null;
+    let documentHtml: string | null = null;
+
+    if (result.poliza) {
+      try {
+        console.log(`[REGIONAL RC Emit] Capturing policy document for ${result.poliza}...`);
+        const printResult = await imprimirPoliza(result.poliza, 'rc');
+
+        if (printResult.success && (printResult.html || printResult.pdf)) {
+          const supabaseAdmin = getSupabaseAdmin();
+          const BUCKET = 'expediente';
+          const timestamp = Date.now();
+          const ext = printResult.pdf ? 'pdf' : 'html';
+          const mimeType = printResult.pdf ? 'application/pdf' : 'text/html';
+          const fileBuffer = printResult.pdf
+            ? Buffer.from(printResult.pdf, 'base64')
+            : Buffer.from(printResult.html!, 'utf8');
+          const filePath = `regional-policies/${result.poliza.replace(/\//g, '-')}/${timestamp}_caratula.${ext}`;
+
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from(BUCKET)
+            .upload(filePath, fileBuffer, { contentType: mimeType, cacheControl: '86400', upsert: true });
+
+          if (uploadError) {
+            console.warn('[REGIONAL RC Emit] Storage upload warning (non-fatal):', uploadError.message);
+          } else {
+            const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(filePath);
+            documentStorageUrl = urlData?.publicUrl || null;
+            if (printResult.html) documentHtml = printResult.html;
+            console.log(`[REGIONAL RC Emit] ✅ Document stored: ${filePath} (${fileBuffer.length} bytes)`);
+          }
+        } else {
+          console.warn('[REGIONAL RC Emit] Document capture failed (non-fatal):', printResult.message);
+        }
+      } catch (printErr: any) {
+        console.warn('[REGIONAL RC Emit] Document capture error (non-fatal):', printErr.message);
+      }
+    }
+
+    // Build print URL: prefer permanent storage URL, fall back to live print endpoint
+    const pdfUrl = documentStorageUrl
+      || (result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}&type=rc` : null);
 
     // ── Auto-save client + policy to Supabase ──
     const cedula = prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || '');
@@ -221,6 +265,36 @@ export async function POST(request: NextRequest) {
       console.warn('[REGIONAL RC Emit] DB save warning (non-fatal):', dbResult.error);
     }
 
+    // ── Save policy document to expediente_documents if we have a client+policy ──
+    if (dbResult.clientId && dbResult.policyId && documentStorageUrl && result.poliza) {
+      try {
+        const supabaseAdmin = getSupabaseAdmin();
+        // Re-read the file from storage to get the buffer for the DB record,
+        // or just insert the DB record pointing to the already-uploaded path.
+        const filePath = documentStorageUrl.includes('/object/public/')
+          ? documentStorageUrl.split('/object/public/expediente/')[1]
+          : null;
+        if (filePath) {
+          const ext = filePath.endsWith('.pdf') ? 'pdf' : 'html';
+          await supabaseAdmin.from('expediente_documents').insert({
+            client_id: dbResult.clientId,
+            policy_id: dbResult.policyId,
+            document_type: 'otros',
+            document_name: `Carátula de Póliza - ${result.poliza}`,
+            file_path: filePath,
+            file_name: `caratula.${ext}`,
+            file_size: null,
+            mime_type: ext === 'pdf' ? 'application/pdf' : 'text/html',
+            uploaded_by: null,
+            notes: 'Carátula oficial emitida por Regional de Seguros. Capturada automáticamente en el momento de emisión.',
+          });
+          console.log('[REGIONAL RC Emit] ✅ Policy document saved to expediente_documents');
+        }
+      } catch (expErr: any) {
+        console.warn('[REGIONAL RC Emit] expediente_documents save warning (non-fatal):', expErr.message);
+      }
+    }
+
     return NextResponse.json({
       ...result,
       success: true,
@@ -228,6 +302,7 @@ export async function POST(request: NextRequest) {
       nroPoliza: result.poliza,
       numcot: result.numcot,
       pdfUrl,
+      documentStorageUrl,
       insurer: 'REGIONAL',
       clientId: dbResult.clientId,
       policyId: dbResult.policyId,

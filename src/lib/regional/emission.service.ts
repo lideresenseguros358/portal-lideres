@@ -224,7 +224,7 @@ export async function imprimirPoliza(
       return { success: false, message: `HTTP ${status}: ${errText.slice(0, 200)}` };
     }
 
-    // Check if response is a PDF (starts with %PDF)
+    // Check if response is a binary PDF (starts with %PDF)
     if (buf.length > 4 && buf.slice(0, 5).toString('ascii') === '%PDF-') {
       console.log('[REGIONAL Imprimir] ✅ PDF received:', buf.length, 'bytes');
       return {
@@ -233,15 +233,26 @@ export async function imprimirPoliza(
       };
     }
 
-    // Not a PDF — try to parse as JSON error message
     const text = buf.toString('utf8');
+
+    // Check if response is HTML (Regional typically returns ~333KB rendered HTML)
+    const trimmedText = text.trimStart();
+    if (trimmedText.startsWith('<!') || trimmedText.startsWith('<html') || trimmedText.startsWith('<HTML')) {
+      console.log('[REGIONAL Imprimir] ✅ HTML document received:', buf.length, 'bytes');
+      return {
+        success: true,
+        html: text,
+      };
+    }
+
+    // Not PDF or HTML — try to parse as JSON error message
     try {
       const json = JSON.parse(text) as Record<string, unknown>;
-      const msg = (json.mensaje || json.message || 'Respuesta no contiene PDF') as string;
-      console.warn('[REGIONAL Imprimir] JSON response (no PDF):', msg);
+      const msg = (json.mensaje || json.message || 'Respuesta no contiene documento') as string;
+      console.warn('[REGIONAL Imprimir] JSON response (no document):', msg);
       return { success: false, message: msg };
     } catch {
-      console.warn('[REGIONAL Imprimir] Non-PDF, non-JSON response:', text.slice(0, 200));
+      console.warn('[REGIONAL Imprimir] Unknown response format:', text.slice(0, 200));
       return { success: false, message: text.slice(0, 200) || 'Respuesta vacía del servidor' };
     }
   } catch (err: unknown) {

@@ -316,7 +316,8 @@ export interface RegionalImprimirBody {
 
 export interface RegionalImprimirResponse {
   success: boolean;
-  pdf?: string;  // base64 or URL
+  pdf?: string;   // base64 binary PDF
+  html?: string;  // raw HTML document (Regional returns ~333KB HTML, not always PDF)
   message?: string;
   [key: string]: unknown;
 }
