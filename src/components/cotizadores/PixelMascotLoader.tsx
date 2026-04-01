@@ -18,7 +18,14 @@ function drawMascota(
   x: number, y: number,
   armPos: 'head' | 'up' | 'mid' | 'down' | 'reach',
   color: string,
-  isTired = false
+  isTired = false,
+  /**
+   * barLiftY — when lifting the big weight, pass (liftY) here.
+   * Negative values cause the 'up' arm to extend dynamically so
+   * the hands always stay connected to the bar instead of floating.
+   * Formula: barLiftY = liftY = (lift - 2) from drawPesaGrande call.
+   */
+  barLiftY = 0
 ) {
   // Cuerpo (8x7)
   drawRect(ctx, x, y, 8, 7, color);
@@ -42,8 +49,28 @@ function drawMascota(
     drawRect(ctx, x - 2, y + 1, 2, 2, color);
     drawRect(ctx, x + 8, y + 1, 2, 2, color);
   } else if (armPos === 'up') {
-    drawRect(ctx, x - 2, y - 2, 2, 2, color);
-    drawRect(ctx, x + 8, y - 2, 2, 2, color);
+    if (barLiftY < 0) {
+      // ── Dynamic arm extension while lifting ──────────────────────────
+      // The bar sits at (y + barLiftY + 1). We extend the arm from the
+      // shoulder (row y + 2) upward to the grip point (row y + barLiftY)
+      // so hands always touch the bar regardless of how high it travels.
+      //
+      // armTopY  = barLiftY          → 1 row above the bar (grip)
+      // armH     = 2 - barLiftY      → distance from grip to shoulder
+      const armTopY = barLiftY;            // e.g. -7 at peak lift
+      const armH    = 2 - barLiftY;        // e.g.  9 at peak lift
+      // Arm shaft — left
+      drawRect(ctx, x - 2, y + armTopY, 2, armH, color);
+      // Arm shaft — right
+      drawRect(ctx, x + 8, y + armTopY, 2, armH, color);
+      // Grip knuckles (1-pixel wider strip right at the bar level)
+      drawRect(ctx, x - 3, y + armTopY, 1, 2, color);
+      drawRect(ctx, x + 10, y + armTopY, 1, 2, color);
+    } else {
+      // Normal raised-arms position (no weight or weight still low)
+      drawRect(ctx, x - 2, y - 2, 2, 2, color);
+      drawRect(ctx, x + 8, y - 2, 2, 2, color);
+    }
   } else if (armPos === 'mid') {
     drawRect(ctx, x - 3, y + 2, 3, 2, color);
     drawRect(ctx, x + 8, y + 2, 3, 2, color);
@@ -143,7 +170,7 @@ export default function PixelMascotLoader({ onStatusChange, size = 256 }: PixelM
         const isFailing = progress > 0.6;
         const activeColor = (isFailing && frameRef.current % 10 < 5) ? cRed : cGreen;
 
-        drawMascota(ctx, mx + shake, my, 'up', activeColor, isFailing);
+        drawMascota(ctx, mx + shake, my, 'up', activeColor, isFailing, lift - 2);
         drawBanda(ctx, mx + shake, my);
         drawPesaGrande(ctx, mx + shake, my, lift - 2);
 

@@ -21,8 +21,14 @@ import {
   FaRedoAlt,
   FaCheck,
   FaBolt,
+  FaThumbtack,
 } from 'react-icons/fa';
 import type { ChatThread, ChatMessage } from '@/types/chat.types';
+import {
+  CaseActionsRow, CaseDotsMenu,
+  CaseDeleteModal, CaseAssignModal,
+  type MasterUser,
+} from '@/components/operaciones/shared/CaseActions';
 
 // ════════════════════════════════════════════
 // HELPERS
@@ -95,6 +101,8 @@ function AssignedBadge({ type, aiEnabled }: { type: string; aiEnabled: boolean }
 // THREAD LIST
 // ════════════════════════════════════════════
 
+const CHAT_PINS_KEY = 'pins:chats';
+
 function ThreadList({
   threads, summary, loading, selectedId,
   onSelect, onRefresh,
@@ -106,166 +114,271 @@ function ThreadList({
   filterStatus: string; setFilterStatus: (v: string) => void;
   filterCategory: string; setFilterCategory: (v: string) => void;
 }) {
+  // ── PIN state ──────────────────────────────
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(CHAT_PINS_KEY);
+      if (stored) setPinnedIds(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const togglePin = useCallback((id: string) => {
+    setPinnedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      try { localStorage.setItem(CHAT_PINS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  // ── Assign master modal ────────────────────
+  const [assignThreadId, setAssignThreadId] = useState<string | null>(null);
+  const [masters, setMasters] = useState<MasterUser[]>([]);
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  const openAssign = useCallback((threadId: string) => {
+    setAssignThreadId(threadId);
+    if (masters.length === 0) {
+      fetch('/api/chats/masters')
+        .then(r => r.json())
+        .then(d => { if (d.data) setMasters(d.data); })
+        .catch(() => {});
+    }
+  }, [masters.length]);
+
+  const doAssign = useCallback(async (masterId: string | null) => {
+    if (!assignThreadId) return;
+    setAssignLoading(true);
+    try {
+      await fetch('/api/chats/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          thread_id: assignThreadId,
+          assign_to: masterId ? { user_id: masterId } : 'ai',
+        }),
+      });
+      onRefresh();
+    } finally {
+      setAssignLoading(false);
+      setAssignThreadId(null);
+    }
+  }, [assignThreadId, onRefresh]);
+
+  // ── Delete modal ───────────────────────────
+  const [deleteThreadId, setDeleteThreadId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const doDelete = useCallback(async () => {
+    if (!deleteThreadId) return;
+    setDeleteLoading(true);
+    try {
+      await fetch(`/api/chats/thread/${deleteThreadId}`, { method: 'DELETE' });
+      onRefresh();
+    } finally {
+      setDeleteLoading(false);
+      setDeleteThreadId(null);
+    }
+  }, [deleteThreadId, onRefresh]);
+
+  // ── Sorted list: pinned first ──────────────
+  const sortedThreads = [
+    ...pinnedIds.map(id => threads.find(t => t.id === id)).filter(Boolean) as ChatThread[],
+    ...threads.filter(t => !pinnedIds.includes(t.id)),
+  ];
+  const hasPinned = pinnedIds.some(id => threads.some(t => t.id === id));
+  const deleteThread = deleteThreadId ? threads.find(t => t.id === deleteThreadId) : null;
+  const assignThread = assignThreadId ? threads.find(t => t.id === assignThreadId) : null;
+
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Top bar */}
-      <div className="p-3 border-b border-gray-200 space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#010139]">💬 Chats</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400">{summary.total || 0} conv.</span>
-            <button onClick={onRefresh} className="text-gray-400 hover:text-[#010139] cursor-pointer">
-              <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
-          <div className="flex-shrink-0 text-gray-400">
-            <FaSearch size={14} />
-          </div>
-          <input type="text" placeholder="Buscar..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0" />
-        </div>
-
-        {/* Filters: Todos + Urgente pill + dropdown */}
-        <div className="flex items-center gap-1.5">
-          {/* Todos */}
-          <button
-            onClick={() => { setFilterStatus(''); setFilterCategory(''); }}
-            className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
-              !filterStatus && !filterCategory
-                ? 'bg-[#010139] text-white shadow-sm'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}>
-            Todos
-            {summary.total ? <span className="text-[9px] opacity-70">({summary.total})</span> : null}
-          </button>
-
-          {/* Urgente — always visible, highlighted red */}
-          <button
-            onClick={() => {
-              const isActive = filterStatus === 'urgent';
-              setFilterStatus(isActive ? '' : 'urgent');
-              if (!isActive) setFilterCategory('');
-            }}
-            className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
-              filterStatus === 'urgent'
-                ? 'bg-red-600 text-white shadow-sm shadow-red-200'
-                : 'bg-red-50 text-red-600 hover:bg-red-100'
-            }`}>
-            <FaExclamationTriangle className="text-[9px]" />
-            Urgente
-            {summary.urgent ? <span className="text-[9px] opacity-70">({summary.urgent})</span> : null}
-          </button>
-
-          {/* Dropdown for remaining filters */}
-          <div className="relative">
-            <select
-              value={
-                filterStatus === 'urgent' ? '' :
-                filterStatus ? `s:${filterStatus}` :
-                filterCategory ? `c:${filterCategory}` : ''
-              }
-              onChange={e => {
-                const v = e.target.value;
-                if (!v) { setFilterStatus(''); setFilterCategory(''); return; }
-                if (v.startsWith('s:')) { setFilterStatus(v.slice(2)); setFilterCategory(''); }
-                else if (v.startsWith('c:')) { setFilterCategory(v.slice(2)); setFilterStatus(''); }
-              }}
-              className={`appearance-none pl-2.5 pr-6 py-1 text-[11px] font-medium rounded-full border cursor-pointer transition-all outline-none ${
-                (filterStatus && filterStatus !== 'urgent') || filterCategory
-                  ? 'bg-[#8AAA19] text-white border-[#8AAA19] shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}>
-              <option value="">Filtrar...</option>
-              <optgroup label="Estado">
-                <option value="s:open">🟢 Abierto{summary.open ? ` (${summary.open})` : ''}</option>
-                <option value="s:closed">⚫ Cerrado</option>
-              </optgroup>
-              <optgroup label="Categoría">
-                <option value="c:simple">💬 Simple</option>
-                <option value="c:lead">⚡ Lead</option>
-              </optgroup>
-            </select>
-            <FaTag className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] pointer-events-none opacity-50" />
-          </div>
-        </div>
-      </div>
-
-      {/* Summary bar */}
-      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
-        <span className="inline-flex items-center gap-1 text-gray-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#010139] animate-pulse" />
-          No leídos: <strong className="text-[#010139]">{summary.unread || 0}</strong>
-        </span>
-        <span className="inline-flex items-center gap-1 text-gray-400">
-          <FaRobot className="text-[9px] text-purple-400" />
-          AI: <strong className="text-purple-600">{summary.ai || 0}</strong>
-        </span>
-        <span className="inline-flex items-center gap-1 text-gray-400">
-          <FaUserTie className="text-[9px] text-blue-400" />
-          Master: <strong className="text-blue-600">{summary.master || 0}</strong>
-        </span>
-      </div>
-
-      {/* Thread list */}
-      <div className="flex-1 overflow-y-auto">
-        {threads.length === 0 ? (
-          <div className="py-16 text-center">
-            <FaComments className="text-3xl text-gray-300 mx-auto mb-3" />
-            <p className="text-xs text-gray-500">Sin conversaciones</p>
-            <p className="text-[10px] text-gray-400 mt-1">Las conversaciones se crean al recibir mensajes de WhatsApp</p>
-          </div>
-        ) : (
-          threads.map(t => (
-            <div key={t.id}
-              onClick={() => onSelect(t.id)}
-              className={`flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors border-b border-gray-50 ${
-                selectedId === t.id ? 'bg-blue-50' : 'hover:bg-gray-50'
-              } ${t.category === 'urgent' ? 'border-l-4 border-l-red-500' : ''}`}>
-
-              {/* Avatar */}
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                t.category === 'urgent' ? 'bg-red-100' : t.category === 'lead' ? 'bg-emerald-100' : 'bg-gray-100'
-              }`}>
-                {t.category === 'urgent'
-                  ? <FaExclamationTriangle className="text-red-500 text-sm" />
-                  : <FaWhatsapp className="text-green-500 text-sm" />}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs font-semibold text-[#010139] truncate">
-                    {t.client_name || t.phone_e164}
-                  </span>
-                  <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">
-                    {fmtRelative(t.last_message_at)}
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-gray-500 truncate mb-1">
-                  {t.last_message_preview || 'Sin mensajes'}
-                </p>
-
-                <div className="flex items-center gap-1 flex-wrap">
-                  <CategoryBadge category={t.category} />
-                  <AssignedBadge type={t.assigned_type} aiEnabled={t.ai_enabled} />
-                  {t.unread_count_master > 0 && (
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#010139] text-white text-[10px] font-bold">
-                      {t.unread_count_master}
-                    </span>
-                  )}
-                </div>
-              </div>
+    <>
+      <div className="flex flex-col h-full bg-white">
+        {/* Top bar */}
+        <div className="p-3 border-b border-gray-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[#010139]">💬 Chats</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400">{summary.total || 0} conv.</span>
+              <button onClick={onRefresh} className="text-gray-400 hover:text-[#010139] cursor-pointer">
+                <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
-          ))
-        )}
+          </div>
+
+          <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+            <div className="flex-shrink-0 text-gray-400"><FaSearch size={14} /></div>
+            <input type="text" placeholder="Buscar..."
+              value={search} onChange={e => setSearch(e.target.value)}
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0" />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => { setFilterStatus(''); setFilterCategory(''); }}
+              className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
+                !filterStatus && !filterCategory ? 'bg-[#010139] text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}>
+              Todos
+              {summary.total ? <span className="text-[9px] opacity-70">({summary.total})</span> : null}
+            </button>
+            <button
+              onClick={() => { const isActive = filterStatus === 'urgent'; setFilterStatus(isActive ? '' : 'urgent'); if (!isActive) setFilterCategory(''); }}
+              className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
+                filterStatus === 'urgent' ? 'bg-red-600 text-white shadow-sm shadow-red-200' : 'bg-red-50 text-red-600 hover:bg-red-100'
+              }`}>
+              <FaExclamationTriangle className="text-[9px]" />
+              Urgente
+              {summary.urgent ? <span className="text-[9px] opacity-70">({summary.urgent})</span> : null}
+            </button>
+            <div className="relative">
+              <select
+                value={filterStatus === 'urgent' ? '' : filterStatus ? `s:${filterStatus}` : filterCategory ? `c:${filterCategory}` : ''}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (!v) { setFilterStatus(''); setFilterCategory(''); return; }
+                  if (v.startsWith('s:')) { setFilterStatus(v.slice(2)); setFilterCategory(''); }
+                  else if (v.startsWith('c:')) { setFilterCategory(v.slice(2)); setFilterStatus(''); }
+                }}
+                className={`appearance-none pl-2.5 pr-6 py-1 text-[11px] font-medium rounded-full border cursor-pointer transition-all outline-none ${
+                  (filterStatus && filterStatus !== 'urgent') || filterCategory
+                    ? 'bg-[#8AAA19] text-white border-[#8AAA19] shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                }`}>
+                <option value="">Filtrar...</option>
+                <optgroup label="Estado">
+                  <option value="s:open">🟢 Abierto{summary.open ? ` (${summary.open})` : ''}</option>
+                  <option value="s:closed">⚫ Cerrado</option>
+                </optgroup>
+                <optgroup label="Categoría">
+                  <option value="c:simple">💬 Simple</option>
+                  <option value="c:lead">⚡ Lead</option>
+                </optgroup>
+              </select>
+              <FaTag className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] pointer-events-none opacity-50" />
+            </div>
+          </div>
+        </div>
+
+        {/* Summary bar */}
+        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
+          <span className="inline-flex items-center gap-1 text-gray-500">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#010139] animate-pulse" />
+            No leídos: <strong className="text-[#010139]">{summary.unread || 0}</strong>
+          </span>
+          <span className="inline-flex items-center gap-1 text-gray-400">
+            <FaRobot className="text-[9px] text-purple-400" />
+            AI: <strong className="text-purple-600">{summary.ai || 0}</strong>
+          </span>
+          <span className="inline-flex items-center gap-1 text-gray-400">
+            <FaUserTie className="text-[9px] text-blue-400" />
+            Master: <strong className="text-blue-600">{summary.master || 0}</strong>
+          </span>
+        </div>
+
+        {/* Thread list */}
+        <div className="flex-1 overflow-y-auto">
+          {sortedThreads.length === 0 ? (
+            <div className="py-16 text-center">
+              <FaComments className="text-3xl text-gray-300 mx-auto mb-3" />
+              <p className="text-xs text-gray-500">Sin conversaciones</p>
+              <p className="text-[10px] text-gray-400 mt-1">Las conversaciones se crean al recibir mensajes de WhatsApp</p>
+            </div>
+          ) : (
+            sortedThreads.map((t, idx) => {
+              const isPinned = pinnedIds.includes(t.id);
+              const prevWasPinned = idx > 0 && pinnedIds.includes(sortedThreads[idx - 1]?.id ?? '');
+              const showDivider = hasPinned && !isPinned && prevWasPinned;
+              return (
+                <div key={t.id}>
+                  {showDivider && (
+                    <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 border-b border-gray-100">
+                      <span className="text-[9px] text-gray-400 font-semibold tracking-widest uppercase">Resto</span>
+                    </div>
+                  )}
+                  <CaseActionsRow
+                    isPinned={isPinned}
+                    onPin={() => togglePin(t.id)}
+                    onAssignMaster={() => openAssign(t.id)}
+                    onDelete={() => setDeleteThreadId(t.id)}
+                    onCardClick={() => onSelect(t.id)}
+                  >
+                    <div className={`group flex items-start gap-3 px-3 py-3 transition-colors border-b border-gray-50 ${
+                      selectedId === t.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    } ${t.category === 'urgent' ? 'border-l-4 border-l-red-500' : ''}
+                    ${isPinned && selectedId !== t.id ? 'bg-blue-50/30' : ''}`}>
+
+                      {/* Avatar */}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        t.category === 'urgent' ? 'bg-red-100' : t.category === 'lead' ? 'bg-emerald-100' : 'bg-gray-100'
+                      }`}>
+                        {t.category === 'urgent'
+                          ? <FaExclamationTriangle className="text-red-500 text-sm" />
+                          : <FaWhatsapp className="text-green-500 text-sm" />}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-center gap-1 min-w-0">
+                            {isPinned && <FaThumbtack className="text-blue-400 text-[9px] flex-shrink-0 -rotate-45" />}
+                            <span className="text-xs font-semibold text-[#010139] truncate">
+                              {t.client_name || t.phone_e164}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                            <span className="text-[10px] text-gray-400">{fmtRelative(t.last_message_at)}</span>
+                            <CaseDotsMenu
+                              isPinned={isPinned}
+                              onPin={() => togglePin(t.id)}
+                              onAssignMaster={() => openAssign(t.id)}
+                              onDelete={() => setDeleteThreadId(t.id)}
+                            />
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-gray-500 truncate mb-1">
+                          {t.last_message_preview || 'Sin mensajes'}
+                        </p>
+
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <CategoryBadge category={t.category} />
+                          <AssignedBadge type={t.assigned_type} aiEnabled={t.ai_enabled} />
+                          {t.unread_count_master > 0 && (
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#010139] text-white text-[10px] font-bold">
+                              {t.unread_count_master}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CaseActionsRow>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
-    </div>
+
+      {deleteThreadId && (
+        <CaseDeleteModal
+          name={deleteThread?.client_name || deleteThread?.phone_e164 || ''}
+          loading={deleteLoading}
+          onConfirm={doDelete}
+          onCancel={() => setDeleteThreadId(null)}
+        />
+      )}
+
+      {assignThreadId && (
+        <CaseAssignModal
+          masters={masters}
+          currentMasterId={assignThread?.assigned_master_user_id}
+          loading={assignLoading}
+          onAssign={doAssign}
+          onCancel={() => setAssignThreadId(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -496,13 +609,6 @@ function ChatView({
 // ════════════════════════════════════════════
 // CONFIG PANEL
 // ════════════════════════════════════════════
-
-interface MasterUser {
-  id: string;
-  name: string;
-  email: string;
-  avatar_url: string | null;
-}
 
 function ConfigPanel({
   thread, onClose, onAssign, onChangeStatus, assigning,

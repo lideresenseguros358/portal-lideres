@@ -35,7 +35,7 @@ function StatusBadge({ status }: { status: QuoteStatus }) {
     COTIZADA: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Cotizada', icon: <FaClock className="text-[8px]" /> },
     EMITIDA: { bg: 'bg-green-100', text: 'text-green-800', label: 'Emitida', icon: <FaCheckCircle className="text-[8px]" /> },
     FALLIDA: { bg: 'bg-red-100', text: 'text-red-800', label: 'Fallida', icon: <FaTimesCircle className="text-[8px]" /> },
-    ABANDONADA: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Abandonada', icon: <FaExclamationTriangle className="text-[8px]" /> },
+    ABANDONADA: { bg: 'bg-red-100', text: 'text-red-700', label: 'Abandonada', icon: <FaExclamationTriangle className="text-[8px]" /> },
   };
   const s = map[status] ?? map['COTIZADA']!;
   if (!s) return null;
@@ -597,13 +597,34 @@ function QuoteDetail({ quote }: { quote: AdmCotQuote }) {
             ) : quote.status === 'ABANDONADA' ? (
               <>
                 <div className="flex items-center gap-1.5 mb-1">
-                  <FaExclamationTriangle className="text-amber-500 text-[10px]" />
-                  <p className="text-amber-600 font-semibold text-[11px]">Proceso Abandonado</p>
+                  <FaExclamationTriangle className="text-red-500 text-[10px]" />
+                  <p className="text-red-600 font-semibold text-[11px]">Proceso Abandonado</p>
                 </div>
-                <p><span className="font-medium text-gray-500">Último paso:</span> <span className="font-semibold text-amber-700">{quote.last_step || '—'}</span></p>
+                <p><span className="font-medium text-gray-500">Último paso:</span> <span className="font-semibold text-red-700">{quote.last_step || '—'}</span></p>
                 {(quote.quote_payload as any)?.error_message && (
                   <p><span className="font-medium text-gray-500">Motivo:</span> {(quote.quote_payload as any).error_message}</p>
                 )}
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Seguimiento</p>
+                  {quote.email ? (
+                    <>
+                      <p className="text-xs">
+                        <span className="font-medium text-gray-500">Email 1 (1h):</span>{' '}
+                        {quote.abandonment_email_sent_at
+                          ? <span className="text-green-600 font-semibold">Enviado · {new Date(quote.abandonment_email_sent_at).toLocaleString('es-PA', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          : <span className="text-orange-500 font-semibold">Pendiente</span>}
+                      </p>
+                      <p className="text-xs">
+                        <span className="font-medium text-gray-500">Email 2 (24h):</span>{' '}
+                        {(quote.quote_payload as any)?.abandonment_email_2_sent_at
+                          ? <span className="text-green-600 font-semibold">Enviado · {new Date((quote.quote_payload as any).abandonment_email_2_sent_at).toLocaleString('es-PA', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          : <span className="text-orange-500 font-semibold">Pendiente</span>}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-red-400 font-medium">Sin email — no se enviará seguimiento</p>
+                  )}
+                </div>
               </>
             ) : quote.status === 'FALLIDA' ? (
               <>

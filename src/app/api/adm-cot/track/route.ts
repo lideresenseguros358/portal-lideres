@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { trackLead, trackCompleteRegistration } from '@/lib/meta/conversions';
+import { trackLead, trackCompleteRegistration, trackAbandonedCheckout } from '@/lib/meta/conversions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -351,20 +351,35 @@ export async function POST(request: NextRequest) {
       }
 
       // ═══════════════════════════════════════
-      // 3. EMISSION FAILED
+      // 3. EMISSION FAILED / ABANDONED
       // ═══════════════════════════════════════
       case 'quote_failed': {
         const v = validateUpdatePayload(data);
         if (!v.valid) return NextResponse.json({ error: v.error }, { status: 400 });
 
+        // Fetch existing row to preserve quote_payload and get id for CAPI
+        const { data: existingFail } = await supabase
+          .from('adm_cot_quotes')
+          .select('id, quote_payload, email, phone, client_name, annual_premium, coverage_type, region')
+          .eq('quote_ref', data.quote_ref)
+          .eq('insurer', data.insurer)
+          .order('quoted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const existingPayload = typeof existingFail?.quote_payload === 'object' && existingFail.quote_payload
+          ? existingFail.quote_payload as Record<string, any>
+          : {};
+
         const failUpdates: Record<string, any> = {
           status: 'ABANDONADA',
           last_step: sanitizeString(data.last_step, 50) || 'emitir',
+          // Merge: keep original quote payload (insurer API response), add error info
           quote_payload: {
-            ...(typeof data.existing_payload === 'object' ? data.existing_payload : {}),
-            error_code: sanitizeString(data.error_code, 50),
-            error_message: sanitizeString(data.error_message, 500),
-            error_endpoint: sanitizeString(data.error_endpoint, 200),
+            ...existingPayload,
+            abandon_error_code: sanitizeString(data.error_code, 50),
+            abandon_error_message: sanitizeString(data.error_message, 500),
+            abandon_error_endpoint: sanitizeString(data.error_endpoint, 200),
           },
         };
 
@@ -386,6 +401,29 @@ export async function POST(request: NextRequest) {
           console.error('[ADM-COT TRACK] Fail update error:', error.message);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        // ═══ META CAPI: Fire "InitiateCheckout" for abandonment retargeting ═══
+        if (existingFail?.id) {
+          const abandonEmail = data.email || existingFail.email;
+          const abandonPhone = data.phone || existingFail.phone;
+          const abandonName = data.client_name || existingFail.client_name || '';
+          const abandonNameParts = abandonName.split(' ');
+          trackAbandonedCheckout({
+            quoteId: existingFail.id,
+            email: abandonEmail || undefined,
+            phone: abandonPhone || undefined,
+            firstName: abandonNameParts[0] || undefined,
+            lastName: abandonNameParts.slice(1).join(' ') || undefined,
+            insurer: data.insurer,
+            ramo: 'AUTO',
+            coverageType: existingFail.coverage_type || undefined,
+            premium: existingFail.annual_premium || undefined,
+            lastStep: sanitizeString(data.last_step, 50) || undefined,
+            clientIp: clientIp !== 'unknown' ? clientIp : undefined,
+            userAgent: request.headers.get('user-agent') || undefined,
+          }).catch(() => { /* silent */ });
+        }
+
         return NextResponse.json({ success: true, action: 'quote_failed' });
       }
 

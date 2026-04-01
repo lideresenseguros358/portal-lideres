@@ -354,7 +354,12 @@ export function buildAbandonmentRecoveryHtml(data: AbandonmentRecoveryData): str
             <p class="urgency-note">${isStage2 ? '¡No dejes pasar esta oportunidad!' : 'El proceso toma menos de 5 minutos'}</p>
           </div>
 
-          <p style="font-size: 14px; color: ${colors.textLight};">Si tienes alguna duda o necesitas asesoría personalizada, no dudes en contactarnos. Nuestro equipo está listo para ayudarte a encontrar la mejor cobertura.</p>
+          <p style="font-size: 14px; color: ${colors.textLight};">¿Tienes dudas o necesitas orientación? <strong style="color: ${colors.primary};">Lissa</strong>, tu asesora virtual de Líderes en Seguros, está disponible 24/7 para responder todas tus preguntas y acompañarte durante el proceso.</p>
+          <div style="text-align:center; margin: 20px 0 8px;">
+            <a href="https://wa.me/50768339167" style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;">
+              💬 Chatear con Lissa
+            </a>
+          </div>
         </div>
       </div>
 

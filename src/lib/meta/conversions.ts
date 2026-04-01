@@ -37,7 +37,7 @@ const TEST_EVENT_CODE = process.env.META_ADS_TEST_EVENT_CODE || '';
 // Types
 // ════════════════════════════════════════════
 
-export type MetaEventName = 'Lead' | 'CompleteRegistration';
+export type MetaEventName = 'Lead' | 'CompleteRegistration' | 'InitiateCheckout';
 
 export interface CAPIEventParams {
   /** Unique DB ID for deduplication (adm_cot_quotes.id) */
@@ -185,6 +185,40 @@ export function trackLead(params: {
     clientIp: params.clientIp,
     userAgent: params.userAgent,
     sourceUrl: 'https://portal.lideresenseguros.com/cotizadores',
+  });
+}
+
+/**
+ * Fire "InitiateCheckout" — called when a quote is abandoned (status → ABANDONADA).
+ * Standard Meta event for checkout/purchase abandonment; enables retargeting audiences.
+ */
+export function trackAbandonedCheckout(params: {
+  quoteId: string;
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  insurer?: string;
+  ramo?: string;
+  coverageType?: string;
+  premium?: number;
+  lastStep?: string;
+  clientIp?: string;
+  userAgent?: string;
+}) {
+  return sendCapiEvent({
+    quoteId: `${params.quoteId}_abandon`,
+    eventName: 'InitiateCheckout',
+    email: params.email,
+    phone: params.phone,
+    firstName: params.firstName,
+    lastName: params.lastName,
+    value: params.premium,
+    contentName: [params.insurer, params.ramo, params.coverageType, params.lastStep ? `abandonó en: ${params.lastStep}` : ''].filter(Boolean).join(' - ') || undefined,
+    contentCategory: params.ramo || 'AUTO',
+    clientIp: params.clientIp,
+    userAgent: params.userAgent,
+    sourceUrl: 'https://portal.lideresenseguros.com/cotizadores/emitir',
   });
 }
 

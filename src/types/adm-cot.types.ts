@@ -42,6 +42,7 @@ export interface AdmCotQuote {
   steps_log: Array<{ step: string; ts: string }> | null;
   quoted_at: string;
   emitted_at: string | null;
+  abandonment_email_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }

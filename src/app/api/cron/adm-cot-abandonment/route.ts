@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { emailService } from '@/lib/email/emailService';
 import { buildAbandonmentRecoveryHtml } from '@/lib/email/templates/AbandonmentRecoveryEmailTemplate';
+import { trackAbandonedCheckout } from '@/lib/meta/conversions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
     // ────────────────────────────────────────────────
     const { data: stage1, error: err1 } = await sb
       .from('adm_cot_quotes')
-      .select('id, quote_ref, insurer, client_name, email, ramo, coverage_type, last_step, updated_at, quote_payload')
+      .select('id, quote_ref, insurer, client_name, email, phone, ramo, coverage_type, last_step, annual_premium, updated_at, quote_payload')
       .eq('status', 'ABANDONADA')
       .not('email', 'is', null)
       .is('abandonment_email_sent_at', null)
@@ -127,6 +128,21 @@ export async function GET(request: NextRequest) {
         if (result.success) {
           sentStage1++;
           console.log(`[CRON ABANDONMENT] ✓ Stage1 email → ${email} (ref: ${q.quote_ref})`);
+
+          // Fire Meta CAPI InitiateCheckout for retargeting (backup — in case session event was lost)
+          const nameParts = (q.client_name || '').split(' ');
+          trackAbandonedCheckout({
+            quoteId: q.id,
+            email,
+            phone: q.phone || undefined,
+            firstName: nameParts[0] || undefined,
+            lastName: nameParts.slice(1).join(' ') || undefined,
+            insurer: q.insurer,
+            ramo: q.ramo || 'AUTO',
+            coverageType: q.coverage_type || undefined,
+            premium: q.annual_premium || undefined,
+            lastStep: q.last_step || undefined,
+          }).catch(() => { /* silent */ });
         } else {
           errors.push(`S1 ${email}: ${result.error}`);
         }
