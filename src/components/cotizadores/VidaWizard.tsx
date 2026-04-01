@@ -17,6 +17,7 @@ interface VidaFormData {
   nombre: string;
   apellido: string;
   fechaNacimiento: string;
+  sexo: 'M' | 'F' | '';
   celular: string;
   correo: string;
   nacionalidad: string;
@@ -63,6 +64,7 @@ const INITIAL_DATA: VidaFormData = {
   nombre: '',
   apellido: '',
   fechaNacimiento: '',
+  sexo: '',
   celular: '',
   correo: '',
   nacionalidad: 'Panamá',
@@ -141,6 +143,104 @@ function sanitizeHTML(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function formatInteger(s: string): string {
+  const n = parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
+  return n > 0 ? n.toLocaleString('en-US') : '';
+}
+
+// ─── Requisitos de Asegurabilidad ───────────────────────────────────
+
+interface ReqItem { key: string; label: string; detalle: string; }
+
+const REQ_META: Record<string, { label: string; detalle: string }> = {
+  examen_medico_urinalisis_nicotina: {
+    label: 'EXM/UL — Examen Médico y Uroanálisis',
+    detalle: 'Incluye: Prueba de Nicotina',
+  },
+  lab_a: {
+    label: 'LAB A',
+    detalle: 'Biometría Hemática Completa, VSG, Glicemia, HbA1c, Perfil Lipídico, Creatinina, BUN, Transaminasas, Bilirrubina, Fosfatasa Alcalina, Ácido Úrico',
+  },
+  ecg: { label: 'ECG — Electrocardiograma', detalle: 'Electrocardiograma en reposo' },
+  psa_41_plus: { label: 'PSA — Antígeno Prostático', detalle: 'Aplica a hombres mayores de 41 años' },
+  ecgm: { label: 'ECGM — Electrocardiograma con Esfuerzo', detalle: 'Electrocardiograma con prueba de esfuerzo' },
+  form_activos_pasivos: { label: 'Formulario de Activos y Pasivos', detalle: 'Declaración financiera de activos y pasivos' },
+  cuestionario_financiero: { label: 'Cuestionario Financiero', detalle: 'Evaluación del perfil financiero del asegurado' },
+};
+
+type ReqTable = { edadMin: number; edadMax: number; rangos: { min: number; max: number; reqs: Record<string, boolean> }[] };
+
+const TABLA_REQUISITOS: ReqTable[] = [
+  {
+    edadMin: 0, edadMax: 19,
+    rangos: [
+      { min: 25000, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    ],
+  },
+  {
+    edadMin: 20, edadMax: 45,
+    rangos: [
+      { min: 25000, max: 400000, reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 400001, max: 500000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 500001, max: 750000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 750001, max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: true, cuestionario_financiero: false } },
+      { min: 1000001, max: 2000000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: true, cuestionario_financiero: true } },
+      { min: 2000001, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: true } },
+    ],
+  },
+  {
+    edadMin: 46, edadMax: 55,
+    rangos: [
+      { min: 25000, max: 200000, reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 200001, max: 300000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: false, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 300001, max: 500000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 500001, max: 750000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 750001, max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: true, cuestionario_financiero: false } },
+      { min: 1000001, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: true } },
+    ],
+  },
+  {
+    edadMin: 56, edadMax: 60,
+    rangos: [
+      { min: 25000, max: 75000, reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 75001, max: 100000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: false, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 100001, max: 500000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 500001, max: 750000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 750001, max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: false } },
+      { min: 1000001, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: true } },
+    ],
+  },
+  {
+    edadMin: 61, edadMax: Infinity,
+    rangos: [
+      { min: 25000, max: 200000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: false, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 200001, max: 750000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+      { min: 750001, max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: false } },
+      { min: 1000001, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: true, lab_a: true, ecg: true, psa_41_plus: true, ecgm: true, form_activos_pasivos: true, cuestionario_financiero: true } },
+    ],
+  },
+];
+
+function calcularRequisitos(edad: number, suma: number, esFumador: boolean, esMasculino: boolean): ReqItem[] {
+  if (!edad || !suma) return [];
+  const grupo = TABLA_REQUISITOS.find(g => edad >= g.edadMin && edad <= g.edadMax);
+  if (!grupo) return [];
+  const found = grupo.rangos.find(r => suma >= r.min && suma <= r.max);
+  const rango = found ?? grupo.rangos[grupo.rangos.length - 1];
+  if (!rango) return [];
+  const reqs = { ...rango.reqs };
+  // Fumador: always EXM/UL (which includes nicotina)
+  if (esFumador) reqs.examen_medico_urinalisis_nicotina = true;
+  // PSA only for males over 41
+  if (!esMasculino || edad <= 41) reqs.psa_41_plus = false;
+  return Object.entries(reqs)
+    .filter(([, v]) => v)
+    .map(([k]) => {
+      const meta = REQ_META[k] ?? { label: k, detalle: '' };
+      return { key: k, label: meta.label, detalle: meta.detalle };
+    });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // STABLE INPUT FIELD (defined outside component to prevent re-mount)
 // ═══════════════════════════════════════════════════════════════════
@@ -212,6 +312,9 @@ export default function VidaWizard() {
   const ingresoAnual = salarioNum * 12;
   const maximoCalculado = calcularMaximo(salarioNum, edad);
   const minimoFijo = 25000;
+  // Minors (< 18) are capped at $25,000 regardless of income
+  const esMenor = edad > 0 && edad < 18;
+  const maximoEfectivo = esMenor ? 25000 : maximoCalculado;
 
   // ── Load address catalogs ──
   useEffect(() => {
@@ -256,9 +359,9 @@ export default function VidaWizard() {
 
   // ── Auto-fill suma asegurada when edad + salario change ──
   useEffect(() => {
-    if (edad > 0 && salarioNum > 0 && !data.sumaAseguradaSolicitada) {
-      const max = calcularMaximo(salarioNum, edad);
-      setData(prev => ({ ...prev, sumaAseguradaSolicitada: max.toString() }));
+    if (edad > 0 && !data.sumaAseguradaSolicitada) {
+      const max = esMenor ? 25000 : (salarioNum > 0 ? calcularMaximo(salarioNum, edad) : 0);
+      if (max > 0) setData(prev => ({ ...prev, sumaAseguradaSolicitada: formatInteger(max.toString()) }));
     }
   }, [edad, salarioNum]);
 
@@ -286,8 +389,9 @@ export default function VidaWizard() {
       else {
         const nacDate = new Date(data.fechaNacimiento);
         if (nacDate > new Date()) e.fechaNacimiento = 'La fecha no puede ser futura';
-        else if (edad < 18 || edad > 85) e.fechaNacimiento = 'Edad debe estar entre 18 y 85 años';
+        else if (edad > 85) e.fechaNacimiento = 'Edad máxima permitida: 85 años';
       }
+      if (!data.sexo) e.sexo = 'Selecciona una opción';
       if (!data.celular.trim()) e.celular = 'Celular es obligatorio';
       else if (data.celular.replace(/\D/g, '').length < 7) e.celular = 'Celular debe tener al menos 7 dígitos';
       if (!data.correo.trim()) e.correo = 'Correo es obligatorio';
@@ -322,14 +426,14 @@ export default function VidaWizard() {
       if (data.tieneSeguroVida === null) e.tieneSeguroVida = 'Selecciona una opción';
       if (data.tieneSeguroVida) {
         if (!data.companiaSeguroActual.trim()) e.companiaSeguroActual = 'Indica la compañía';
-        if (!data.sumaAseguradaActual || parseFloat(data.sumaAseguradaActual) <= 0) e.sumaAseguradaActual = 'Indica la suma asegurada actual';
+        if (!data.sumaAseguradaActual || parseCurrency(data.sumaAseguradaActual) <= 0) e.sumaAseguradaActual = 'Indica la suma asegurada actual';
       }
       if (data.esCubrirHipoteca === null) e.esCubrirHipoteca = 'Selecciona una opción';
       if (data.esCubrirHipoteca && (!data.aniosHipoteca || parseInt(data.aniosHipoteca) <= 0)) e.aniosHipoteca = 'Indica los años de la hipoteca';
-      const suma = parseFloat(data.sumaAseguradaSolicitada) || 0;
-      if (suma < minimoFijo) e.sumaAseguradaSolicitada = `Mínimo permitido: $${formatUSD(minimoFijo)}`;
-      else if (maximoCalculado > 0 && suma > maximoCalculado) e.sumaAseguradaSolicitada = `Máximo permitido: $${formatUSD(maximoCalculado)}`;
-      else if (suma <= 0) e.sumaAseguradaSolicitada = 'Indica la suma asegurada';
+      const suma = parseCurrency(data.sumaAseguradaSolicitada);
+      if (suma <= 0) e.sumaAseguradaSolicitada = 'Indica la suma asegurada';
+      else if (suma < minimoFijo) e.sumaAseguradaSolicitada = `Mínimo permitido: $${formatUSD(minimoFijo)}`;
+      else if (maximoEfectivo > 0 && suma > maximoEfectivo) e.sumaAseguradaSolicitada = `Máximo permitido: $${formatUSD(maximoEfectivo)}`;
     }
 
     if (s === 6) {
@@ -383,8 +487,8 @@ export default function VidaWizard() {
     // Backend recalc for anti-manipulation
     const beEdad = calcularEdad(data.fechaNacimiento);
     const beSalario = parseCurrency(data.salarioMensual);
-    const beMax = calcularMaximo(beSalario, beEdad);
-    const beSuma = parseFloat(data.sumaAseguradaSolicitada) || 0;
+    const beMax = beEdad < 18 ? 25000 : calcularMaximo(beSalario, beEdad);
+    const beSuma = parseCurrency(data.sumaAseguradaSolicitada);
 
     if (beSuma < minimoFijo || (beMax > 0 && beSuma > beMax)) {
       setErrors({ sumaAseguradaSolicitada: 'Suma asegurada fuera del rango permitido. Vuelve al paso 5.' });
@@ -410,6 +514,7 @@ export default function VidaWizard() {
         '',
         '── DATOS PERSONALES ──',
         `Nombre: ${sanitizeHTML(data.nombre)} ${sanitizeHTML(data.apellido)}`,
+        `Sexo: ${data.sexo === 'M' ? 'Masculino' : data.sexo === 'F' ? 'Femenino' : ''}`,
         `Fecha de nacimiento: ${data.fechaNacimiento} (Edad: ${beEdad} años)`,
         `Celular: ${sanitizeHTML(data.celular)}`,
         `Correo: ${sanitizeHTML(data.correo)}`,
@@ -484,6 +589,7 @@ export default function VidaWizard() {
             apellido: data.apellido,
             fecha_nacimiento: data.fechaNacimiento,
             edad: beEdad,
+            sexo: data.sexo,
             celular: data.celular,
             correo: data.correo,
             nacionalidad: data.nacionalidad,
@@ -622,9 +728,34 @@ export default function VidaWizard() {
             }`}
           />
           {edad > 0 && (
-            <p className="text-sm text-[#8AAA19] font-semibold mt-1">Edad: {edad} años</p>
+            <p className="text-sm text-[#8AAA19] font-semibold mt-1">Edad: {edad} años{esMenor ? ' — Menor de edad' : ''}</p>
           )}
           {errors.fechaNacimiento && <p className="text-red-500 text-xs mt-1 font-medium">{errors.fechaNacimiento}</p>}
+        </div>
+        {/* Sexo */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            Sexo <span className="text-red-500">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {(['M', 'F'] as const).map((val) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => update({ sexo: val })}
+                className={`py-3 px-4 rounded-xl border-2 font-semibold text-sm transition-all ${
+                  data.sexo === val
+                    ? 'border-[#8AAA19] bg-[#8AAA19]/10 text-[#8AAA19]'
+                    : errors.sexo
+                    ? 'border-red-300 bg-red-50 text-gray-600'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {val === 'M' ? '♂ Masculino' : '♀ Femenino'}
+              </button>
+            ))}
+          </div>
+          {errors.sexo && <p className="text-red-500 text-xs mt-1 font-medium">{errors.sexo}</p>}
         </div>
         <WizardInputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" data={data} errors={errors} onUpdate={update} />
         <WizardInputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" data={data} errors={errors} onUpdate={update} />
@@ -1116,6 +1247,14 @@ export default function VidaWizard() {
   }
 
   function renderStep5() {
+    const sumaActualNum = parseCurrency(data.sumaAseguradaActual);
+    const sumaSolicitadaNum = parseCurrency(data.sumaAseguradaSolicitada);
+    const cumuloTotal = (data.tieneSeguroVida && sumaActualNum > 0) ? sumaSolicitadaNum + sumaActualNum : sumaSolicitadaNum;
+    const esFumador = !!data.haFumadoAlgunaVez;
+    const esMasculino = data.sexo === 'M';
+    const requisitos = calcularRequisitos(edad, cumuloTotal, esFumador, esMasculino);
+    const tieneCumulo = data.tieneSeguroVida && sumaActualNum > 0 && sumaSolicitadaNum > 0;
+
     return (
       <div className="space-y-5">
         {/* Seguro actual */}
@@ -1127,16 +1266,25 @@ export default function VidaWizard() {
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Suma asegurada actual (USD) <span className="text-red-500">*</span>
               </label>
-              <div className={`flex items-center gap-2 px-3 py-3 border-2 rounded-xl transition-colors ${errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
-                <span className="flex-shrink-0 text-gray-400 font-semibold text-sm sm:text-base select-none">$</span>
+              <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
+                <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
                 <input
                   type="text"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   value={data.sumaAseguradaActual}
-                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaActual: v }); }}
-                  placeholder="50000"
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9.]/g, '');
+                    const parts = raw.split('.');
+                    const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                    const decimals = cleaned.split('.')[1];
+                    if (decimals && decimals.length > 2) return;
+                    update({ sumaAseguradaActual: cleaned });
+                  }}
+                  onBlur={() => { const fmt = formatCurrencyBlur(data.sumaAseguradaActual); if (fmt) update({ sumaAseguradaActual: fmt }); }}
+                  onFocus={(e) => { const raw = data.sumaAseguradaActual.replace(/,/g, ''); update({ sumaAseguradaActual: raw }); setTimeout(() => e.target.select(), 0); }}
+                  placeholder="0.00"
                   onWheel={(e) => e.currentTarget.blur()}
-                  className="flex-1 min-w-0 p-0 border-0 bg-transparent text-base focus:outline-none focus:ring-0 appearance-none"
+                  className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
                 />
               </div>
               {errors.sumaAseguradaActual && <p className="text-red-500 text-xs mt-1 font-medium">{errors.sumaAseguradaActual}</p>}
@@ -1154,52 +1302,88 @@ export default function VidaWizard() {
 
         {/* Suma asegurada solicitada */}
         <div className="bg-gradient-to-br from-[#010139]/5 to-[#8AAA19]/5 rounded-xl p-4 sm:p-5 border-2 border-[#8AAA19]/20">
-          <div className="flex items-start gap-2 mb-3">
-            <h4 className="text-sm font-bold text-[#010139]">Suma asegurada solicitada (USD)</h4>
-            <div className="group relative">
-              <FaInfoCircle className="text-[#8AAA19] text-sm cursor-help" />
-              <div className="hidden group-hover:block absolute z-10 left-0 top-6 w-64 bg-white p-3 rounded-lg shadow-xl border text-xs text-gray-600">
-                Tu máximo recomendado se calcula con tu ingreso anual y un multiplicador según tu edad. Esto nos ayuda a sugerirte una suma asegurada acorde.
-              </div>
-            </div>
-          </div>
+          <h4 className="text-base font-bold text-[#010139] mb-0.5">Resultado</h4>
 
-          {edad > 0 && salarioNum > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-              <div className="bg-white rounded-lg p-2 text-center border">
-                <p className="text-[10px] text-gray-500 uppercase font-semibold">Edad</p>
-                <p className="text-sm font-bold text-[#010139]">{edad} años</p>
-              </div>
-              <div className="bg-white rounded-lg p-2 text-center border">
-                <p className="text-[10px] text-gray-500 uppercase font-semibold">Multiplicador</p>
-                <p className="text-sm font-bold text-[#8AAA19]">x{multiplicador}</p>
-              </div>
-              <div className="bg-white rounded-lg p-2 text-center border">
-                <p className="text-[10px] text-gray-500 uppercase font-semibold">Ingreso anual</p>
-                <p className="text-sm font-bold text-[#010139]">${formatUSD(ingresoAnual)}</p>
-              </div>
-              <div className="bg-white rounded-lg p-2 text-center border">
-                <p className="text-[10px] text-gray-500 uppercase font-semibold">Máximo</p>
-                <p className="text-sm font-bold text-[#8AAA19]">${formatUSD(maximoCalculado)}</p>
-              </div>
-            </div>
+          {esMenor ? (
+            <p className="text-sm text-gray-600 mb-3">
+              Para menores de edad, la suma asegurada máxima permitida es de{' '}
+              <span className="font-bold text-[#010139]">$25,000.00</span>.
+            </p>
+          ) : edad > 0 && ingresoAnual > 0 ? (
+            <p className="text-sm text-gray-600 mb-3">
+              Basado en tu edad de <span className="font-semibold">{edad} años</span> y tus ingresos anuales de{' '}
+              <span className="font-semibold">${formatUSD(ingresoAnual)}</span>, puedes aspirar a una suma asegurada de hasta:
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 mb-3">Completa tu fecha de nacimiento y salario para ver tu máximo recomendado.</p>
+          )}
+
+          {maximoEfectivo > 0 && (
+            <p className="text-3xl sm:text-4xl font-extrabold text-[#8AAA19] mb-4">
+              ${formatUSD(maximoEfectivo)}
+            </p>
           )}
 
           <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
-            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
+            <span className="flex-shrink-0 text-gray-500 font-bold text-xl sm:text-2xl select-none">$</span>
             <input
               type="text"
               inputMode="numeric"
               value={data.sumaAseguradaSolicitada}
-              onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaSolicitada: v }); }}
+              onChange={(e) => { update({ sumaAseguradaSolicitada: formatInteger(e.target.value) }); }}
+              onFocus={(e) => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); update({ sumaAseguradaSolicitada: raw }); setTimeout(() => e.target.select(), 0); }}
+              onBlur={() => { const raw = data.sumaAseguradaSolicitada.replace(/,/g, ''); if (raw) update({ sumaAseguradaSolicitada: formatInteger(raw) }); }}
               placeholder="Suma asegurada"
               onWheel={(e) => e.currentTarget.blur()}
-              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-2xl sm:text-3xl font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.sumaAseguradaSolicitada && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.sumaAseguradaSolicitada}</p>}
-          {maximoCalculado > 0 && !errors.sumaAseguradaSolicitada && (
-            <p className="text-xs text-gray-500 mt-1.5">Rango permitido: ${formatUSD(minimoFijo)} – ${formatUSD(maximoCalculado)}</p>
+          {maximoEfectivo > 0 && !errors.sumaAseguradaSolicitada && (
+            <p className="text-xs text-gray-500 mt-1.5">Rango permitido: ${formatUSD(minimoFijo)} – ${formatUSD(maximoEfectivo)}</p>
+          )}
+
+          {/* Requisitos de Asegurabilidad */}
+          {sumaSolicitadaNum >= minimoFijo && (
+            <div className="mt-4 border border-blue-200 bg-blue-50 rounded-xl p-4">
+              <p className="text-sm font-bold text-blue-800 mb-2">Requisitos de asegurabilidad</p>
+
+              {tieneCumulo && (
+                <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs font-semibold text-amber-800">⚠️ Cúmulo ASSA detectado</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Suma solicitada ${formatUSD(sumaSolicitadaNum)} + seguro actual ${formatUSD(sumaActualNum)} = <span className="font-bold">${formatUSD(cumuloTotal)}</span>
+                  </p>
+                  <p className="text-xs text-amber-700">Los requisitos se calculan sobre el total acumulado.</p>
+                </div>
+              )}
+
+              {esMenor && (
+                <div className="mb-3 p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-xs font-semibold text-purple-800">Menor de edad</p>
+                  <p className="text-xs text-purple-700 mt-0.5">Suma máxima permitida para menores: $25,000.00</p>
+                </div>
+              )}
+
+              {requisitos.length === 0 ? (
+                <p className="text-sm text-green-700 font-medium">✓ No se requieren exámenes médicos para esta suma asegurada.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {requisitos.map((r) => (
+                    <li key={r.key} className="text-sm">
+                      <span className="font-semibold text-blue-900">{r.label}</span>
+                      {r.detalle && <p className="text-xs text-blue-700 mt-0.5">{r.detalle}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {esFumador && (
+                <p className="text-xs text-gray-600 mt-2 border-t border-blue-200 pt-2">
+                  * Fumador declarado — Prueba de Nicotina incluida en EXM/UL.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
