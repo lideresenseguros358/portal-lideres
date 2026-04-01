@@ -81,7 +81,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   };
 
   // ── Mobile carousel state (CC) ──
-  const [activePlansCC, setActivePlansCC]       = useState<Record<string, 'basico' | 'premium'>>({});
+  const [globalPlanCC, setGlobalPlanCC] = useState<'basico' | 'premium'>('basico');
   const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
   const [ccTooltip, setCCTooltip]               = useState<{ key: string; top: number; left: number } | null>(null);
   const ccCarouselRef = useRef<HTMLDivElement>(null);
@@ -453,10 +453,32 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           color: white;
           box-shadow: 0 2px 6px rgba(1,1,57,0.25);
         }
+        /* ── Estado SELECCIONADO del botón Premium ── */
         .cc-plan-toggle button.cc-toggle-premium {
           background: linear-gradient(135deg, #8AAA19, #6d8814);
           color: white;
-          box-shadow: 0 2px 6px rgba(138,170,25,0.35);
+          box-shadow: 0 2px 8px rgba(138,170,25,0.55);
+        }
+        /* ── Estado NO seleccionado: shimmer + pop ── */
+        @keyframes cc-premium-shine {
+          0%        { background-position: -250% center; }
+          45%, 100% { background-position: 300% center; }
+        }
+        @keyframes cc-premium-pop {
+          0%, 72%, 100% { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
+          77%            { transform: scale(1.07); box-shadow: 0 0 0 6px rgba(138,170,25,0.18), 0 4px 18px rgba(138,170,25,0.6); }
+          83%            { transform: scale(0.97); box-shadow: 0 2px 6px rgba(138,170,25,0.3); }
+          88%            { transform: scale(1.03); box-shadow: 0 0 0 3px rgba(138,170,25,0.12), 0 3px 12px rgba(138,170,25,0.45); }
+          93%            { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
+        }
+        .cc-plan-toggle button.cc-toggle-premium-idle {
+          background: linear-gradient(105deg,
+            #6d8814 0%, #8AAA19 28%, #d6ec4a 46%, #c0d830 50%, #d6ec4a 54%, #8AAA19 72%, #6d8814 100%);
+          background-size: 300% auto;
+          color: white;
+          animation:
+            cc-premium-shine 2.8s ease-in-out infinite,
+            cc-premium-pop   4s   ease-in-out infinite;
         }
 
         /* Dot indicators CC */
@@ -804,7 +826,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
               const basicPlan  = insurerQuotes.find(q => q.planType === 'basico');
               const premiumPlan = insurerQuotes.find(q => q.planType === 'premium');
               const hasBoth    = !!basicPlan && !!premiumPlan;
-              const currentPlanType = activePlansCC[insurerName] ?? (premiumPlan ? 'premium' : 'basico');
+              const currentPlanType = hasBoth ? globalPlanCC : (premiumPlan ? 'premium' : 'basico');
               const currentPlan = currentPlanType === 'premium' ? (premiumPlan ?? basicPlan) : (basicPlan ?? premiumPlan);
               if (!currentPlan) return null;
 
@@ -846,14 +868,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                   {hasBoth && (
                     <div className="cc-plan-toggle">
                       <button
-                        onClick={() => setActivePlansCC(prev => ({ ...prev, [insurerName]: 'basico' }))}
+                        onClick={() => setGlobalPlanCC('basico')}
                         className={currentPlanType === 'basico' ? 'cc-toggle-basic' : ''}
                       >
                         Básico · ${basicPlan!.annualPremium.toFixed(0)}
                       </button>
                       <button
-                        onClick={() => setActivePlansCC(prev => ({ ...prev, [insurerName]: 'premium' }))}
-                        className={currentPlanType === 'premium' ? 'cc-toggle-premium' : ''}
+                        onClick={() => setGlobalPlanCC('premium')}
+                        className={currentPlanType === 'premium' ? 'cc-toggle-premium' : 'cc-toggle-premium-idle'}
                       >
                         ⭐ Premium · ${premiumPlan!.annualPremium.toFixed(0)}
                       </button>
