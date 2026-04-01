@@ -908,22 +908,16 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {insurersData.map((insurer) => {
           const isOffline = !!offlineInsurers[insurer.id];
+          if (isOffline) return null;
           return (
-            <div key={insurer.id} className={`bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl'}`}>
+            <div key={insurer.id} className="bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl">
               {/* Header */}
-              <div className={`p-6 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
+              <div className="p-6 text-white bg-gradient-to-br from-[#010139] to-[#020270]">
                 <div className="flex items-center gap-4 mb-4">
                   <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
                   <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
-                  {isOffline && (
-                    <span className="inline-flex items-center gap-1.5 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
-                      <FaExclamationTriangle className="text-[10px]" /> OFFLINE
-                    </span>
-                  )}
                 </div>
-                <div className="text-sm text-white/80 font-medium">
-                  {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata • Sin inspección'}
-                </div>
+                <div className="text-sm text-white/80 font-medium">Emisión inmediata • Sin inspección</div>
               </div>
               {renderPlanSection(insurer, insurer.basicPlan, 'basic', false)}
               {renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)}
@@ -948,7 +942,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           aria-label="Comparativa de aseguradoras"
         >
           {insurersData.map((insurer, idx) => {
-            const isOffline  = !!offlineInsurers[insurer.id];
+            if (!!offlineInsurers[insurer.id]) return null;
             const isActive   = idx === activeCardIndex;
             const currentPlan = globalPlan;
 
@@ -956,27 +950,19 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
               /* ── Tarjeta de aseguradora (con coverflow) ── */
               <div
                 key={insurer.id}
-                className={`tp-carousel-item ${isActive ? 'tp-active' : 'tp-inactive'} bg-white rounded-2xl shadow-lg border-2 overflow-hidden ${isOffline ? 'border-red-200 opacity-80' : 'border-gray-100'}`}
+                className={`tp-carousel-item ${isActive ? 'tp-active' : 'tp-inactive'} bg-white rounded-2xl shadow-lg border-2 overflow-hidden border-gray-100`}
               >
                 {/* Header compacto */}
-                <div className={`px-4 py-3 text-white ${isOffline ? 'bg-gradient-to-br from-gray-500 to-gray-600' : 'bg-gradient-to-br from-[#010139] to-[#020270]'}`}>
+                <div className="px-4 py-3 text-white bg-gradient-to-br from-[#010139] to-[#020270]">
                   <div className="flex items-center gap-3">
                     <InsurerLogo logoUrl={getLogoUrl(insurer.id)} insurerName={insurer.name} size="lg" />
                     <h3 className="font-bold text-base flex-1 leading-tight">{insurer.name}</h3>
-                    {isOffline && (
-                      <span className="inline-flex items-center gap-1 bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse">
-                        <FaExclamationTriangle size={9} /> OFFLINE
-                      </span>
-                    )}
                   </div>
-                  <div className="text-xs text-white/75 font-medium mt-1">
-                    {isOffline ? 'Aseguradora fuera de línea' : 'Emisión inmediata · Sin inspección'}
-                  </div>
+                  <div className="text-xs text-white/75 font-medium mt-1">Emisión inmediata · Sin inspección</div>
                 </div>
 
                 {/* ── TOGGLE DE PLAN: Básico ↔ Premium ── */}
-                {!isOffline && (
-                  <div className="pt-3 pb-1">
+                <div className="pt-3 pb-1">
                     <div className="tp-plan-toggle">
                       <button
                         onClick={() => setGlobalPlan('basic')}
@@ -993,7 +979,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                       </button>
                     </div>
                   </div>
-                )}
 
                 {/* ── Solo muestra el plan activo seleccionado en el toggle ── */}
                 {currentPlan === 'basic'

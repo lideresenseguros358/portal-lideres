@@ -1109,34 +1109,6 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           </div>
         </div>
 
-        {/* Offline Insurer Cards */}
-        {offlineInsurers.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            {offlineInsurers.map((name) => (
-              <div key={name} className="relative overflow-visible">
-                <div className="rounded-xl border-2 border-red-200 shadow-md bg-white opacity-80">
-                  <div className="p-4 text-white flex-shrink-0 rounded-t-xl bg-gradient-to-br from-gray-500 to-gray-600">
-                    <div className="flex items-center gap-2 mb-2">
-                      <InsurerLogo logoUrl={getLogoUrl(name)} insurerName={name} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-sm leading-tight truncate">{name}</h3>
-                      </div>
-                      <span className="inline-flex items-center gap-1.5 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
-                        <FaExclamationTriangle className="text-[10px]" /> OFFLINE
-                      </span>
-                    </div>
-                    <div className="text-sm text-white/80 font-medium">Fuera de línea</div>
-                  </div>
-                  <div className="p-6 text-center">
-                    <FaExclamationTriangle className="text-red-300 text-3xl mx-auto mb-3" />
-                    <p className="text-gray-500 font-semibold text-sm">Aseguradora fuera de línea</p>
-                    <p className="text-gray-400 text-xs mt-1">Esta aseguradora se encuentra fuera de servicio por el momento. Intente más tarde.</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Premium Upgrade Modal */}
         {showUpgradeModal && selectedBasicPlan && correspondingPremiumPlan && (
