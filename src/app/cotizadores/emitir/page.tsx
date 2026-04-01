@@ -922,7 +922,7 @@ export default function EmitirPage() {
           dirhab: emissionData.direccion || 'Ciudad de Panamá',
           // Datos cumplimiento
           ocupacion: 1,
-          ingresoAnual: parseInt(emissionData.nivelIngresos) || 1,
+          ingresoAnual: ({ 'menos de 10mil': 1, '10mil a 30mil': 2, '30mil a 50mil': 3, 'mas de 50mil': 4 } as Record<string, number>)[emissionData.nivelIngresos] ?? 1,
           paisTributa: 507,
           pep: emissionData.esPEP ? 'S' : 'N',
           // Vehículo

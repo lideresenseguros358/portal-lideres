@@ -213,7 +213,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     }
     return AUTO_THIRD_PARTY_INSURERS;
   });
-  const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
+  const [expandedBenefits, setExpandedBenefits] = useState(false);
   const [offlineInsurers, setOfflineInsurers] = useState<Record<string, boolean>>({});
   const [conexionTip, setConexionTip] = useState<string | null>(null);
   const fetchingRef = useRef(false);
@@ -460,8 +460,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     return INSURER_LOGOS[insurerId] || null;
   };
 
-  const toggleBenefits = (key: string) => {
-    setExpandedBenefits(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleBenefits = () => {
+    setExpandedBenefits(prev => !prev);
   };
 
   // ── Definiciones de tooltip por cobertura RC ──
@@ -614,8 +614,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     type: 'basic' | 'premium',
     isPremium: boolean
   ) => {
-    const benefitsKey = `${insurer.id}-${type}-benefits`;
-    const isBenefitsExpanded = expandedBenefits[benefitsKey] || false;
+    const isBenefitsExpanded = expandedBenefits;
 
     // Normalize to standard benefit list
     const normalized = normalizePlanBenefits(insurer.id, plan, type);
@@ -665,7 +664,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         {/* ── Beneficios y Asistencia (collapsible) ── */}
         <div className="mb-4">
           <button
-            onClick={() => toggleBenefits(benefitsKey)}
+            onClick={() => toggleBenefits()}
             className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <span className="flex items-center gap-2">

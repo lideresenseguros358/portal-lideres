@@ -83,7 +83,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   // ── Mobile carousel state (CC) ──
   const [globalPlanCC, setGlobalPlanCC] = useState<'basico' | 'premium'>('basico');
   const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
-  const [expandedBenefitsCC, setExpandedBenefitsCC] = useState<Record<string, boolean>>({});
+  const [expandedBenefitsCC, setExpandedBenefitsCC] = useState(false);
   const ccCarouselRef = useRef<HTMLDivElement>(null);
   const ccHintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1019,12 +1019,11 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
 
                     {/* ── Beneficios y Endosos (collapsible) ── */}
                     {currentPlan._isReal && (currentPlan._beneficios?.length > 0 || currentPlan._endosos?.length > 0) && (() => {
-                      const benefKey = `${insurerName}-${currentPlanType}`;
-                      const isExpanded = expandedBenefitsCC[benefKey] || false;
+                      const isExpanded = expandedBenefitsCC;
                       return (
                         <div className="mb-4">
                           <button
-                            onClick={() => setExpandedBenefitsCC(prev => ({ ...prev, [benefKey]: !prev[benefKey] }))}
+                            onClick={() => setExpandedBenefitsCC(prev => !prev)}
                             className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
                           >
                             <span className="flex items-center gap-2">
