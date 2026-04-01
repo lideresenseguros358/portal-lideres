@@ -544,8 +544,10 @@ export default function EmitirV2Page() {
             body: welcomeForm,
           });
           const welcomeResult = await welcomeResponse.json();
-          if (welcomeResult.success) {
-            console.log('[FEDPA CC V2] ✅ Expediente enviado:', welcomeResult.messageId);
+          if (welcomeResult.emails?.allOk) {
+            console.log('[FEDPA CC V2] ✅ Emails enviados:', JSON.stringify(welcomeResult.emails));
+          } else if (welcomeResult.success) {
+            console.warn('[FEDPA CC V2] ⚠️ Correos fallaron:', JSON.stringify(welcomeResult.emails));
           } else {
             console.error('[FEDPA CC V2] Error expediente:', welcomeResult.error);
           }

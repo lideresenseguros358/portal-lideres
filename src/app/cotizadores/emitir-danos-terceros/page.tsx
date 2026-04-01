@@ -611,10 +611,12 @@ export default function EmitirDanosTercerosPage() {
             body: welcomeForm,
           });
           const welcomeResult = await welcomeResponse.json();
-          if (welcomeResult.success) {
-            console.log('[FEDPA DT] ✅ Bienvenida enviada:', welcomeResult.messageId, '| Expediente:', JSON.stringify(welcomeResult.expediente));
+          if (welcomeResult.emails?.allOk) {
+            console.log('[FEDPA DT] ✅ Emails enviados. Portal:', welcomeResult.emails.portal.ok, '| Bienvenida:', welcomeResult.emails.welcome.ok);
+          } else if (welcomeResult.success) {
+            console.warn('[FEDPA DT] ⚠️ Correos fallaron:', JSON.stringify(welcomeResult.emails));
           } else {
-            console.error('[FEDPA DT] Error bienvenida:', welcomeResult.error);
+            console.error('[FEDPA DT] Error expediente:', welcomeResult.error);
           }
         } catch (welcomeErr: any) {
           console.error('[FEDPA DT] Error enviando bienvenida:', welcomeErr);
@@ -855,9 +857,12 @@ export default function EmitirDanosTercerosPage() {
           });
           
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[IS EXPEDIENTE DT] ✅ Correo enviado:', expedienteResult.messageId);
+          if (expedienteResult.emails?.allOk) {
+            console.log('[IS EXPEDIENTE DT] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
             toast.success('Expediente y confirmación enviados por correo');
+          } else if (expedienteResult.success) {
+            console.warn('[IS EXPEDIENTE DT] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
+            toast.warning('Póliza emitida pero hubo un error enviando los correos');
           } else {
             console.error('[IS EXPEDIENTE DT] Error:', expedienteResult.error);
             toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
@@ -1019,6 +1024,8 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('insurerName', 'La Regional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureRef.current || '');
           if (regionalPoliza) expedienteForm.append('pdfUrl', `/api/regional/auto/print?poliza=${encodeURIComponent(regionalPoliza)}`);
+          if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
 
           expedienteForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -1066,8 +1073,10 @@ export default function EmitirDanosTercerosPage() {
             body: expedienteForm,
           });
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[REGIONAL EXPEDIENTE DT] ✅ Correo enviado');
+          if (expedienteResult.emails?.allOk) {
+            console.log('[REGIONAL EXPEDIENTE DT] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
+          } else if (expedienteResult.success) {
+            console.warn('[REGIONAL EXPEDIENTE DT] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
           } else {
             console.warn('[REGIONAL EXPEDIENTE DT] Error:', expedienteResult.error);
           }
@@ -1290,8 +1299,10 @@ export default function EmitirDanosTercerosPage() {
             body: expedienteForm,
           });
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[ANCON DT] ✅ Expediente enviado:', expedienteResult.messageId);
+          if (expedienteResult.emails?.allOk) {
+            console.log('[ANCON DT] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
+          } else if (expedienteResult.success) {
+            console.warn('[ANCON DT] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
           } else {
             console.warn('[ANCON DT] Error expediente:', expedienteResult.error);
           }

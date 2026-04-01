@@ -846,9 +846,12 @@ export default function EmitirPage() {
           });
           
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[IS EXPEDIENTE] ✅ Correo enviado:', expedienteResult.messageId);
+          if (expedienteResult.emails?.allOk) {
+            console.log('[IS EXPEDIENTE] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
             toast.success('Expediente enviado por correo');
+          } else if (expedienteResult.success) {
+            console.warn('[IS EXPEDIENTE] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
+            toast.warning('Póliza emitida pero hubo un error enviando los correos');
           } else {
             console.error('[IS EXPEDIENTE] Error:', expedienteResult.error);
             toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
@@ -903,6 +906,13 @@ export default function EmitirPage() {
         // Build emission request — field names accepted by /api/regional/auto/emit-cc
         const regionalEmitBody = {
           numcot: selectedPlan._numcot || selectedPlan._idCotizacion || '',
+          // Cliente (for Supabase record creation)
+          nombre: emissionData.primerNombre || '',
+          apellido: emissionData.primerApellido || '',
+          cedula: emissionData.cedula || '',
+          email: emissionData.email || '',
+          celular: emissionData.celular || emissionData.telefono || '',
+          fechaNacimiento: emissionData.fechaNacimiento || '',
           // Dirección (Regional API catalog codes)
           codpais: 507,
           codestado: emissionData.codProvincia || 8,
@@ -1074,8 +1084,10 @@ export default function EmitirPage() {
             body: expedienteForm,
           });
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[REGIONAL CC] ✅ Expediente enviado:', expedienteResult.messageId);
+          if (expedienteResult.emails?.allOk) {
+            console.log('[REGIONAL CC] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
+          } else if (expedienteResult.success) {
+            console.warn('[REGIONAL CC] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
           } else {
             console.error('[REGIONAL CC] Error expediente:', expedienteResult.error);
           }
@@ -1311,8 +1323,10 @@ export default function EmitirPage() {
             body: expedienteForm,
           });
           const expedienteResult = await expedienteResponse.json();
-          if (expedienteResult.success) {
-            console.log('[ANCON CC] ✅ Expediente enviado:', expedienteResult.messageId);
+          if (expedienteResult.emails?.allOk) {
+            console.log('[ANCON CC] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
+          } else if (expedienteResult.success) {
+            console.warn('[ANCON CC] ⚠️ Correos fallaron:', JSON.stringify(expedienteResult.emails));
           } else {
             console.error('[ANCON CC] Error expediente:', expedienteResult.error);
           }

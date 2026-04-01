@@ -3,6 +3,9 @@
  * Handles RC (DT) and CC policy emission, plan de pago, and PDF printing
  */
 
+import https from 'node:https';
+import http from 'node:http';
+import { URL as NodeURL } from 'node:url';
 import { regionalPost, regionalPut } from './http-client';
 import { REGIONAL_RC_ENDPOINTS, REGIONAL_CC_ENDPOINTS } from './config';
 import type {
@@ -127,8 +130,48 @@ export async function actualizarPlanPago(
 }
 
 // ═══ Imprimir Póliza ═══
-// NOTE: This endpoint returns RAW PDF binary (not JSON), so we bypass
-// the generic regionalPost helper and call the API directly.
+// NOTE: This endpoint returns RAW PDF binary (not JSON).
+// We use node:https directly (NOT global fetch) because:
+//   1. Regional PROD server uses a self-signed TLS cert — undici (Node.js built-in
+//      fetch) does NOT respect NODE_TLS_REJECT_UNAUTHORIZED at runtime.
+//   2. We need raw Buffer output (not a UTF-8 string) for binary PDF data.
+
+function nodeHttpsBinaryRequest(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string,
+  timeoutMs: number
+): Promise<{ status: number; buf: Buffer }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new NodeURL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const lib = isHttps ? https : http;
+
+    const bodyBuf = Buffer.from(body, 'utf8');
+    const options: https.RequestOptions = {
+      hostname: parsed.hostname,
+      port: parsed.port || (isHttps ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method,
+      headers: { ...headers, 'Content-Length': bodyBuf.length.toString() },
+      rejectUnauthorized: false,   // Regional PROD uses self-signed cert
+    };
+
+    const req = lib.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, buf: Buffer.concat(chunks) }));
+      res.on('error', reject);
+    });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Regional imprimirPoliza timeout after ${timeoutMs}ms`));
+    });
+    req.on('error', reject);
+    req.write(bodyBuf);
+    req.end();
+  });
+}
 
 export async function imprimirPoliza(
   poliza: string
@@ -145,40 +188,34 @@ export async function imprimirPoliza(
   const url = `${baseUrl}${REGIONAL_CC_ENDPOINTS.IMPRIMIR}`;
   const auth = `Basic ${Buffer.from(`${creds.username}:${creds.password}`).toString('base64')}`;
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: auth,
+    codInter: creds.codInter,
+    codProv: creds.codInter,   // CC endpoints require codProv (same value as codInter)
+    token: creds.tokenCC,
+  };
+
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    console.log('[REGIONAL Imprimir] POST', url);
+    const { status, buf } = await nodeHttpsBinaryRequest(
+      url,
+      'POST',
+      headers,
+      JSON.stringify({ poliza: cleanPoliza }),
+      30000
+    );
 
-    const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: auth,
-        codInter: creds.codInter,
-        token: creds.tokenCC,
-      },
-      body: JSON.stringify({ poliza: cleanPoliza }),
-      signal: controller.signal,
-    }).finally(() => {
-      if (prevTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls;
-    });
+    console.log('[REGIONAL Imprimir] Status:', status, '— bytes:', buf.length);
 
-    clearTimeout(timer);
-    console.log('[REGIONAL Imprimir] Status:', res.status);
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      console.error('[REGIONAL Imprimir] HTTP error:', res.status, errText.slice(0, 300));
-      return { success: false, message: `HTTP ${res.status}: ${errText.slice(0, 200)}` };
+    if (status < 200 || status >= 300) {
+      const errText = buf.toString('utf8').slice(0, 300);
+      console.error('[REGIONAL Imprimir] HTTP error:', status, errText);
+      return { success: false, message: `HTTP ${status}: ${errText.slice(0, 200)}` };
     }
 
-    const buf = Buffer.from(await res.arrayBuffer());
-
     // Check if response is a PDF (starts with %PDF)
-    if (buf.length > 4 && buf.toString('utf8', 0, 5) === '%PDF-') {
+    if (buf.length > 4 && buf.slice(0, 5).toString('ascii') === '%PDF-') {
       console.log('[REGIONAL Imprimir] ✅ PDF received:', buf.length, 'bytes');
       return {
         success: true,
@@ -199,7 +236,7 @@ export async function imprimirPoliza(
     }
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error('[REGIONAL Imprimir] Fetch error:', errMsg);
+    console.error('[REGIONAL Imprimir] Request error:', errMsg);
     return { success: false, message: errMsg };
   }
 }

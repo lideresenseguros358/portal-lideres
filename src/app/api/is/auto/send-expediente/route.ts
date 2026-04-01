@@ -24,7 +24,10 @@ async function sendZeptoWithAttachments(opts: {
   attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
 }): Promise<{ ok: boolean; messageId: string }> {
   let apiKey = (process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '').replace(/^["']|["']$/g, '');
-  if (apiKey && !apiKey.startsWith('Zoho-enczapikey')) {
+  if (!apiKey) {
+    throw new Error('ZEPTO_API_KEY no está configurado — los correos no pueden enviarse');
+  }
+  if (!apiKey.startsWith('Zoho-enczapikey')) {
     apiKey = `Zoho-enczapikey ${apiKey}`;
   }
   const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
@@ -49,23 +52,45 @@ async function sendZeptoWithAttachments(opts: {
     }));
   }
 
-  const res = await fetch(ZEPTO_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  const MAX_ATTEMPTS = 3;
+  let lastError = '';
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      console.log(`[ZEPTO] Attempt ${attempt}/${MAX_ATTEMPTS} → ${Array.isArray(opts.to) ? opts.to.join(', ') : opts.to}`);
+      const res = await fetch(ZEPTO_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': apiKey },
+        body: JSON.stringify(body),
+      });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`ZeptoMail API error (${res.status}): ${errText.substring(0, 300)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const messageId = data?.data?.[0]?.message_id || data?.request_id || 'unknown';
+        return { ok: true, messageId };
+      }
+
+      const errText = await res.text();
+      lastError = `ZeptoMail API error (HTTP ${res.status}): ${errText.substring(0, 300)}`;
+      console.error(`[ZEPTO] Attempt ${attempt} failed:`, lastError);
+
+      // Don't retry 4xx errors (client errors) — they are permanent failures
+      // Note: 429 from ZeptoMail means "Credit exhausted" (LE_102), not transient rate-limit
+      if (res.status >= 400 && res.status < 500) {
+        throw new Error(lastError);
+      }
+    } catch (err: any) {
+      lastError = err.message || 'Network error';
+      // Re-throw non-retryable errors (4xx) immediately
+      if (lastError.includes('HTTP 4')) throw err;
+      console.error(`[ZEPTO] Attempt ${attempt} exception:`, lastError);
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
   }
 
-  const data = await res.json();
-  const messageId = data?.data?.[0]?.message_id || data?.request_id || 'unknown';
-  return { ok: true, messageId };
+  throw new Error(lastError || 'ZeptoMail: todos los intentos fallaron');
 }
 
 // Expediente recipients
@@ -345,6 +370,10 @@ export async function POST(request: NextRequest) {
     
     // Send emails via ZeptoMail REST API
     let isMailMessageId = '';
+    let portalEmailOk = false;
+    let portalEmailError = '';
+    let welcomeEmailOk = false;
+    let welcomeEmailError = '';
 
     // ═══ EMAIL 1: EXPEDIENTE PARA ASEGURADORA (solo Internacional) ═══
     // Incluye: docs del cliente + formulario inspección (CC) + cotización (CC)
@@ -410,15 +439,17 @@ export async function POST(request: NextRequest) {
       });
 
       console.log('[IS EXPEDIENTE] Enviando expediente portal a:', PORTAL_RECIPIENT);
-      await sendZeptoWithAttachments({
+      const portalResult = await sendZeptoWithAttachments({
         to: PORTAL_RECIPIENT,
         subject: `Expediente Portal - ${insurerName} - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
         html: portalHtml,
         attachments: portalAttachments,
       });
-      console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', PORTAL_RECIPIENT);
+      portalEmailOk = true;
+      console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', PORTAL_RECIPIENT, portalResult.messageId);
     } catch (portalMailError: any) {
-      console.error('[IS EXPEDIENTE] Error enviando expediente portal:', portalMailError.message);
+      portalEmailError = portalMailError.message;
+      console.error('[IS EXPEDIENTE] ❌ Error enviando expediente portal:', portalMailError.message);
     }
 
     // === ENVIAR RESUMEN Y BIENVENIDA AL CLIENTE ===
@@ -474,9 +505,11 @@ export async function POST(request: NextRequest) {
         subject: welcomeSubject,
         html: welcomeHtml,
       });
+      welcomeEmailOk = true;
       console.log('[IS EXPEDIENTE] ✅ Bienvenida enviada a:', welcomeRecipient, welcomeResult.messageId);
     } catch (welcomeError: any) {
-      console.error('[IS EXPEDIENTE] Error enviando bienvenida:', welcomeError.message);
+      welcomeEmailError = welcomeError.message;
+      console.error('[IS EXPEDIENTE] ❌ Error enviando bienvenida:', welcomeError.message);
     }
     
     // ═══ GUARDAR DOCUMENTOS EN EXPEDIENTE (Supabase Storage) ═══
@@ -720,12 +753,20 @@ export async function POST(request: NextRequest) {
       ? createHash('sha256').update(authPdfBuffer).digest('hex')
       : null;
 
+    const allEmailsOk = portalEmailOk && welcomeEmailOk;
+
     return NextResponse.json({
       success: true,
       messageId: isMailMessageId || 'portal-only',
       recipients: isIS ? isRecipients : [PORTAL_RECIPIENT],
       attachmentCount: attachments.length,
-      clientEmailSent: !!clientEmail,
+      clientEmailSent: welcomeEmailOk,
+      emails: {
+        portal: { ok: portalEmailOk, error: portalEmailError || null },
+        welcome: { ok: welcomeEmailOk, to: welcomeEmailOk ? (clientData.email || OFFICE_EMAIL) : null, error: welcomeEmailError || null },
+        insurer: isIS ? { ok: !!isMailMessageId, messageId: isMailMessageId || null } : null,
+        allOk: allEmailsOk,
+      },
       expediente: { saved: expedienteSaved, errors: expedienteErrors },
       audit: {
         consent_version: '1.0',

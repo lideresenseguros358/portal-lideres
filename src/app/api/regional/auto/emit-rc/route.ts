@@ -10,6 +10,7 @@ import { emitirPolizaRC } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import { getRegionalCredentials } from '@/lib/regional/config';
 import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
+import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import type { RegionalRCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -168,6 +169,31 @@ export async function POST(request: NextRequest) {
     // Build print URL for the confirmation page / expediente
     const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}` : null;
 
+    // ── Auto-save client + policy to Supabase ──
+    const cedula = prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || '');
+    const clientName = `${nombre} ${apellido}`.trim();
+    const dbResult = await crearClienteYPoliza({
+      insurerPattern: '%REGIONAL%',
+      national_id: cedula,
+      name: clientName,
+      email: email || undefined,
+      phone: String(celular || telefono || ''),
+      birth_date: parseDdMmYyyy(fechaNacimiento),
+      policy_number: result.poliza || `REGIONAL-RC-${Date.now()}`,
+      ramo: 'AUTO',
+      notas: [
+        marca && modelo ? `Vehículo: ${marca} ${modelo} ${anio || ''}` : null,
+        numplaca ? `Placa: ${numplaca}` : null,
+        'Cobertura: Daños a Terceros',
+      ].filter(Boolean).join('\n'),
+      start_date: new Date().toISOString().split('T')[0],
+      renewal_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    });
+
+    if (dbResult.error) {
+      console.warn('[REGIONAL RC Emit] DB save warning (non-fatal):', dbResult.error);
+    }
+
     return NextResponse.json({
       ...result,
       success: true,
@@ -176,10 +202,12 @@ export async function POST(request: NextRequest) {
       numcot: result.numcot,
       pdfUrl,
       insurer: 'REGIONAL',
+      clientId: dbResult.clientId,
+      policyId: dbResult.policyId,
       // Echo back sent data for carátula verification
       cliente: {
-        nombre: `${nombre} ${apellido}`.trim(),
-        cedula: prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || ''),
+        nombre: clientName,
+        cedula,
         email: email || '',
         telefono: celular || telefono || '',
         sexo: sexo || 'M',

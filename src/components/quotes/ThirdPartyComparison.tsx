@@ -217,15 +217,45 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [conexionTip, setConexionTip] = useState<string | null>(null);
   const fetchingRef = useRef(false);
 
-  // ── Mobile carousel state ──
-  const [activePlans, setActivePlans] = useState<Record<string, 'basic' | 'premium'>>({});
+  // ── Mobile carousel state: single global plan so all cards sync ──
+  const [globalPlan, setGlobalPlan] = useState<'basic' | 'premium'>('basic');
   const [coverageTooltip, setCoverageTooltip] = useState<{ key: string; top: number; left: number } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
+  const hintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Portal mounting guard (SSR-safe) ──
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
+
+  // ── Scroll hint: doble pulso horizontal cada 60 s ──
+  // Solo se activa si el usuario aún no ha scrolleado (está en la primera tarjeta).
+  useEffect(() => {
+    const nudgeCarousel = () => {
+      const el = carouselRef.current;
+      if (!el || el.scrollLeft > 20) return; // ya scrolleó — no molestar
+
+      const px = 55; // píxeles de cada pulso
+      const delay = (ms: number, fn: () => void) => setTimeout(fn, ms);
+
+      el.style.scrollSnapType = 'none'; // desactivar snap durante el pulso
+      el.scrollTo({ left: px, behavior: 'smooth' });
+      delay(350, () => el.scrollTo({ left: 0,  behavior: 'smooth' }));
+      delay(700, () => el.scrollTo({ left: px, behavior: 'smooth' }));
+      delay(1050, () => {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+        delay(450, () => { el.style.scrollSnapType = ''; }); // re-activar snap
+      });
+    };
+
+    const initial = setTimeout(nudgeCarousel, 3500); // primer pulso al cargar
+    hintIntervalRef.current = setInterval(nudgeCarousel, 60_000); // cada 60 s
+
+    return () => {
+      clearTimeout(initial);
+      if (hintIntervalRef.current) clearInterval(hintIntervalRef.current);
+    };
+  }, []);
 
   // ── Premium hint: solo muestra la primera visita, dura 2 s ──
   const [showPremiumHint, setShowPremiumHint] = useState(false);
@@ -560,7 +590,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                   setCoverageTooltip(null);
                 } else {
                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setCoverageTooltip({ key: benefit.key, top: rect.top, left: rect.left + rect.width / 2 });
+                  setCoverageTooltip({ key: benefit.key, top: rect.top + window.scrollY, left: rect.left + rect.width / 2 + window.scrollX });
                 }
               }}
             >
@@ -771,22 +801,35 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           color: white;
           box-shadow: 0 2px 6px rgba(1,1,57,0.25);
         }
-        /* Pulse continuo en el botón Premium para invitar al usuario */
-        @keyframes tp-premium-pulse {
-          0%, 100% { box-shadow: 0 2px 6px rgba(138,170,25,0.35); }
-          50%       { box-shadow: 0 0 0 5px rgba(138,170,25,0.18),
-                                  0 2px 8px rgba(138,170,25,0.55); }
-        }
+        /* ── Estado SELECCIONADO del botón Premium ── */
         .tp-plan-toggle button.tp-toggle-premium {
           background: linear-gradient(135deg, #8AAA19, #6d8814);
           color: white;
-          animation: tp-premium-pulse 2s ease-in-out infinite;
-        }
-        /* Detener pulse cuando ya está seleccionado */
-        .tp-plan-toggle button.tp-toggle-premium:focus,
-        .tp-plan-toggle button.tp-toggle-premium:active {
-          animation: none;
           box-shadow: 0 2px 8px rgba(138,170,25,0.55);
+        }
+
+        /* ── Estado NO seleccionado del botón Premium: shimmer + pop ──
+           Shimmer: barre un destello luminoso de izquierda a derecha.
+           Pop: cada 4 s el botón se infla y rebota para llamar atención. */
+        @keyframes tp-premium-shine {
+          0%       { background-position: -250% center; }
+          45%, 100% { background-position: 300% center; }
+        }
+        @keyframes tp-premium-pop {
+          0%, 72%, 100% { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
+          77%            { transform: scale(1.07); box-shadow: 0 0 0 6px rgba(138,170,25,0.18), 0 4px 18px rgba(138,170,25,0.6); }
+          83%            { transform: scale(0.97); box-shadow: 0 2px 6px rgba(138,170,25,0.3); }
+          88%            { transform: scale(1.03); box-shadow: 0 0 0 3px rgba(138,170,25,0.12), 0 3px 12px rgba(138,170,25,0.45); }
+          93%            { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
+        }
+        .tp-plan-toggle button.tp-toggle-premium-idle {
+          background: linear-gradient(105deg,
+            #6d8814 0%, #8AAA19 28%, #d6ec4a 46%, #c0d830 50%, #d6ec4a 54%, #8AAA19 72%, #6d8814 100%);
+          background-size: 300% auto;
+          color: white;
+          animation:
+            tp-premium-shine 2.8s ease-in-out infinite,
+            tp-premium-pop   4s   ease-in-out infinite;
         }
 
         /* Hint tooltip de primera visita */
@@ -907,7 +950,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           {insurersData.map((insurer, idx) => {
             const isOffline  = !!offlineInsurers[insurer.id];
             const isActive   = idx === activeCardIndex;
-            const currentPlan = activePlans[insurer.id] ?? 'basic';
+            const currentPlan = globalPlan;
 
             return (
               /* ── Tarjeta de aseguradora (con coverflow) ── */
@@ -936,15 +979,15 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                   <div className="pt-3 pb-1">
                     <div className="tp-plan-toggle">
                       <button
-                        onClick={() => setActivePlans(prev => ({ ...prev, [insurer.id]: 'basic' }))}
+                        onClick={() => setGlobalPlan('basic')}
                         className={currentPlan === 'basic' ? 'tp-toggle-basic' : ''}
                       >
                         Básico · B/.{insurer.basicPlan.annualPremium.toFixed(0)}
                       </button>
                       <button
                         ref={idx === 0 ? firstPremiumBtnRef : undefined}
-                        onClick={() => setActivePlans(prev => ({ ...prev, [insurer.id]: 'premium' }))}
-                        className={currentPlan === 'premium' ? 'tp-toggle-premium' : ''}
+                        onClick={() => setGlobalPlan('premium')}
+                        className={currentPlan === 'premium' ? 'tp-toggle-premium' : 'tp-toggle-premium-idle'}
                       >
                         ⭐ Premium · B/.{insurer.premiumPlan.annualPremium.toFixed(0)}
                       </button>
@@ -985,7 +1028,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           {/* Popup del tooltip */}
           <div
             style={{
-              position: 'fixed',
+              position: 'absolute',
               top: coverageTooltip.top,
               left: coverageTooltip.left,
               transform: 'translate(-50%, calc(-100% - 8px))',
@@ -1030,9 +1073,9 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           <div
             className="tp-hint-bubble"
             style={{
-              position: 'fixed',
-              top: rect.top,
-              left: rect.left + rect.width / 2,
+              position: 'absolute',
+              top: rect.top + window.scrollY,
+              left: rect.left + rect.width / 2 + window.scrollX,
               transform: 'translate(-50%, calc(-100% - 8px))',
               zIndex: 9999,
               background: '#010139',

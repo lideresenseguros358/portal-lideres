@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaCC, actualizarPlanPago } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
+import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import type { RegionalCCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -26,6 +27,13 @@ export async function POST(request: NextRequest) {
 
     // Accept both raw API field names AND the friendly names sent by the CC frontend
     const numcot = body.numcot;
+    // Optional client data for Supabase record creation
+    const clientNombre = body.nombre || body.primerNombre || '';
+    const clientApellido = body.apellido || body.primerApellido || '';
+    const clientCedula = body.cedula || body.national_id || '';
+    const clientEmail = body.email || '';
+    const clientCelular = body.celular || body.telefono || '';
+    const clientFechaNacimiento = body.fechaNacimiento || '';
     // Dirección — raw or defaults
     const codpais = body.codpais;
     const codestado = body.codestado || body.codProvincia;
@@ -156,6 +164,37 @@ export async function POST(request: NextRequest) {
     const elapsed = Date.now() - t0;
     console.log(`[REGIONAL CC Emit] Completed in ${elapsed}ms. Poliza: ${emitResult.poliza}`);
 
+    // ── Auto-save client + policy to Supabase ──
+    let clientId: string | undefined;
+    let policyId: string | undefined;
+    if (clientCedula || clientNombre) {
+      const clientName = `${clientNombre} ${clientApellido}`.trim();
+      const dbResult = await crearClienteYPoliza({
+        insurerPattern: '%REGIONAL%',
+        national_id: clientCedula,
+        name: clientName,
+        email: clientEmail || undefined,
+        phone: clientCelular || undefined,
+        birth_date: parseDdMmYyyy(clientFechaNacimiento),
+        policy_number: emitResult.poliza || `REGIONAL-CC-${Date.now()}`,
+        ramo: 'AUTO',
+        notas: [
+          numplaca ? `Placa: ${numplaca}` : null,
+          'Cobertura: Cobertura Completa',
+        ].filter(Boolean).join('\n'),
+        start_date: new Date().toISOString().split('T')[0],
+        renewal_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      });
+      if (dbResult.error) {
+        console.warn('[REGIONAL CC Emit] DB save warning (non-fatal):', dbResult.error);
+      } else {
+        clientId = dbResult.clientId;
+        policyId = dbResult.policyId;
+      }
+    } else {
+      console.warn('[REGIONAL CC Emit] No client data in request — skipping Supabase record creation');
+    }
+
     return NextResponse.json({
       success: true,
       poliza: emitResult.poliza,
@@ -163,6 +202,8 @@ export async function POST(request: NextRequest) {
       numcot: emitResult.numcot,
       pdfUrl,
       insurer: 'REGIONAL',
+      clientId,
+      policyId,
       // Echo back sent data for carátula verification
       vehiculo: {
         placa: numplaca || '',

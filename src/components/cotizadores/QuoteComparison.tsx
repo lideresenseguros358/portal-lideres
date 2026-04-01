@@ -85,6 +85,35 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
   const [activeCCCardIndex, setActiveCCCardIndex] = useState(0);
   const [ccTooltip, setCCTooltip]               = useState<{ key: string; top: number; left: number } | null>(null);
   const ccCarouselRef = useRef<HTMLDivElement>(null);
+  const ccHintIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Scroll hint: doble pulso horizontal cada 60 s ──
+  useEffect(() => {
+    const nudgeCarousel = () => {
+      const el = ccCarouselRef.current;
+      if (!el || el.scrollLeft > 20) return;
+
+      const px = 55;
+      const delay = (ms: number, fn: () => void) => setTimeout(fn, ms);
+
+      el.style.scrollSnapType = 'none';
+      el.scrollTo({ left: px, behavior: 'smooth' });
+      delay(350, () => el.scrollTo({ left: 0,  behavior: 'smooth' }));
+      delay(700, () => el.scrollTo({ left: px, behavior: 'smooth' }));
+      delay(1050, () => {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+        delay(450, () => { el.style.scrollSnapType = ''; });
+      });
+    };
+
+    const initial = setTimeout(nudgeCarousel, 3500);
+    ccHintIntervalRef.current = setInterval(nudgeCarousel, 60_000);
+
+    return () => {
+      clearTimeout(initial);
+      if (ccHintIntervalRef.current) clearInterval(ccHintIntervalRef.current);
+    };
+  }, []);
 
   // ── Agrupa las cotizaciones por aseguradora para el carrusel mobile ──
   const insurerGroupsMap = quotes.reduce((acc: Record<string, QuotePlan[]>, q) => {

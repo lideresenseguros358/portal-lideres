@@ -23,6 +23,7 @@ import {
 } from '@/lib/ancon/emission.service';
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
+import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 
 export const maxDuration = 120;
 
@@ -439,12 +440,41 @@ export async function POST(request: NextRequest) {
     const elapsed = Date.now() - t0;
     log('DONE', `SUCCESS in ${elapsed}ms. Poliza: ${polizaNumber}`);
 
+    // ── Auto-save client + policy to Supabase ──
+    const anconNationalId = cedula || pasaporte || ruc || '';
+    const anconClientName = [primer_nombre, segundo_nombre, primer_apellido, segundo_apellido]
+      .filter(Boolean).join(' ').trim();
+
+    const dbResult = await crearClienteYPoliza({
+      insurerPattern: '%ANCON%',
+      national_id: anconNationalId,
+      name: anconClientName,
+      email: email || undefined,
+      phone: telefono_celular || telefono_residencial || undefined,
+      birth_date: parseDdMmYyyy(fecha_nacimiento),
+      policy_number: polizaNumber,
+      ramo: 'AUTO',
+      notas: [
+        nombre_marca && nombre_modelo ? `Vehículo: ${nombre_marca} ${nombre_modelo} ${ano || ''}` : null,
+        placa ? `Placa: ${placa}` : null,
+        isCC ? 'Cobertura: Cobertura Completa' : 'Cobertura: Daños a Terceros',
+      ].filter(Boolean).join('\n'),
+      start_date: new Date().toISOString().split('T')[0],
+      renewal_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    });
+
+    if (dbResult.error) {
+      console.warn('[API ANCON Emisión] DB save warning (non-fatal):', dbResult.error);
+    }
+
     return NextResponse.json({
       success: true,
       poliza: polizaNumber,
       nroPoliza: polizaNumber,
       noCotizacion: no_cotizacion,
       insurer: 'ANCON',
+      clientId: dbResult.clientId,
+      policyId: dbResult.policyId,
       pdfUrl: pdfUrl || `/api/ancon/print?poliza=${encodeURIComponent(polizaNumber)}`,
       _timing: { totalMs: elapsed },
     });
