@@ -390,11 +390,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     };
     
     // ============================================
-    // PREMIUM: Centenario upgrade = $60 - $35 (Plus ya incluido) = $25 extra
-    // Solo sumar la diferencia del upgrade, no el costo completo
+    // PREMIUM: Centenario endoso — IS NO cobra extra por Centenario vs Plus.
+    // IS factura al mismo precio para ambos planes (endosoTexto va solo como txtComentarios).
+    // El precio del plan Premium es IGUAL al Básico para que la caratula coincida con el cobro.
     // ============================================
-    const centenarioUpgrade = IS_ENDOSOS.CENTENARIO.costoAnual - IS_ENDOSOS.PLUS.costoAnual; // $60 - $35 = $25
-    const subtotalPremium = primaBase + centenarioUpgrade;
+    const subtotalPremium = primaBase; // mismo base que Básico — IS no diferencia en precio
     const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
     const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
@@ -402,7 +402,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         codigo: IS_ENDOSOS.CENTENARIO.codigo,
         nombre: IS_ENDOSOS.CENTENARIO.nombre,
         incluido: true,
-        descripcion: `Upgrade: +B/.${centenarioUpgrade.toFixed(2)} sobre Plus incluido`,
+        descripcion: 'Incluido en la prima',
         subBeneficios: IS_ENDOSOS.CENTENARIO.beneficios,
       },
       {
@@ -430,7 +430,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: centenarioUpgrade, // Solo el delta $25 (Plus ya en coberturas)
+        costoEndoso: 0, // IS no cobra extra por Centenario — mismo precio que Básico
         impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
