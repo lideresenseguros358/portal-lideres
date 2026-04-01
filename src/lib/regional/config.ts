@@ -25,10 +25,10 @@ const DEFAULT_DESA_URL = 'https://desa.laregionaldeseguros.com:10443/desaw';
 
 export function getRegionalBaseUrl(env?: RegionalEnvironment): string {
   const resolved = env ?? getRegionalEnv();
-  if (resolved === 'production') {
-    return process.env.REGIONAL_BASE_URL_PROD || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL;
-  }
-  return process.env.REGIONAL_BASE_URL_DESA || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL;
+  const raw = resolved === 'production'
+    ? (process.env.REGIONAL_BASE_URL_PROD || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL)
+    : (process.env.REGIONAL_BASE_URL_DESA || process.env.REGIONAL_BASE_URL || DEFAULT_DESA_URL);
+  return raw.trim().replace(/\/$/, ''); // strip trailing whitespace/newlines and trailing slash
 }
 
 // Credentials — read suffixed vars, fall back to unsuffixed legacy vars

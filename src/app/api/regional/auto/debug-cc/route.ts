@@ -59,7 +59,6 @@ export async function GET() {
     'Content-Type': 'application/json',
     Authorization: `Basic ${Buffer.from(`${creds.username}:${creds.password}`).toString('base64')}`,
     codInter: creds.codInter,
-    codProv: creds.codInter,
     token: creds.tokenCC,
   };
 
