@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
             entity_type: 'delinquency',
             entity_id: row.id,
             detail: { stage, client_email: clientEmail, nro_poliza: row.policy_number, total_pending: totalPending },
-          }).catch(() => {});
+          }).then(undefined, () => {});
 
           console.log(`[CRON MOROSIDAD-EMAILS] ✅ ${stage} sent: ${row.policy_number} → ${clientEmail}`);
         } else {

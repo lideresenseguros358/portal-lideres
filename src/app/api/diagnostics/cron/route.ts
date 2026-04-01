@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       const response = await fetch(`${baseUrl}${job.path}`, {
         method: 'GET',
         headers: {
-          'x-cron-secret': cronSecret || '',
+          'x-cron-secret': process.env.CRON_SECRET || '',
         },
       });
 

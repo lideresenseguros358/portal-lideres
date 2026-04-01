@@ -138,9 +138,9 @@ export function resolverPlanCCIS(sel: CoverageSelection): ISPlanCC | null {
       return totalA - totalB;
     });
     
-    const mejor = candidatos[0];
+    const mejor = candidatos[0]!;
     console.log(`[IS Plan CC Resolver] ⚠️ Sin coincidencia exacta. Plan más cercano: ${mejor.texto} (código ${mejor.codigo})`);
-    return mejor;
+    return mejor ?? null;
   }
   
   // 3. No encontrado — usar plan máximo como fallback

@@ -146,7 +146,7 @@ export async function actionImportDelinquency(payload: {
   cutoffDate: string;
   records: Array<{
     policy_number: string;
-    client_name: string;
+    client_name?: string;
     due_soon: number;
     current: number;
     bucket_1_30: number;

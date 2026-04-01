@@ -32,7 +32,7 @@ export async function GET() {
     fechaEmision: '26/03/2026',
   });
 
-  return new NextResponse(buf, {
+  return new NextResponse(new Uint8Array(buf), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',

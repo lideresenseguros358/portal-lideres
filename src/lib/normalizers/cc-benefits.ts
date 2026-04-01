@@ -73,7 +73,7 @@ function extractGenericDetail(raw: string): string | undefined {
   if (paren) return paren[1];
   // Match colon-separated detail (e.g., "🚛 Grúa: Por colisión y avería — Máx. 2 eventos/año")
   const colonDetail = raw.match(/:\s*(.+)/);
-  if (colonDetail) return colonDetail[1].trim();
+  if (colonDetail) return colonDetail[1]?.trim();
   // Match "hasta B/. ..." or "Hasta $..."
   const hasta = raw.match(/hasta\s+[\w/.]+\s*[\d,.]+/i);
   if (hasta) return hasta[0];

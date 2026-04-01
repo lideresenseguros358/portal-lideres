@@ -267,20 +267,21 @@ async function callVertexChat(
     throw new Error('[VERTEX-PREFLIGHT] contents array is empty — at least one user turn is required');
   }
 
-  if (contents[0].role !== 'user') {
+  const firstTurn = contents[0]!;
+  if (firstTurn.role !== 'user') {
     throw new Error(
-      `[VERTEX-PREFLIGHT] contents[0].role must be 'user', got '${contents[0].role}'. ` +
+      `[VERTEX-PREFLIGHT] contents[0].role must be 'user', got '${firstTurn.role}'. ` +
       'Vertex AI rejects payloads that start with a model turn.',
     );
   }
 
   for (let i = 0; i < contents.length; i++) {
-    const turn = contents[i];
+    const turn = contents[i]!;
     if (!turn.parts || turn.parts.length === 0) {
       throw new Error(`[VERTEX-PREFLIGHT] contents[${i}] (role=${turn.role}) has no parts`);
     }
     for (let j = 0; j < turn.parts.length; j++) {
-      const part = turn.parts[j];
+      const part = turn.parts[j]!;
       // Only validate text parts; inlineData parts (media) are OK without text
       if ('text' in part && (part.text === null || part.text === undefined || String(part.text).trim() === '')) {
         throw new Error(
@@ -432,7 +433,7 @@ function sanitizeChatHistory(
   //   - a thread has a system message ("🤖 LISSA AI retomó...") before any user message
   //   - a proactive follow-up was sent before the user replied
   let startIdx = 0;
-  while (startIdx < withBodies.length && withBodies[startIdx].direction !== 'inbound') {
+  while (startIdx < withBodies.length && withBodies[startIdx]!.direction !== 'inbound') {
     startIdx++;
   }
 
