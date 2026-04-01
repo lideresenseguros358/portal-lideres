@@ -647,6 +647,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                             }`}
                           >
                             Al Contado
+                            {quote._priceBreakdown && quote._priceBreakdown.totalConTarjeta > quote._priceBreakdown.totalAlContado && (() => {
+                              const pct = Math.round((quote._priceBreakdown!.totalConTarjeta - quote._priceBreakdown!.totalAlContado) / quote._priceBreakdown!.totalConTarjeta * 100);
+                              return pct > 0 ? (
+                                <span className={`block text-[9px] font-bold mt-0.5 ${paymentMode === 'contado' ? 'text-white/80' : 'text-[#8AAA19]'}`}>
+                                  Ahorra {pct}%
+                                </span>
+                              ) : null;
+                            })()}
                           </button>
                           <p className="text-[10px] text-gray-500 text-center mt-1">(1 cuota)</p>
                         </div>
@@ -899,7 +907,17 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
                             <button
                               onClick={() => setPaymentMode('contado')}
                               className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'contado' ? 'bg-[#8AAA19] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
-                            >Al Contado</button>
+                            >
+                              Al Contado
+                              {currentPlan._priceBreakdown && currentPlan._priceBreakdown.totalConTarjeta > currentPlan._priceBreakdown.totalAlContado && (() => {
+                                const pct = Math.round((currentPlan._priceBreakdown!.totalConTarjeta - currentPlan._priceBreakdown!.totalAlContado) / currentPlan._priceBreakdown!.totalConTarjeta * 100);
+                                return pct > 0 ? (
+                                  <span className={`block text-[9px] font-bold mt-0.5 ${paymentMode === 'contado' ? 'text-white/80' : 'text-[#8AAA19]'}`}>
+                                    Ahorra {pct}%
+                                  </span>
+                                ) : null;
+                              })()}
+                            </button>
                             <button
                               onClick={() => setPaymentMode('tarjeta')}
                               className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'tarjeta' ? 'bg-[#010139] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
