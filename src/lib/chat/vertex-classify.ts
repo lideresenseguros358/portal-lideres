@@ -255,6 +255,48 @@ async function callVertexChat(
 
   if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID not configured');
 
+  // ── PRE-FLIGHT VALIDATION ──────────────────────────────────────────────────
+  // Validate every invariant Vertex AI enforces BEFORE sending, so we get a
+  // descriptive local error instead of an opaque "default message cannot be empty".
+
+  if (!systemPrompt || !systemPrompt.trim()) {
+    throw new Error('[VERTEX-PREFLIGHT] systemPrompt is empty or whitespace-only');
+  }
+
+  if (!contents || contents.length === 0) {
+    throw new Error('[VERTEX-PREFLIGHT] contents array is empty — at least one user turn is required');
+  }
+
+  if (contents[0].role !== 'user') {
+    throw new Error(
+      `[VERTEX-PREFLIGHT] contents[0].role must be 'user', got '${contents[0].role}'. ` +
+      'Vertex AI rejects payloads that start with a model turn.',
+    );
+  }
+
+  for (let i = 0; i < contents.length; i++) {
+    const turn = contents[i];
+    if (!turn.parts || turn.parts.length === 0) {
+      throw new Error(`[VERTEX-PREFLIGHT] contents[${i}] (role=${turn.role}) has no parts`);
+    }
+    for (let j = 0; j < turn.parts.length; j++) {
+      const part = turn.parts[j];
+      // Only validate text parts; inlineData parts (media) are OK without text
+      if ('text' in part && (part.text === null || part.text === undefined || String(part.text).trim() === '')) {
+        throw new Error(
+          `[VERTEX-PREFLIGHT] Empty text part at contents[${i}].parts[${j}] ` +
+          `(role=${turn.role}). This would cause Vertex 400 "default message cannot be empty".`,
+        );
+      }
+    }
+  }
+
+  // ── DEBUG LOG (structure, not full text to avoid log bloat) ──────────────
+  console.log(
+    `[VERTEX-CHAT] Sending to ${model} | systemPrompt: ${systemPrompt.length} chars | ` +
+    `contents: ${contents.length} turns [${contents.map(c => `${c.role}(${c.parts.length}p)`).join(' → ')}]`,
+  );
+
   const auth = createAuthClient();
   const client = await auth.getClient();
 
@@ -365,13 +407,45 @@ export interface AiReplyResult {
 // ════════════════════════════════════════════
 
 /**
- * Elimina del historial cualquier turno con body nulo, undefined o vacío
- * para que Vertex AI no rechace el payload con "default message cannot be empty".
+ * Prepara el historial de conversación para enviarlo a Vertex AI.
+ *
+ * Reglas que Vertex AI impone sobre el array `contents`:
+ *   1. Ningún Part puede tener `text: ""` — causa "default message cannot be empty"
+ *   2. El primer turno DEBE ser `role: "user"` — un turno de modelo al inicio causa 400
+ *   3. La alternancia user/model debe ser estricta (se maneja en el llamador)
+ *
+ * Esta función garantiza las reglas 1 y 2:
+ *   - Filtra mensajes con body nulo, undefined, o solo espacios en blanco
+ *   - Elimina todos los turnos 'outbound' (model) del comienzo del array
+ *     hasta encontrar el primer mensaje 'inbound' (user)
  */
 function sanitizeChatHistory(
   history: { direction: string; body: string }[],
 ): { direction: string; body: string }[] {
-  return history.filter(m => typeof m.body === 'string' && m.body.trim().length > 0);
+  // Rule 1: remove any turn with empty/null/whitespace-only body
+  const withBodies = history.filter(
+    m => typeof m.body === 'string' && m.body.trim().length > 0,
+  );
+
+  // Rule 2: drop all leading outbound (model) turns so the array always starts
+  // with an inbound (user) turn.  This can happen when:
+  //   - a thread has a system message ("🤖 LISSA AI retomó...") before any user message
+  //   - a proactive follow-up was sent before the user replied
+  let startIdx = 0;
+  while (startIdx < withBodies.length && withBodies[startIdx].direction !== 'inbound') {
+    startIdx++;
+  }
+
+  const sanitized = withBodies.slice(startIdx);
+
+  if (startIdx > 0) {
+    console.warn(
+      `[VERTEX-HISTORY] Dropped ${startIdx} leading outbound turn(s) from history ` +
+      `to satisfy Vertex AI's "first turn must be user" requirement.`,
+    );
+  }
+
+  return sanitized;
 }
 
 export async function generateAiReply(input: ReplyInput): Promise<AiReplyResult> {
@@ -447,6 +521,21 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
 
   currentParts.push({ text: safeCurrentMessage });
   contents.push({ role: 'user', parts: currentParts });
+
+  // ── PROTOCOLO 3B — Post-build contents integrity check ─────────────────
+  // Belt-and-suspenders: verify the final array before we send it.
+  // The pre-flight in callVertexChat will catch issues too, but logging here
+  // gives us the exact contents structure in context.
+  if (contents[0]?.role !== 'user') {
+    console.error(
+      '[VERTEX-REPLY] BUG: contents[0].role is not "user" after build — this will cause Vertex 400.',
+      JSON.stringify(contents.map(c => ({ role: c.role, bodySnippet: c.parts?.[0]?.text?.substring(0, 40) }))),
+    );
+  }
+  console.log(
+    `[VERTEX-REPLY] Payload ready | currentMsg: "${safeCurrentMessage.substring(0, 60)}..." | ` +
+    `historyTurns: ${contents.length - 1} | roles: [${contents.map(c => c.role).join(', ')}]`,
+  );
 
   // Run sentiment analysis in parallel with reply generation
   const sentimentMessages = [

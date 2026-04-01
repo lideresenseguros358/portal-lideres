@@ -198,7 +198,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[WHATSAPP] From:', phone, '| Name:', contactName, '| Message:', messageText.substring(0, 100));
+    // PROTOCOLO 2C — Final guard: never pass empty messageText to the pipeline.
+    // Media messages always produce a non-empty descriptive body above, but
+    // this guard catches any edge case (unknown media type, codec error, etc.)
+    // BEFORE it can reach Vertex AI and cause "default message cannot be empty".
+    if (!messageText || messageText.trim() === '') {
+      console.warn('[WHATSAPP] Empty messageText after extraction — type:', messageType, '— sending friendly reply');
+      await sendWhatsAppMessage(
+        phone,
+        'Por favor, envíame tu consulta por escrito para poder ayudarte. 😊',
+      );
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
+
+    console.log('[WHATSAPP] From:', phone, '| Name:', contactName, '| Type:', messageType, '| Message:', messageText.substring(0, 100));
 
     // Admin command interception — runs BEFORE rate limiter and chat engine.
     // Only the ADMIN_PHONE_NUMBER can trigger commands. Clients sending '/'
