@@ -736,6 +736,25 @@ export default function IncendioWizard() {
               Ingresa el valor de reposición de la estructura. Mínimo: $10,000
             </p>
           )}
+          {/* ── Estimado de prima ── */}
+          {(() => {
+            const v = parseCurrency(data.valorBien);
+            if (!v) return null;
+            const prima = v * 0.001; // 0.1%
+            return (
+              <div className="mt-3 flex items-center gap-2 bg-[#010139]/5 border border-[#010139]/15 rounded-lg px-3 py-2">
+                <span className="text-lg">🏠</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-[#010139]/60 uppercase tracking-wide leading-none mb-0.5">Costo aproximado</p>
+                  <p className="text-sm font-bold text-[#010139]">
+                    ${prima.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="text-xs font-normal text-gray-500 ml-1">/ año</span>
+                  </p>
+                </div>
+                <span className="text-[10px] text-gray-400 flex-shrink-0">0.10% de la suma</span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Helpful note */}
