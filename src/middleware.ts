@@ -59,11 +59,24 @@ export async function middleware(request: NextRequest) {
 
   const userResult = await Promise.race([
     supabase.auth.getUser(),
-    new Promise<{ data: { user: null } }>(resolve =>
-      setTimeout(() => resolve({ data: { user: null } }), 5000)
+    new Promise<{ data: { user: null }; error: null }>(resolve =>
+      setTimeout(() => resolve({ data: { user: null }, error: null }), 5000)
     ),
   ]);
-  const { data: { user } } = userResult as Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  const authResult = userResult as Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  const user = authResult.data?.user ?? null;
+
+  // Stale refresh token: clean up cookies and redirect to login to stop log spam
+  if (
+    authResult.error &&
+    (authResult.error.code === 'refresh_token_not_found' ||
+      authResult.error.message?.includes('Refresh Token'))
+  ) {
+    await supabase.auth.signOut();
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('error', 'Tu sesión expiró. Por favor inicia sesión de nuevo.');
+    return applySecurityHeaders(NextResponse.redirect(loginUrl));
+  }
 
   // If user is authenticated and not on /account, check must_change_password and broker active status
   if (user && !request.nextUrl.pathname.startsWith('/account') && !request.nextUrl.pathname.startsWith('/login')) {
