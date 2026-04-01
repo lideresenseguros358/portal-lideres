@@ -409,15 +409,22 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
           gap: 12px;
+          /* scroll-padding-inline + padding-inline hacen que el primer y último
+             card se centren correctamente mientras dejan visible el peek */
           padding: 8px 20px 14px;
+          /* Rompe el px-4 del contenedor padre para usar el ancho completo del viewport */
+          margin-left: -1rem;
+          margin-right: -1rem;
+          width: calc(100% + 2rem);
         }
         .cc-carousel::-webkit-scrollbar { display: none; }
 
         .cc-carousel-item {
           flex-shrink: 0;
           scroll-snap-align: center;
-          width: calc(90vw);
-          max-width: 360px;
+          /* 82vw deja ~9% de peek en cada lado una vez centrado el card */
+          width: calc(82vw);
+          max-width: 340px;
           transition: transform 0.35s cubic-bezier(.25,.46,.45,.94),
                       opacity  0.35s ease;
           will-change: transform, opacity;
