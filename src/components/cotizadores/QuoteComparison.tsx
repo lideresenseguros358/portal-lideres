@@ -469,7 +469,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
         /* ── Estado NO seleccionado: shimmer + pop ── */
         @keyframes cc-premium-shine {
           0%        { background-position: -250% center; }
-          45%, 100% { background-position: 300% center; }
+          22%, 100% { background-position:  300% center; }
         }
         @keyframes cc-premium-pop {
           0%, 72%, 100% { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
@@ -484,7 +484,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
           background-size: 300% auto;
           color: white;
           animation:
-            cc-premium-shine 2.8s ease-in-out infinite,
+            cc-premium-shine 7s ease-in-out infinite,
             cc-premium-pop   4s   ease-in-out infinite;
         }
 

@@ -283,6 +283,16 @@ async function callVertexChat(
   const text = textParts.length > 0 ? textParts.map((p: any) => p.text).join('') : '';
   const tokens = data?.usageMetadata?.totalTokenCount || 0;
 
+  // PROTOCOLO 1 — Lanzar excepción si Vertex devolvió texto vacío para que el
+  // catch de generateAiReply active el fallback en lugar de enviar body='' a Meta.
+  if (!text.trim()) {
+    const finishReason = data?.candidates?.[0]?.finishReason ?? 'unknown';
+    const promptFeedback = data?.promptFeedback?.blockReason ?? null;
+    throw new Error(
+      `[VERTEX-EMPTY-TEXT] No text content in response. finishReason=${finishReason}${promptFeedback ? `, blockReason=${promptFeedback}` : ''}`,
+    );
+  }
+
   return { text, tokens };
 }
 
@@ -350,6 +360,20 @@ export interface AiReplyResult {
   is_closing: boolean;
 }
 
+// ════════════════════════════════════════════
+// PROTOCOLO 3 — Sanitizador de historial
+// ════════════════════════════════════════════
+
+/**
+ * Elimina del historial cualquier turno con body nulo, undefined o vacío
+ * para que Vertex AI no rechace el payload con "default message cannot be empty".
+ */
+function sanitizeChatHistory(
+  history: { direction: string; body: string }[],
+): { direction: string; body: string }[] {
+  return history.filter(m => typeof m.body === 'string' && m.body.trim().length > 0);
+}
+
 export async function generateAiReply(input: ReplyInput): Promise<AiReplyResult> {
   const start = Date.now();
 
@@ -376,16 +400,33 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     fullSystemPrompt += `\n\n<empathy_mode>\nIMPORTANTE: El usuario está frustrado o enojado. Aplica estas técnicas de empatía:\n1. Valida su emoción primero: "Entiendo tu frustración y la tomo muy en serio."\n2. No te pongas a la defensiva ni minimices su queja.\n3. Muestra compromiso genuino de resolver la situación.\n4. Si es una queja de servicio, ofrece escalar con un supervisor.\n5. Mantén tu tono cálido pero profesional, nunca condescendiente.\n</empathy_mode>`;
   }
 
+  // PROTOCOLO 2A — Guardia sobre el mensaje actual antes de llamar a Vertex
+  const safeCurrentMessage = input.currentMessage?.trim();
+  if (!safeCurrentMessage) {
+    console.warn('[VERTEX-REPLY] currentMessage is empty — aborting AI reply');
+    const latencyMs = Date.now() - start;
+    return {
+      reply: 'Por favor, envíame tu consulta por escrito para poder ayudarte. 😊',
+      tokens: 0,
+      latencyMs,
+      sentiment: 'neutral',
+      is_closing: false,
+    };
+  }
+
   // Build proper Gemini contents array with alternating user/model turns
   const contents: { role: string; parts: { text: string }[] }[] = [];
 
-  if (input.conversationHistory?.length) {
+  // PROTOCOLO 3 — Sanitizar historial: eliminar turnos con body vacío o nulo
+  const cleanHistory = sanitizeChatHistory(input.conversationHistory ?? []);
+
+  if (cleanHistory.length) {
     let lastRole = '';
-    for (const msg of input.conversationHistory) {
+    for (const msg of cleanHistory) {
       const role = msg.direction === 'inbound' ? 'user' : 'model';
       // Gemini requires strict user/model alternation — skip duplicates
       if (role === lastRole) continue;
-      contents.push({ role, parts: [{ text: msg.body }] });
+      contents.push({ role, parts: [{ text: msg.body.trim() }] });
       lastRole = role;
     }
     // If last history entry was user, add a model placeholder to maintain alternation
@@ -404,7 +445,7 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     }
   }
 
-  currentParts.push({ text: input.currentMessage });
+  currentParts.push({ text: safeCurrentMessage });
   contents.push({ role: 'user', parts: currentParts });
 
   // Run sentiment analysis in parallel with reply generation

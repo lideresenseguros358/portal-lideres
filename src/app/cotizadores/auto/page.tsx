@@ -49,25 +49,6 @@ const CAROUSEL_STYLES = `
   border-radius: 3px;
 }
 
-/* ── CTA button — CC shimmer ── */
-@keyframes auto-cc-shine {
-  0%        { background-position: -250% center; }
-  45%, 100% { background-position:  300% center; }
-}
-@keyframes auto-cc-pop {
-  0%, 72%, 100% { transform: scale(1);    box-shadow: 0 2px 8px  rgba(138,170,25,.35); }
-  77%            { transform: scale(1.06); box-shadow: 0 0 0 6px  rgba(138,170,25,.18), 0 4px 18px rgba(138,170,25,.6); }
-  83%            { transform: scale(0.97); box-shadow: 0 2px 6px  rgba(138,170,25,.30); }
-  88%            { transform: scale(1.03); box-shadow: 0 0 0 3px  rgba(138,170,25,.12), 0 3px 12px rgba(138,170,25,.45); }
-  93%            { transform: scale(1);    box-shadow: 0 2px 8px  rgba(138,170,25,.35); }
-}
-.auto-cc-btn-idle {
-  background: linear-gradient(105deg,
-    #6d8814 0%, #8AAA19 28%, #d6ec4a 46%, #c0d830 50%, #d6ec4a 54%, #8AAA19 72%, #6d8814 100%);
-  background-size: 300% auto;
-  animation: auto-cc-shine 2.8s ease-in-out infinite,
-             auto-cc-pop   4.2s ease-in-out infinite;
-}
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -301,9 +282,7 @@ export default function CotizarAutoPage() {
 
                 <button
                   onClick={(e) => { e.stopPropagation(); handleSelect('full-coverage'); }}
-                  className={`cot-touch-btn w-full text-white py-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform ${
-                    activeIdx === 1 ? 'auto-cc-btn-idle' : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814]'
-                  }`}
+                  className="cot-touch-btn w-full text-white py-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform bg-gradient-to-r from-[#8AAA19] to-[#6d8814]"
                 >
                   Cotizar Ahora →
                 </button>

@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
+import { resolveAnconVehicleCodes } from '@/lib/ancon/catalogs.service';
 import type { AnconQuoteInput } from '@/lib/ancon/types';
 
 export const maxDuration = 30;
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
       tipo_persona,
       fecha_nac,
       nuevo,
+      marca,   // Brand name string for IS→ANCON code resolution
+      modelo,  // Model name string for IS→ANCON code resolution
     } = body;
 
     if (!cod_marca || !cod_modelo || !ano) {
@@ -38,9 +41,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve ANCON-specific vehicle codes from brand/model name strings.
+    // IS numeric codes (e.g. 74 for Suzuki) are NOT valid in ANCON's catalog.
+    let resolvedCodMarca = String(cod_marca).padStart(5, '0');
+    let resolvedCodModelo = String(cod_modelo).padStart(5, '0');
+
+    if (marca && modelo) {
+      try {
+        const resolved = await resolveAnconVehicleCodes(String(marca), String(modelo));
+        if (resolved) {
+          resolvedCodMarca = resolved.codMarca;
+          resolvedCodModelo = resolved.codModelo;
+          console.log(`[API ANCON Cotización] Vehicle resolved: "${marca}/${modelo}" → marca=${resolvedCodMarca}, modelo=${resolvedCodModelo} (${resolved.matchMethod})`);
+        } else {
+          console.warn(`[API ANCON Cotización] Could not resolve ANCON codes for "${marca}/${modelo}" — using IS codes as fallback`);
+        }
+      } catch (err: any) {
+        console.warn(`[API ANCON Cotización] Vehicle resolution error for "${marca}/${modelo}":`, err.message, '— using IS codes as fallback');
+      }
+    }
+
     const input: AnconQuoteInput = {
-      cod_marca: String(cod_marca).padStart(5, '0'),
-      cod_modelo: String(cod_modelo).padStart(5, '0'),
+      cod_marca: resolvedCodMarca,
+      cod_modelo: resolvedCodModelo,
       ano: String(ano),
       suma_asegurada: String(suma_asegurada || '15000'),
       cod_producto: String(cod_producto || '00312'),

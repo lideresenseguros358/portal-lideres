@@ -1063,8 +1063,12 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // IS numeric codes are included but the API will prefer name-based resolution
         cod_marca: quoteData.marcaCodigo || '00122',
         cod_modelo: quoteData.modeloCodigo || '10393',
+        // Brand/model name strings — used by the API to resolve correct ANCON codes
+        marca: quoteData.marca || '',
+        modelo: quoteData.modelo || '',
         ano: String(quoteData.anio || new Date().getFullYear()),
         suma_asegurada: String(quoteData.valorVehiculo || 15000),
         cod_producto: '00312',

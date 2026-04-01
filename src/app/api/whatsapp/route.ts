@@ -141,7 +141,13 @@ export async function POST(request: NextRequest) {
     type MediaType = typeof MEDIA_TYPES[number];
 
     if (messageType !== 'text' && !MEDIA_TYPES.includes(messageType as MediaType)) {
-      console.log('[WHATSAPP] Unsupported message type ignored:', messageType);
+      // PROTOCOLO 2B — Interceptar stickers, reacciones y otros tipos no soportados
+      // con una respuesta amable en lugar de ignorarlos silenciosamente.
+      console.log('[WHATSAPP] Unsupported message type intercepted:', messageType, '— sending friendly reply');
+      await sendWhatsAppMessage(
+        phone,
+        'Hola 👋 Por favor, envíame tu consulta por escrito para poder ayudarte. No puedo procesar este tipo de mensaje.',
+      );
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
@@ -228,8 +234,18 @@ export async function POST(request: NextRequest) {
 
     // If AI generated a reply, send it via Meta Graph API
     if (result.aiReply && result.aiReplySent) {
-      const sent = await sendWhatsAppMessage(phone, result.aiReply);
-      console.log('[WHATSAPP] AI reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
+      // PROTOCOLO 2B (guardia final) — nunca enviar body vacío a Meta Graph API.
+      const safeReply = result.aiReply.trim();
+      if (!safeReply) {
+        console.error('[WHATSAPP] AI reply is empty after trim — sending fallback to avoid Meta 400');
+        await sendWhatsAppMessage(
+          phone,
+          'Disculpa, tuve un problema técnico momentáneo. Puedes escribirnos a contacto@lideresenseguros.com o llamar al 223-2373. 💚',
+        );
+      } else {
+        const sent = await sendWhatsAppMessage(phone, safeReply);
+        console.log('[WHATSAPP] AI reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
+      }
     } else {
       console.log('[WHATSAPP] No AI reply (ai_enabled=false or assigned to master). Duration:', Date.now() - startTime, 'ms');
     }

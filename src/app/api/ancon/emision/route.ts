@@ -24,6 +24,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
+import { resolveAnconVehicleCodes } from '@/lib/ancon/catalogs.service';
 
 export const maxDuration = 120;
 
@@ -305,6 +306,26 @@ export async function POST(request: NextRequest) {
       log('2/4', 'Sin archivos adjuntos — continuando sin documentos');
     }
 
+    // ═══ Resolve ANCON vehicle codes from name strings ═══
+    // Always resolve from names when available — incoming cod_marca_agt may be
+    // an IS numeric code (e.g. "74" for Suzuki) which is invalid in ANCON's catalog.
+    let finalCodMarcaAgt = cod_marca_agt || '';
+    let finalCodModeloAgt = cod_modelo_agt || '';
+    if (nombre_marca && nombre_modelo) {
+      try {
+        const resolved = await resolveAnconVehicleCodes(nombre_marca, nombre_modelo);
+        if (resolved) {
+          finalCodMarcaAgt = resolved.codMarca;
+          finalCodModeloAgt = resolved.codModelo;
+          log('3/4', `Vehicle codes resolved: "${nombre_marca}/${nombre_modelo}" → marca=${finalCodMarcaAgt}, modelo=${finalCodModeloAgt} (${resolved.matchMethod})`);
+        } else {
+          log('3/4', `Vehicle resolution returned null for "${nombre_marca}/${nombre_modelo}" — sending empty codes`);
+        }
+      } catch (err: any) {
+        log('3/4', `Vehicle resolution error for "${nombre_marca}/${nombre_modelo}": ${err.message} — sending empty codes`);
+      }
+    }
+
     // ═══ STEP 3: Emit policy ═══
     // EmitirDatos/EmisionServer handles client creation internally.
     // Inspection is CC-only — not called for DT.
@@ -346,9 +367,9 @@ export async function POST(request: NextRequest) {
       suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',
       codigo_acreedor: codigo_acreedor || '',
       nombre_acreedor: nombre_acreedor || '',
-      cod_marca_agt: String(cod_marca_agt || ''),
+      cod_marca_agt: String(finalCodMarcaAgt || ''),
       nombre_marca: (nombre_marca || '').toUpperCase(),
-      cod_modelo_agt: String(cod_modelo_agt || ''),
+      cod_modelo_agt: String(finalCodModeloAgt || ''),
       nombre_modelo: (nombre_modelo || '').toUpperCase(),
       uso: uso || 'PARTICULAR',
       codigo_color_agt: codigo_color_agt || '001',

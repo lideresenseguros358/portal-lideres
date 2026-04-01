@@ -55,10 +55,11 @@ export async function getMarcas(): Promise<RegionalMarca[]> {
   } else {
     raw = extractArray(res.data || res.raw) as any[];
   }
-  // Normalize: Regional API returns 'descmarca' but our types expect 'descripcion'
+  // Normalize: Regional API may return different field names across environments
+  // codmarca variants: codmarca | cod_marca | CodMarca | codMarca | id_marca | idmarca
   const normalized: RegionalMarca[] = raw.map((m: any) => ({
-    codmarca: m.codmarca,
-    descripcion: m.descripcion || m.descmarca || m.nombre || '',
+    codmarca: m.codmarca ?? m.cod_marca ?? m.CodMarca ?? m.codMarca ?? m.id_marca ?? m.idmarca,
+    descripcion: m.descripcion || m.descmarca || m.DescMarca || m.desc_marca || m.nombre || m.Nombre || '',
   }));
   if (normalized.length > 0) {
     setCache('marcas', normalized);
@@ -80,11 +81,12 @@ export async function getModelos(codMarca: number): Promise<RegionalModelo[]> {
   } else {
     raw = extractArray(res.data || res.raw) as any[];
   }
-  // Normalize: Regional API returns 'descmodelo' but our types expect 'descripcion'
+  // Normalize: Regional API may return different field names across environments
+  // codmodelo variants: codmodelo | cod_modelo | CodModelo | codModelo | id_modelo
   const normalized: RegionalModelo[] = raw.map((m: any) => ({
-    codmodelo: m.codmodelo,
-    descripcion: m.descripcion || m.descmodelo || m.nombre || '',
-    codmarca: m.codmarca,
+    codmodelo: m.codmodelo ?? m.cod_modelo ?? m.CodModelo ?? m.codModelo ?? m.id_modelo ?? m.idmodelo,
+    descripcion: m.descripcion || m.descmodelo || m.DescModelo || m.desc_modelo || m.nombre || m.Nombre || '',
+    codmarca: m.codmarca ?? m.cod_marca ?? m.CodMarca ?? m.codMarca,
   }));
   if (normalized.length > 0) {
     setCache(cacheKey, normalized);

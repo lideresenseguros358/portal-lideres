@@ -796,8 +796,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
            Shimmer: barre un destello luminoso de izquierda a derecha.
            Pop: cada 4 s el botón se infla y rebota para llamar atención. */
         @keyframes tp-premium-shine {
-          0%       { background-position: -250% center; }
-          45%, 100% { background-position: 300% center; }
+          0%        { background-position: -250% center; }
+          22%, 100% { background-position:  300% center; }
         }
         @keyframes tp-premium-pop {
           0%, 72%, 100% { transform: scale(1);    box-shadow: 0 2px 8px rgba(138,170,25,0.35); }
@@ -812,7 +812,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           background-size: 300% auto;
           color: white;
           animation:
-            tp-premium-shine 2.8s ease-in-out infinite,
+            tp-premium-shine 7s ease-in-out infinite,
             tp-premium-pop   4s   ease-in-out infinite;
         }
 
