@@ -5,10 +5,13 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { FaUser, FaInfoCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { ACREEDORES_PANAMA, getAcreedoresGrouped } from '@/lib/constants/acreedores';
+import type { CedulaQRData } from '@/lib/utils/cedula-qr-parser';
+
+const CedulaQRScanner = lazy(() => import('@/components/cotizadores/CedulaQRScanner'));
 
 export interface InsuredData {
   primerNombre: string;
@@ -57,6 +60,22 @@ export default function InsuredDataSection({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPEPTooltip, setShowPEPTooltip] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+
+  const handleQRScanSuccess = (data: CedulaQRData) => {
+    setFormData(prev => ({
+      ...prev,
+      cedula:         data.cedula         || prev.cedula,
+      primerNombre:   data.primerNombre    || prev.primerNombre,
+      segundoNombre:  data.segundoNombre   || prev.segundoNombre,
+      primerApellido: data.primerApellido  || prev.primerApellido,
+      segundoApellido:data.segundoApellido || prev.segundoApellido,
+      sexo:           (data.sexo === 'M' || data.sexo === 'F') ? data.sexo : prev.sexo,
+      fechaNacimiento:data.fechaNacimiento || prev.fechaNacimiento,
+    }));
+    setShowQRScanner(false);
+    toast.success('¡Cédula escaneada! Revisa los datos antes de continuar.');
+  };
 
   const handleChange = (field: keyof InsuredData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -117,6 +136,23 @@ export default function InsuredDataSection({
 
   return (
     <div className="space-y-6">
+      {/* QR autocompletar banner */}
+      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <p className="font-semibold text-blue-900 mb-0.5">✨ Autocompletar con QR</p>
+            <p className="text-xs text-blue-700">Escanea el QR del reverso de la cédula para llenar los datos automáticamente</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowQRScanner(true)}
+            className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+          >
+            📱 Escanear
+          </button>
+        </div>
+      </div>
+
       {/* Header de sección */}
       <div className="flex items-center gap-3 pb-4 border-b-2 border-gray-200">
         <FaUser className="text-[#010139] text-2xl" />
@@ -414,6 +450,16 @@ export default function InsuredDataSection({
           Guardar y Continuar →
         </button>
       </div>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <Suspense fallback={null}>
+          <CedulaQRScanner
+            onScanSuccess={handleQRScanSuccess}
+            onClose={() => setShowQRScanner(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
