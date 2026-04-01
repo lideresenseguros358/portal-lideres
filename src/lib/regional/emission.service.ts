@@ -174,12 +174,13 @@ function nodeHttpsBinaryRequest(
 }
 
 export async function imprimirPoliza(
-  poliza: string
+  poliza: string,
+  tokenType: 'rc' | 'cc' = 'cc'
 ): Promise<RegionalImprimirResponse> {
   // Strip trailing "-0" suffix that CC emission sometimes appends —
   // the imprimirPoliza endpoint only recognises the base policy number.
   const cleanPoliza = poliza.replace(/-0$/, '');
-  console.log('[REGIONAL Imprimir] Printing policy:', cleanPoliza, poliza !== cleanPoliza ? `(stripped from ${poliza})` : '');
+  console.log('[REGIONAL Imprimir] Printing policy:', cleanPoliza, `(tokenType: ${tokenType})`, poliza !== cleanPoliza ? `(stripped from ${poliza})` : '');
 
   const { getRegionalBaseUrl, getRegionalCredentials, getRegionalEnv } = await import('./config');
   const env = getRegionalEnv();
@@ -188,13 +189,22 @@ export async function imprimirPoliza(
   const url = `${baseUrl}${REGIONAL_CC_ENDPOINTS.IMPRIMIR}`;
   const auth = `Basic ${Buffer.from(`${creds.username}:${creds.password}`).toString('base64')}`;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: auth,
-    codInter: creds.codInter,
-    codProv: creds.codInter,   // CC endpoints require codProv (same value as codInter)
-    token: creds.tokenCC,
-  };
+  // RC (DT) policies were emitted with the RC token — must use same token for print.
+  // CC policies use tokenCC + codProv header.
+  const headers: Record<string, string> = tokenType === 'rc'
+    ? {
+        'Content-Type': 'application/json',
+        Authorization: auth,
+        codInter: creds.codInter,
+        token: creds.token,
+      }
+    : {
+        'Content-Type': 'application/json',
+        Authorization: auth,
+        codInter: creds.codInter,
+        codProv: creds.codInter,
+        token: creds.tokenCC,
+      };
 
   try {
     console.log('[REGIONAL Imprimir] POST', url);

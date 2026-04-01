@@ -13,6 +13,7 @@ import { imprimirPoliza } from '@/lib/regional/emission.service';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const poliza = searchParams.get('poliza');
+  const type = (searchParams.get('type') || 'cc') as 'rc' | 'cc';
 
   if (!poliza) {
     return NextResponse.json(
@@ -21,14 +22,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return handlePrint(poliza);
+  return handlePrint(poliza, type);
 }
 
 // ── POST: For frontend fetch calls ──
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { poliza } = body;
+    const { poliza, type } = body;
 
     if (!poliza) {
       return NextResponse.json(
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return handlePrint(String(poliza));
+    return handlePrint(String(poliza), (type || 'cc') as 'rc' | 'cc');
   } catch (error: any) {
     console.error('[API REGIONAL Print] POST parse error:', error);
     return NextResponse.json(
@@ -48,12 +49,12 @@ export async function POST(request: NextRequest) {
 }
 
 // ── Shared handler ──
-async function handlePrint(poliza: string) {
+async function handlePrint(poliza: string, tokenType: 'rc' | 'cc' = 'cc') {
   const requestId = `rprint-${Date.now().toString(36)}`;
 
   try {
-    console.log(`[API REGIONAL Print] ${requestId} Printing poliza: ${poliza}`);
-    const result = await imprimirPoliza(poliza);
+    console.log(`[API REGIONAL Print] ${requestId} Printing poliza: ${poliza} (type: ${tokenType})`);
+    const result = await imprimirPoliza(poliza, tokenType);
 
     if (!result.success) {
       return NextResponse.json(

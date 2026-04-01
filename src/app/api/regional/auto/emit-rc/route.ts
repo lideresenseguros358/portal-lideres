@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build print URL for the confirmation page / expediente
-    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}` : null;
+    const pdfUrl = result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}&type=rc` : null;
 
     // ── Auto-save client + policy to Supabase ──
     const cedula = prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || '');
