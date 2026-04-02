@@ -120,9 +120,9 @@ export default function CameraCapture({
   };
 
   return (
-    <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+    <div className="fixed inset-0 h-[100dvh] overflow-hidden bg-black z-[9999] flex flex-col">
       {/* ── Header ────────────────────────────────── */}
-      <div className="bg-[#010139] text-white p-4 flex items-center justify-between flex-shrink-0">
+      <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <FaCamera className="text-2xl" />
           <div>
@@ -141,7 +141,7 @@ export default function CameraCapture({
       </div>
 
       {/* ── Camera viewport ───────────────────────── */}
-      <div className="flex-1 relative bg-black overflow-hidden">
+      <div className="flex-1 min-h-0 relative bg-black overflow-hidden">
         {error ? (
           <div className="flex items-center justify-center h-full p-6">
             <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 max-w-sm w-full text-center">
@@ -178,7 +178,7 @@ export default function CameraCapture({
 
       {/* ── Bottom: instructions + shutter ────────── */}
       {!error && (
-        <div className="flex-shrink-0 bg-black/90 px-5 pt-4 pb-8">
+        <div className="shrink-0 bg-black/90 px-5 pt-4 pb-6 safe-bottom">
           {/* Instructions box — same style as CedulaQRScanner */}
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-white mb-5">
             <h3 className="font-bold mb-2 flex items-center gap-2 text-sm">
@@ -213,7 +213,7 @@ export default function CameraCapture({
       )}
 
       {/* ── Footer ────────────────────────────────── */}
-      <div className="bg-[#010139] text-white p-3 text-center flex-shrink-0">
+      <div className="shrink-0 bg-[#010139] text-white p-3 text-center">
         <p className="text-xs text-gray-400">🔒 Las fotos son para uso exclusivo de la inspección</p>
       </div>
     </div>

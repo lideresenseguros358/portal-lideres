@@ -5,13 +5,16 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { FaCamera, FaCheck } from 'react-icons/fa';
 import { toast } from 'sonner';
+
+const CameraCapture = lazy(() => import('@/components/cotizadores/emision/CameraCapture'));
 
 interface InspectionPhoto {
   id: string;
   name: string;
+  instructions: string;
   file?: File;
   preview?: string;
 }
@@ -24,20 +27,20 @@ interface VehicleInspectionProps {
 export default function VehicleInspection({ onContinue, isInternacional = false }: VehicleInspectionProps) {
   // ORDEN DE CAPTURA: F, LI, LD, T, MA, KM, TB, AS, KEY, CH (IS only)
   const basePhotos: InspectionPhoto[] = [
-    { id: 'frontal', name: 'Vista Frontal' },
-    { id: 'lateral-izq', name: 'Lateral Izquierdo' },
-    { id: 'lateral-der', name: 'Lateral Derecho' },
-    { id: 'trasera', name: 'Vista Trasera' },
-    { id: 'motor', name: 'Motor Abierto' },
-    { id: 'kilometraje', name: 'Kilometraje' },
-    { id: 'tablero', name: 'Tablero' },
-    { id: 'asientos', name: 'Asientos' },
-    { id: 'llave', name: 'Llave del Vehículo' },
-    ...(isInternacional ? [{ id: 'chasis-placa', name: 'Placa de Chasis' }] : []),
+    { id: 'frontal',      name: 'Vista Frontal',         instructions: 'Colócate frente al vehículo en un lugar abierto con buena iluminación natural. Captura el auto completo de frente — la placa delantera y los faros deben verse claramente.' },
+    { id: 'lateral-izq',  name: 'Lateral Izquierdo',     instructions: 'Colócate al lado izquierdo (conductor) dejando suficiente distancia. Captura todo el lateral del vehículo de punta a punta con la carrocería completa.' },
+    { id: 'lateral-der',  name: 'Lateral Derecho',       instructions: 'Colócate al lado derecho (pasajero) dejando suficiente distancia. Captura todo el lateral del vehículo de punta a punta con la carrocería completa.' },
+    { id: 'trasera',      name: 'Vista Trasera',         instructions: 'Colócate detrás del vehículo en un lugar abierto con buena iluminación. La placa trasera y las luces deben verse con claridad.' },
+    { id: 'motor',        name: 'Motor Abierto',         instructions: 'Abre el capó completamente y fotografia el compartimiento del motor desde arriba. El motor debe ocupar la mayor parte de la foto y ser claramente visible.' },
+    { id: 'kilometraje',  name: 'Kilometraje',           instructions: 'Siéntate frente al tablero y fotografía el panel de instrumentos mostrando el marcador de kilometraje. El número de kilómetros debe leerse con claridad.' },
+    { id: 'tablero',      name: 'Tablero',               instructions: 'Desde el asiento del conductor, captura el tablero completo mostrando todos los controles, pantallas e indicadores del vehículo.' },
+    { id: 'asientos',     name: 'Asientos',              instructions: 'Desde la puerta delantera abierta, captura el interior mostrando los asientos delanteros y, de ser posible, los traseros.' },
+    { id: 'llave',        name: 'Llave del Vehículo',    instructions: 'Coloca la llave del vehículo sobre una superficie plana con buena luz. Fotografíala de cerca para que se vea claramente el tipo y forma de la llave.' },
+    ...(isInternacional ? [{ id: 'chasis-placa', name: 'Placa de Chasis (VIN)', instructions: 'Busca la plaquita metálica o etiqueta adhesiva con el número VIN de 17 dígitos. Primero revisa el marco interior de la puerta del conductor (abre la puerta y mira el borde metálico). Si no la encuentras ahí, búscala en la esquina inferior del parabrisas desde afuera, o en el tablero junto al parabrisas. El número VIN completo de 17 dígitos debe leerse perfectamente en la foto.' }] : []),
   ];
   const [photos, setPhotos] = useState<InspectionPhoto[]>(basePhotos);
   
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const [currentHighlight, setCurrentHighlight] = useState<number>(0);
 
   // IS-specific inspection questions (only for Cobertura Completa)
@@ -107,20 +110,6 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
     'Teléfono', 'DVD',
   ];
 
-  // Descripciones para tooltips
-  const photoDescriptions: Record<string, string> = {
-    'frontal': 'Toma una foto del frente del vehículo',
-    'lateral-izq': 'Toma una foto del lado izquierdo completo',
-    'lateral-der': 'Toma una foto del lado derecho completo',
-    'trasera': 'Toma una foto de la parte trasera del vehículo',
-    'motor': 'Abre el capó y toma foto del motor',
-    'kilometraje': 'Toma foto del odometro mostrando los kilómetros',
-    'tablero': 'Toma foto del tablero de instrumentos encendido',
-    'asientos': 'Toma foto del interior mostrando los asientos',
-    'llave': 'Toma foto de las llaves del vehículo',
-    'chasis-placa': 'Placa de chasis: se encuentra por lo general en el marco de la puerta del conductor o en la pared de la cabina de motor',
-  };
-
   // Animación de parpadeo secuencial
   useEffect(() => {
     const nextIncompleteIndex = photos.findIndex(p => !p.file);
@@ -129,40 +118,29 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
     }
   }, [photos]);
 
-  const handlePhotoCapture = async (photoId: string) => {
-    try {
-      // En mobile, capturar con cámara
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.capture = 'environment' as any;
-      
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          if (file.size > 5 * 1024 * 1024) {
-            toast.error('La imagen debe ser menor a 5MB');
-            return;
-          }
-          
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setPhotos(prev => prev.map(photo => 
-              photo.id === photoId 
-                ? { ...photo, file, preview: reader.result as string }
-                : photo
-            ));
-            toast.success(`Foto de ${photos.find(p => p.id === photoId)?.name} capturada`);
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      
-      input.click();
-    } catch (error) {
-      console.error('Error capturando foto:', error);
-      toast.error('Error al capturar la foto');
+  const handlePhotoCapture = (photoId: string) => {
+    setActiveCameraId(photoId);
+  };
+
+  const handleCaptureComplete = async (file: File, photoId: string) => {
+    setActiveCameraId(null);
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen debe ser menor a 5MB');
+      return;
     }
+
+    const preview = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+
+    setPhotos(prev => prev.map(photo =>
+      photo.id === photoId ? { ...photo, file, preview } : photo
+    ));
+    const photoLabel = photos.find(p => p.id === photoId)?.name;
+    toast.success(`Foto de ${photoLabel} capturada`);
   };
 
   const handleSubmit = () => {
@@ -263,7 +241,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             <rect x="70" y="250" width="100" height="30" rx="5" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
             
             {/* Botón F - Frontal */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('frontal')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="120" 
                 cy="70" 
@@ -279,7 +257,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón LI - Lateral Izquierdo */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('lateral-izq')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="30" 
                 cy="190" 
@@ -295,7 +273,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón LD - Lateral Derecho */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('lateral-der')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="210" 
                 cy="190" 
@@ -311,7 +289,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón T - Trasera */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('trasera')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="120" 
                 cy="310" 
@@ -327,7 +305,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón MA - Motor Abierto (debajo de F) */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('motor')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="120" 
                 cy="115" 
@@ -343,7 +321,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón KM - Kilometraje (izquierda, debajo de MA) */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('kilometraje')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="90" 
                 cy="155" 
@@ -359,7 +337,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón TB - Tablero (derecha, debajo de MA) */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('tablero')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="150" 
                 cy="155" 
@@ -375,7 +353,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón AS - Asientos (centro) */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('asientos')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="120" 
                 cy="190" 
@@ -391,7 +369,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             </g>
             
             {/* Botón KEY - Llaves (debajo de AS) */}
-            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('llave')} onMouseLeave={() => setActiveTooltip(null)}>
+            <g className="cursor-pointer">
               <circle 
                 cx="120" 
                 cy="235" 
@@ -408,7 +386,7 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             
             {/* Botón CH - Placa de Chasis (debajo de KEY, solo IS) */}
             {isInternacional && photos[9] && (
-              <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('chasis-placa')} onMouseLeave={() => setActiveTooltip(null)}>
+              <g className="cursor-pointer">
                 <circle 
                   cx="120" 
                   cy="270" 
@@ -424,64 +402,6 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
               </g>
             )}
           </svg>
-          
-          {/* Tooltip */}
-          {activeTooltip && (
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full mb-2 z-10">
-              <div className="bg-[#010139] text-white px-4 py-2 rounded-lg shadow-xl text-sm font-semibold whitespace-nowrap">
-                {photoDescriptions[activeTooltip]}
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full">
-                  <div className="border-8 border-transparent border-t-[#010139]"></div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Leyenda */}
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-gray-600">Pendiente</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-gray-600">Completada</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
-            <span className="text-gray-600">Siguiente sugerida</span>
-          </div>
-        </div>
-      </div>
-
-      {/* IS-specific: Inspection Questions for Cobertura Completa */}
-      {isInternacional && (
-        <div className="space-y-6">
-          {/* Pregunta 1: Extras */}
-          <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6">
-            <h3 className="text-lg font-bold text-[#010139] mb-4">
-              🔧 ¿Su auto cuenta con extras?
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">Favor detallar si aplica</p>
-            
-            <div className="flex items-center gap-4 mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="tieneExtras"
-                  checked={tieneExtras === true}
-                  onChange={() => setTieneExtras(true)}
-                  className="w-4 h-4 text-[#8AAA19]"
-                />
-                <span className="text-sm font-semibold text-gray-700">Sí</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="tieneExtras"
-                  checked={tieneExtras === false}
-                  onChange={() => { setTieneExtras(false); setExtrasSeleccionados([]); setExtrasDetalle(''); }}
                   className="w-4 h-4 text-[#8AAA19]"
                 />
                 <span className="text-sm font-semibold text-gray-700">No</span>
@@ -736,6 +656,23 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
             : 'Completa todas las fotos'}
         </button>
       </div>
+
+      {/* ── CameraCapture modal ───────────────────── */}
+      {activeCameraId && (() => {
+        const activePhoto = photos.find(p => p.id === activeCameraId);
+        if (!activePhoto) return null;
+        return (
+          <Suspense fallback={null}>
+            <CameraCapture
+              label={activePhoto.name}
+              instructions={activePhoto.instructions}
+              photoId={activePhoto.id}
+              onCapture={handleCaptureComplete}
+              onClose={() => setActiveCameraId(null)}
+            />
+          </Suspense>
+        );
+      })()}
     </div>
   );
 }

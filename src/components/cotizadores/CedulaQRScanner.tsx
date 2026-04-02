@@ -114,9 +114,9 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
   };
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
+    <div className="fixed inset-0 h-[100dvh] overflow-hidden bg-black/90 z-50 flex flex-col">
       {/* Header */}
-      <div className="bg-[#010139] text-white p-4 flex items-center justify-between">
+      <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <FaIdCard className="text-2xl" />
           <div>
@@ -132,10 +132,10 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
         </button>
       </div>
 
-      {/* Scanner Area */}
-      <div className="flex-1 flex items-center justify-center p-4">
+      {/* Scanner Area — flex-1 min-h-0 prevents overflow beyond screen */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center gap-3 px-4 py-3">
         {error ? (
-          <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 max-w-md">
+          <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm">
             <FaCamera className="text-4xl text-red-500 mx-auto mb-4" />
             <p className="text-white text-center mb-4">{error}</p>
             <button
@@ -146,20 +146,21 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
             </button>
           </div>
         ) : (
-          <div className="w-full max-w-md">
-            {/* QR Reader Container */}
+          <div className="w-full max-w-sm flex flex-col gap-3">
+            {/* QR Reader — explicit height so Html5Qrcode's injected UI is clipped */}
             <div
               id="qr-reader"
-              className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl"
+              className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl w-full"
+              style={{ height: 'clamp(260px, 70vw, 320px)' }}
             />
 
             {/* Instructions */}
-            <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-xl p-4 text-white">
-              <h3 className="font-bold mb-2 flex items-center gap-2">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white">
+              <h3 className="font-bold mb-1.5 flex items-center gap-2 text-sm">
                 <FaIdCard className="text-[#8AAA19]" />
                 Instrucciones:
               </h3>
-              <ol className="text-sm space-y-2 list-decimal list-inside">
+              <ol className="text-xs space-y-1 list-decimal list-inside">
                 <li>Coloca la cédula boca abajo</li>
                 <li>Enfoca el código QR en el recuadro</li>
                 <li>Mantén la cédula estable</li>
@@ -171,9 +172,9 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
       </div>
 
       {/* Footer */}
-      <div className="bg-[#010139] text-white p-4 text-center">
+      <div className="shrink-0 bg-[#010139] text-white p-3 text-center">
         <p className="text-xs text-gray-400">
-          🔒 Tus datos están seguros y encriptados
+          Tus datos están seguros y encriptados
         </p>
       </div>
     </div>
