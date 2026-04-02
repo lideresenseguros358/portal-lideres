@@ -27,25 +27,6 @@ export const VEHICLE_MARCA_TO_FEDPA_USO: Record<number, string> = {
 // Valor por defecto si no se encuentra la marca
 export const DEFAULT_FEDPA_USO = '10'; // Auto Particular
 
-/**
- * Mapeo de códigos IS a códigos FEDPA para Marca
- * IS usa números, FEDPA usa strings (abreviaciones)
- */
-export const IS_TO_FEDPA_MARCA: Record<number, string> = {
-  // Verified against IS production catalog (2025)
-  156: 'TOY',  // Toyota
-  74: 'HYU',   // Hyundai
-  86: 'KIA',   // Kia
-  113: 'NIS',  // Nissan
-  148: 'SUZ',  // Suzuki
-  217: 'GEE',  // Geely
-  69: 'HON',   // Honda
-  99: 'MAZ',   // Mazda
-  107: 'MIT',  // Mitsubishi
-  20: 'CHE',   // Chevrolet
-  50: 'FOR',   // Ford
-};
-
 import { getFedpaMarcaFromIS, normalizarModeloFedpa } from './fedpa-vehicle-mapper';
 
 /**

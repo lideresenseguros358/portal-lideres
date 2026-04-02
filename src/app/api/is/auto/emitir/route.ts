@@ -71,8 +71,10 @@ export async function POST(request: NextRequest) {
       pjeBexp,
       // Acreedor (banco)
       vacreedor,
-      // Endoso texto para condiciones especiales
+      // Endoso texto para condiciones especiales (imprime en caratula IS)
       vendosoTexto,
+      // Plan adicional IS (código de getplanesadicionales): 0 si no aplica
+      vcodplancoberturadadic,
       dry_run,
       environment = getISDefaultEnv(),
     } = body;
@@ -168,7 +170,7 @@ export async function POST(request: NextRequest) {
       anioAuto: String(vanioauto),
       sumaAseg: String(vsumaaseg || '0'),
       codPlanCobertura: parseInt(vcodplancobertura as string),
-      codPlanCoberturaAdic: 0,
+      codPlanCoberturaAdic: parseInt(vcodplancoberturadadic as string) || 0,
       codGrupoTarifa: parseInt(vcodgrupotarifa as string),
       placa: vplaca,
       motor: vmotor,
@@ -230,7 +232,7 @@ export async function POST(request: NextRequest) {
           anioAuto: String(vanioauto),
           sumaAseg: String(vsumaaseg || '0'),
           codPlanCobertura: parseInt(vcodplancobertura as string),
-          codPlanCoberturaAdic: 0,
+          codPlanCoberturaAdic: parseInt(vcodplancoberturadadic as string) || 0,
           codGrupoTarifa: parseInt(vcodgrupotarifa as string),
           fecNacimiento: vfecnacimiento || '01/01/1990',
           codProvincia: parseInt(vcodprovincia) || 8,

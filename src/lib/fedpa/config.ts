@@ -93,17 +93,26 @@ export const EMISOR_EXTERNO_ENDPOINTS = {
   CONSULTAR_PLANES_CC: '/api/Polizas/consultar_planes_cc_externos',
   CONSULTAR_BENEFICIOS: '/api/Polizas/consultar_beneficios_planes_externos',
   CONSULTAR_USOS: '/api/Polizas/consultar_uso_externos',
-  
+  // Catálogo de vehículos (brand/model resolution — may not exist yet; fetched with try/catch)
+  CONSULTAR_MARCAS: '/api/Polizas/consultar_marcas_externos',
+  CONSULTAR_MODELOS: '/api/Polizas/consultar_modelos_externos',
+
   // Cotización
   GET_COTIZACION: '/api/Polizas/get_cotizacion',
-  
+
   // Emisión
   GET_NRO_POLIZA: '/api/Polizas/get_nropoliza',
   CREAR_POLIZA: '/api/Polizas/crear_poliza_auto_cc_externos',
-  
+
   // DEPRECATED: These only return policy numbers, not PDFs
   GET_CARATULA_TEST: '/api/Polizas/get_nropoliza',
   GET_CARATULA_PROD: '/api/Polizas/get_nropoliza_emitir',
+} as const;
+
+export const EMISOR_PLAN_ENDPOINTS_CATALOG = {
+  // These may or may not be exposed — tried with GET, fail gracefully
+  MARCAS: '/api/marcas',
+  MODELOS: '/api/modelos',
 } as const;
 
 // ============================================

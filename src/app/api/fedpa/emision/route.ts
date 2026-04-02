@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { emitirPoliza, crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
-import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
+import { resolveFedpaMarca, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 export async function POST(request: NextRequest) {
   const requestId = `emi-${Date.now().toString(36)}`;
@@ -56,18 +56,19 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // ── Marca/Modelo: FEDPA PROD requires string numeric codes (e.g. '5' for Toyota, '100' for model) ──
-    // Do NOT convert to text abbreviations — PROD validates against AUT_MODELO_FK.
-    const rawMarca = String(emisionData.Marca || '');
-    const rawModelo = String(emisionData.Modelo || '');
-    const marcaNombre = emisionData.MarcaNombre || '';
-    const modeloNombre = emisionData.ModeloNombre || rawModelo;
-    
+    // ── Marca/Modelo: resolve via dynamic FEDPA catalog (falls back to derived 3-char code) ──
+    const isMarcaCodigo = parseInt(String(emisionData.Marca)) || 0;
+    const marcaNombre = String(emisionData.MarcaNombre || '');
+    const modeloNombre = String(emisionData.ModeloNombre || emisionData.Modelo || '');
+    const { code: resolvedMarca, matchMethod: marcaMethod } = await resolveFedpaMarca(isMarcaCodigo, marcaNombre);
+    const resolvedModelo = normalizarModeloFedpa(modeloNombre);
+    console.log(`[API FEDPA Emisión] ${requestId} Vehicle: IS marca ${isMarcaCodigo}/${marcaNombre} → "${resolvedMarca}" (${marcaMethod}), modelo "${resolvedModelo}"`);
+
     const env = environment as FedpaEnvironment;
     const emisionRequest: EmitirPolizaRequest = {
       Plan: emisionData.Plan,
       idDoc: emisionData.idDoc,
-      
+
       // Cliente
       PrimerNombre: emisionData.PrimerNombre,
       PrimerApellido: emisionData.PrimerApellido,
@@ -83,12 +84,12 @@ export async function POST(request: NextRequest) {
       Email: emisionData.Email,
       esPEP: emisionData.esPEP,
       Acreedor: emisionData.Acreedor,
-      
-      // Vehículo — pass marca/modelo as-is (string numeric codes for PROD)
+
+      // Vehículo — resolved brand code (3-char abbreviation or dynamic FEDPA catalog match)
       sumaAsegurada: emisionData.sumaAsegurada || 0,
       Uso: emisionData.Uso,
-      Marca: rawMarca,
-      Modelo: rawModelo,
+      Marca: resolvedMarca,
+      Modelo: resolvedModelo,
       Ano: emisionData.Ano,
       Motor: emisionData.Motor,
       Placa: emisionData.Placa,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
     // ═══ LOG: JSON completo que se envía a FEDPA ═══
     console.log(`\n[FEDPA EMISIÓN] ${requestId} ═══ PAYLOAD JSON ═══`);
     console.log(JSON.stringify(emisionRequest, null, 2));
-    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${rawMarca} | Modelo: ${rawModelo} | MarcaNombre: ${marcaNombre} | ModeloNombre: ${modeloNombre}`);
+    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${resolvedMarca} | Modelo: ${resolvedModelo} | MarcaNombre: ${marcaNombre} | ModeloNombre: ${modeloNombre}`);
     console.log(`[FEDPA EMISIÓN] ${requestId} ═════════════════════════\n`);
     
     // Emitir con FEDPA — NO reintentar automáticamente (operación crítica)

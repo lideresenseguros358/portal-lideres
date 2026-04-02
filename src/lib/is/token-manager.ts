@@ -1,261 +1,250 @@
 /**
  * Sistema de Token Diario para Internacional de Seguros (IS)
- * Según instructivo IS: obtener token diario desde /api/tokens
+ *
+ * IS genera un token diario por usuario. Flujo correcto:
+ *   1. GET  /tokens/diario   → Recupera el token del día si ya fue generado (99% de casos)
+ *   2. POST /tokens          → Genera el token del día (primera llamada del día)
+ *
+ * Capas de caché (de más rápida a más lenta):
+ *   L1: Memoria  (in-process, ~0ms)
+ *   L2: Supabase (cross-instancias serverless, ~50ms)
+ *   L3: IS API   (fuente de verdad, ~300ms)
  */
 
-import { ISEnvironment, getISBaseUrl } from './config';
+import { ISEnvironment, getISBaseUrl, CACHE_TTL } from './config';
 
 interface TokenCache {
   token: string;
-  expiresAt: number; // timestamp en ms
+  expiresAt: number; // timestamp ms
 }
 
+// L1: caché en memoria por instancia
 const tokenCache: Record<ISEnvironment, TokenCache | null> = {
   development: null,
   production: null,
 };
 
-// IS-J: Single-flight promises para evitar llamadas duplicadas
+// Single-flight: evita llamadas duplicadas concurrentes al mismo endpoint
 const tokenFetchPromises: Record<ISEnvironment, Promise<string> | null> = {
   development: null,
   production: null,
 };
 
-const TOKEN_TTL_HOURS = 23; // 23 horas según instructivo IS
+const TOKEN_TTL_HOURS = 23;
 
-/**
- * Obtener token principal desde ENV vars
- */
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
 function getPrimaryToken(env: ISEnvironment): string {
   const token = env === 'production'
     ? process.env.KEY_PRODUCCION_IS
     : process.env.KEY_DESARROLLO_IS;
-
   if (!token) {
-    throw new Error(
-      `Variable de entorno no configurada: ${
-        env === 'production' ? 'KEY_PRODUCCION_IS' : 'KEY_DESARROLLO_IS'
-      }`
-    );
+    throw new Error(`Variable de entorno no configurada: ${env === 'production' ? 'KEY_PRODUCCION_IS' : 'KEY_DESARROLLO_IS'}`);
   }
-
   return token;
 }
 
-/**
- * Extraer y validar un JWT token de la respuesta del endpoint de tokens IS
- */
-function extractTokenFromResponse(bodyText: string, contentType: string, endpointLabel: string): string {
-  // Limpiar comillas envolventes si la respuesta es un JSON string
-  // IS devuelve: "eyJhbG..." (con comillas) cuando content-type es application/json
-  let cleanBody = bodyText.trim();
-  if (cleanBody.startsWith('"') && cleanBody.endsWith('"')) {
-    cleanBody = cleanBody.slice(1, -1);
-  }
-  
-  // CASO 1: El body (limpio) es directamente un JWT
-  if (cleanBody.startsWith('eyJ')) {
-    const token = cleanBody.trim();
-    const parts = token.split('.');
-    if (parts.length === 3 && token.length >= 50) {
-      console.log(`[IS Token Manager] Token extraído directamente del body (${endpointLabel})`);
-      return token;
+function extractTokenFromResponse(bodyText: string, contentType: string, label: string): string {
+  let clean = bodyText.trim();
+  if (clean.startsWith('"') && clean.endsWith('"')) clean = clean.slice(1, -1);
+
+  if (clean.startsWith('eyJ')) {
+    const parts = clean.split('.');
+    if (parts.length === 3 && clean.length >= 50) {
+      console.log(`[IS Token Manager] Token extraído del body (${label})`);
+      return clean;
     }
   }
-  
-  // CASO 2: JSON con estructura - parsear y buscar
+
   let data: any;
-  try {
-    data = JSON.parse(bodyText);
-  } catch {
-    // Si no es JSON y no es JWT directo, error
-    throw new Error(`Respuesta no es JSON ni JWT válido (${endpointLabel})`);
+  try { data = JSON.parse(bodyText); } catch {
+    throw new Error(`Respuesta no es JSON ni JWT válido (${label})`);
   }
-  
-  // Detectar bloqueo WAF
+
   if (data._event_transid && !data.token && !data.Token && !data.access_token) {
-    const error = new Error('IS Token endpoint bloqueado o incorrecto');
-    error.name = 'ISIntegrationError';
-    throw error;
+    const err = new Error('IS Token endpoint bloqueado por WAF');
+    err.name = 'ISIntegrationError';
+    throw err;
   }
-  
-  // Buscar token en múltiples ubicaciones
-  let dailyToken = 
-    data.tokenDiario ||
-    data.token ||
-    data.Token ||
-    data.access_token ||
-    data.data?.token ||
-    data.Table?.[0]?.TOKEN ||
-    data.Table?.[0]?.token ||
-    data.Table?.[0]?.Token;
-  
-  // Si la respuesta parseada es string (JSON string: "eyJhbG...")
-  if (!dailyToken && typeof data === 'string') {
-    dailyToken = data;
+
+  let t =
+    data.tokenDiario || data.token || data.Token || data.access_token ||
+    data.data?.token || data.Table?.[0]?.TOKEN || data.Table?.[0]?.token ||
+    data.Table?.[0]?.Token || (typeof data === 'string' ? data : null);
+
+  if (!t) throw new Error(`Token no encontrado en respuesta de ${label}`);
+  if (typeof t !== 'string') throw new Error('Token no es string');
+  t = t.trim();
+  if (!t.startsWith('eyJ') || t.split('.').length !== 3 || t.length < 50) {
+    throw new Error(`Token de ${label} no es JWT válido`);
   }
-  
-  if (!dailyToken) {
-    const keys = typeof data === 'object' ? Object.keys(data) : [];
-    console.error(`[IS Token Manager] Token no encontrado en ${endpointLabel}. Keys:`, keys);
-    throw new Error(`Token no encontrado en respuesta de ${endpointLabel}`);
-  }
-  
-  // Validar JWT
-  if (typeof dailyToken !== 'string') {
-    throw new Error('Token no es string');
-  }
-  
-  const tokenStr = dailyToken.trim();
-  const parts = tokenStr.split('.');
-  
-  if (!tokenStr.startsWith('eyJ') || parts.length !== 3 || tokenStr.length < 50) {
-    console.error(`[IS Token Manager] Token inválido de ${endpointLabel}:`, tokenStr.substring(0, 30));
-    throw new Error(`Token de ${endpointLabel} no es JWT válido`);
-  }
-  
-  return tokenStr;
+  return t;
 }
 
-/**
- * Llamar a un endpoint de tokens IS
- */
-async function callTokenEndpoint(url: string, primaryToken: string, label: string, method: 'GET' | 'POST' = 'GET'): Promise<string> {
+async function callTokenEndpoint(
+  url: string,
+  primaryToken: string,
+  label: string,
+  method: 'GET' | 'POST' = 'GET',
+): Promise<string> {
   const response = await fetch(url, {
     method,
-    headers: {
-      'Authorization': `Bearer ${primaryToken}`,
-      'Accept': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${primaryToken}`, Accept: 'application/json' },
   });
 
   const status = response.status;
-  const contentType = response.headers.get('content-type') || '';
-  
-  console.log(`[IS Token Manager] ${method} ${url} - ${status} - ${contentType}`);
+  const ct = response.headers.get('content-type') || '';
+  console.log(`[IS Token Manager] ${method} ${url} - ${status} - ${ct}`);
 
   if (!response.ok) {
     const preview = await response.text();
     console.error(`[IS Token Manager] Error ${status} en ${label}:`, preview.substring(0, 120));
     throw new Error(`Error ${status} en ${label}`);
   }
-  
-  if (contentType.includes('text/html')) {
-    throw new Error(`Bloqueo WAF en ${label}`);
-  }
+  if (ct.includes('text/html')) throw new Error(`Bloqueo WAF en ${label}`);
 
   const bodyText = await response.text();
   console.log(`[IS Token Manager] ${label} body (200 chars):`, bodyText.substring(0, 200));
-  
-  return extractTokenFromResponse(bodyText, contentType, label);
+  return extractTokenFromResponse(bodyText, ct, label);
 }
 
-/**
- * Obtener token diario desde IS
- * 
- * SEGÚN DOCUMENTACIÓN IS:
- * - Paso 1: GET /api/tokens → GENERA el token diario (con Bearer primary token)
- * - Paso Opcional: GET /api/tokens/diario → RECUPERA el token diario ya generado
- * - Paso 2: Usar el token diario como Bearer en todos los endpoints
- * 
- * IMPORTANTE: /tokens GENERA, /tokens/diario solo RECUPERA.
- * Si solo llamamos /tokens/diario sin haber llamado /tokens primero,
- * puede devolver el token principal en vez del diario → 401 en endpoints.
- */
-async function fetchDailyToken(env: ISEnvironment): Promise<string> {
-  const primaryToken = getPrimaryToken(env);
-  let baseUrl = getISBaseUrl(env);
-  baseUrl = baseUrl.replace(/\/+$/, '');
-  
-  // Paso 1: GENERAR token diario con /tokens
-  const generateUrl = `${baseUrl}/tokens`;
-  // Paso Opcional: RECUPERAR token diario con /tokens/diario
-  const retrieveUrl = `${baseUrl}/tokens/diario`;
+// ─── Supabase caché L2 (fire-and-forget en escritura) ─────────────────────────
 
+async function readTokenFromSupabase(env: ISEnvironment): Promise<string | null> {
   try {
-    // PRIMERO: Intentar GENERAR el token diario con POST /tokens
-    // IMPORTANTE: IS requiere POST (no GET) para generar el token diario.
-    // GET /tokens devuelve 404 "Acceso denegado" pero POST /tokens funciona.
-    console.log('[IS Token Manager] Paso 1: Generando token diario con POST /tokens...');
-    try {
-      const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens (POST)', 'POST');
-      
-      if (token === primaryToken) {
-        console.warn('[IS Token Manager] ⚠️ POST /tokens devolvió el mismo token principal, intentando /tokens/diario...');
-      } else {
-        console.log('[IS Token Manager] ✅ Token diario GENERADO exitosamente via POST /tokens');
-        return token;
-      }
-    } catch (postError: any) {
-      console.warn(`[IS Token Manager] POST /tokens falló: ${postError.message}`);
-      
-      // Fallback: intentar GET /tokens (por si cambian la API)
-      try {
-        console.log('[IS Token Manager] Fallback: intentando GET /tokens...');
-        const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens (GET)', 'GET');
-        if (token !== primaryToken) {
-          console.log('[IS Token Manager] ✅ Token diario GENERADO via GET /tokens');
-          return token;
-        }
-      } catch (getError: any) {
-        console.warn(`[IS Token Manager] GET /tokens también falló: ${getError.message}`);
-      }
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from('is_daily_tokens')
+      .select('token, expires_at')
+      .eq('environment', env)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!data) return null;
+
+    const expiresAt = new Date(data.expires_at).getTime();
+    if (expiresAt <= Date.now() + 5 * 60 * 1000) {
+      // Expira en menos de 5 min → no usarlo
+      return null;
     }
-    
-    // SEGUNDO: Si /tokens falla, intentar /tokens/diario (recupera el último generado)
-    console.log('[IS Token Manager] Intentando recuperar token con /tokens/diario...');
-    const dailyToken = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario', 'GET');
-    
-    if (dailyToken === primaryToken) {
-      console.warn('[IS Token Manager] ⚠️ /tokens/diario devolvió el token principal');
-      console.warn('[IS Token Manager] Usando el token tal cual (puede causar 401 en endpoints)');
-    } else {
-      console.log('[IS Token Manager] ✅ Token diario RECUPERADO exitosamente');
-    }
-    
-    return dailyToken;
-    
-  } catch (error: any) {
-    console.error(`[IS Token Manager] Error obteniendo token diario (${env}):`, error.message);
-    throw error;
+
+    // Rellenar L1 también
+    tokenCache[env] = { token: data.token, expiresAt };
+    console.log('[IS Token Manager] ✅ Token recuperado desde Supabase (L2)');
+    return data.token;
+  } catch {
+    // Supabase no disponible — continuar sin él
+    return null;
   }
 }
 
+function saveTokenToSupabase(env: ISEnvironment, token: string, expiresAt: number): void {
+  // Fire-and-forget: no bloquea el flujo principal
+  (async () => {
+    try {
+      const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+      const sb = getSupabaseAdmin();
+      await sb.from('is_daily_tokens').upsert(
+        {
+          environment: env,
+          token,
+          expires_at: new Date(expiresAt).toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'environment' },
+      );
+      console.log('[IS Token Manager] Token persistido en Supabase (L2)');
+    } catch (e: any) {
+      console.warn('[IS Token Manager] No se pudo persistir token en Supabase:', e?.message);
+    }
+  })();
+}
+
+// ─── Lógica de obtención desde IS (L3) ─────────────────────────────────────
+
 /**
- * Obtener token diario válido (con cache + single-flight)
- * IS-J: Evita llamadas duplicadas usando promise cache
+ * Obtener token diario desde IS.
+ *
+ * Orden correcto:
+ *   1. GET /tokens/diario  → recupera el del día (ya generado, funciona el 99% del tiempo)
+ *   2. POST /tokens        → genera uno nuevo (primera llamada del día o si /diario falla)
+ *
+ * Antes el orden era al revés: POST primero → siempre 401 después de la 1ª generación,
+ * generando 2 round-trips fallidos innecesarios antes de llegar a /tokens/diario.
+ */
+async function fetchTokenFromIS(env: ISEnvironment): Promise<string> {
+  const primaryToken = getPrimaryToken(env);
+  const baseUrl = getISBaseUrl(env).replace(/\/+$/, '');
+  const retrieveUrl = `${baseUrl}/tokens/diario`;
+  const generateUrl = `${baseUrl}/tokens`;
+
+  // ── Paso 1: Recuperar el token del día ya generado ──────────────────────────
+  try {
+    console.log('[IS Token Manager] Paso 1: Recuperando token con GET /tokens/diario...');
+    const token = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario', 'GET');
+    if (token && token !== primaryToken) {
+      console.log('[IS Token Manager] ✅ Token diario RECUPERADO vía GET /tokens/diario');
+      return token;
+    }
+    console.warn('[IS Token Manager] /tokens/diario devolvió el token principal, intentando generar...');
+  } catch (e: any) {
+    console.warn(`[IS Token Manager] GET /tokens/diario falló: ${e.message}. Intentando generar...`);
+  }
+
+  // ── Paso 2: Generar token nuevo (primera llamada del día) ───────────────────
+  console.log('[IS Token Manager] Paso 2: Generando token con POST /tokens...');
+  const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens (POST)', 'POST');
+  if (token !== primaryToken) {
+    console.log('[IS Token Manager] ✅ Token diario GENERADO vía POST /tokens');
+    return token;
+  }
+
+  throw new Error('IS devolvió el token principal en ambos endpoints; token diario no disponible');
+}
+
+// ─── API pública ──────────────────────────────────────────────────────────────
+
+/**
+ * Obtener token diario válido.
+ * Capas: L1 memoria → L2 Supabase → L3 IS API
+ * Single-flight para evitar llamadas concurrentes duplicadas.
  */
 export async function getDailyToken(env: ISEnvironment): Promise<string> {
   const now = Date.now();
-  const cached = tokenCache[env];
 
-  // Si hay token en cache y no ha expirado, usarlo
+  // L1: memoria
+  const cached = tokenCache[env];
   if (cached && cached.expiresAt > now) {
     console.log('[IS Token Manager] Usando token desde cache');
     return cached.token;
   }
 
-  // SINGLE-FLIGHT: Si ya hay una llamada en progreso, esperar esa
+  // Single-flight
   if (tokenFetchPromises[env]) {
     console.log('[IS Token Manager] Llamada a /tokens/diario ya en progreso, esperando...');
     return tokenFetchPromises[env]!;
   }
 
-  // Iniciar nueva llamada y cachear la promise
   console.log('[IS Token Manager] Iniciando nueva llamada a /tokens/diario');
   const fetchPromise = (async () => {
     try {
-      const dailyToken = await fetchDailyToken(env);
-      
-      // Guardar en cache con TTL
-      tokenCache[env] = {
-        token: dailyToken,
-        expiresAt: now + (TOKEN_TTL_HOURS * 60 * 60 * 1000),
-      };
+      // L2: Supabase
+      const sbToken = await readTokenFromSupabase(env);
+      if (sbToken) return sbToken;
 
-      return dailyToken;
+      // L3: IS API
+      const token = await fetchTokenFromIS(env);
+      const expiresAt = now + TOKEN_TTL_HOURS * 60 * 60 * 1000;
+
+      // Guardar en L1
+      tokenCache[env] = { token, expiresAt };
+      // Guardar en L2 (async, no bloquea)
+      saveTokenToSupabase(env, token, expiresAt);
+
+      return token;
     } finally {
-      // Limpiar promise cache al terminar (éxito o error)
       tokenFetchPromises[env] = null;
     }
   })();
@@ -265,14 +254,14 @@ export async function getDailyToken(env: ISEnvironment): Promise<string> {
 }
 
 /**
- * Invalidar cache de token (forzar renovación)
+ * Invalidar caché de token (fuerza renovación en la próxima llamada)
  */
 export function invalidateToken(env: ISEnvironment): void {
   tokenCache[env] = null;
 }
 
 /**
- * Obtener token diario con retry en caso de bloqueo WAF
+ * getDailyToken con retry en caso de bloqueo WAF
  */
 export async function getDailyTokenWithRetry(env: ISEnvironment, maxRetries = 1): Promise<string> {
   try {

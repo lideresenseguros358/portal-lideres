@@ -667,6 +667,7 @@ export default function EmitirPage() {
             pjeBexp: selectedPlan._descuentoPorcentaje || 0,
             vacreedor: emissionData.acreedor || '',
             vendosoTexto: selectedPlan._endosoTexto || '',
+            vcodplancoberturadadic: selectedPlan._codPlanCoberturaAdic || 0,
             tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,

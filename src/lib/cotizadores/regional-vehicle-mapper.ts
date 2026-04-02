@@ -24,46 +24,152 @@
 import { getMarcas, getModelos } from '@/lib/regional/catalogs.service';
 import type { RegionalMarca, RegionalModelo } from '@/lib/regional/types';
 
+/**
+ * Cache layers for Regional catalog data:
+ *   L1: In-memory per process instance     (~0ms)
+ *   L2: Supabase insurer_vehicle_catalogs  (~50ms, shared across serverless instances)
+ *   L3: Regional REST API                  (~200ms per call, source of truth)
+ */
+
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 // ═══════════════════════════════════════════════════════════════
 // STATIC MAPPING: IS marca code → Regional marca code
-// Populated from known catalog correspondences.
-// If a brand is missing here, the dynamic lookup will handle it.
+// Empty: Regional brand codes differ completely from IS codes and
+// have no predictable relationship — always resolved dynamically.
 // ═══════════════════════════════════════════════════════════════
 
-const IS_TO_REGIONAL_MARCA: Record<number, number> = {
-  // Estas correspondencias se actualizan conforme se confirman con el catálogo Regional.
-  // La clave es el codMarca de IS, el valor es el codmarca de Regional.
-  // Si no está aquí, se busca por nombre dinámicamente.
-};
+const IS_TO_REGIONAL_MARCA: Record<number, number> = {};
 
 // ═══════════════════════════════════════════════════════════════
-// In-memory cache for Regional catalogs (server-side, per-instance)
+// L1: In-memory cache
 // ═══════════════════════════════════════════════════════════════
 
-let cachedMarcas: RegionalMarca[] | null = null;
-let cachedMarcasTimestamp = 0;
-const cachedModelos: Map<number, { data: RegionalModelo[]; timestamp: number }> = new Map();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+let _memMarcas: RegionalMarca[] | null = null;
+let _memMarcasAt = 0;
+const _memModelos = new Map<number, { data: RegionalModelo[]; ts: number }>();
+
+// ═══════════════════════════════════════════════════════════════
+// L2: Supabase helpers
+// ═══════════════════════════════════════════════════════════════
+
+async function supabaseReadMarcas(): Promise<RegionalMarca[] | null> {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from('insurer_vehicle_catalogs')
+      .select('catalog_data, expires_at')
+      .eq('insurer', 'REGIONAL')
+      .eq('catalog_key', 'marcas')
+      .single();
+
+    if (!data) return null;
+    if (new Date(data.expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
+
+    const marcas = data.catalog_data as RegionalMarca[];
+    _memMarcas = marcas;
+    _memMarcasAt = Date.now();
+    console.log(`[REGIONAL Vehicle Mapper] ✅ marcas from Supabase L2 (${marcas.length} entries)`);
+    return marcas;
+  } catch {
+    return null;
+  }
+}
+
+function supabaseSaveMarcas(marcas: RegionalMarca[]): void {
+  (async () => {
+    try {
+      const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+      const sb = getSupabaseAdmin();
+      await sb.from('insurer_vehicle_catalogs').upsert(
+        {
+          insurer: 'REGIONAL',
+          catalog_key: 'marcas',
+          catalog_data: marcas,
+          fetched_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + CATALOG_TTL_MS).toISOString(),
+        },
+        { onConflict: 'insurer,catalog_key' },
+      );
+      console.log('[REGIONAL Vehicle Mapper] Saved marcas to Supabase L2');
+    } catch (e: any) {
+      console.warn('[REGIONAL Vehicle Mapper] Supabase save failed (marcas):', e?.message);
+    }
+  })();
+}
+
+async function supabaseReadModelos(codMarca: number): Promise<RegionalModelo[] | null> {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from('insurer_vehicle_catalogs')
+      .select('catalog_data, expires_at')
+      .eq('insurer', 'REGIONAL')
+      .eq('catalog_key', `modelos_${codMarca}`)
+      .single();
+
+    if (!data) return null;
+    if (new Date(data.expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
+
+    const modelos = data.catalog_data as RegionalModelo[];
+    _memModelos.set(codMarca, { data: modelos, ts: Date.now() });
+    console.log(`[REGIONAL Vehicle Mapper] ✅ modelos_${codMarca} from Supabase L2 (${modelos.length} entries)`);
+    return modelos;
+  } catch {
+    return null;
+  }
+}
+
+function supabaseSaveModelos(codMarca: number, modelos: RegionalModelo[]): void {
+  (async () => {
+    try {
+      const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+      const sb = getSupabaseAdmin();
+      await sb.from('insurer_vehicle_catalogs').upsert(
+        {
+          insurer: 'REGIONAL',
+          catalog_key: `modelos_${codMarca}`,
+          catalog_data: modelos,
+          fetched_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + CATALOG_TTL_MS).toISOString(),
+        },
+        { onConflict: 'insurer,catalog_key' },
+      );
+    } catch (e: any) {
+      console.warn(`[REGIONAL Vehicle Mapper] Supabase save failed (modelos_${codMarca}):`, e?.message);
+    }
+  })();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// L1 → L2 → L3 fetchers
+// ═══════════════════════════════════════════════════════════════
 
 async function getRegionalMarcasCached(): Promise<RegionalMarca[]> {
-  if (cachedMarcas && Date.now() - cachedMarcasTimestamp < CACHE_TTL) {
-    return cachedMarcas;
-  }
-  // If fetch fails and we have stale cache, use it rather than failing
-  const stale = cachedMarcas;
+  // L1
+  if (_memMarcas && Date.now() - _memMarcasAt < CATALOG_TTL_MS) return _memMarcas;
+
+  // L2
+  const sb = await supabaseReadMarcas();
+  if (sb) return sb;
+
+  // L3
+  const stale = _memMarcas;
   try {
+    console.log('[REGIONAL Vehicle Mapper] Fetching marcas from Regional API (L3)…');
     const fresh = await getMarcas();
-    cachedMarcas = fresh;
-    cachedMarcasTimestamp = Date.now();
-    // Diagnostic: log first 3 entries to verify field names
-    const sample = cachedMarcas.slice(0, 3).map(m => ({ codmarca: m.codmarca, descripcion: m.descripcion, keys: Object.keys(m) }));
-    const withoutDesc = cachedMarcas.filter(m => !m.descripcion).length;
-    console.log(`[REGIONAL Vehicle Mapper] Cached ${cachedMarcas.length} marcas (${withoutDesc} without descripcion). Sample:`, JSON.stringify(sample));
-    return cachedMarcas;
+    _memMarcas = fresh;
+    _memMarcasAt = Date.now();
+    supabaseSaveMarcas(fresh); // async, non-blocking
+    const sample = fresh.slice(0, 3).map(m => ({ codmarca: m.codmarca, descripcion: m.descripcion }));
+    console.log(`[REGIONAL Vehicle Mapper] Loaded ${fresh.length} marcas. Sample:`, JSON.stringify(sample));
+    return fresh;
   } catch (err: any) {
     console.error('[REGIONAL Vehicle Mapper] Error fetching marcas:', err);
     if (stale && stale.length > 0) {
-      console.warn('[REGIONAL Vehicle Mapper] Using stale marcas cache due to API error');
+      console.warn('[REGIONAL Vehicle Mapper] Using stale marcas (L1) due to API error');
       return stale;
     }
     throw new Error(`No se pudo conectar al catálogo de marcas de La Regional (${err.message || 'error de conexión'}). Intente nuevamente en unos minutos.`);
@@ -71,22 +177,27 @@ async function getRegionalMarcasCached(): Promise<RegionalMarca[]> {
 }
 
 async function getRegionalModelosCached(codMarcaRegional: number): Promise<RegionalModelo[]> {
-  const cached = cachedModelos.get(codMarcaRegional);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-  const stale = cached?.data;
+  // L1
+  const mem = _memModelos.get(codMarcaRegional);
+  if (mem && Date.now() - mem.ts < CATALOG_TTL_MS) return mem.data;
+
+  // L2
+  const sb = await supabaseReadModelos(codMarcaRegional);
+  if (sb) return sb;
+
+  // L3
+  const stale = mem?.data;
   try {
+    console.log(`[REGIONAL Vehicle Mapper] Fetching modelos for marca ${codMarcaRegional} from Regional API (L3)…`);
     const modelos = await getModelos(codMarcaRegional);
-    cachedModelos.set(codMarcaRegional, { data: modelos, timestamp: Date.now() });
-    const sampleM = modelos.slice(0, 3).map(m => ({ codmodelo: m.codmodelo, descripcion: m.descripcion, keys: Object.keys(m) }));
-    const withoutDescM = modelos.filter(m => !m.descripcion).length;
-    console.log(`[REGIONAL Vehicle Mapper] Cached ${modelos.length} modelos for marca ${codMarcaRegional} (${withoutDescM} without descripcion). Sample:`, JSON.stringify(sampleM));
+    _memModelos.set(codMarcaRegional, { data: modelos, ts: Date.now() });
+    supabaseSaveModelos(codMarcaRegional, modelos); // async, non-blocking
+    console.log(`[REGIONAL Vehicle Mapper] Loaded ${modelos.length} modelos for marca ${codMarcaRegional}`);
     return modelos;
   } catch (err: any) {
     console.error(`[REGIONAL Vehicle Mapper] Error fetching modelos for marca ${codMarcaRegional}:`, err);
     if (stale && stale.length > 0) {
-      console.warn(`[REGIONAL Vehicle Mapper] Using stale modelos cache for marca ${codMarcaRegional} due to API error`);
+      console.warn(`[REGIONAL Vehicle Mapper] Using stale modelos (L1) for marca ${codMarcaRegional} due to API error`);
       return stale;
     }
     throw new Error(`No se pudo conectar al catálogo de modelos de La Regional (${err.message || 'error de conexión'}). Intente nuevamente en unos minutos.`);
@@ -107,6 +218,7 @@ function normalizeName(name: string | undefined | null): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Remove accents
     .toUpperCase()
+    .replace(/[*#()[\]{}/\\]/g, '') // Remove special chars (e.g. IS "*Cam" suffix)
     .replace(/[-_]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -154,7 +266,7 @@ function findBestMarcaMatch(
 
 /**
  * Find best match for a model name in Regional's catalog.
- * Same strategy: exact → startsWith → includes
+ * Same strategy: exact → startsWith → includes → token-based → prefix-drop
  */
 function findBestModeloMatch(
   nombre: string,
@@ -182,7 +294,29 @@ function findBestModeloMatch(
   const contains = valid.find(m => normalizeName(m.descripcion).includes(target));
   if (contains) return contains;
 
-  // 5. First word match (handles "COROLLA XLI" → "COROLLA", etc.)
+  // 5. Token-based: every significant token of IS model appears in the Regional model name
+  const tokens = target.split(' ').filter(t => t.length >= 2);
+  if (tokens.length >= 2) {
+    const tokenMatch = valid.find(m => {
+      const norm = normalizeName(m.descripcion);
+      return tokens.every(tok => norm.includes(tok));
+    });
+    if (tokenMatch) return tokenMatch;
+  }
+
+  // 6. Progressive prefix: drop trailing tokens (handles "*Cam", option suffixes)
+  if (tokens.length >= 2) {
+    for (let drop = 1; drop < tokens.length - 1; drop++) {
+      const prefix = tokens.slice(0, tokens.length - drop).join(' ');
+      const prefixMatch = valid.find(
+        m => normalizeName(m.descripcion) === prefix ||
+             normalizeName(m.descripcion).startsWith(prefix)
+      );
+      if (prefixMatch) return prefixMatch;
+    }
+  }
+
+  // 7. First word match (handles "COROLLA XLI" → "COROLLA", etc.)
   const targetFirstWord = target.split(' ')[0];
   if (targetFirstWord && targetFirstWord.length >= 3) {
     const firstWord = valid.find(m => normalizeName(m.descripcion).split(' ')[0] === targetFirstWord);

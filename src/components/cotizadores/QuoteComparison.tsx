@@ -1035,28 +1035,39 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
 
                           {isExpanded && (
                             <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
-                              {/* Beneficios */}
+                              {/* Beneficios generales */}
                               {(currentPlan._beneficios || []).filter((b: any) => b.incluido).map((b: any, bIdx: number) => (
                                 <div key={bIdx} className={`flex items-start gap-2 px-3 py-2 text-xs ${bIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} border-b border-gray-100 last:border-b-0`}>
                                   <span className="text-[#8AAA19] flex-shrink-0 mt-0.5">✓</span>
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-medium text-gray-700">{b.nombre}</span>
-                                    {b.descripcion && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{b.descripcion}</p>}
-                                  </div>
+                                  <span className="font-medium text-gray-700">{b.nombre}</span>
                                 </div>
                               ))}
-                              {/* Endosos */}
+                              {/* Endosos con sus sub-beneficios expandidos */}
                               {(currentPlan._endosos || []).filter((e: any) => e.incluido).map((e: any, eIdx: number) => {
                                 const isExclusive = e.codigo === 'PORCELANA' || e.codigo === 'VA' || e.codigo === 'CENTENARIO';
+                                const subBeneficios: string[] = e.subBeneficios || [];
                                 return (
-                                  <div key={`e-${eIdx}`} className={`flex items-start gap-2 px-3 py-2 text-xs ${(currentPlan._beneficios?.filter((b: any) => b.incluido).length + eIdx) % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} border-b border-gray-100 last:border-b-0`}>
-                                    <span className={`flex-shrink-0 mt-0.5 ${isExclusive && currentPlanType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`}>
-                                      {isExclusive && currentPlanType === 'premium' ? '⭐' : '✓'}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                      <span className="font-medium text-gray-700">{e.nombre}</span>
-                                      {e.descripcion && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{e.descripcion}</p>}
+                                  <div key={`e-${eIdx}`} className="border-b border-gray-100 last:border-b-0">
+                                    {/* Cabecera del endoso */}
+                                    <div className={`flex items-center gap-2 px-3 py-2 text-xs ${isExclusive && currentPlanType === 'premium' ? 'bg-green-50' : 'bg-gray-50'}`}>
+                                      <span className={`flex-shrink-0 ${isExclusive && currentPlanType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`}>
+                                        {isExclusive && currentPlanType === 'premium' ? '⭐' : '✓'}
+                                      </span>
+                                      <span className={`font-semibold ${isExclusive && currentPlanType === 'premium' ? 'text-[#010139]' : 'text-gray-700'}`}>
+                                        {e.nombre}
+                                      </span>
                                     </div>
+                                    {/* Sub-beneficios del endoso */}
+                                    {subBeneficios.length > 0 && (
+                                      <div className="px-3 pb-2 pt-1 space-y-1">
+                                        {subBeneficios.map((sub: string, sIdx: number) => (
+                                          <div key={sIdx} className="flex items-start gap-1.5 text-[10px] text-gray-600">
+                                            <span className="text-[#8AAA19] flex-shrink-0 mt-0.5">›</span>
+                                            <span>{sub}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}

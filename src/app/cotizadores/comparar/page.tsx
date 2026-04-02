@@ -347,10 +347,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     const IS_TAX_RATE = 0.06; // 6% (5% impuesto + 1% timbres)
     
     // ============================================
-    // BÁSICO: Endoso Plus ya incluido en coberturas (COD_AMPARO 19 / BENEFICIO PLUS)
-    // La suma de PRIMA1 ya incluye el endoso Plus $35
+    // BÁSICO: primaBase (API base sin endoso) + Endoso Plus ($35/año)
+    // La API IS se llama con codPlanCoberturaAdic=0, por lo que PTOTAL/PRIMA1
+    // no incluye ningún endoso. El costo del Endoso Plus se suma manualmente.
     // ============================================
-    const subtotalBasico = primaBase; // Suma PRIMA1 de la opción seleccionada
+    const subtotalBasico = primaBase + IS_ENDOSOS.PLUS.costoAnual; // primaBase + $35
     const impuestoBasico = Math.round(subtotalBasico * IS_TAX_RATE * 100) / 100;
     const primaBasico = Math.round((subtotalBasico + impuestoBasico) * 100) / 100;
     const basicoEndosos = [
@@ -362,7 +363,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         subBeneficios: IS_ENDOSOS.PLUS.beneficios,
       },
     ];
-    
+
     const basico = {
       ...sharedData,
       id: 'internacional-basico',
@@ -376,25 +377,26 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: 0, // Plus ya incluido en coberturas
+        costoEndoso: IS_ENDOSOS.PLUS.costoAnual, // $35 Endoso Plus
         impuesto: impuestoBasico,
         totalConTarjeta: primaBasico,
         totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100,
         ahorroContado: Math.round(primaBasico * 0.05 * 100) / 100,
         descuentoProntoPago: Math.round(primaBasico * 0.05 * 100) / 100,
       },
-      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
+      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
       _endosos: basicoEndosos,
       _endosoIncluido: 'Endoso Plus',
-      _endosoTexto: 'ENDOSO PLUS'
+      _endosoTexto: 'ENDOSO PLUS',
+      // IS: getplanesadicionales tipoPlan=1 → {"TEXTO":"Beneficio Plus","DATO":22}
+      _codPlanCoberturaAdic: 22,
     };
-    
+
     // ============================================
-    // PREMIUM: Centenario endoso — delta sobre Básico (Plus).
-    // Centenario cuesta $60/año vs Plus $35/año → diferencia de $25 que se suma al base.
+    // PREMIUM: primaBase (API base sin endoso) + Endoso Plus Centenario ($60/año, costo completo).
+    // Se suma el costo TOTAL del Centenario ($60), no solo el delta vs Plus.
     // ============================================
-    const endosoDelta = IS_ENDOSOS.CENTENARIO.costoAnual - IS_ENDOSOS.PLUS.costoAnual; // 25.00
-    const subtotalPremium = primaBase + endosoDelta;
+    const subtotalPremium = primaBase + IS_ENDOSOS.CENTENARIO.costoAnual; // primaBase + $60
     const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
     const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
@@ -413,7 +415,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         subBeneficios: IS_ENDOSOS.PLUS.beneficios,
       },
     ];
-    
+
     const premium = {
       ...sharedData,
       id: 'internacional-premium',
@@ -430,21 +432,23 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: endosoDelta, // $25 diferencia Centenario vs Plus
+        costoEndoso: IS_ENDOSOS.CENTENARIO.costoAnual, // $60 Endoso Plus Centenario
         impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
         ahorroContado: Math.round(primaPremium * 0.05 * 100) / 100,
         descuentoProntoPago: Math.round(primaPremium * 0.05 * 100) / 100,
       },
-      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
+      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
       _endosos: premiumEndosos,
       _endosoIncluido: 'Endoso Plus Centenario',
-      _endosoTexto: 'ENDOSO PLUS CENTENARIO'
+      _endosoTexto: 'ENDOSO PLUS CENTENARIO',
+      // IS: getplanesadicionales tipoPlan=1 → {"TEXTO":"Beneficio Plus Centenario","DATO":23}
+      _codPlanCoberturaAdic: 23,
     };
-    
-    console.log(`[IS] ✅ Básico: $${primaBasico.toFixed(2)} (Endoso Plus $${IS_ENDOSOS.PLUS.costoAnual})`);
-    console.log(`[IS] ✅ Premium: $${primaPremium.toFixed(2)} (Endoso Centenario $${IS_ENDOSOS.CENTENARIO.costoAnual})`);
+
+    console.log(`[IS] ✅ Básico: $${primaBasico.toFixed(2)} (primaBase $${primaBase.toFixed(2)} + Endoso Plus $${IS_ENDOSOS.PLUS.costoAnual})`);
+    console.log(`[IS] ✅ Premium: $${primaPremium.toFixed(2)} (primaBase $${primaBase.toFixed(2)} + Endoso Centenario $${IS_ENDOSOS.CENTENARIO.costoAnual})`);
     if (descuentoTotal > 0) {
       console.log(`[IS] ✅ Descuento buena experiencia aplicado: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}%)`);
     }

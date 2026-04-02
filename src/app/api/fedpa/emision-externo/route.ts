@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, getFedpaDefaultEnv } from '@/lib/fedpa/config';
 import { crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
 import { normalizeText } from '@/lib/fedpa/utils';
-import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
+import { resolveFedpaMarca, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
@@ -102,6 +102,14 @@ export async function POST(request: NextRequest) {
     console.log(`\n[EMISOR EXTERNO] ${requestId} ═══ START (env=${environment}) ═══`);
     console.log(`[EMISOR EXTERNO] Files: File1=${file1?.name || 'NONE'} (${file1?.size || 0}B), File2=${file2?.name || 'NONE'} (${file2?.size || 0}B), File3=${file3?.name || 'NONE'} (${file3?.size || 0}B)`);
 
+    // ── Resolve FEDPA brand/model codes once — used in both get_cotizacion and crear_poliza ──
+    const isMarcaCodigo = parseInt(String(body.Marca)) || 0;
+    const marcaNombreStr = String(body.MarcaNombre || '');
+    const modeloNombreStr = String(body.ModeloNombre || body.Modelo || '');
+    const { code: resolvedCodMarca, matchMethod: marcaMethod } = await resolveFedpaMarca(isMarcaCodigo, marcaNombreStr);
+    const resolvedCodModelo = normalizarModeloFedpa(modeloNombreStr);
+    console.log(`[EMISOR EXTERNO] ${requestId} Vehicle resolved: IS marca ${isMarcaCodigo}/${marcaNombreStr} → "${resolvedCodMarca}" (${marcaMethod}), modelo "${resolvedCodModelo}"`);
+
     // ═══════════════════════════════════════════════════
     // STEP 1: get_cotizacion
     // ═══════════════════════════════════════════════════
@@ -117,8 +125,8 @@ export async function POST(request: NextRequest) {
       CodLimiteGastosMedico: String(body.CodLimiteGastosMedico || '16'),
       EndosoIncluido: body.EndosoIncluido || 'S',
       CodPlan: String(body.CodPlan || '411'),
-      CodMarca: String(body.Marca || '5'),
-      CodModelo: String(body.Modelo || '10'),
+      CodMarca: resolvedCodMarca,
+      CodModelo: resolvedCodModelo,
       Nombre: normalizeText(body.PrimerNombre),
       Apellido: normalizeText(body.PrimerApellido),
       Cedula: body.Identificacion || '0-0-0',
@@ -284,8 +292,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       Auto: {
-        CodMarca: /^\d+$/.test(String(body.Marca)) ? getFedpaMarcaFromIS(parseInt(body.Marca), body.MarcaNombre) : normalizeText(body.Marca),
-        CodModelo: /^\d+$/.test(String(body.Modelo)) ? normalizarModeloFedpa(body.ModeloNombre || body.Modelo) : normalizeText(body.Modelo),
+        CodMarca: resolvedCodMarca,
+        CodModelo: resolvedCodModelo,
         Ano: String(body.Ano || new Date().getFullYear()),
         Placa: normalizeText(body.Placa || ''),
         Chasis: normalizeText(body.Vin || ''),
