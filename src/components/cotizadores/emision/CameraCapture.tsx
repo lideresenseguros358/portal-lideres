@@ -2,14 +2,15 @@
  * CameraCapture — Full-screen camera modal with bottom instructions
  * For vehicle inspection photos (CC emission flow)
  *
- * Shows live getUserMedia feed + instruction box at bottom + shutter button.
- * Matches the visual style of CedulaQRScanner.
- * Falls back gracefully with error state if camera permission is denied.
+ * Mounted via React Portal on document.body so that position:fixed is always
+ * relative to the viewport — ancestor transforms (reveal animations, touch
+ * feedback) cannot offset the overlay.
  */
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FaCamera, FaTimes } from 'react-icons/fa';
 import { ImSpinner8 } from 'react-icons/im';
 
@@ -31,14 +32,32 @@ export default function CameraCapture({
   onCapture,
   onClose,
 }: CameraCaptureProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  // Start camera on mount
+  // Esperar DOM para montar el portal
+  useEffect(() => { setMounted(true); }, []);
+
+  // Bloquear scroll de la página de fondo
   useEffect(() => {
+    if (!mounted) return;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, [mounted]);
+
+  // Iniciar cámara
+  useEffect(() => {
+    if (!mounted) return;
     let cancelled = false;
 
     async function startCamera() {
@@ -58,7 +77,6 @@ export default function CameraCapture({
         }
 
         streamRef.current = stream;
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
@@ -84,9 +102,9 @@ export default function CameraCapture({
       cancelled = true;
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
-  }, []);
+  }, [mounted]);
 
-  // Capture current frame as JPEG File
+  // Capturar frame actual como JPEG
   const handleCapture = useCallback(async () => {
     if (!videoRef.current || !isReady || capturing) return;
     setCapturing(true);
@@ -119,29 +137,49 @@ export default function CameraCapture({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 h-[100dvh] overflow-hidden bg-black z-[9999] flex flex-col">
+  if (!mounted) return null;
+
+  const overlay = (
+    /*
+      Overlay full-screen montado como portal en document.body.
+      Al estar fuera del árbol DOM de la página, ningún transform/filter
+      de un ancestro puede romper position:fixed.
+      z-[9999] supera al header (z-40) y al bottom nav (z-40).
+      env(safe-area-inset-*) respeta el notch y la barra de inicio en iPhone.
+    */
+    <div
+      className="fixed inset-0 z-[9999] bg-black flex flex-col"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        overflow: 'hidden',
+      }}
+    >
       {/* ── Header ────────────────────────────────── */}
-      <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FaCamera className="text-2xl" />
-          <div>
-            <h2 className="text-lg font-bold">{label}</h2>
+      <div
+        className="shrink-0 bg-[#010139] text-white px-4 flex items-center justify-between"
+        style={{ height: 56 }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <FaCamera className="text-xl shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold leading-tight truncate">{label}</p>
             <p className="text-xs text-gray-300">Coloca el vehículo en el encuadre</p>
           </div>
         </div>
+        {/* Botón X siempre visible */}
         <button
           onClick={handleClose}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           type="button"
           aria-label="Cerrar cámara"
+          className="shrink-0 ml-3 w-9 h-9 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 active:bg-white/35 transition-colors"
         >
-          <FaTimes className="text-xl" />
+          <FaTimes className="text-base text-white" />
         </button>
       </div>
 
-      {/* ── Camera viewport ───────────────────────── */}
-      <div className="flex-1 min-h-0 relative bg-black overflow-hidden">
+      {/* ── Visor de cámara — ocupa todo el espacio disponible ── */}
+      <div className="flex-1 min-h-0 relative bg-black" style={{ overflow: 'hidden' }}>
         {error ? (
           <div className="flex items-center justify-center h-full p-6">
             <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 max-w-sm w-full text-center">
@@ -158,7 +196,6 @@ export default function CameraCapture({
           </div>
         ) : (
           <>
-            {/* Loading spinner */}
             {!isReady && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <ImSpinner8 className="text-white text-4xl animate-spin" />
@@ -176,31 +213,31 @@ export default function CameraCapture({
         )}
       </div>
 
-      {/* ── Bottom: instructions + shutter ────────── */}
+      {/* ── Instrucciones + disparador (solo cuando no hay error) ── */}
       {!error && (
-        <div className="shrink-0 bg-black/90 px-5 pt-4 pb-6 safe-bottom">
-          {/* Instructions box — same style as CedulaQRScanner */}
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-white mb-5">
-            <h3 className="font-bold mb-2 flex items-center gap-2 text-sm">
-              <FaCamera className="text-[#8AAA19]" />
+        <div className="shrink-0 bg-black/90 px-5 pt-4 pb-5">
+          {/* Banner de instrucciones */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white mb-4">
+            <h3 className="font-bold mb-1.5 flex items-center gap-2 text-sm">
+              <FaCamera className="text-[#8AAA19] shrink-0" />
               Instrucciones:
             </h3>
-            <p className="text-sm leading-relaxed text-gray-200">{instructions}</p>
+            <p className="text-xs leading-relaxed text-gray-200">{instructions}</p>
           </div>
 
-          {/* Shutter button */}
+          {/* Botón disparador */}
           <div className="flex items-center justify-center">
             <button
               onClick={handleCapture}
               disabled={!isReady || capturing}
+              type="button"
+              aria-label="Tomar foto"
               className={`relative w-20 h-20 rounded-full border-4 border-white flex items-center justify-center
                 transition-all duration-150 active:scale-95
                 ${!isReady || capturing
                   ? 'opacity-40 cursor-not-allowed'
                   : 'hover:border-[#8AAA19] hover:scale-105'
                 }`}
-              type="button"
-              aria-label="Tomar foto"
             >
               {capturing ? (
                 <ImSpinner8 className="text-white text-2xl animate-spin" />
@@ -213,9 +250,14 @@ export default function CameraCapture({
       )}
 
       {/* ── Footer ────────────────────────────────── */}
-      <div className="shrink-0 bg-[#010139] text-white p-3 text-center">
-        <p className="text-xs text-gray-400">🔒 Las fotos son para uso exclusivo de la inspección</p>
+      <div
+        className="shrink-0 bg-[#010139] text-white px-4 text-center flex items-center justify-center"
+        style={{ height: 44 }}
+      >
+        <p className="text-xs text-gray-400">Las fotos son para uso exclusivo de la inspección</p>
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
