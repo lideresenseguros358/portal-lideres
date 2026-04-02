@@ -5,10 +5,11 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
+import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
 import type { Acreedor } from '@/lib/constants/acreedores';
 
@@ -95,6 +96,11 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
   const [acreedoresList, setAcreedoresList] = useState<Acreedor[]>(ACREEDORES_PANAMA);
+
+  const acreedoresOptions = useMemo<AutocompleteOption[]>(
+    () => acreedoresList.map(a => ({ value: a.codigoFEDPA, label: a.label })),
+    [acreedoresList],
+  );
 
   // IS Address catalogs — cascading dropdowns
   const isInternacional = quoteData?.insurerName?.includes('INTERNACIONAL') || false;
@@ -1197,28 +1203,13 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Banco Acreedor <span className="text-gray-500 text-xs">(si el vehículo está financiado)</span>
                 </label>
-                <select
+                <Autocomplete
+                  options={acreedoresOptions}
                   value={formData.acreedor}
-                  onChange={(e) => setFormData({ ...formData, acreedor: e.target.value })}
-                  className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-                >
-                  <option value="">Sin acreedor (no financiado)</option>
-                  {(['BANCO', 'COOPERATIVA', 'FINANCIERA', 'FIDUCIARIA', 'OTRO'] as const).map(tipo => {
-                    const items = acreedoresList.filter(a => a.tipo === tipo);
-                    if (!items.length) return null;
-                    const labels: Record<string, string> = {
-                      BANCO: 'Bancos', COOPERATIVA: 'Cooperativas',
-                      FINANCIERA: 'Financieras y Leasings', FIDUCIARIA: 'Fiduciarias y Fideicomisos', OTRO: 'Otros',
-                    };
-                    return (
-                      <optgroup key={tipo} label={labels[tipo]}>
-                        {items.map((a, i) => (
-                          <option key={`${tipo}-${i}`} value={a.codigoFEDPA}>{a.label}</option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
+                  onChange={(val) => setFormData({ ...formData, acreedor: val as string })}
+                  placeholder="Sin acreedor (no financiado)"
+                  emptyMessage="No se encontró ningún acreedor con ese nombre"
+                />
               </div>
             )}
 
