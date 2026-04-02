@@ -26,6 +26,8 @@ import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 import EmissionLoadingModal from '@/components/cotizadores/EmissionLoadingModal';
+import EmissionTimeoutModal from '@/components/cotizadores/EmissionTimeoutModal';
+import { useEmissionTimeout } from '@/hooks/useEmissionTimeout';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
@@ -63,6 +65,20 @@ export default function EmitirDanosTercerosPage() {
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+
+  // ═══ Session timeout (30 min) ═══
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+
+  useEmissionTimeout(() => {
+    // Clear all emission-related session data
+    const KEYS = [
+      'thirdPartyQuote', 'selectedQuote', 'emittedPolicy', 'fedpaEmissionPayload',
+      'isInspectionData', 'inspectionPhotosIndex', 'emissionFormData',
+      'emissionCedulaFile', 'emissionLicenciaFile', 'vehicleFormData', 'vehicleRegistroFile',
+    ];
+    KEYS.forEach(k => sessionStorage.removeItem(k));
+    setShowTimeoutModal(true);
+  });
 
   // ═══ Emission Loading Modal state ═══
   const [showEmissionModal, setShowEmissionModal] = useState(false);
@@ -1984,6 +2000,13 @@ export default function EmitirDanosTercerosPage() {
           onComplete={handleEmissionModalComplete}
           onReport={handleEmissionReport}
         />
+
+        {/* Session timeout modal */}
+        {showTimeoutModal && (
+          <EmissionTimeoutModal
+            onConfirm={() => router.replace('/cotizadores')}
+          />
+        )}
       </div>
     );
   }

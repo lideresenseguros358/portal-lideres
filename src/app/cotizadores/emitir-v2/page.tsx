@@ -26,6 +26,8 @@ import CreditCardInput, { type CardData } from '@/components/is/CreditCardInput'
 import { generateInspectionReport } from '@/lib/utils/inspectionReportGenerator';
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
+import EmissionTimeoutModal from '@/components/cotizadores/EmissionTimeoutModal';
+import { useEmissionTimeout } from '@/hooks/useEmissionTimeout';
 
 interface Section {
   id: string;
@@ -57,7 +59,21 @@ export default function EmitirV2Page() {
   const [cardLast4, setCardLast4] = useState<string | null>(null);
   const [cardBrand, setCardBrand] = useState<string | null>(null);
   const [pfCardData, setPfCardData] = useState<CardData | null>(null);
-  
+
+  // ═══ Session timeout (30 min) ═══
+  const [showTimeoutModal, setShowTimeoutModal] = useState(false);
+
+  useEmissionTimeout(() => {
+    // Clear all emission-related session data
+    const KEYS = [
+      'selectedQuote', 'quoteInput', 'editMode', 'emittedPolicy', 'fedpaEmissionPayload',
+      'isInspectionData', 'inspectionPhotosIndex', 'emissionFormData',
+      'emissionCedulaFile', 'emissionLicenciaFile', 'vehicleFormData', 'vehicleRegistroFile',
+    ];
+    KEYS.forEach(k => sessionStorage.removeItem(k));
+    setShowTimeoutModal(true);
+  });
+
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
     const refId = selectedPlan?._idCotizacion;
@@ -1015,6 +1031,13 @@ export default function EmitirV2Page() {
           )}
         </div>
       </div>
+
+      {/* Session timeout modal */}
+      {showTimeoutModal && (
+        <EmissionTimeoutModal
+          onConfirm={() => router.replace('/cotizadores')}
+        />
+      )}
     </div>
   );
 }
