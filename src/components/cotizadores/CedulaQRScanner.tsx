@@ -106,6 +106,13 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
     };
   }, [handleScanSuccess]);
 
+  // Lock body scroll while scanner is open (prevents iOS Safari from scrolling behind)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const handleClose = async () => {
     if (scannerRef.current?.isScanning) {
       await scannerRef.current.stop();
@@ -113,8 +120,14 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
     onClose();
   };
 
+  // QR reader box height — clamped so it always fits on screen with header+instructions+footer
+  const qrBoxH = 'min(55vw, 260px)';
+
   return (
-    <div className="fixed inset-0 h-[100dvh] overflow-hidden bg-black/90 z-50 flex flex-col">
+    <div
+      className="fixed inset-0 overflow-hidden bg-black/90 z-50 flex flex-col"
+      style={{ height: '100dvh', touchAction: 'none' }}
+    >
       {/* Header */}
       <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -132,8 +145,8 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
         </button>
       </div>
 
-      {/* Scanner Area — flex-1 min-h-0 prevents overflow beyond screen */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center gap-3 px-4 py-3">
+      {/* Scanner Area */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 py-3 overflow-hidden">
         {error ? (
           <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm">
             <FaCamera className="text-4xl text-red-500 mx-auto mb-4" />
@@ -147,15 +160,19 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
           </div>
         ) : (
           <div className="w-full max-w-sm flex flex-col gap-3">
-            {/* QR Reader — explicit height so Html5Qrcode's injected UI is clipped */}
+            {/*
+              Wrapper controls the visual height — Html5Qrcode overwrites #qr-reader's
+              own inline height, so the constraint MUST live on this parent div.
+            */}
             <div
-              id="qr-reader"
-              className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl w-full"
-              style={{ height: 'clamp(260px, 70vw, 320px)' }}
-            />
+              className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl w-full shrink-0"
+              style={{ height: qrBoxH }}
+            >
+              <div id="qr-reader" style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+            </div>
 
             {/* Instructions */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white">
+            <div className="shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white">
               <h3 className="font-bold mb-1.5 flex items-center gap-2 text-sm">
                 <FaIdCard className="text-[#8AAA19]" />
                 Instrucciones:
