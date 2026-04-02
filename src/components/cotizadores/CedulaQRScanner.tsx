@@ -64,8 +64,7 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
           { facingMode: 'environment' }, // Cámara trasera
           {
             fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
+            qrbox: { width: 220, height: 220 },
           },
           (decodedText) => {
             // QR escaneado exitosamente
@@ -125,79 +124,97 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
     onClose();
   };
 
-  // QR reader box height — small enough to fit with header+instructions+footer on any phone
-  const qrBoxH = 'min(55vw, 260px)';
-
   return (
-    <div
-      className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden"
-    >
-      {/* Header */}
-      <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FaIdCard className="text-2xl" />
-          <div>
-            <h2 className="text-lg font-bold">Escanear Cédula</h2>
-            <p className="text-xs text-gray-300">Coloca el QR frente a la cámara</p>
+    <>
+      {/*
+        Force-contain everything html5-qrcode injects into #qr-reader.
+        The library sets its own inline height on the element; these rules
+        override it so the video stream never escapes the wrapper div.
+      */}
+      <style>{`
+        #qr-reader { width: 100% !important; height: 100% !important; overflow: hidden !important; }
+        #qr-reader > div { height: 100% !important; overflow: hidden !important; }
+        #qr-reader video {
+          width: 100% !important;
+          height: 100% !important;
+          max-height: 100% !important;
+          object-fit: cover !important;
+          position: absolute !important;
+          inset: 0 !important;
+        }
+        #qr-reader canvas { display: none !important; }
+      `}</style>
+
+      <div className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="shrink-0 bg-[#010139] text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <FaIdCard className="text-2xl shrink-0" />
+            <div>
+              <h2 className="text-base font-bold leading-tight">Escanear Cédula</h2>
+              <p className="text-xs text-gray-300">Coloca el QR frente a la cámara</p>
+            </div>
           </div>
+          <button
+            onClick={handleClose}
+            aria-label="Cerrar escáner"
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors shrink-0"
+          >
+            <FaTimes className="text-xl" />
+          </button>
         </div>
-        <button
-          onClick={handleClose}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-        >
-          <FaTimes className="text-xl" />
-        </button>
-      </div>
 
-      {/* Scanner Area */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 py-3 overflow-hidden">
-        {error ? (
-          <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm">
-            <FaCamera className="text-4xl text-red-500 mx-auto mb-4" />
-            <p className="text-white text-center mb-4">{error}</p>
-            <button
-              onClick={handleClose}
-              className="w-full px-4 py-2 bg-red-500 text-white rounded-lg font-semibold"
-            >
-              Cerrar
-            </button>
-          </div>
-        ) : (
-          <div className="w-full max-w-sm flex flex-col gap-3">
-            {/*
-              Wrapper controls the visual height — Html5Qrcode overwrites #qr-reader's
-              own inline height, so the constraint MUST live on this parent div.
-            */}
-            <div
-              className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl w-full shrink-0"
-              style={{ height: qrBoxH }}
-            >
-              <div id="qr-reader" style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+        {/* Scanner Area */}
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 py-3 overflow-hidden">
+          {error ? (
+            <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm">
+              <FaCamera className="text-4xl text-red-500 mx-auto mb-4" />
+              <p className="text-white text-center mb-4">{error}</p>
+              <button
+                onClick={handleClose}
+                className="w-full px-4 py-2 bg-red-500 text-white rounded-lg font-semibold"
+              >
+                Cerrar
+              </button>
             </div>
+          ) : (
+            <div className="w-full max-w-sm flex flex-col gap-3 min-h-0">
+              {/*
+                Height = viewport minus fixed chrome (header ~56px + footer ~44px +
+                py-3*2 ~24px + gap-3 ~12px + instructions ~110px + breathing ~16px ≈ 262px).
+                Capped at 280px so it never overflows on tall phones either.
+              */}
+              <div
+                className="rounded-xl overflow-hidden border-4 border-[#8AAA19] shadow-2xl w-full shrink-0 relative"
+                style={{ height: 'min(calc(100dvh - 262px), 280px)' }}
+              >
+                <div id="qr-reader" />
+              </div>
 
-            {/* Instructions */}
-            <div className="shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white">
-              <h3 className="font-bold mb-1.5 flex items-center gap-2 text-sm">
-                <FaIdCard className="text-[#8AAA19]" />
-                Instrucciones:
-              </h3>
-              <ol className="text-xs space-y-1 list-decimal list-inside">
-                <li>Coloca la cédula boca abajo</li>
-                <li>Enfoca el código QR en el recuadro</li>
-                <li>Mantén la cédula estable</li>
-                <li>Espera a que se escanee automáticamente</li>
-              </ol>
+              {/* Instructions */}
+              <div className="shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-3 text-white">
+                <h3 className="font-bold mb-1.5 flex items-center gap-2 text-sm">
+                  <FaIdCard className="text-[#8AAA19]" />
+                  Instrucciones:
+                </h3>
+                <ol className="text-xs space-y-1 list-decimal list-inside">
+                  <li>Coloca la cédula boca abajo</li>
+                  <li>Enfoca el código QR en el recuadro</li>
+                  <li>Mantén la cédula estable</li>
+                  <li>Espera a que se escanee automáticamente</li>
+                </ol>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Footer */}
-      <div className="shrink-0 bg-[#010139] text-white p-3 text-center">
-        <p className="text-xs text-gray-400">
-          Tus datos están seguros y encriptados
-        </p>
+        {/* Footer */}
+        <div className="shrink-0 bg-[#010139] text-white p-3 text-center">
+          <p className="text-xs text-gray-400">
+            Tus datos están seguros y encriptados
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
