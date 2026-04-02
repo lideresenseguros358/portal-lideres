@@ -402,6 +402,52 @@ export default function VehicleInspection({ onContinue, isInternacional = false 
               </g>
             )}
           </svg>
+        </div>
+
+        {/* Leyenda */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-gray-600">Pendiente</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-gray-600">Completada</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+            <span className="text-gray-600">Siguiente sugerida</span>
+          </div>
+        </div>
+      </div>
+
+      {/* IS-specific: Inspection Questions for Cobertura Completa */}
+      {isInternacional && (
+        <div className="space-y-6">
+          {/* Pregunta 1: Extras */}
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6">
+            <h3 className="text-lg font-bold text-[#010139] mb-4">
+              🔧 ¿Su auto cuenta con extras?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">Favor detallar si aplica</p>
+
+            <div className="flex items-center gap-4 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tieneExtras"
+                  checked={tieneExtras === true}
+                  onChange={() => setTieneExtras(true)}
+                  className="w-4 h-4 text-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-700">Sí</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tieneExtras"
+                  checked={tieneExtras === false}
+                  onChange={() => { setTieneExtras(false); setExtrasSeleccionados([]); setExtrasDetalle(''); }}
                   className="w-4 h-4 text-[#8AAA19]"
                 />
                 <span className="text-sm font-semibold text-gray-700">No</span>
