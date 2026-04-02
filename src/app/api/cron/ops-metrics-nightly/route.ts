@@ -93,16 +93,21 @@ export async function GET(request: Request) {
 
     if (allMetricsUsers) {
       for (const row of allMetricsUsers) {
-        // Get avg effectiveness for this user's urgencies evaluated today
+        // Resolve urgency case IDs for this user first — .in() requires an array,
+        // not a subquery builder (passing a QueryBuilder causes new Set() to throw).
+        const { data: userCases } = await supabase
+          .from('ops_cases')
+          .select('id')
+          .eq('assigned_master_id', row.user_id)
+          .eq('case_type', 'urgencia');
+
+        const caseIds = (userCases || []).map((c: any) => c.id);
+        if (caseIds.length === 0) continue;
+
         const { data: evals } = await supabase
           .from('ops_ai_evaluations')
           .select('effectiveness_score, final_sentiment_label')
-          .in('case_id', supabase
-            .from('ops_cases')
-            .select('id')
-            .eq('assigned_master_id', row.user_id)
-            .eq('case_type', 'urgencia')
-          )
+          .in('case_id', caseIds)
           .gte('evaluated_at', `${today}T00:00:00`)
           .lte('evaluated_at', `${today}T23:59:59`);
 
