@@ -106,11 +106,16 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
     };
   }, [handleScanSuccess]);
 
-  // Lock body scroll while scanner is open (prevents iOS Safari from scrolling behind)
+  // Prevent any scroll / interaction with the page behind the overlay
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
   }, []);
 
   const handleClose = async () => {
@@ -120,13 +125,12 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
     onClose();
   };
 
-  // QR reader box height — clamped so it always fits on screen with header+instructions+footer
+  // QR reader box height — small enough to fit with header+instructions+footer on any phone
   const qrBoxH = 'min(55vw, 260px)';
 
   return (
     <div
-      className="fixed inset-0 overflow-hidden bg-black/90 z-50 flex flex-col"
-      style={{ height: '100dvh', touchAction: 'none' }}
+      className="fixed inset-0 z-[9999] bg-black flex flex-col overflow-hidden"
     >
       {/* Header */}
       <div className="shrink-0 bg-[#010139] text-white p-4 flex items-center justify-between">
