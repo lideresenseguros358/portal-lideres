@@ -80,8 +80,8 @@ export async function buildBankACH(
   let totalAmount = 0;
   
   for (const total of totalsByBroker) {
-    // Skip if net amount is 0 or negative
-    const netAmount = Number(total.net_amount) || 0;
+    // Skip if net amount rounds to 0 or less (handles floating-point residuals like 0.005)
+    const netAmount = Math.round((Number(total.net_amount) || 0) * 100) / 100;
     if (netAmount <= 0) {
       console.log(`[buildBankACH] Broker ${total.broker?.name} RECHAZADO: net <= 0 (${netAmount})`);
       continue;

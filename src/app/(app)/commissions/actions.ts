@@ -4653,7 +4653,8 @@ export async function actionExportBankCsv(fortnightId: string) {
     const filteredTotals = totalsArray.filter((t) => {
       const isLissa = t.broker?.email?.toLowerCase() === LISSA_EMAIL;
       console.log(`[actionExportBankCsv] Broker ${t.broker?.name}: gross=$${t.gross_amount.toFixed(2)} net=$${t.net_amount.toFixed(2)} retained=${t.is_retained} lissa=${isLissa}`);
-      return t.net_amount > 0 && !t.is_retained && !isLissa;
+      const roundedNet = Math.round(t.net_amount * 100) / 100;
+      return roundedNet > 0 && !t.is_retained && !isLissa;
     });
 
     console.log(`[actionExportBankCsv] ${filteredTotals.length} brokers para TXT`);
