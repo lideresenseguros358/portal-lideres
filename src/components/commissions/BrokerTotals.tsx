@@ -230,10 +230,10 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
   // Calcular y emitir total neto (EXCLUIR LISSA y RETENIDOS) - Debe coincidir con TXT banco
   useEffect(() => {
     const payableBrokers = Object.entries(groupedData)
-      .filter(([, broker]) => 
+      .filter(([, broker]) =>
         broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com' &&
         !broker.is_retained &&
-        broker.total_net > 0
+        Math.round(broker.total_net * 100) / 100 > 0
       );
 
     if (onTotalNetChange) {
