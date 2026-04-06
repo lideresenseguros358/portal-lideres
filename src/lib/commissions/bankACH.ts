@@ -41,6 +41,7 @@ interface ValidationError {
   brokerId: string;
   brokerName: string;
   errors: string[];
+  netAmount: number;
 }
 
 // Todas las funciones de normalización y validación están en ach-normalization.ts
@@ -99,7 +100,8 @@ export async function buildBankACH(
       errors.push({
         brokerId: broker.id,
         brokerName: broker.name || 'DESCONOCIDO',
-        errors: validation.errors
+        errors: validation.errors,
+        netAmount,
       });
       continue; // Skip this broker
     }

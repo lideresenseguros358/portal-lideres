@@ -1116,11 +1116,21 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
 
               {/* Errores si los hay */}
               {txtDownloadData.achErrors.length > 0 && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
                   <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
                     <FaExclamationTriangle size={12} />
-                    {txtDownloadData.achErrors.length} broker(s) excluidos por datos bancarios incompletos
+                    {txtDownloadData.achErrors.length} corredor(es) excluidos por datos bancarios incompletos
                   </p>
+                  <div className="max-h-36 overflow-y-auto space-y-1">
+                    {txtDownloadData.achErrors.map((e: any) => (
+                      <div key={e.brokerId} className="flex items-center justify-between text-xs text-red-800 bg-red-100 rounded px-2 py-1">
+                        <span className="font-medium truncate flex-1 mr-2">{e.brokerName}</span>
+                        <span className="font-semibold whitespace-nowrap">
+                          ${Number(e.netAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
