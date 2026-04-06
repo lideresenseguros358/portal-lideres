@@ -27,8 +27,6 @@ export async function GET(request: NextRequest) {
     const startDay = parseInt(fortnightStart.split('-')[2] || '1');
     const fortnightType = startDay <= 15 ? 'Q1' : 'Q2';
 
-    console.log('[broker-debts] Fortnight:', fortnightStart, 'to', fortnightEnd);
-    console.log('[broker-debts] Fortnight type:', fortnightType);
 
     const supabase = getSupabaseAdmin();
 
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('[broker-debts] Total active advances:', advances?.length || 0);
 
     // 2. Obtener recurrencias activas
     const { data: recurrences, error: recurrencesError } = await supabase
@@ -63,7 +60,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log('[broker-debts] Total active recurrences:', recurrences?.length || 0);
 
     // 3. Filtrar recurrencias que aplican en esta quincena
     const today = new Date().toISOString().split('T')[0] || '';
@@ -81,7 +77,6 @@ export async function GET(request: NextRequest) {
       return rec.fortnight_type === fortnightType;
     });
 
-    console.log('[broker-debts] Applicable recurrences for', fortnightType, ':', applicableRecurrences.length);
 
     // 4. Construir set de recurrence_ids que aplican en esta quincena
     const applicableRecurrenceIds = new Set(applicableRecurrences.map(r => r.id));
@@ -137,8 +132,6 @@ export async function GET(request: NextRequest) {
         recurrence_count: data.recurrence_count,
       }));
 
-    console.log('[broker-debts] Brokers with debts:', result.length);
-    console.log('[broker-debts] Sample:', result.slice(0, 3));
 
     return NextResponse.json({
       ok: true,

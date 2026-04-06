@@ -189,16 +189,21 @@ export async function actionUploadMultipleImports(
       percent: number;
     }>();
     
+    const multiPoliciesWithOverride: string[] = [];
     (existingPolicies || []).forEach((p: any) => {
       const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
+      if (p.percent_override !== null && p.percent_override !== undefined) {
+        multiPoliciesWithOverride.push(`${p.policy_number}=${p.percent_override}`);
+      }
       policyMap.set(p.policy_number, {
         broker_id: p.broker_id,
         client_id: p.client_id,
         percent: percent,
       });
     });
-    
+
     console.log(`[MATCHING] Nivel 1 - Pólizas en BD: ${policyMap.size}`);
+    console.log(`[MATCHING] Pólizas con percent_override: ${multiPoliciesWithOverride.length} → ${multiPoliciesWithOverride.slice(0, 5).join(', ')}`);
     
     // NIVEL 2: Buscar en preliminar (temp_client_import) - NUEVO
     // Solo para pólizas que NO están en policies
@@ -210,16 +215,18 @@ export async function actionUploadMultipleImports(
         .select(`
           policy_number,
           broker_id,
+          percent_override,
           brokers!inner(percent_default)
         `)
         .in('policy_number', unmatchedPolicyNumbers)
         .not('broker_id', 'is', null);
-      
+
       let preliminarMatches = 0;
       (preliminarPolicies || []).forEach((p: any) => {
         // Solo agregar si NO existe ya en policyMap (policies tiene prioridad)
         if (!policyMap.has(p.policy_number) && p.broker_id) {
-          const percent = p.brokers?.percent_default ?? 1.0;
+          // Prioridad: percent_override > percent_default > 1.0 (mismo que Level 1)
+          const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
           policyMap.set(p.policy_number, {
             broker_id: p.broker_id,
             client_id: '', // temp_client_import no tiene client_id fijo
@@ -742,10 +749,14 @@ export async function actionUploadImport(formData: FormData) {
       percent: number;
     }>();
     
+    const policiesWithOverride: string[] = [];
     (existingPolicies || []).forEach((p: any) => {
       // Prioridad: percent_override > percent_default > 1.0
       const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
-      
+      if (p.percent_override !== null && p.percent_override !== undefined) {
+        policiesWithOverride.push(`${p.policy_number}=${p.percent_override}`);
+      }
+
       policyMap.set(p.policy_number, {
         broker_id: p.broker_id,
         client_id: p.client_id,
@@ -755,6 +766,7 @@ export async function actionUploadImport(formData: FormData) {
     });
 
     console.log(`[MATCHING][${insurerName}] Nivel 1 - Pólizas en BD: ${policyMap.size}`);
+    console.log(`[MATCHING][${insurerName}] Pólizas con percent_override: ${policiesWithOverride.length} → ${policiesWithOverride.slice(0, 5).join(', ')}`);
 
     // NIVEL 2: Buscar en preliminar (temp_client_import) - NUEVO
     // Solo para pólizas que NO están en policies
@@ -792,6 +804,7 @@ export async function actionUploadImport(formData: FormData) {
           .select(`
             policy_number,
             broker_id,
+            percent_override,
             brokers!inner(percent_default)
           `)
           .in('policy_number', unmatchedPolicyNumbers.length > 0 ? unmatchedPolicyNumbers : ['__NONE__'])
@@ -815,6 +828,7 @@ export async function actionUploadImport(formData: FormData) {
             .select(`
               policy_number,
               broker_id,
+              percent_override,
               brokers!inner(percent_default)
             `)
             .eq('insurer_id', parsed.insurer_id)
@@ -865,6 +879,7 @@ export async function actionUploadImport(formData: FormData) {
           .select(`
             policy_number,
             broker_id,
+            percent_override,
             brokers!inner(percent_default)
           `)
           .in('policy_number', unmatchedPolicyNumbers)
@@ -872,12 +887,13 @@ export async function actionUploadImport(formData: FormData) {
 
         preliminarPoliciesAll = preliminarPolicies || [];
       }
-      
+
       let preliminarMatches = 0;
       (preliminarPoliciesAll || []).forEach((p: any) => {
         // Solo agregar si NO existe ya en policyMap (policies tiene prioridad)
         if (!policyMap.has(p.policy_number) && p.broker_id) {
-          const percent = p.brokers?.percent_default ?? 1.0;
+          // Prioridad: percent_override > percent_default > 1.0 (mismo que Level 1)
+          const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
           policyMap.set(p.policy_number, {
             broker_id: p.broker_id,
             client_id: '', // temp_client_import no tiene client_id fijo
@@ -1053,6 +1069,14 @@ export async function actionUploadImport(formData: FormData) {
           assigned_broker_id: null,
         });
       }
+    }
+
+    // Log amounts for override policies specifically
+    const overridePolicyNumbers = new Set(policiesWithOverride.map(s => s.split('=')[0]!));
+    const itemsWithOverride = itemsToInsert.filter(i => i.policy_number && overridePolicyNumbers.has(i.policy_number));
+    if (itemsWithOverride.length > 0) {
+      console.log(`[SERVER][${insurerName}] 🎯 Items con percent_override aplicado (${itemsWithOverride.length}):`,
+        itemsWithOverride.slice(0, 7).map(i => ({ policy: i.policy_number, percent: policyMap.get(i.policy_number!)?.percent, gross: i.gross_amount })));
     }
 
     console.log(`[SERVER][${insurerName}] ========== RESULTADO DEL MATCHING (SOLO NIVEL 1) ==========`);
