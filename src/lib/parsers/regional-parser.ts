@@ -137,38 +137,30 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
 
     console.log(`[REGIONAL PDF] Page ${pageNum} Monto C. Pagado: ${pageAmounts.length} amounts, first=${pageAmounts[0]}, last=${pageAmounts[pageAmounts.length-1]}`);
 
-    // Page 1: first value is the page total, then individual values
-    // Page 2+: first 1-2 values are running totals, then individual values
-    // Heuristic: the page total equals the sum of individual values on that page
-    // Simpler: if first amount equals sum of the rest, skip it
     if (pageAmounts.length > 1) {
       const first = pageAmounts[0]!;
       const rest = pageAmounts.slice(1);
       const sumRest = rest.reduce((a, b) => a + b, 0);
-      // If first ≈ sum of rest, it's a total — skip it
       if (Math.abs(first - sumRest) < 0.05) {
+        // First value is a page total — skip it
         console.log(`[REGIONAL PDF] Page ${pageNum}: skipping total ${first} (sum of rest = ${sumRest.toFixed(2)})`);
         montoCPagadoList.push(...rest);
-      } else if (pageNum > 1) {
-        // On page 2+, try skipping first 2 values (prev total + running total)
-        const withoutTwo = pageAmounts.slice(2);
-        const sumWithoutTwo = withoutTwo.reduce((a, b) => a + b, 0);
-        if (withoutTwo.length > 0 && pageAmounts.length > 2) {
-          // Check if first two are totals
-          const second = pageAmounts[1]!;
-          if (Math.abs(first - second) < 0.05) {
-            // Both are same total — skip both
-            console.log(`[REGIONAL PDF] Page ${pageNum}: skipping 2 repeated totals ${first}`);
-            montoCPagadoList.push(...withoutTwo);
-          } else {
-            // Just skip the first (prev page total)
-            montoCPagadoList.push(...rest);
-          }
-        } else {
-          montoCPagadoList.push(...rest);
-        }
       } else {
-        montoCPagadoList.push(...rest);
+        // Skip any leading run of identical values (running/cumulative totals at page breaks)
+        let leadingSkip = 0;
+        while (
+          leadingSkip + 1 < pageAmounts.length &&
+          Math.abs(pageAmounts[leadingSkip]! - pageAmounts[leadingSkip + 1]!) < 0.05
+        ) {
+          leadingSkip++;
+        }
+        if (leadingSkip > 0) {
+          console.log(`[REGIONAL PDF] Page ${pageNum}: skipping ${leadingSkip + 1} leading repeated totals (${pageAmounts[0]})`);
+          montoCPagadoList.push(...pageAmounts.slice(leadingSkip + 1));
+        } else {
+          // No totals detected — all values are individual commissions
+          montoCPagadoList.push(...pageAmounts);
+        }
       }
     } else {
       montoCPagadoList.push(...pageAmounts);
@@ -254,8 +246,8 @@ export async function parseRegionalPDF(fileBuffer: ArrayBuffer): Promise<Regiona
   const expectedCount = Math.min(policyList.length, names.length);
   let alignedMontoCPagadoList = montoCPagadoList;
   if (expectedCount > 0 && montoCPagadoList.length > expectedCount) {
-    // Try trimming excess from start (running totals at page breaks)
-    alignedMontoCPagadoList = montoCPagadoList.slice(montoCPagadoList.length - expectedCount);
+    // Trim excess from end: extra entries correspond to names that merged/failed to parse
+    alignedMontoCPagadoList = montoCPagadoList.slice(0, expectedCount);
   }
 
   console.log(`[REGIONAL PDF] Expected rows: ${expectedCount}, aligned comisiones: ${alignedMontoCPagadoList.length}`);
