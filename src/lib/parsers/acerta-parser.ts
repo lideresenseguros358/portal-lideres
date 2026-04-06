@@ -196,12 +196,12 @@ function extractCommissionFromAmountLine(line: string): number {
 function parseColumnar(lines: string[]): AcertaRow[] {
   const rows: AcertaRow[] = [];
 
-  // Ramo+Policy pattern: exactly "DD NNNNNNN" (2-digit ramo, space, 5+ digit policy)
-  const ramoPolicyRe = /^(\d{2})\s+(\d{5,})$/;
+  // Ramo+Policy pattern: "DD NNNNNNN" or "DD-NNNNNNN-NN" (with optional trailing segment)
+  const ramoPolicyRe = /^(\d{2})[\s-](\d{5,})(?:-\d+)?$/;
   // Client name: at least 2 words, all uppercase letters/spaces/accents, no digits
   const clientNameRe = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ\s]{4,}$/;
-  // Date line
-  const dateRe = /^\d{2}\/\d{2}\/\d{4}$/;
+  // Date line: DD/MM/YYYY or DD-MMM-YY (e.g. 25-MAR-26)
+  const dateRe = /^(\d{2}\/\d{2}\/\d{4}|\d{2}-[A-Z]{3}-\d{2})$/i;
   // Decimal number (amounts like 8.94, 0.45)
   const decimalRe = /^\d+\.\d{1,2}$/;
   // Integer that could be commission % (e.g., 20, 100)
