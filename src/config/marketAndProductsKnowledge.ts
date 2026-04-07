@@ -65,6 +65,30 @@ SECCIÓN SALUD — BLUE CROSS / INTERNACIONAL DE SEGUROS
 ASEGURADORA: Compañía Internacional de Seguros, S.A. (Blue Cross Blue Shield Panama)
 Productos: MediRed (doméstico) y Plan Médico Internacional (PMI)
 
+⚠️ NOTA CRÍTICA PARA LISSA — ARQUITECTURA DEL CONTRATO BLUE CROSS:
+Las Condiciones Generales (este documento) definen LAS REGLAS: qué está cubierto,
+bajo qué condiciones, y qué está excluido. Los MONTOS EXACTOS por cobertura
+(deducibles, máximos anuales, límites de cada beneficio) están en un documento
+SEPARADO llamado "Tabla de Beneficios Máximos Reembolsables", que varía según el
+plan contratado (Infinity, Gold, Platinum, Classic, etc.).
+
+PROTOCOLO DE RESPUESTA CUANDO PREGUNTEN POR BLUE CROSS:
+1. Si preguntan "¿Blue Cross cubre X?" → Responde SÍ/NO con las condiciones exactas
+   que tienes. Ejemplo: "Sí, Blue Cross cubre prótesis externas de miembros bajo
+   estas condiciones: [condiciones]."
+2. Si preguntan "¿Cuánto cubre Blue Cross de X?" o "¿Cuál es el límite de X en el
+   Plan Infinity?" → Responde: "Sí está cubierto [da las condiciones]. El monto
+   exacto está en tu Tabla de Beneficios, que es específica del plan. ¿La tienes
+   a mano o me envías tu certificado de póliza para darte el número exacto?"
+3. JAMÁS respondas "contacta a Blue Cross" si la regla de cobertura está aquí.
+
+PLANES CONOCIDOS DE BLUE CROSS PANAMÁ (nombres de mercado, sin montos en este doc):
+Los planes de MediRed/Blue Cross se comercializan con nombres como: Infinity, Gold,
+Silver, Classic, Platinum, Executive, Premium u otras denominaciones. Todos siguen
+las mismas Condiciones Generales (reglas), pero cada plan tiene su propia Tabla de
+Beneficios con montos diferentes. Cuando el cliente mencione "Plan Infinity" u otro
+nombre, las REGLAS DE COBERTURA que tienes aplican igualmente a todos los planes.
+
 ## MEDIRED — Seguro de Salud Individual/Colectivo (MEDIRED-07/99 Rev.06/22)
 Autorizaciones: Resolución No. DRLA-091 y DRLA-092 del 16 de diciembre 2022.
 
@@ -87,6 +111,39 @@ SERVICIOS AMBULATORIOS:
 - Exámenes especiales (MRI, CT, Nuclear, EMG, VCN, Holter, Ecocardiograma, Endoscopía,
   Colonoscopía, Cateterismo, CPRE, Crioterapia, Cauterización, Litotripsia):
   REQUIEREN AUTORIZACIÓN PREVIA. Sin autorización = reducción del 50% del beneficio.
+
+PRÓTESIS Y ORTESIS — GUÍA DE RESPUESTA DIRECTA:
+(Reglas extraídas de las Condiciones Generales MediRed y PMI, Cláusula IV y VI)
+
+▶ EXOPRÓTESIS U ORTESIS (prótesis externas — brazos, manos, piernas, pies artificiales):
+  RESPUESTA DIRECTA: SÍ ESTÁN CUBIERTAS, pero solo bajo estas condiciones específicas:
+  1. Solo para miembros (brazos, manos, piernas, pies artificiales). No otras partes.
+  2. El asegurado DEBE poder lograr función ambulatoria o funcional con el dispositivo.
+  3. El asegurado NO debe tener una condición cardiovascular, neuromuscular o
+     locomotora significativa que se vea afectada negativamente por el dispositivo.
+  4. Las reparaciones: cubiertas solo cuando sean necesarias por cambios anatómicos/
+     funcionales o desgaste normal.
+  5. REQUIERE AUTORIZACIÓN PREVIA. Sin autorización = beneficio reducido al 50%.
+  6. El límite en dólares está en la Tabla de Beneficios del plan específico.
+  → Responder a cliente: "Sí, Blue Cross cubre prótesis externas de miembros
+    (brazos y piernas artificiales). Requiere autorización previa y que puedas
+    lograr función ambulatoria con ella. El monto exacto está en tu Tabla de
+    Beneficios — ¿me la envías o tienes tu plan a mano?"
+
+▶ ENDOPRÓTESIS (prótesis colocadas quirúrgicamente — ej. cadera, rodilla, válvula):
+  RESPUESTA DIRECTA: PUEDEN ESTAR CUBIERTAS sujeto a aprobación médica de la compañía.
+  La regla oficial dice: "La compañía podrá aprobar endoprótesis implantadas
+  quirúrgicamente basándose en necesidad médica." No es automático, requiere
+  aprobación caso a caso. El límite está en la Tabla de Beneficios.
+  → Responder a cliente: "Las prótesis internas (como de cadera o rodilla) se
+    evalúan caso a caso. Blue Cross las puede aprobar si son médicamente necesarias.
+    Necesitas solicitar autorización previa a la compañía."
+
+▶ PRÓTESIS DENTALES: NO CUBIERTAS (excepto daño accidental a dientes naturales
+  en buen estado, con tratamiento autorizado dentro de los 90 días del accidente).
+
+▶ PRÓTESIS OCULARES/AUDITIVAS: Excluidas de cobertura estándar (excepto si están
+  especificadas en la Tabla de Beneficios del plan).
 
 EMERGENCIAS:
 - Por accidente: dentro de 24 horas del evento (incluye dental de emergencia para
@@ -141,9 +198,9 @@ OTRAS COBERTURAS:
 8. Suicidio o lesiones autoinfligidas; exposición voluntaria al peligro; actos criminales.
 9. Correcciones de visión (Excimer láser LASIK), anteojos, lentes de contacto,
    audífonos (excepto según tabla).
-10. Órtesis, prótesis externas, aparatos mecánicos/electrónicos (las endoprótesis
-    implantadas quirúrgicamente pueden estar cubiertas; las exoprótesis excluidas a menos
-    que estén en la tabla).
+10. Aparatos mecánicos/electrónicos en general. EXCEPCIÓN IMPORTANTE: Las prótesis
+    de miembros (exoprótesis) y endoprótesis tienen sus propias reglas de cobertura —
+    ver sección "PRÓTESIS Y ORTESIS — GUÍA DE RESPUESTA DIRECTA" más arriba.
 11. Tratamientos de fertilidad, FIV, cirugía de cambio de sexo, anticoncepción/DIU.
 12. Tratamientos experimentales/de investigación.
 13. Podiatría (juanetes, pies planos, callos, etc.).
