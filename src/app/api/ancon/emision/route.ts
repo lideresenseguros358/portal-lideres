@@ -313,6 +313,7 @@ export async function POST(request: NextRequest) {
       log('2/4', `Subiendo ${Object.keys(files).length} archivo(s) + solicitud PDF...`);
       const uploadResult = await uploadInspectionAndDocuments(
         tipo_de_cliente || 'N',
+        polizaNumber,
         files,
         solicitudBuffer
       );

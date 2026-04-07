@@ -34,7 +34,7 @@ const TEST_CLIENT = {
   segundoNombre:   'TEST',
   primerApellido:  'PRUEBA',
   segundoApellido: 'ANCON',
-  cedula:          '8-999-1234',
+  cedula:          '8-123-4567',
   email:           'contacto@lideresenseguros.com',  // results go to office
   telefono:        '6000-0000',
   celular:         '6000-0000',

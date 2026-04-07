@@ -324,7 +324,8 @@ export async function getAnconRestToken(): Promise<string | null> {
 // ═══ REST API: Upload document file ═══
 
 export async function uploadDocumentREST(
-  nombreArchivo: string,
+  nombreArchivo: string,  // Hash from SubirDocumentos — used as the uploaded file's name
+  nroRegistro: string,    // Policy number from GenerarNodocumento
   file: Buffer | Blob,
   fileName: string,
   mimeType: string
@@ -335,10 +336,12 @@ export async function uploadDocumentREST(
     const form = new FormData();
     form.append('Usuario', creds.usuario);
     form.append('Clave', creds.password);
-    form.append('NombreArchivo', nombreArchivo);
+    form.append('Tipo', '1');
+    form.append('NroRegistro', nroRegistro);
 
+    // ANCON requires the file to be uploaded with the hash from SubirDocumentos as its filename
     const blob = file instanceof Blob ? file : new Blob([new Uint8Array(file)], { type: mimeType });
-    form.append('Archivo', blob, fileName);
+    form.append('files', blob, nombreArchivo);
 
     const res = await fetch(`${ANCON_REST_URL}/api/Polizas/post_add_documentos_polizas_emision`, {
       method: 'POST',
@@ -378,6 +381,7 @@ export async function uploadDocumentREST(
 
 export async function uploadInspectionAndDocuments(
   tipoPersona: string,
+  polizaNumber: string,     // Policy number from GenerarNodocumento — required by REST endpoint
   files: Record<string, { buffer: Buffer; name: string; type: string }>,
   solicitudBuffer?: Buffer  // Pre-generated Solicitud de Seguros PDF (doc id=1)
 ): Promise<{ success: boolean; uploaded: number; failed: number; errors: string[] }> {
@@ -418,6 +422,7 @@ export async function uploadInspectionAndDocuments(
 
     const result = await uploadDocumentREST(
       doc.nombre_archivo,
+      polizaNumber,
       fileData.buffer,
       fileData.name,
       fileData.type

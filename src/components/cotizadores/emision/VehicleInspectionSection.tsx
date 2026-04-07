@@ -6,12 +6,15 @@
 
 'use client';
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { FaCamera, FaCheck, FaExclamationTriangle, FaTimes } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 // Lazy-load the camera modal — only instantiated when the user opens it
 const CameraCapture = lazy(() => import('./CameraCapture'));
+
+// Inspection tooltip for sequential photo hints
+import InspectionPhotoTooltip from './InspectionPhotoTooltip';
 
 interface InspectionPhoto {
   id: string;
@@ -97,6 +100,9 @@ export default function VehicleInspectionSection({
   const [currentPendingIndex, setCurrentPendingIndex] = useState(0);
   // id of the photo whose camera is currently open, null = camera closed
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+
+  // Refs para cada botón de inspección (para posicionar tooltips)
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // Restore cached photos on mount
   useEffect(() => {
@@ -221,6 +227,9 @@ export default function VehicleInspectionSection({
 
     return (
       <button
+        ref={(el) => {
+          if (el) buttonRefs.current[photo.id] = el;
+        }}
         onClick={() => { if (!isLocked) handlePhotoCapture(photo.id); }}
         disabled={isLocked}
         className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 font-bold text-sm
@@ -337,6 +346,17 @@ export default function VehicleInspectionSection({
         </div>
       </div>
 
+      {/* Inspection Photo Tooltips — one per on-car photo */}
+      {photosOnCar.map((photo, index) => (
+        <InspectionPhotoTooltip
+          key={`tooltip-${photo.id}`}
+          isVisible={index === currentPendingIndex && !photo.file}
+          buttonElement={buttonRefs.current[photo.id] || null}
+          photoIndex={index}
+          totalPhotos={photos.length}
+        />
+      ))}
+
       {/* Photos below car (VIN, etc.) */}
       {photosBelowCar.length > 0 && (
         <div className="space-y-3">
@@ -395,6 +415,9 @@ export default function VehicleInspectionSection({
                       </div>
                     ) : (
                       <button
+                        ref={(el) => {
+                          if (el) buttonRefs.current[photo.id] = el;
+                        }}
                         onClick={() => !isLocked && handlePhotoCapture(photo.id)}
                         disabled={isLocked}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
@@ -409,6 +432,15 @@ export default function VehicleInspectionSection({
                         <span className="text-sm">Tomar Foto</span>
                       </button>
                     )}
+
+                    {/* Tooltip para foto adicional */}
+                    <InspectionPhotoTooltip
+                      key={`tooltip-${photo.id}`}
+                      isVisible={isPending && !photo.file}
+                      buttonElement={buttonRefs.current[photo.id] || null}
+                      photoIndex={globalIndex}
+                      totalPhotos={photos.length}
+                    />
                   </div>
                 </div>
               </div>
