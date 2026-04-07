@@ -1369,7 +1369,7 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
 export default function ComparePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { editMode: contextEditMode, insurerSettings, toggleInsurerSetting } = useCotizadorEdit();
+  const { editMode: contextEditMode, insurerSettings, loadingSettings, toggleInsurerSetting } = useCotizadorEdit();
   const editMode = contextEditMode || searchParams.get('edit') === '1';
 
   const [loading, setLoading] = useState(!editMode); // skip loading in edit mode
@@ -1606,7 +1606,18 @@ export default function ComparePage() {
   }, [router, editMode]);
 
   // ── Edit mode: skip normal flow and show insurer cards ──
-  if (editMode && !loading) {
+  if (editMode) {
+    if (loadingSettings) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-[#010139] border-t-[#8AAA19] mb-4 mx-auto"></div>
+            <p className="text-gray-600 font-semibold">Cargando configuración de aseguradoras...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
         <div className="max-w-7xl mx-auto">
@@ -1617,6 +1628,7 @@ export default function ComparePage() {
             offlineInsurers={[]}
             editMode={true}
             insurerSettings={insurerSettings}
+            loadingSettings={loadingSettings}
             onToggleInsurer={async (slug, active) => {
               await toggleInsurerSetting(slug, 'cc_activo', active);
             }}

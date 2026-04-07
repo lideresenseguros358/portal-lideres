@@ -92,10 +92,10 @@ export function CotizadorEditProvider({ children, isMaster }: CotizadorEditProvi
 
   // Load settings on mount if master
   useEffect(() => {
-    if (isMaster) {
+    if (isMaster && insurerSettings.length === 0) {
       loadSettings();
     }
-  }, [isMaster, loadSettings]);
+  }, [isMaster, loadSettings, insurerSettings.length]);
 
   return (
     <CotizadorEditContext.Provider

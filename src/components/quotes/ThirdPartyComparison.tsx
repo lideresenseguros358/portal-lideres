@@ -16,6 +16,7 @@ interface ThirdPartyComparisonProps {
   editMode?: boolean;
   insurerSettings?: CotizadorInsurerSetting[];
   onToggleInsurer?: (slug: string, active: boolean) => Promise<void>;
+  loadingSettings?: boolean;
 }
 
 // ── Cache helpers ──
@@ -212,6 +213,7 @@ export default function ThirdPartyComparison({
   editMode = false,
   insurerSettings = [],
   onToggleInsurer,
+  loadingSettings = false,
 }: ThirdPartyComparisonProps) {
   const [generatingQuote, setGeneratingQuote] = useState(false);
   const [togglingInsurer, setTogglingInsurer] = useState<string | null>(null);
@@ -745,7 +747,28 @@ export default function ThirdPartyComparison({
   };
 
   // ── Edit Mode: Show insurer cards with toggle active/inactive ──
-  if (editMode && insurerSettings.length > 0) {
+  if (editMode) {
+    if (loadingSettings) {
+      return (
+        <div className="py-20 px-4">
+          <div className="max-w-7xl mx-auto text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-[#010139] border-t-[#8AAA19] mb-4 mx-auto"></div>
+            <p className="text-gray-600 font-semibold">Cargando configuración de aseguradoras...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (insurerSettings.length === 0) {
+      return (
+        <div className="py-20 px-4">
+          <div className="max-w-7xl mx-auto text-center">
+            <p className="text-gray-600 font-semibold">No hay aseguradoras disponibles</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="py-8 px-4">
         <div className="max-w-7xl mx-auto">

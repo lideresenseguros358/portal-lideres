@@ -11,7 +11,7 @@ import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 export default function ThirdPartyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { editMode: contextEditMode, insurerSettings, toggleInsurerSetting } = useCotizadorEdit();
+  const { editMode: contextEditMode, insurerSettings, loadingSettings, toggleInsurerSetting } = useCotizadorEdit();
   const editMode = contextEditMode || searchParams.get('edit') === '1';
 
   const [loading, setLoading] = useState(false);
@@ -236,6 +236,7 @@ export default function ThirdPartyPage() {
               onSelectPlan={handleSelectPlan}
               editMode={editMode}
               insurerSettings={insurerSettings}
+              loadingSettings={loadingSettings}
               onToggleInsurer={async (slug, active) => {
                 await toggleInsurerSetting(slug, 'tp_activo', active);
               }}
