@@ -107,13 +107,13 @@ export function CaseActionsRow({
 
     const snappingThreshold = 25;
 
-    // If more than threshold in positive direction, snap to right panel
+    // If more than threshold in positive direction (RIGHT swipe), snap to left panel (Bloquear)
     if (swipeX > snappingThreshold) {
-      setSwipeX(REVEAL_WIDTH_RIGHT);
+      setSwipeX(REVEAL_WIDTH_LEFT);
     }
-    // If more than threshold in negative direction, snap to left panel
+    // If more than threshold in negative direction (LEFT swipe), snap to right panel (PIN, Asignar, Eliminar)
     else if (swipeX < -snappingThreshold) {
-      setSwipeX(-REVEAL_WIDTH_LEFT);
+      setSwipeX(-REVEAL_WIDTH_RIGHT);
     }
     // Otherwise snap to closed
     else {
