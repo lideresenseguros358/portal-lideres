@@ -36,16 +36,15 @@ interface CaseActionsRowProps {
 export function CaseActionsRow({
   isPinned, onPin, onAssignMaster, onDelete, onBlock, isBlocked, onCardClick, children,
 }: CaseActionsRowProps) {
-  // Calculate reveal width based on whether block action exists (3 or 4 buttons × 48 px)
   const hasBlockAction = !!onBlock;
-  const REVEAL_WIDTH = (hasBlockAction ? 4 : 3) * BUTTON_WIDTH;
+  const REVEAL_WIDTH_RIGHT = 3 * BUTTON_WIDTH; // PIN, Master, Delete
+  const REVEAL_WIDTH_LEFT = 1 * BUTTON_WIDTH; // Block (isolated on left)
 
-  // Mobile swipe state
+  // Mobile swipe state: positive = left swipe, negative = right swipe
   const [swipeX, setSwipeX] = useState(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const isScrollRef = useRef<boolean | null>(null);
-  const isRevealed = swipeX >= REVEAL_WIDTH;
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? 0;
@@ -56,7 +55,7 @@ export function CaseActionsRow({
   const handleTouchMove = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
-    const dx = touchStartX.current - t.clientX; // positive = swiping left
+    const dx = touchStartX.current - t.clientX; // positive = left, negative = right
     const dy = Math.abs(touchStartY.current - t.clientY);
 
     // Determine gesture direction on first significant movement
@@ -65,36 +64,44 @@ export function CaseActionsRow({
     }
     if (isScrollRef.current) return;
 
-    if (isRevealed) {
-      // Dragging right to close
-      setSwipeX(Math.max(0, REVEAL_WIDTH + dx)); // dx < 0 when swiping right
-    } else if (dx > 0) {
-      // Dragging left to open
-      setSwipeX(Math.min(REVEAL_WIDTH, dx));
+    if (dx > 0) {
+      // Swiping LEFT → reveal right side (PIN, Master, Delete)
+      setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
+    } else if (dx < 0 && hasBlockAction) {
+      // Swiping RIGHT → reveal left side (Block only)
+      setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
+    } else {
+      setSwipeX(0);
     }
   };
 
   const handleTouchEnd = () => {
     if (isScrollRef.current) return;
-    setSwipeX(swipeX > REVEAL_WIDTH * 0.38 ? REVEAL_WIDTH : 0);
+    const threshold = 20;
+    if (swipeX > threshold) {
+      setSwipeX(REVEAL_WIDTH_RIGHT);
+    } else if (swipeX < -threshold) {
+      setSwipeX(-REVEAL_WIDTH_LEFT);
+    } else {
+      setSwipeX(0);
+    }
   };
 
   const handleCardClick = () => {
-    if (swipeX > 0) { setSwipeX(0); return; }
+    if (swipeX !== 0) { setSwipeX(0); return; }
     onCardClick();
   };
 
   return (
     // overflow-hidden only on mobile so the desktop dropdown can escape
     <div className="relative overflow-hidden md:overflow-visible">
-      {/* ── Mobile action strip (hidden on md+) ── */}
-      <div
-        className="md:hidden absolute right-0 top-0 h-full flex"
-        style={{ width: REVEAL_WIDTH }}
-        aria-hidden
-      >
-        {/* Right side (swipe RIGHT when blocked mode) - Block/Unblock */}
-        {hasBlockAction && (
+      {/* ── Left action strip (swipe RIGHT) - Block/Unblock only ── */}
+      {hasBlockAction && (
+        <div
+          className="md:hidden absolute left-0 top-0 h-full flex"
+          style={{ width: REVEAL_WIDTH_LEFT }}
+          aria-hidden
+        >
           <button
             onClick={(e) => { e.stopPropagation(); onBlock?.(); setSwipeX(0); }}
             className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-white text-[10px] font-bold select-none ${
@@ -104,9 +111,15 @@ export function CaseActionsRow({
             {isBlocked ? <FaCheckCircle className="text-base" /> : <FaBan className="text-base" />}
             {isBlocked ? 'Desbloquear' : 'Bloquear'}
           </button>
-        )}
+        </div>
+      )}
 
-        {/* Left side (swipe LEFT) - PIN, Master, Delete */}
+      {/* ── Right action strip (swipe LEFT) - PIN, Master, Delete ── */}
+      <div
+        className="md:hidden absolute right-0 top-0 h-full flex"
+        style={{ width: REVEAL_WIDTH_RIGHT }}
+        aria-hidden
+      >
         <button
           onClick={(e) => { e.stopPropagation(); onPin(); setSwipeX(0); }}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-white text-[10px] font-bold select-none ${
@@ -136,8 +149,8 @@ export function CaseActionsRow({
       <div
         className="relative bg-white"
         style={{
-          transform: `translateX(-${swipeX}px)`,
-          transition: swipeX === 0 || swipeX === REVEAL_WIDTH ? 'transform 0.22s ease' : 'none',
+          transform: `translateX(${swipeX}px)`,
+          transition: swipeX === 0 || Math.abs(swipeX) === REVEAL_WIDTH_RIGHT || Math.abs(swipeX) === REVEAL_WIDTH_LEFT ? 'transform 0.22s ease' : 'none',
           willChange: 'transform',
         }}
         onTouchStart={handleTouchStart}
