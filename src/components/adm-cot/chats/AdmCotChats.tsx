@@ -108,12 +108,14 @@ function ThreadList({
   threads, summary, loading, selectedId,
   onSelect, onRefresh,
   search, setSearch, filterStatus, setFilterStatus, filterCategory, setFilterCategory,
+  showBlocked, setShowBlocked,
 }: {
   threads: ChatThread[]; summary: any; loading: boolean; selectedId: string | null;
   onSelect: (id: string) => void; onRefresh: () => void;
   search: string; setSearch: (v: string) => void;
   filterStatus: string; setFilterStatus: (v: string) => void;
   filterCategory: string; setFilterCategory: (v: string) => void;
+  showBlocked: boolean; setShowBlocked: (v: boolean) => void;
 }) {
   // ── PIN state ──────────────────────────────
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -1056,6 +1058,8 @@ export default function AdmCotChats() {
               setFilterStatus={setFilterStatus}
               filterCategory={filterCategory}
               setFilterCategory={setFilterCategory}
+              showBlocked={showBlocked}
+              setShowBlocked={setShowBlocked}
             />
           </div>
 
