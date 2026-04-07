@@ -107,12 +107,14 @@ function ThreadList({
   threads, summary, loading, selectedId,
   onSelect, onRefresh,
   search, setSearch, filterStatus, setFilterStatus, filterCategory, setFilterCategory,
+  showBlocked, setShowBlocked, onBlock,
 }: {
   threads: ChatThread[]; summary: any; loading: boolean; selectedId: string | null;
   onSelect: (id: string) => void; onRefresh: () => void;
   search: string; setSearch: (v: string) => void;
   filterStatus: string; setFilterStatus: (v: string) => void;
   filterCategory: string; setFilterCategory: (v: string) => void;
+  showBlocked: boolean; setShowBlocked: (v: boolean) => void; onBlock: (id: string) => void;
 }) {
   // ── PIN state ──────────────────────────────
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -204,6 +206,28 @@ function ThreadList({
                 <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
+          </div>
+
+          {/* Tabs: Activos / Bloqueados */}
+          <div className="flex gap-2 border-b border-gray-200 -mx-3 px-3">
+            <button
+              onClick={() => setShowBlocked(false)}
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${
+                !showBlocked
+                  ? 'border-[#010139] text-[#010139]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}>
+              Activos
+            </button>
+            <button
+              onClick={() => setShowBlocked(true)}
+              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${
+                showBlocked
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}>
+              🚫 Bloqueados
+            </button>
           </div>
 
           <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
@@ -301,6 +325,8 @@ function ThreadList({
                     onPin={() => togglePin(t.id)}
                     onAssignMaster={() => openAssign(t.id)}
                     onDelete={() => setDeleteThreadId(t.id)}
+                    onBlock={() => onBlock(t.id)}
+                    isBlocked={t.is_blocked}
                     onCardClick={() => onSelect(t.id)}
                   >
                     <div className={`group flex items-start gap-3 px-3 py-3 transition-colors border-b border-gray-50 ${
@@ -333,6 +359,8 @@ function ThreadList({
                               onPin={() => togglePin(t.id)}
                               onAssignMaster={() => openAssign(t.id)}
                               onDelete={() => setDeleteThreadId(t.id)}
+                              onBlock={() => onBlock(t.id)}
+                              isBlocked={t.is_blocked}
                             />
                           </div>
                         </div>
@@ -839,6 +867,7 @@ export default function AdmCotChats() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [showBlocked, setShowBlocked] = useState(false);
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -848,6 +877,7 @@ export default function AdmCotChats() {
       if (search) params.search = search;
       if (filterStatus) params.status = filterStatus;
       if (filterCategory) params.category = filterCategory;
+      if (showBlocked) params.is_blocked = 'true';
       const q = new URLSearchParams(params).toString();
       const res = await fetch(`/api/chats/threads?${q}`);
       const json = await res.json();
@@ -859,7 +889,7 @@ export default function AdmCotChats() {
       console.error('Failed to fetch threads:', err);
     }
     setLoadingThreads(false);
-  }, [search, filterStatus, filterCategory]);
+  }, [search, filterStatus, filterCategory, showBlocked]);
 
   useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
@@ -964,6 +994,28 @@ export default function AdmCotChats() {
     } catch {}
   };
 
+  // Block/Unblock thread
+  const handleToggleBlock = async (threadId: string) => {
+    try {
+      const thread = threads.find(t => t.id === threadId);
+      const isBlocked = thread?.is_blocked || false;
+      await fetch('/api/chats/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          thread_id: threadId,
+          is_blocked: !isBlocked,
+        }),
+      });
+      if (selectedThreadId === threadId) {
+        await fetchThreadDetail(threadId);
+      }
+      fetchThreads();
+    } catch (err) {
+      console.error('Block toggle failed:', err);
+    }
+  };
+
   const selectThread = (id: string) => {
     setSelectedThreadId(id);
     setShowConfig(false);
@@ -1002,6 +1054,9 @@ export default function AdmCotChats() {
               setFilterStatus={setFilterStatus}
               filterCategory={filterCategory}
               setFilterCategory={setFilterCategory}
+              showBlocked={showBlocked}
+              setShowBlocked={setShowBlocked}
+              onBlock={handleToggleBlock}
             />
           </div>
 
