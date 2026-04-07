@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FaCar, FaShieldAlt } from 'react-icons/fa';
 import Breadcrumb from '@/components/ui/Breadcrumb';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CSS (inline <style> injected once)
@@ -57,6 +58,10 @@ const CAROUSEL_STYLES = `
 
 export default function CotizarAutoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { editMode: contextEditMode } = useCotizadorEdit();
+  const editMode = contextEditMode || searchParams.get('edit') === '1';
+
   const [minPriceDT, setMinPriceDT] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
 
@@ -121,8 +126,21 @@ export default function CotizarAutoPage() {
   };
 
   const handleSelect = (type: 'third-party' | 'full-coverage') => {
-    if (type === 'third-party') router.push('/cotizadores/third-party');
-    else router.push('/cotizadores/auto/completa');
+    if (editMode) {
+      // In edit mode, skip the form and go directly to comparison
+      if (type === 'third-party') {
+        router.push('/cotizadores/third-party?edit=1');
+      } else {
+        router.push('/cotizadores/comparar?edit=1');
+      }
+    } else {
+      // Normal flow
+      if (type === 'third-party') {
+        router.push('/cotizadores/third-party');
+      } else {
+        router.push('/cotizadores/auto/completa');
+      }
+    }
   };
 
   const priceLabel = loadingPrice ? 'Cargando...' : minPriceDT ? `Desde B/.${minPriceDT}/año` : 'Desde B/.115/año';

@@ -21,6 +21,7 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
 import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 
 // A7: Scroll to top al montar
 if (typeof window !== 'undefined') {
@@ -1367,7 +1368,11 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
 
 export default function ComparePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const { editMode: contextEditMode, insurerSettings, toggleInsurerSetting } = useCotizadorEdit();
+  const editMode = contextEditMode || searchParams.get('edit') === '1';
+
+  const [loading, setLoading] = useState(!editMode); // skip loading in edit mode
   const [quoteData, setQuoteData] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [offlineInsurers, setOfflineInsurers] = useState<string[]>([]);
@@ -1375,13 +1380,19 @@ export default function ComparePage() {
 
   useEffect(() => {
     const loadQuoteData = async () => {
+      // In edit mode, skip data loading
+      if (editMode) {
+        setLoading(false);
+        return;
+      }
+
       // Guard: evitar doble ejecución por React StrictMode
       if (hasLoadedRef.current) return;
       hasLoadedRef.current = true;
-      
+
       try {
         setLoading(true);
-        
+
         // Obtener datos del formulario
         const storedInput = sessionStorage.getItem('quoteInput');
         if (!storedInput) {
@@ -1592,7 +1603,28 @@ export default function ComparePage() {
     };
 
     loadQuoteData();
-  }, [router]);
+  }, [router, editMode]);
+
+  // ── Edit mode: skip normal flow and show insurer cards ──
+  if (editMode && !loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <QuoteComparison
+            policyType="auto-completa"
+            quotes={[]}
+            quoteData={{}}
+            offlineInsurers={[]}
+            editMode={true}
+            insurerSettings={insurerSettings}
+            onToggleInsurer={async (slug, active) => {
+              await toggleInsurerSetting(slug, 'cc_activo', active);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (loading) return <LoadingSkeleton />;
   if (!quoteData || quotes.length === 0) {
@@ -1630,6 +1662,9 @@ export default function ComparePage() {
           quotes={quotes}
           quoteData={quoteData}
           offlineInsurers={offlineInsurers}
+          editMode={false}
+          insurerSettings={[]}
+          onToggleInsurer={undefined}
         />
       </div>
     </div>

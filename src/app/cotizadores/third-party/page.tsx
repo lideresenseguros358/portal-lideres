@@ -1,14 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FaShieldAlt, FaClock, FaCheckCircle, FaCar, FaCreditCard } from 'react-icons/fa';
 import ThirdPartyComparison from '@/components/quotes/ThirdPartyComparison';
 import { AutoThirdPartyPlan } from '@/lib/constants/auto-quotes';
 import Breadcrumb from '@/components/ui/Breadcrumb';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 
 export default function ThirdPartyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { editMode: contextEditMode, insurerSettings, toggleInsurerSetting } = useCotizadorEdit();
+  const editMode = contextEditMode || searchParams.get('edit') === '1';
+
   const [loading, setLoading] = useState(false);
   const [fedpaSelection, setFedpaSelection] = useState<{ planType: 'basic' | 'premium'; plan: AutoThirdPartyPlan } | null>(null);
   const [fedpaPaymentMode, setFedpaPaymentMode] = useState<'contado' | 'cuotas'>('contado');
@@ -150,53 +155,57 @@ export default function ThirdPartyPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white py-8 px-4 shadow-xl">
-        <div className="max-w-7xl mx-auto">
-          {/* Breadcrumb */}
-          <Breadcrumb
-            items={[
-              { label: 'Auto', href: '/cotizadores/auto' },
-              { label: 'Daños a Terceros', icon: <FaCar /> },
-            ]}
-          />
+      {/* Hero Section — hidden in edit mode */}
+      {!editMode && (
+        <>
+          <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white py-8 px-4 shadow-xl">
+            <div className="max-w-7xl mx-auto">
+              {/* Breadcrumb */}
+              <Breadcrumb
+                items={[
+                  { label: 'Auto', href: '/cotizadores/auto' },
+                  { label: 'Daños a Terceros', icon: <FaCar /> },
+                ]}
+              />
 
-          <div className="mt-6">
-            <div
-              data-reveal="left"
-              className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-4"
-            >
-              <FaShieldAlt className="text-[#8AAA19]" />
-              <span className="text-sm font-semibold">Seguro Obligatorio</span>
+              <div className="mt-6">
+                <div
+                  data-reveal="left"
+                  className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-4"
+                >
+                  <FaShieldAlt className="text-[#8AAA19]" />
+                  <span className="text-sm font-semibold">Seguro Obligatorio</span>
+                </div>
+                <h1
+                  data-reveal="down"
+                  data-delay="80"
+                  className="text-4xl md:text-5xl font-bold mb-4"
+                >
+                  Daños a Terceros
+                </h1>
+                <p
+                  data-reveal="fade"
+                  data-delay="160"
+                  className="text-xl text-white/90 max-w-2xl"
+                >
+                  Compara y elige tu plan.{' '}
+                  <strong className="text-[#8AAA19]">Emisión inmediata</strong> sin inspección del vehículo.
+                </p>
+              </div>
             </div>
-            <h1
-              data-reveal="down"
-              data-delay="80"
-              className="text-4xl md:text-5xl font-bold mb-4"
-            >
-              Daños a Terceros
-            </h1>
-            <p
-              data-reveal="fade"
-              data-delay="160"
-              className="text-xl text-white/90 max-w-2xl"
-            >
-              Compara y elige tu plan.{' '}
-              <strong className="text-[#8AAA19]">Emisión inmediata</strong> sin inspección del vehículo.
-            </p>
           </div>
-        </div>
-      </div>
 
-      {/* Cintillo de forma de pago */}
-      <div className="bg-[#010139] border-b border-white/10 px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
-          <FaCreditCard className="text-[#8AAA19] flex-shrink-0 text-sm" />
-          <p className="text-white/90 text-xs sm:text-sm font-medium text-center leading-snug">
-            El pago de tu seguro se realizará por <strong className="text-white">tarjeta de crédito/débito</strong> — 100% seguro, procesado por <strong className="text-[#8AAA19]">PaguéloFácil</strong>
-          </p>
-        </div>
-      </div>
+          {/* Cintillo de forma de pago */}
+          <div className="bg-[#010139] border-b border-white/10 px-4 py-2.5">
+            <div className="max-w-7xl mx-auto flex items-center justify-center gap-2">
+              <FaCreditCard className="text-[#8AAA19] flex-shrink-0 text-sm" />
+              <p className="text-white/90 text-xs sm:text-sm font-medium text-center leading-snug">
+                El pago de tu seguro se realizará por <strong className="text-white">tarjeta de crédito/débito</strong> — 100% seguro, procesado por <strong className="text-[#8AAA19]">PaguéloFácil</strong>
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Comparison Section */}
       <div className="py-8 px-4">
@@ -223,65 +232,75 @@ export default function ThirdPartyPage() {
               <p className="text-gray-600 font-semibold">Cargando información...</p>
             </div>
           ) : (
-            <ThirdPartyComparison onSelectPlan={handleSelectPlan} />
+            <ThirdPartyComparison
+              onSelectPlan={handleSelectPlan}
+              editMode={editMode}
+              insurerSettings={insurerSettings}
+              onToggleInsurer={async (slug, active) => {
+                await toggleInsurerSetting(slug, 'tp_activo', active);
+              }}
+            />
           )}
         </div>
       </div>
 
-      {/* Info Footer */}
-      <div className="bg-gradient-to-r from-blue-50 to-green-50 py-12 px-4 mt-8">
-        <div className="max-w-5xl mx-auto">
-          <div data-reveal="up" className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
-            <div className="flex items-start gap-4">
-              <div className="text-5xl flex-shrink-0">💡</div>
-              <div>
-                <h3 className="text-2xl font-bold text-[#010139] mb-4">¿Cómo elegir tu plan?</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div data-reveal="left" data-delay="100" className="border-l-4 border-blue-500 pl-4">
-                    <div className="font-bold text-[#010139] mb-2 text-lg">Plan Básico</div>
-                    <p className="text-gray-700 text-sm leading-relaxed">
-                      Cumple con los <strong>requisitos legales mínimos</strong>.
-                      Perfecto si buscas <strong className="text-blue-600">economía</strong> y solo necesitas la cobertura obligatoria para circular.
-                    </p>
-                  </div>
-                  <div data-reveal="right" data-delay="100" className="border-l-4 border-[#8AAA19] pl-4">
-                    <div className="font-bold text-[#010139] mb-2 text-lg">Plan Premium</div>
-                    <p className="text-gray-700 text-sm leading-relaxed">
-                      <strong>Coberturas ampliadas</strong> con mayores límites.
-                      Incluye <strong className="text-[#8AAA19]">grúa y asistencia vial</strong>.
-                      Mayor tranquilidad en carretera.
-                    </p>
+      {/* Info Footer — hidden in edit mode */}
+      {!editMode && (
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 py-12 px-4 mt-8">
+          <div className="max-w-5xl mx-auto">
+            <div data-reveal="up" className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+              <div className="flex items-start gap-4">
+                <div className="text-5xl flex-shrink-0">💡</div>
+                <div>
+                  <h3 className="text-2xl font-bold text-[#010139] mb-4">¿Cómo elegir tu plan?</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div data-reveal="left" data-delay="100" className="border-l-4 border-blue-500 pl-4">
+                      <div className="font-bold text-[#010139] mb-2 text-lg">Plan Básico</div>
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        Cumple con los <strong>requisitos legales mínimos</strong>.
+                        Perfecto si buscas <strong className="text-blue-600">economía</strong> y solo necesitas la cobertura obligatoria para circular.
+                      </p>
+                    </div>
+                    <div data-reveal="right" data-delay="100" className="border-l-4 border-[#8AAA19] pl-4">
+                      <div className="font-bold text-[#010139] mb-2 text-lg">Plan Premium</div>
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        <strong>Coberturas ampliadas</strong> con mayores límites.
+                        Incluye <strong className="text-[#8AAA19]">grúa y asistencia vial</strong>.
+                        Mayor tranquilidad en carretera.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Beneficios */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-              {[
-                { icon: <FaCheckCircle className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: 'Cobertura Legal', sub: 'Cumple requisitos de tránsito', delay: '0' },
-                { icon: <FaClock className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: 'Emisión Inmediata', sub: 'Sin inspección previa', delay: '100' },
-                { icon: <FaShieldAlt className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: '4 Aseguradoras', sub: 'Compara y elige la mejor', delay: '200' },
-              ].map(({ icon, title, sub, delay }) => (
-                <div
-                  key={title}
-                  data-reveal="up"
-                  data-delay={delay}
-                  className="flex items-center gap-3 bg-blue-50 rounded-xl p-4 border border-blue-100"
-                >
-                  {icon}
-                  <div>
-                    <div className="font-bold text-[#010139] text-sm">{title}</div>
-                    <div className="text-xs text-gray-600 mt-0.5">{sub}</div>
+              {/* Beneficios */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                {[
+                  { icon: <FaCheckCircle className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: 'Cobertura Legal', sub: 'Cumple requisitos de tránsito', delay: '0' },
+                  { icon: <FaClock className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: 'Emisión Inmediata', sub: 'Sin inspección previa', delay: '100' },
+                  { icon: <FaShieldAlt className="text-[#8AAA19] text-2xl flex-shrink-0" />, title: '4 Aseguradoras', sub: 'Compara y elige la mejor', delay: '200' },
+                ].map(({ icon, title, sub, delay }) => (
+                  <div
+                    key={title}
+                    data-reveal="up"
+                    data-delay={delay}
+                    className="flex items-center gap-3 bg-blue-50 rounded-xl p-4 border border-blue-100"
+                  >
+                    {icon}
+                    <div>
+                      <div className="font-bold text-[#010139] text-sm">{title}</div>
+                      <div className="text-xs text-gray-600 mt-0.5">{sub}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {fedpaSelection && (
+      {/* FEDPA payment mode modal — hidden in edit mode */}
+      {!editMode && fedpaSelection && (
         <div className="fixed inset-0 z-50 bg-[#010139]/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
           <div className="w-full max-w-2xl bg-gradient-to-b from-white to-[#f7f9ff] rounded-3xl shadow-2xl border border-white/70 overflow-hidden">
             <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-5 sm:px-7 sm:py-6 text-white">
@@ -347,6 +366,8 @@ export default function ThirdPartyPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

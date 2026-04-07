@@ -2010,6 +2010,39 @@ export type Database = {
           },
         ]
       }
+      cotizador_insurer_settings: {
+        Row: {
+          cc_activo: boolean
+          created_at: string
+          display_name: string
+          id: string
+          logo_key: string | null
+          slug: string
+          tp_activo: boolean
+          updated_at: string
+        }
+        Insert: {
+          cc_activo?: boolean
+          created_at?: string
+          display_name: string
+          id?: string
+          logo_key?: string | null
+          slug: string
+          tp_activo?: boolean
+          updated_at?: string
+        }
+        Update: {
+          cc_activo?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          logo_key?: string | null
+          slug?: string
+          tp_activo?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       brokers: {
         Row: {
           active: boolean | null

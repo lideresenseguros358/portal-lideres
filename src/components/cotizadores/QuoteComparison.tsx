@@ -15,6 +15,7 @@ import PremiumUpgradeModal from './PremiumUpgradeModal';
 import QuoteDetailsCard from './QuoteDetailsCard';
 import AutoCloseTooltip from '@/components/ui/AutoCloseTooltip';
 import { preciosTooltips, getDeducibleTooltip, getEndosoTooltip } from '@/lib/cotizadores/fedpa-premium-features';
+import { CotizadorInsurerSetting } from '@/context/CotizadorEditContext';
 
 interface Coverage {
   name: string;
@@ -63,10 +64,22 @@ interface QuoteComparisonProps {
   quotes: QuotePlan[];
   quoteData: any;
   offlineInsurers?: string[];
+  editMode?: boolean;
+  insurerSettings?: CotizadorInsurerSetting[];
+  onToggleInsurer?: (slug: string, active: boolean) => Promise<void>;
 }
 
-export default function QuoteComparison({ policyType, quotes, quoteData, offlineInsurers = [] }: QuoteComparisonProps) {
+export default function QuoteComparison({
+  policyType,
+  quotes,
+  quoteData,
+  offlineInsurers = [],
+  editMode = false,
+  insurerSettings = [],
+  onToggleInsurer,
+}: QuoteComparisonProps) {
   const router = useRouter();
+  const [togglingInsurer, setTogglingInsurer] = useState<string | null>(null);
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
   const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -322,6 +335,86 @@ export default function QuoteComparison({ policyType, quotes, quoteData, offline
     // Navegar a la ruta correcta (auto/completa)
     router.push('/cotizadores/auto/completa');
   };
+
+  // ── Edit mode: show insurer cards with toggle active/inactive for CC ──
+  if (editMode && insurerSettings.length > 0) {
+    return (
+      <div className="py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#010139] mb-3">
+              Modo Edición: Cobertura Completa
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Activa o desactiva cada aseguradora para esta sección
+            </p>
+          </div>
+
+          {/* Grid of insurer cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {insurerSettings.map((setting) => {
+              const isActive = setting.cc_activo;
+              return (
+                <div
+                  key={setting.slug}
+                  className={`rounded-2xl shadow-lg border-2 p-6 transition-all ${
+                    isActive
+                      ? 'border-[#8AAA19] bg-white'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                >
+                  {/* Logo */}
+                  <div className="mb-4 flex justify-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center">
+                      <InsurerLogo logoUrl={`/aseguradoras/${setting.slug}.png`} insurerName={setting.display_name} size="lg" />
+                    </div>
+                  </div>
+
+                  {/* Name */}
+                  <h3 className="text-center font-bold text-gray-900 mb-4 text-sm">{setting.display_name}</h3>
+
+                  {/* Status badge + Toggle */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                      isActive
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {isActive ? '✓ Activo' : '✕ Inactivo'}
+                    </div>
+                  </div>
+
+                  {/* Toggle button */}
+                  <button
+                    onClick={async () => {
+                      setTogglingInsurer(setting.slug);
+                      try {
+                        await onToggleInsurer?.(setting.slug, !isActive);
+                      } catch (err) {
+                        console.error('Failed to toggle insurer:', err);
+                      } finally {
+                        setTogglingInsurer(null);
+                      }
+                    }}
+                    disabled={togglingInsurer === setting.slug}
+                    className={`w-full py-2 rounded-xl font-semibold text-sm transition-all ${
+                      togglingInsurer === setting.slug
+                        ? 'opacity-50 cursor-not-allowed'
+                        : isActive
+                        ? 'bg-red-500 text-white hover:bg-red-600'
+                        : 'bg-green-500 text-white hover:bg-green-600'
+                    }`}
+                  >
+                    {togglingInsurer === setting.slug ? 'Actualizando...' : (isActive ? 'Desactivar' : 'Activar')}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
