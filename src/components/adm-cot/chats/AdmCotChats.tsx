@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
 import {
   FaSearch,
   FaComments,
@@ -108,14 +107,12 @@ function ThreadList({
   threads, summary, loading, selectedId,
   onSelect, onRefresh,
   search, setSearch, filterStatus, setFilterStatus, filterCategory, setFilterCategory,
-  showBlocked, setShowBlocked,
 }: {
   threads: ChatThread[]; summary: any; loading: boolean; selectedId: string | null;
   onSelect: (id: string) => void; onRefresh: () => void;
   search: string; setSearch: (v: string) => void;
   filterStatus: string; setFilterStatus: (v: string) => void;
   filterCategory: string; setFilterCategory: (v: string) => void;
-  showBlocked: boolean; setShowBlocked: (v: boolean) => void;
 }) {
   // ── PIN state ──────────────────────────────
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
@@ -198,7 +195,7 @@ function ThreadList({
     <>
       <div className="flex flex-col h-full bg-white">
         {/* Top bar */}
-        <div className="p-3 border-b border-gray-200 space-y-3">
+        <div className="p-3 border-b border-gray-200 space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#010139]">💬 Chats</h2>
             <div className="flex items-center gap-2">
@@ -207,28 +204,6 @@ function ThreadList({
                 <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
               </button>
             </div>
-          </div>
-
-          {/* Tabs: Activos / Bloqueados */}
-          <div className="flex gap-2 border-b border-gray-200">
-            <button
-              onClick={() => setShowBlocked(false)}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${
-                !showBlocked
-                  ? 'border-[#010139] text-[#010139]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}>
-              Activos
-            </button>
-            <button
-              onClick={() => setShowBlocked(true)}
-              className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${
-                showBlocked
-                  ? 'border-red-600 text-red-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}>
-              🚫 Bloqueados
-            </button>
           </div>
 
           <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
@@ -326,8 +301,6 @@ function ThreadList({
                     onPin={() => togglePin(t.id)}
                     onAssignMaster={() => openAssign(t.id)}
                     onDelete={() => setDeleteThreadId(t.id)}
-                    onBlock={() => handleToggleBlock(t.id)}
-                    isBlocked={t.is_blocked}
                     onCardClick={() => onSelect(t.id)}
                   >
                     <div className={`group flex items-start gap-3 px-3 py-3 transition-colors border-b border-gray-50 ${
@@ -360,8 +333,6 @@ function ThreadList({
                               onPin={() => togglePin(t.id)}
                               onAssignMaster={() => openAssign(t.id)}
                               onDelete={() => setDeleteThreadId(t.id)}
-                              onBlock={() => handleToggleBlock(t.id)}
-                              isBlocked={t.is_blocked}
                             />
                           </div>
                         </div>
@@ -868,7 +839,6 @@ export default function AdmCotChats() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
-  const [showBlocked, setShowBlocked] = useState(false); // Toggle between Activos/Bloqueados
 
   // Fetch threads
   const fetchThreads = useCallback(async () => {
@@ -878,7 +848,6 @@ export default function AdmCotChats() {
       if (search) params.search = search;
       if (filterStatus) params.status = filterStatus;
       if (filterCategory) params.category = filterCategory;
-      if (showBlocked) params.is_blocked = 'true'; // Filter for blocked threads
       const q = new URLSearchParams(params).toString();
       const res = await fetch(`/api/chats/threads?${q}`);
       const json = await res.json();
@@ -890,7 +859,7 @@ export default function AdmCotChats() {
       console.error('Failed to fetch threads:', err);
     }
     setLoadingThreads(false);
-  }, [search, filterStatus, filterCategory, showBlocked]);
+  }, [search, filterStatus, filterCategory]);
 
   useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
@@ -981,31 +950,6 @@ export default function AdmCotChats() {
     setAssigning(false);
   };
 
-  // Block/Unblock thread
-  const handleToggleBlock = async (threadId: string) => {
-    const thread = threads.find(t => t.id === threadId);
-    if (!thread) return;
-    const newBlockedState = !thread.is_blocked;
-    try {
-      const res = await fetch('/api/chats/block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thread_id: threadId, is_blocked: newBlockedState }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        await fetchThreads();
-        if (selectedThreadId === threadId) {
-          await fetchThreadDetail(threadId);
-        }
-        toast.success(json.message);
-      }
-    } catch (err) {
-      console.error('Block/Unblock failed:', err);
-      toast.error('No se pudo actualizar el bloqueo');
-    }
-  };
-
   // Change status
   const handleChangeStatus = async (status: string) => {
     if (!selectedThreadId) return;
@@ -1058,8 +1002,6 @@ export default function AdmCotChats() {
               setFilterStatus={setFilterStatus}
               filterCategory={filterCategory}
               setFilterCategory={setFilterCategory}
-              showBlocked={showBlocked}
-              setShowBlocked={setShowBlocked}
             />
           </div>
 
