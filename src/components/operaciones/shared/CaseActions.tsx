@@ -39,73 +39,94 @@ export function CaseActionsRow({
   const hasBlockAction = !!onBlock;
   const REVEAL_WIDTH_RIGHT = 3 * BUTTON_WIDTH; // PIN, Master, Delete
   const REVEAL_WIDTH_LEFT = 1 * BUTTON_WIDTH; // Block (isolated on left)
-  const DIRECTION_THRESHOLD = 8; // pixels to determine direction
+  const DIRECTION_THRESHOLD = 10; // pixels to determine direction
 
-  // Mobile swipe state: positive = left swipe, negative = right swipe
+  // Mobile swipe state
   const [swipeX, setSwipeX] = useState(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
-  const isScrollRef = useRef<boolean | null>(null); // null=undetermined, true=scroll, false=swipe
-  const swipeDirectionRef = useRef<'left' | 'right' | null>(null); // Direction lock
+  const isScrollRef = useRef<boolean | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? 0;
     touchStartY.current = e.touches[0]?.clientY ?? 0;
     isScrollRef.current = null;
-    swipeDirectionRef.current = null; // Reset direction lock
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
-    const dx = touchStartX.current - t.clientX; // positive = left, negative = right
+    const dx = touchStartX.current - t.clientX; // positive = left swipe, negative = right swipe
     const dy = Math.abs(touchStartY.current - t.clientY);
     const absDx = Math.abs(dx);
 
-    // Step 1: Determine if it's a vertical scroll or horizontal swipe
+    // Determine gesture type: vertical scroll or horizontal swipe
     if (isScrollRef.current === null && (absDx > DIRECTION_THRESHOLD || dy > DIRECTION_THRESHOLD)) {
-      // If vertical movement > horizontal, it's a scroll
-      isScrollRef.current = dy > absDx * 1.4;
+      isScrollRef.current = dy > absDx * 1.4; // true = scroll, false = swipe
     }
 
-    // If it's a scroll, ignore
+    // Ignore if it's a vertical scroll
     if (isScrollRef.current) return;
 
-    // Step 2: Lock swipe direction on first significant horizontal movement
-    if (swipeDirectionRef.current === null && absDx > DIRECTION_THRESHOLD) {
-      swipeDirectionRef.current = dx > 0 ? 'left' : 'right';
-    }
+    // LOGIC:
+    // - If swipeX === 0 (closed), allow movement in either direction
+    // - If swipeX > 0 (right side open), only allow closing (moving back to 0) or further left
+    // - If swipeX < 0 (left side open), only allow closing (moving back to 0) or further right
 
-    // Step 3: Only allow movement in the locked direction
-    if (swipeDirectionRef.current === 'left') {
-      // LEFT swipe only (positive dx)
+    if (swipeX === 0) {
+      // Not open yet - allow opening in either direction
       if (dx > 0) {
+        // LEFT swipe - open right side
         setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
-      }
-    } else if (swipeDirectionRef.current === 'right' && hasBlockAction) {
-      // RIGHT swipe only (negative dx)
-      if (dx < 0) {
+      } else if (dx < 0 && hasBlockAction) {
+        // RIGHT swipe - open left side
         setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
+      }
+    } else if (swipeX > 0) {
+      // Right side is open - only allow closing or going further left
+      if (dx > swipeX) {
+        // Further left
+        setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
+      } else if (dx <= swipeX) {
+        // Closing back toward 0
+        setSwipeX(Math.max(0, dx));
+      }
+    } else if (swipeX < 0) {
+      // Left side is open - only allow closing or going further right
+      if (dx < swipeX) {
+        // Further right
+        setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
+      } else if (dx >= swipeX) {
+        // Closing back toward 0
+        setSwipeX(Math.min(0, dx));
       }
     }
   };
 
   const handleTouchEnd = () => {
     if (isScrollRef.current) return;
-    const threshold = 20;
-    if (swipeX > threshold) {
+
+    const snappingThreshold = 25;
+
+    // If more than threshold in positive direction, snap to right panel
+    if (swipeX > snappingThreshold) {
       setSwipeX(REVEAL_WIDTH_RIGHT);
-    } else if (swipeX < -threshold) {
+    }
+    // If more than threshold in negative direction, snap to left panel
+    else if (swipeX < -snappingThreshold) {
       setSwipeX(-REVEAL_WIDTH_LEFT);
-    } else {
+    }
+    // Otherwise snap to closed
+    else {
       setSwipeX(0);
     }
-    // Reset for next swipe
-    swipeDirectionRef.current = null;
   };
 
   const handleCardClick = () => {
-    if (swipeX !== 0) { setSwipeX(0); return; }
+    if (swipeX !== 0) {
+      setSwipeX(0);
+      return;
+    }
     onCardClick();
   };
 
