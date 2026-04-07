@@ -388,7 +388,7 @@ function ThreadList({
 
 function ChatView({
   thread, messages, loading, onBack, onRefresh,
-  onSend, sending, onToggleConfig,
+  onSend, sending, onToggleConfig, scrollRef,
 }: {
   thread: ChatThread | null;
   messages: ChatMessage[];
@@ -398,10 +398,12 @@ function ChatView({
   onSend: (body: string) => void;
   sending: boolean;
   onToggleConfig: () => void;
+  scrollRef: React.RefObject<HTMLDivElement>;
 }) {
   const [input, setInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll only if user was at bottom before the update
+  // The parent component controls autoRefresh based on isScrolledToBottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -830,6 +832,9 @@ export default function AdmCotChats() {
   const [sending, setSending] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
+  // Ref to scroll container in ChatView — used to pause autorefresh while reading
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
   // Filters
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -864,6 +869,14 @@ export default function AdmCotChats() {
     return () => clearInterval(interval);
   }, [fetchThreads]);
 
+  // Check if user is scrolled to bottom of chat (threshold: 100px from bottom)
+  const isScrolledToBottom = useCallback(() => {
+    if (!chatScrollRef.current) return true; // Default to true if ref not ready
+    const { scrollTop, scrollHeight, clientHeight } = chatScrollRef.current;
+    const threshold = 100;
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  }, []);
+
   // Fetch thread detail + messages
   const fetchThreadDetail = useCallback(async (id: string) => {
     setLoadingMessages(true);
@@ -883,14 +896,20 @@ export default function AdmCotChats() {
   useEffect(() => {
     if (selectedThreadId) {
       fetchThreadDetail(selectedThreadId);
-      // Auto-refresh messages every 10s when viewing
-      const interval = setInterval(() => fetchThreadDetail(selectedThreadId), 10000);
+
+      // Auto-refresh messages every 10s when viewing, but only if user is at bottom
+      // This prevents auto-scroll from interrupting while reading history
+      const interval = setInterval(() => {
+        if (isScrolledToBottom()) {
+          fetchThreadDetail(selectedThreadId);
+        }
+      }, 10000);
       return () => clearInterval(interval);
     } else {
       setSelectedThread(null);
       setMessages([]);
     }
-  }, [selectedThreadId, fetchThreadDetail]);
+  }, [selectedThreadId, fetchThreadDetail, isScrolledToBottom]);
 
   // Send manual message
   const handleSend = async (body: string) => {
@@ -999,6 +1018,7 @@ export default function AdmCotChats() {
               onSend={handleSend}
               sending={sending}
               onToggleConfig={() => setShowConfig(!showConfig)}
+              scrollRef={chatScrollRef}
             />
           </div>
 
