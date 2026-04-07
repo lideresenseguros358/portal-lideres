@@ -11,7 +11,7 @@ import { FaSignOutAlt, FaEdit, FaTimes } from 'react-icons/fa';
 import MobileBottomNav from '@/components/cotizadores/mobile/MobileBottomNav';
 import { usePathname } from 'next/navigation';
 import { supabaseClient } from '@/lib/supabase/client';
-import { CotizadorEditProvider } from '@/context/CotizadorEditContext';
+import { CotizadorEditProvider, useCotizadorEdit } from '@/context/CotizadorEditContext';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mobile animation CSS — injected once in the layout so every cotizador page
@@ -86,12 +86,117 @@ const MOBILE_ANIMATION_CSS = `
 }
 `;
 
-export default function CotizadoresLayout({ children }: { children: ReactNode }) {
+// Header component that reads editMode from context
+function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAuth: boolean }) {
+  const { editMode, setEditMode } = useCotizadorEdit();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isMaster, setIsMaster] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [loadingAuth, setLoadingAuth] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
+
+  const handleExit = () => {
+    window.location.href = 'https://www.lideresenseguros.com';
+  };
+
+  return (
+    <header className="bg-white shadow-md border-b-2 border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+        <div className="flex items-center justify-between">
+          {/* Edit button (left side, visible only if master) */}
+          {!loadingAuth && isMaster && (
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                editMode
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'bg-[#8AAA19] text-white hover:bg-[#7a9415]'
+              }`}
+              title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
+            >
+              {editMode ? (
+                <>
+                  <FaTimes className="text-lg" />
+                  <span className="hidden sm:inline">Salir edición</span>
+                </>
+              ) : (
+                <>
+                  <FaEdit className="text-lg" />
+                  <span className="hidden sm:inline">Editar</span>
+                </>
+              )}
+            </button>
+          )}
+          {!isMaster && <div />} {/* Spacer if not master */}
+
+          {/* Contenedor derecho con avatar y texto */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Avatar con logo alternativo clickeable */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="relative focus:outline-none focus:ring-2 focus:ring-[#8AAA19] rounded-xl transition-all hover:scale-105"
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#010139] flex items-center justify-center shadow-lg p-2">
+                  <Image
+                    src="/logo_alternativo.png"
+                    alt="Líderes en Seguros"
+                    width={40}
+                    height={40}
+                    className="w-full h-full object-contain"
+                    priority
+                    unoptimized
+                  />
+                </div>
+                {/* Ganchito verde */}
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-[#8AAA19] rounded-full border-2 border-white flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">✓</span>
+                </div>
+              </button>
+
+              {/* Dropdown Popup */}
+              {showDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={handleExit}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <FaSignOutAlt className="text-[#8AAA19]" />
+                    <span className="font-semibold">Salir</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Logo Text */}
+            <div className="hidden sm:block">
+              <h2 className="text-sm sm:text-base font-bold text-[#010139] leading-tight">Líderes en Seguros</h2>
+              <p className="text-xs text-gray-600">Cotizador Online</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export default function CotizadoresLayout({ children }: { children: ReactNode }) {
+  const [isMaster, setIsMaster] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const pathname = usePathname();
 
   // Detect master session on mount
@@ -155,27 +260,6 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
     };
   }, [pathname]);
 
-  // Cerrar dropdown al hacer click fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showDropdown]);
-
-  const handleExit = () => {
-    window.location.href = 'https://www.lideresenseguros.com';
-  };
-
   return (
     <CotizadorEditProvider isMaster={isMaster}>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -183,83 +267,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
         <style dangerouslySetInnerHTML={{ __html: MOBILE_ANIMATION_CSS }} />
 
         {/* Header público + master edit button */}
-        <header className="bg-white shadow-md border-b-2 border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
-            <div className="flex items-center justify-between">
-              {/* Edit button (left side, visible only if master) */}
-              {!loadingAuth && isMaster && (
-                <button
-                  onClick={() => setEditMode(!editMode)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                    editMode
-                      ? 'bg-red-500 text-white hover:bg-red-600'
-                      : 'bg-[#8AAA19] text-white hover:bg-[#7a9415]'
-                  }`}
-                  title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
-                >
-                  {editMode ? (
-                    <>
-                      <FaTimes className="text-lg" />
-                      <span className="hidden sm:inline">Salir edición</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaEdit className="text-lg" />
-                      <span className="hidden sm:inline">Editar</span>
-                    </>
-                  )}
-                </button>
-              )}
-              {!isMaster && <div />} {/* Spacer if not master */}
-
-              {/* Contenedor derecho con avatar y texto */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Avatar con logo alternativo clickeable */}
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    onClick={() => setShowDropdown(!showDropdown)}
-                    className="relative focus:outline-none focus:ring-2 focus:ring-[#8AAA19] rounded-xl transition-all hover:scale-105"
-                  >
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#010139] flex items-center justify-center shadow-lg p-2">
-                      <Image
-                        src="/logo_alternativo.png"
-                        alt="Líderes en Seguros"
-                        width={40}
-                        height={40}
-                        className="w-full h-full object-contain"
-                        priority
-                        unoptimized
-                      />
-                    </div>
-                    {/* Ganchito verde */}
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-[#8AAA19] rounded-full border-2 border-white flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">✓</span>
-                    </div>
-                  </button>
-
-                  {/* Dropdown Popup */}
-                  {showDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-xl border-2 border-gray-200 py-1 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <button
-                        onClick={handleExit}
-                        className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
-                      >
-                        <FaSignOutAlt className="text-[#8AAA19]" />
-                        <span className="font-semibold">Salir</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Logo Text */}
-                <div className="hidden sm:block">
-                  <h2 className="text-sm sm:text-base font-bold text-[#010139] leading-tight">Líderes en Seguros</h2>
-                  <p className="text-xs text-gray-600">Cotizador Online</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+        <LayoutHeader isMaster={isMaster} loadingAuth={loadingAuth} />
 
         {/* Content */}
         <main className="pb-4 md:pb-0">
