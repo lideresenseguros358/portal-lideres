@@ -15,6 +15,7 @@ import { SYSTEM_PROMPT } from '@/lib/ai/vertex';
 import { getActiveMemory, buildMemoryPromptBlock } from './lissa-memory';
 import { INSURANCE_KNOWLEDGE_PROMPT } from '@/config/insuranceKnowledge';
 import { LEGAL_KNOWLEDGE_PROMPT } from '@/config/legalKnowledge';
+import { MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT } from '@/config/marketAndProductsKnowledge';
 
 // ── Auth ──
 
@@ -375,6 +376,7 @@ Actúa como en una conversación fluida de WhatsApp. NUNCA repitas el saludo (ej
     CORE_ADDENDUM,
     INSURANCE_KNOWLEDGE_PROMPT,
     LEGAL_KNOWLEDGE_PROMPT,
+    MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT,
   ];
 
   if (memoryBlock) {
