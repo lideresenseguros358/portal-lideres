@@ -367,8 +367,6 @@ export default function ThirdPartyPage() {
           </div>
         </div>
       )}
-      </>
-      )}
     </div>
   );
 }
