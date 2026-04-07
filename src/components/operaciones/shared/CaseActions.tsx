@@ -39,17 +39,20 @@ export function CaseActionsRow({
   const hasBlockAction = !!onBlock;
   const REVEAL_WIDTH_RIGHT = 3 * BUTTON_WIDTH; // PIN, Master, Delete
   const REVEAL_WIDTH_LEFT = 1 * BUTTON_WIDTH; // Block (isolated on left)
+  const DIRECTION_THRESHOLD = 8; // pixels to determine direction
 
   // Mobile swipe state: positive = left swipe, negative = right swipe
   const [swipeX, setSwipeX] = useState(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
-  const isScrollRef = useRef<boolean | null>(null);
+  const isScrollRef = useRef<boolean | null>(null); // null=undetermined, true=scroll, false=swipe
+  const swipeDirectionRef = useRef<'left' | 'right' | null>(null); // Direction lock
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? 0;
     touchStartY.current = e.touches[0]?.clientY ?? 0;
     isScrollRef.current = null;
+    swipeDirectionRef.current = null; // Reset direction lock
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -57,21 +60,33 @@ export function CaseActionsRow({
     if (!t) return;
     const dx = touchStartX.current - t.clientX; // positive = left, negative = right
     const dy = Math.abs(touchStartY.current - t.clientY);
+    const absDx = Math.abs(dx);
 
-    // Determine gesture direction on first significant movement
-    if (isScrollRef.current === null && (Math.abs(dx) > 6 || dy > 6)) {
-      isScrollRef.current = dy > Math.abs(dx) * 1.4;
+    // Step 1: Determine if it's a vertical scroll or horizontal swipe
+    if (isScrollRef.current === null && (absDx > DIRECTION_THRESHOLD || dy > DIRECTION_THRESHOLD)) {
+      // If vertical movement > horizontal, it's a scroll
+      isScrollRef.current = dy > absDx * 1.4;
     }
+
+    // If it's a scroll, ignore
     if (isScrollRef.current) return;
 
-    if (dx > 0) {
-      // Swiping LEFT → reveal right side (PIN, Master, Delete)
-      setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
-    } else if (dx < 0 && hasBlockAction) {
-      // Swiping RIGHT → reveal left side (Block only)
-      setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
-    } else {
-      setSwipeX(0);
+    // Step 2: Lock swipe direction on first significant horizontal movement
+    if (swipeDirectionRef.current === null && absDx > DIRECTION_THRESHOLD) {
+      swipeDirectionRef.current = dx > 0 ? 'left' : 'right';
+    }
+
+    // Step 3: Only allow movement in the locked direction
+    if (swipeDirectionRef.current === 'left') {
+      // LEFT swipe only (positive dx)
+      if (dx > 0) {
+        setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
+      }
+    } else if (swipeDirectionRef.current === 'right' && hasBlockAction) {
+      // RIGHT swipe only (negative dx)
+      if (dx < 0) {
+        setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
+      }
     }
   };
 
@@ -85,6 +100,8 @@ export function CaseActionsRow({
     } else {
       setSwipeX(0);
     }
+    // Reset for next swipe
+    swipeDirectionRef.current = null;
   };
 
   const handleCardClick = () => {
