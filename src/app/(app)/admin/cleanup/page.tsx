@@ -18,14 +18,6 @@ interface CleanupStats {
     expedientes: number;
     payments: number;
   };
-  chat: {
-    threads: number;
-    messages: number;
-  };
-  legacy: {
-    cases: number;
-    emails: number;
-  };
 }
 
 interface CleanupResult {
@@ -34,8 +26,6 @@ interface CleanupResult {
   deleted?: {
     operaciones: Record<string, number>;
     admCot: Record<string, number>;
-    chat: Record<string, number>;
-    legacy: Record<string, number>;
   };
   errors?: string[];
 }
@@ -70,7 +60,7 @@ export default function CleanupPage() {
   };
 
   const handleCleanup = async () => {
-    if (!confirm('⚠️ ¿Está seguro de que desea eliminar TODOS los datos de prueba? Esta acción no se puede deshacer.')) {
+    if (!confirm('⚠️ ¿Está seguro de que desea eliminar TODOS los datos de los módulos Operaciones y ADM COT? Esta acción no se puede deshacer.\n\n📌 Los módulos de Chat y Trámites NO serán afectados.')) {
       return;
     }
 
@@ -99,8 +89,14 @@ export default function CleanupPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-[#010139] mb-2">🧹 Limpieza de Datos de Prueba</h1>
-        <p className="text-gray-600">Elimina datos de testing de los módulos Operaciones y ADM COT. Esta acción es irreversible.</p>
+        <h1 className="text-3xl font-bold text-[#010139] mb-2">🧹 Limpieza: Operaciones & ADM COT</h1>
+        <p className="text-gray-600">Elimina TODA la data de prueba de los módulos Operaciones y ADM COT. Los módulos de Chat y Trámites quedan intactos.</p>
+      </div>
+
+      {/* Warning Banner */}
+      <div className="bg-red-50 border-l-4 border-red-600 rounded-lg p-4">
+        <p className="text-sm font-semibold text-red-900">⚠️ ATENCIÓN</p>
+        <p className="text-xs text-red-800 mt-1">Esta acción eliminará <strong>TODOS</strong> los registros de ambos módulos. Esta acción es irreversible.</p>
       </div>
 
       {/* Last Cleanup */}
@@ -123,8 +119,8 @@ export default function CleanupPage() {
       ) : stats ? (
         <div className="bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden">
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <h2 className="text-lg font-bold text-[#010139]">Datos a Limpiar</h2>
-            <p className="text-xs text-gray-500 mt-1">Total: <strong>{stats.total}</strong> registros de prueba</p>
+            <h2 className="text-lg font-bold text-[#010139]">Datos a Eliminar</h2>
+            <p className="text-xs text-gray-500 mt-1">Total: <strong className="text-red-600">{stats.total}</strong> registros</p>
           </div>
 
           <div className="p-6 space-y-6">
@@ -135,11 +131,7 @@ export default function CleanupPage() {
                 {Object.entries(stats.operaciones).map(([key, count]) => (
                   <div
                     key={key}
-                    className={`p-3 rounded-lg border ${
-                      count > 0
-                        ? 'bg-red-50 border-red-200 text-red-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
-                    }`}
+                    className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700"
                   >
                     <p className="text-xs font-semibold mb-1 capitalize">
                       {key.replace(/([A-Z])/g, ' $1')}
@@ -157,55 +149,7 @@ export default function CleanupPage() {
                 {Object.entries(stats.admCot).map(([key, count]) => (
                   <div
                     key={key}
-                    className={`p-3 rounded-lg border ${
-                      count > 0
-                        ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <p className="text-xs font-semibold mb-1 capitalize">
-                      {key.replace(/([A-Z])/g, ' $1')}
-                    </p>
-                    <p className="text-lg font-bold">{count}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chat */}
-            <div>
-              <h3 className="text-sm font-bold text-[#010139] mb-3">🔗 Módulo: Chat Legacy</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(stats.chat).map(([key, count]) => (
-                  <div
-                    key={key}
-                    className={`p-3 rounded-lg border ${
-                      count > 0
-                        ? 'bg-purple-50 border-purple-200 text-purple-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <p className="text-xs font-semibold mb-1 capitalize">
-                      {key.replace(/([A-Z])/g, ' $1')}
-                    </p>
-                    <p className="text-lg font-bold">{count}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Legacy */}
-            <div>
-              <h3 className="text-sm font-bold text-[#010139] mb-3">📦 Datos Legacy</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(stats.legacy).map(([key, count]) => (
-                  <div
-                    key={key}
-                    className={`p-3 rounded-lg border ${
-                      count > 0
-                        ? 'bg-orange-50 border-orange-200 text-orange-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
-                    }`}
+                    className="p-3 rounded-lg border bg-yellow-50 border-yellow-200 text-yellow-700"
                   >
                     <p className="text-xs font-semibold mb-1 capitalize">
                       {key.replace(/([A-Z])/g, ' $1')}
@@ -236,7 +180,7 @@ export default function CleanupPage() {
           className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
         >
           <FaTrashAlt />
-          {cleaning ? 'Limpiando...' : 'Limpiar Todos'}
+          {cleaning ? 'Limpiando...' : 'Eliminar Todo'}
         </button>
       </div>
 
@@ -265,7 +209,7 @@ export default function CleanupPage() {
                   {Object.entries(result.deleted).map(([module, counts]: [string, any]) => (
                     <div key={module} className="space-y-1">
                       <p className={`font-semibold ${result.success ? 'text-green-800' : 'text-red-800'}`}>
-                        {module}:
+                        {module === 'operaciones' ? '📋 Operaciones' : '💬 ADM COT'}:
                       </p>
                       {Object.entries(counts).map(([key, count]: [string, any]) => (
                         count > 0 && (
@@ -296,13 +240,15 @@ export default function CleanupPage() {
 
       {/* Info Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
-        <p className="font-semibold mb-2">ℹ️ Que se elimina:</p>
+        <p className="font-semibold mb-2">ℹ️ Alcance de la limpieza:</p>
+        <ul className="list-disc list-inside space-y-1 text-xs mb-3">
+          <li><strong>Operaciones:</strong> Todos los casos, renovaciones, peticiones, urgencias y emails</li>
+          <li><strong>ADM COT:</strong> Todas las conversaciones, cotizaciones, expedientes y pagos</li>
+        </ul>
+        <p className="font-semibold mb-2 text-blue-900 border-t border-blue-200 pt-3">✅ Módulos que quedan intactos:</p>
         <ul className="list-disc list-inside space-y-1 text-xs">
-          <li><strong>Operaciones:</strong> Casos, renovaciones, peticiones, urgencias y emails de prueba (creados en últimos 7 días)</li>
-          <li><strong>ADM COT:</strong> Conversaciones, cotizaciones, expedientes y pagos de prueba (creados en últimos 7 días)</li>
-          <li><strong>Chat:</strong> Threads y mensajes de test (creados en últimos 7 días)</li>
-          <li><strong>Legacy:</strong> Casos antiguos con is_test=true o prefijo TEST-</li>
-          <li>Todos los registros asociados (mensajes, comentarios, archivos, historial)</li>
+          <li><strong>Chat:</strong> Todos los threads y mensajes de WhatsApp</li>
+          <li><strong>Trámites:</strong> Todos los casos de la página de trámites</li>
         </ul>
       </div>
     </div>
