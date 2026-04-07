@@ -25,6 +25,7 @@ export interface ChatThread {
   assigned_type: AssignedType;
   assigned_master_user_id: string | null;
   ai_enabled: boolean;
+  is_blocked: boolean;
   last_message_at: string;
   last_message_preview: string | null;
   last_ai_message_at: string | null;
@@ -70,6 +71,8 @@ export type ChatEventType =
   | 'unassigned'
   | 'ai_disabled'
   | 'ai_enabled'
+  | 'blocked'
+  | 'unblocked'
   | 'email_sent'
   | 'email_failed'
   | 'notification_sent'

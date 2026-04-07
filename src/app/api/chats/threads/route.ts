@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category') || undefined;
   const assignedType = searchParams.get('assigned_type') || undefined;
   const search = searchParams.get('search') || undefined;
+  const isBlocked = searchParams.get('is_blocked') === 'true';
   const page = parseInt(searchParams.get('page') || '1');
   const pageSize = parseInt(searchParams.get('pageSize') || '50');
 
@@ -46,6 +47,13 @@ export async function GET(request: NextRequest) {
     let q = sb.from('chat_threads')
       .select('*', { count: 'exact' })
       .order('last_message_at', { ascending: false });
+
+    // Filter by blocked status
+    if (isBlocked) {
+      q = q.eq('is_blocked', true);
+    } else {
+      q = q.eq('is_blocked', false); // Default: show only active (non-blocked)
+    }
 
     if (status) q = q.eq('status', status);
     if (category) q = q.eq('category', category);

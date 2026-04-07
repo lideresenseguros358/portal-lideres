@@ -12,27 +12,34 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { FaEllipsisV, FaThumbtack, FaUserTie, FaTrashAlt, FaTimes, FaSearch } from 'react-icons/fa';
+import { FaEllipsisV, FaThumbtack, FaUserTie, FaTrashAlt, FaTimes, FaSearch, FaBan, FaCheckCircle } from 'react-icons/fa';
 
 // ─────────────────────────────────────────────
 // SWIPEABLE ROW  (mobile)  +  3-DOT BUTTON (desktop)
 // ─────────────────────────────────────────────
 
-const REVEAL_WIDTH = 144; // 3 buttons × 48 px each
+const BUTTON_WIDTH = 48; // width of each action button
 
 interface CaseActionsRowProps {
   isPinned: boolean;
   onPin: () => void;
   onAssignMaster: () => void;
   onDelete: () => void;
+  /** Optional 4th action: block/unblock */
+  onBlock?: () => void;
+  isBlocked?: boolean;
   /** Normal card click (select case). Blocked while swipe is open. */
   onCardClick: () => void;
   children: React.ReactNode;
 }
 
 export function CaseActionsRow({
-  isPinned, onPin, onAssignMaster, onDelete, onCardClick, children,
+  isPinned, onPin, onAssignMaster, onDelete, onBlock, isBlocked, onCardClick, children,
 }: CaseActionsRowProps) {
+  // Calculate reveal width based on whether block action exists (3 or 4 buttons × 48 px)
+  const hasBlockAction = !!onBlock;
+  const REVEAL_WIDTH = (hasBlockAction ? 4 : 3) * BUTTON_WIDTH;
+
   // Mobile swipe state
   const [swipeX, setSwipeX] = useState(0);
   const touchStartX = useRef(0);
@@ -86,6 +93,20 @@ export function CaseActionsRow({
         style={{ width: REVEAL_WIDTH }}
         aria-hidden
       >
+        {/* Right side (swipe RIGHT when blocked mode) - Block/Unblock */}
+        {hasBlockAction && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onBlock?.(); setSwipeX(0); }}
+            className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-white text-[10px] font-bold select-none ${
+              isBlocked ? 'bg-emerald-600' : 'bg-red-600'
+            }`}
+          >
+            {isBlocked ? <FaCheckCircle className="text-base" /> : <FaBan className="text-base" />}
+            {isBlocked ? 'Desbloquear' : 'Bloquear'}
+          </button>
+        )}
+
+        {/* Left side (swipe LEFT) - PIN, Master, Delete */}
         <button
           onClick={(e) => { e.stopPropagation(); onPin(); setSwipeX(0); }}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-white text-[10px] font-bold select-none ${
@@ -139,9 +160,12 @@ interface CaseDotsMenuProps {
   onPin: () => void;
   onAssignMaster: () => void;
   onDelete: () => void;
+  /** Optional block/unblock action */
+  onBlock?: () => void;
+  isBlocked?: boolean;
 }
 
-export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete }: CaseDotsMenuProps) {
+export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete, onBlock, isBlocked }: CaseDotsMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -166,6 +190,12 @@ export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete }: Case
     },
     { label: 'Asignar master', icon: <FaUserTie />, action: onAssignMaster, danger: false },
     { label: 'Eliminar', icon: <FaTrashAlt />, action: onDelete, danger: true },
+    ...(onBlock ? [{
+      label: isBlocked ? 'Desbloquear' : 'Bloquear',
+      icon: isBlocked ? <FaCheckCircle className="text-emerald-500" /> : <FaBan className="text-red-500" />,
+      action: onBlock,
+      danger: !isBlocked,
+    }] : []),
   ];
 
   return (
