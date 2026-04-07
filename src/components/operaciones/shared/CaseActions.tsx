@@ -56,9 +56,9 @@ export function CaseActionsRow({
   const handleTouchMove = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
-    const dx = touchStartX.current - t.clientX; // positive = left swipe, negative = right swipe
+    const fingerDx = t.clientX - touchStartX.current; // positive = right swipe, negative = left swipe
     const dy = Math.abs(touchStartY.current - t.clientY);
-    const absDx = Math.abs(dx);
+    const absDx = Math.abs(fingerDx);
 
     // Determine gesture type: vertical scroll or horizontal swipe
     if (isScrollRef.current === null && (absDx > DIRECTION_THRESHOLD || dy > DIRECTION_THRESHOLD)) {
@@ -68,37 +68,36 @@ export function CaseActionsRow({
     // Ignore if it's a vertical scroll
     if (isScrollRef.current) return;
 
-    // LOGIC:
-    // - If swipeX === 0 (closed), allow movement in either direction
-    // - If swipeX > 0 (right side open), only allow closing (moving back to 0) or further left
-    // - If swipeX < 0 (left side open), only allow closing (moving back to 0) or further right
+    // Swipe direction mapping:
+    // - fingerDx > 0 (swipe RIGHT) → swipeX becomes positive → reveals LEFT side (Bloquear)
+    // - fingerDx < 0 (swipe LEFT) → swipeX becomes negative → reveals RIGHT side (PIN, Asignar, Eliminar)
 
     if (swipeX === 0) {
       // Not open yet - allow opening in either direction
-      if (dx > 0) {
-        // LEFT swipe - open right side
-        setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
-      } else if (dx < 0 && hasBlockAction) {
-        // RIGHT swipe - open left side
-        setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
+      if (fingerDx > 0) {
+        // RIGHT swipe - open left side (Bloquear)
+        setSwipeX(Math.min(REVEAL_WIDTH_LEFT, fingerDx));
+      } else if (fingerDx < 0) {
+        // LEFT swipe - open right side (PIN, Asignar, Eliminar)
+        setSwipeX(Math.max(-REVEAL_WIDTH_RIGHT, fingerDx));
       }
     } else if (swipeX > 0) {
-      // Right side is open - only allow closing or going further left
-      if (dx > swipeX) {
-        // Further left
-        setSwipeX(Math.min(REVEAL_WIDTH_RIGHT, dx));
-      } else if (dx <= swipeX) {
+      // Left side is open (Bloquear) - only allow closing or going further right
+      if (fingerDx > swipeX) {
+        // Further right
+        setSwipeX(Math.min(REVEAL_WIDTH_LEFT, fingerDx));
+      } else if (fingerDx <= swipeX) {
         // Closing back toward 0
-        setSwipeX(Math.max(0, dx));
+        setSwipeX(Math.max(0, fingerDx));
       }
     } else if (swipeX < 0) {
-      // Left side is open - only allow closing or going further right
-      if (dx < swipeX) {
-        // Further right
-        setSwipeX(Math.max(-REVEAL_WIDTH_LEFT, dx));
-      } else if (dx >= swipeX) {
+      // Right side is open (PIN, Asignar, Eliminar) - only allow closing or going further left
+      if (fingerDx < swipeX) {
+        // Further left
+        setSwipeX(Math.max(-REVEAL_WIDTH_RIGHT, fingerDx));
+      } else if (fingerDx >= swipeX) {
         // Closing back toward 0
-        setSwipeX(Math.min(0, dx));
+        setSwipeX(Math.min(0, fingerDx));
       }
     }
   };
