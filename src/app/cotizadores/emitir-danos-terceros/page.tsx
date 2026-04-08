@@ -12,7 +12,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes } from 'react-icons/fa';
+import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes, FaLock } from 'react-icons/fa';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import CreditCardInput, { type CardData } from '@/components/is/CreditCardInput';
@@ -48,6 +49,11 @@ export default function EmitirDanosTercerosPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const step = (searchParams.get('step') || 'emission-data') as EmissionStep;
+
+  // ═══ Master privileges ═══
+  const { isMaster } = useCotizadorEdit();
+  const [availableBrokers, setAvailableBrokers] = useState<{id: string, name: string}[]>([]);
+  const [masterBrokerId, setMasterBrokerId] = useState<string>('');
 
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -130,6 +136,19 @@ export default function EmitirDanosTercerosPage() {
       setLoading(false);
     }
   }, [router]);
+
+  // ═══ Load available brokers for master users ═══
+  useEffect(() => {
+    if (isMaster && !loading) {
+      fetch('/api/brokers')
+        .then(r => r.json())
+        .then(d => {
+          const active = (d.brokers || []).filter((b: any) => b.active !== false);
+          setAvailableBrokers(active);
+        })
+        .catch(err => console.error('Error loading brokers:', err));
+    }
+  }, [isMaster, loading]);
 
   // ═══ ADM COT: Detect abandonment — if user entered data and leaves page ═══
   useEffect(() => {
@@ -271,7 +290,7 @@ export default function EmitirDanosTercerosPage() {
       let pfCardDisplay: string | undefined;
 
       // ═══ IDEMPOTENCY GUARD: Check for duplicate charges BEFORE processing ═══
-      if (pfCardData && emissionData) {
+      if (!isMaster && pfCardData && emissionData) {
         setEmissionProgress(1);
         setEmissionStep('Verificando estado de su solicitud...');
 
@@ -301,7 +320,7 @@ export default function EmitirDanosTercerosPage() {
       }
 
       // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
-      if (pfCardData) {
+      if (!isMaster && pfCardData) {
         setEmissionProgress(2);
         setEmissionStep('Procesando pago con tarjeta...');
 
@@ -460,7 +479,12 @@ export default function EmitirDanosTercerosPage() {
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ environment: 'PROD', ...emisionCommon, idDoc: docsResponseData.idDoc }),
+          body: JSON.stringify({
+            environment: 'PROD',
+            ...emisionCommon,
+            idDoc: docsResponseData.idDoc,
+            ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
+          }),
         });
         const emisionResponseData = await emisionResponse.json();
 
@@ -500,11 +524,12 @@ export default function EmitirDanosTercerosPage() {
           phone: emissionData.telefono || emissionData.celular,
         });
         
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
         // FEDPA DT: cantidadPago=2 means "mensual 10 pagos" in the insurer's system,
         // but the client pays via PF on their chosen schedule (e.g. 2 cuotas semestrales).
-        const isFedpaCuotasMismatch = selectedPaymentMode === 'cuotas' && selectedInstallmentsCount !== 10;
-        createPaymentOnEmission({
+        if (!isMaster) {
+          const isFedpaCuotasMismatch = selectedPaymentMode === 'cuotas' && selectedInstallmentsCount !== 10;
+          createPaymentOnEmission({
           insurer: 'FEDPA',
           policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
           insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
@@ -517,13 +542,14 @@ export default function EmitirDanosTercerosPage() {
           pfRecCodOper,
           pfCardType,
           pfCardDisplay,
-          insurerPaymentPlan: selectedPaymentMode === 'cuotas' ? {
-            insurerCuotas: 10,
-            insurerFrequency: 'MENSUAL',
-            clientCuotas: selectedInstallmentsCount,
-            mismatch: isFedpaCuotasMismatch,
-          } : undefined,
-        });
+            insurerPaymentPlan: selectedPaymentMode === 'cuotas' ? {
+              insurerCuotas: 10,
+              insurerFrequency: 'MENSUAL',
+              clientCuotas: selectedInstallmentsCount,
+              mismatch: isFedpaCuotasMismatch,
+            } : undefined,
+          });
+        }
 
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
         setEmissionProgress(75);
@@ -717,6 +743,7 @@ export default function EmitirDanosTercerosPage() {
             formaPago: 1, // DT = contado
             cantCuotas: 1,
             tipo_cobertura: 'Daños a Terceros',
+            ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
           }),
         });
 
@@ -764,17 +791,19 @@ export default function EmitirDanosTercerosPage() {
           phone: emissionData.telefono || emissionData.celular,
         });
 
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
-        createPaymentOnEmission({
-          insurer: 'INTERNACIONAL',
-          policyNumber: emisionResult.nroPoliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPlan.annualPremium || 0,
-          installments: 1,
-          ramo: 'AUTO',
-          cobertura: 'TERCEROS',
-        });
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'INTERNACIONAL',
+            policyNumber: emisionResult.nroPoliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPlan.annualPremium || 0,
+            installments: 1,
+            ramo: 'AUTO',
+            cobertura: 'TERCEROS',
+          });
+        }
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
         setEmissionProgress(75);
@@ -987,6 +1016,7 @@ export default function EmitirDanosTercerosPage() {
             condHabApellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
             condHabSexo: emissionData.sexo === 'M' ? 'M' : 'F',
             condHabEdocivil: emissionData.estadoCivil === 'casado' ? 'C' : 'S',
+            ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
           }),
         });
 
@@ -1016,17 +1046,19 @@ export default function EmitirDanosTercerosPage() {
           phone: emissionData.telefono || emissionData.celular,
         });
 
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
-        createPaymentOnEmission({
-          insurer: 'REGIONAL',
-          policyNumber: emisionResult.poliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPlan.annualPremium || 0,
-          installments: 1,
-          ramo: 'AUTO',
-          cobertura: 'TERCEROS',
-        });
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'REGIONAL',
+            policyNumber: emisionResult.poliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPlan.annualPremium || 0,
+            installments: 1,
+            ramo: 'AUTO',
+            cobertura: 'TERCEROS',
+          });
+        }
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
         setEmissionProgress(75);
@@ -1192,6 +1224,11 @@ export default function EmitirDanosTercerosPage() {
         const anconForm = new FormData();
         anconForm.append('emissionData', JSON.stringify(anconEmitBody));
 
+        // Master broker override
+        if (isMaster && masterBrokerId) {
+          anconForm.append('masterBrokerId', masterBrokerId);
+        }
+
         // Firma digital para la Solicitud de Seguros PDF
         if (signatureRef.current) {
           anconForm.append('firmaDataUrl', signatureRef.current);
@@ -1235,17 +1272,19 @@ export default function EmitirDanosTercerosPage() {
           cedula: emissionData.cedula,
         });
 
-        // ═══ ADM COT: Auto-create pending payment ═══
-        createPaymentOnEmission({
-          insurer: 'ANCON',
-          policyNumber: anconEmisionResult.poliza,
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
-          installments: selectedInstallmentsCount,
-          ramo: 'AUTO',
-          cobertura: 'TERCEROS',
-        });
+        // ═══ ADM COT: Auto-create pending payment (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'ANCON',
+            policyNumber: anconEmisionResult.poliza,
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+            installments: selectedInstallmentsCount,
+            ramo: 'AUTO',
+            cobertura: 'TERCEROS',
+          });
+        }
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
         setEmissionProgress(75);
@@ -1575,10 +1614,10 @@ export default function EmitirDanosTercerosPage() {
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-6">
               <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">
-                Información de Pago
+                {isMaster ? 'Emisión Master' : 'Información de Pago'}
               </h2>
               <p className="text-gray-600">
-                Completa los datos de tu tarjeta para procesar el pago
+                {isMaster ? 'La emisión master no requiere pago con tarjeta' : 'Completa los datos de tu tarjeta para procesar el pago'}
               </p>
             </div>
 
@@ -1598,28 +1637,43 @@ export default function EmitirDanosTercerosPage() {
               </div>
             </div>
 
-            <CreditCardInput
-              onTokenReceived={handlePaymentTokenReceived}
-              onCardDataReady={handleCardDataReady}
-              onError={handlePaymentError}
-              environment="development"
-            />
-
-            {cardData && (
-              <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
-                <FaCheckCircle className="text-[#8AAA19] flex-shrink-0" />
-                <p className="text-sm font-semibold text-green-800">
-                  Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
-                </p>
+            {isMaster ? (
+              <div className="flex flex-col items-center justify-center gap-4 p-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 min-h-40">
+                <FaLock className="text-4xl text-blue-600" />
+                <p className="text-lg font-bold text-[#010139]">Usuario master detectado</p>
+                <p className="text-sm text-gray-600 text-center">La emisión no requiere pago con tarjeta.<br/>Presiona Continuar para ir al resumen.</p>
               </div>
+            ) : (
+              <>
+                <CreditCardInput
+                  onTokenReceived={handlePaymentTokenReceived}
+                  onCardDataReady={handleCardDataReady}
+                  onError={handlePaymentError}
+                  environment="development"
+                />
+
+                {cardData && (
+                  <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                    <FaCheckCircle className="text-[#8AAA19] flex-shrink-0" />
+                    <p className="text-sm font-semibold text-green-800">
+                      Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="mt-6">
               <button
-                onClick={() => goToStep('review')}
-                disabled={!paymentToken}
+                onClick={() => {
+                  if (isMaster) {
+                    setCompletedSteps(prev => [...prev.filter(s => s !== 'payment-info'), 'payment-info']);
+                  }
+                  goToStep('review');
+                }}
+                disabled={!isMaster && !paymentToken}
                 className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
-                  paymentToken
+                  isMaster || paymentToken
                     ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
@@ -1627,7 +1681,7 @@ export default function EmitirDanosTercerosPage() {
               >
                 Continuar al Resumen
               </button>
-              {!paymentToken && (
+              {!isMaster && !paymentToken && (
                 <p className="text-xs text-gray-500 text-center mt-2">
                   Ingresa los datos de tu tarjeta para continuar
                 </p>
@@ -1648,7 +1702,7 @@ export default function EmitirDanosTercerosPage() {
     const isInternacionalDT = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
 
     const handleEmitClick = () => {
-      if (!signatureDataUrl) {
+      if (!isMaster && !signatureDataUrl) {
         setShowSignaturePad(true);
         return;
       }
@@ -1859,14 +1913,36 @@ export default function EmitirDanosTercerosPage() {
               </div>
             )}
 
+            {/* Master-exclusive broker dropdown */}
+            {isMaster && availableBrokers.length > 0 && (
+              <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  🏢 Asignar Corredor / Broker
+                </label>
+                <select
+                  value={masterBrokerId}
+                  onChange={e => setMasterBrokerId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#010139] focus:outline-none"
+                >
+                  <option value="">-- Portal Líderes (por defecto) --</option>
+                  {availableBrokers.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Sin selección se asigna a portal@lideresenseguros.com
+                </p>
+              </div>
+            )}
+
             {/* Emit Button */}
             <div className="mt-8">
               <button
                 onClick={handleEmitClick}
-                disabled={isConfirming || !declarationAccepted}
+                disabled={isConfirming || (!isMaster && !declarationAccepted)}
                 className={`w-full py-5 px-6 rounded-xl font-bold text-xl
                   flex items-center justify-center gap-3 transition-all duration-200
-                  ${isConfirming || !declarationAccepted
+                  ${isConfirming || (!isMaster && !declarationAccepted)
                     ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                     : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'}`}
                 type="button"
@@ -1883,14 +1959,19 @@ export default function EmitirDanosTercerosPage() {
                   </>
                 )}
               </button>
-              {!declarationAccepted && (
+              {!isMaster && !declarationAccepted && (
                 <p className="text-xs text-gray-500 text-center mt-2">
                   Debes aceptar los Términos y Condiciones para continuar
                 </p>
               )}
-              {declarationAccepted && !signatureDataUrl && (
+              {!isMaster && declarationAccepted && !signatureDataUrl && (
                 <p className="text-xs text-blue-600 text-center mt-2">
                   Al emitir se solicitará tu firma digital para la carta de autorización
+                </p>
+              )}
+              {isMaster && (
+                <p className="text-xs text-blue-600 text-center mt-2">
+                  Emisión master: la firma será saltada
                 </p>
               )}
             </div>

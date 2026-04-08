@@ -161,23 +161,29 @@ async function guardarEmisionBD(
  */
 export async function crearClienteYPolizaFEDPA(
   request: EmitirPolizaRequest,
-  response: EmitirPolizaResponse
+  response: EmitirPolizaResponse,
+  overrideBrokerId?: string
 ): Promise<{ clientId?: string; policyId?: string; error?: string }> {
   try {
     const supabase = getSupabaseAdmin();
-    
-    // 1. Buscar broker "portal" (portal@lideresenseguros.com)
-    const { data: oficinaBroker } = await supabase
-      .from('brokers')
-      .select('id')
-      .eq('email', 'portal@lideresenseguros.com')
-      .single();
-    
-    if (!oficinaBroker) {
-      throw new Error('Broker oficina no encontrado');
+
+    // 1. Resolver broker_id (override para master o default portal@)
+    let broker_id = overrideBrokerId;
+
+    if (!broker_id) {
+      // Buscar broker "portal" (portal@lideresenseguros.com)
+      const { data: oficinaBroker } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('email', 'portal@lideresenseguros.com')
+        .single();
+
+      if (!oficinaBroker) {
+        throw new Error('Broker oficina no encontrado');
+      }
+
+      broker_id = oficinaBroker.id;
     }
-    
-    const broker_id = oficinaBroker.id;
     
     // 2. Buscar aseguradora FEDPA
     const { data: fedpaInsurer } = await supabase

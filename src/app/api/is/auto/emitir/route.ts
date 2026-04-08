@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
       vcodplancoberturadadic,
       dry_run,
       environment = getISDefaultEnv(),
+      masterBrokerId,
     } = body;
     
     const supabase = getSupabaseAdmin();
@@ -112,7 +113,28 @@ export async function POST(request: NextRequest) {
       }
       cachedBrokerId = oficinaBroker.p_id;
     }
-    
+
+    // ═══ Master broker override verification ═══
+    let effectiveBrokerId = cachedBrokerId;
+    if (masterBrokerId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (profile?.role === 'master') {
+            effectiveBrokerId = masterBrokerId;
+            console.log('[API IS Auto Emitir] Master broker override:', masterBrokerId);
+          }
+        }
+      } catch (err) {
+        console.warn('[API IS Auto Emitir] Master verification failed:', err);
+      }
+    }
+
     if (!vIdPv) {
       return NextResponse.json(
         { success: false, error: 'Falta ID de cotización (vIdPv)' },
@@ -268,7 +290,7 @@ export async function POST(request: NextRequest) {
     // Crear cliente y póliza en BD
     const clientePolicyResult = await crearClienteYPolizaIS({
       insurer_id: cachedInsurerId!,
-      broker_id: cachedBrokerId!,
+      broker_id: effectiveBrokerId!,
       nro_poliza: result.nroPoliza,
       cliente_nombre: vnombre,
       cliente_apellido: `${vapellido1} ${vapellido2 || ''}`.trim(),

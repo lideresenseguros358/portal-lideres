@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitirPoliza, crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
+import { getSupabaseServer } from '@/lib/supabase/server';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 import { resolveFedpaMarca, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
@@ -128,9 +129,31 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`[API FEDPA Emisión] ${requestId} Póliza emitida:`, { poliza: result.poliza });
-    
+
+    // ═══ Master broker override verification ═══
+    let masterBrokerId: string | undefined;
+    if (emisionData.masterBrokerId) {
+      try {
+        const supabase = await getSupabaseServer();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (profile?.role === 'master') {
+            masterBrokerId = emisionData.masterBrokerId;
+            console.log(`[API FEDPA Emisión] ${requestId} Master broker override:`, masterBrokerId);
+          }
+        }
+      } catch (err) {
+        console.warn(`[API FEDPA Emisión] ${requestId} Master verification failed:`, err);
+      }
+    }
+
     // Crear cliente y póliza en sistema interno
-    const { clientId, policyId, error: dbError } = await crearClienteYPolizaFEDPA(emisionRequest, result);
+    const { clientId, policyId, error: dbError } = await crearClienteYPolizaFEDPA(emisionRequest, result, masterBrokerId);
     
     if (dbError) {
       console.warn(`[API FEDPA Emisión] ${requestId} No se pudo guardar en BD:`, dbError);
