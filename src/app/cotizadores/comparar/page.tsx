@@ -1409,16 +1409,36 @@ export default function ComparePage() {
         // Solo procesar si es Auto Cobertura Completa
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
-          
-          // ── PARALELO: IS, FEDPA, REGIONAL y ANCON al mismo tiempo ──
-          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA + REGIONAL + ANCON)...');
+
+          // Helper: Check if insurer is active (cc_activo)
+          const isInsurerActive = (slug: string): boolean => {
+            if (!insurerSettings?.length) return true; // Default to all active if no settings loaded
+            const setting = insurerSettings.find(s => s.slug === slug);
+            return setting?.cc_activo !== false;
+          };
+
+          // Only quote active insurers
+          const shouldQuoteIS = isInsurerActive('internacional');
+          const shouldQuoteFEDPA = isInsurerActive('fedpa');
+          const shouldQuoteREGIONAL = isInsurerActive('regional');
+          const shouldQuoteANCON = isInsurerActive('ancon');
+
+          const activeNames = [
+            shouldQuoteIS && 'IS',
+            shouldQuoteFEDPA && 'FEDPA',
+            shouldQuoteREGIONAL && 'REGIONAL',
+            shouldQuoteANCON && 'ANCON',
+          ].filter(Boolean).join(' + ');
+
+          // ── PARALELO: Solo aseguradoras activas ──
+          console.log(`[Comparar] Generando cotizaciones en PARALELO (${activeNames || 'ninguna'})...`);
           const t0 = Date.now();
-          
+
           const [isResult, fedpaResult, regionalResult, anconResult] = await Promise.allSettled([
-            generateInternacionalQuotes(input),
-            generateFedpaQuotes(input),
-            generateRegionalQuotes(input),
-            generateAnconQuotes(input),
+            shouldQuoteIS ? generateInternacionalQuotes(input) : Promise.resolve({ basico: null, premium: null }),
+            shouldQuoteFEDPA ? generateFedpaQuotes(input) : Promise.resolve({ basico: null, premium: null }),
+            shouldQuoteREGIONAL ? generateRegionalQuotes(input) : Promise.resolve({ basico: null, premium: null }),
+            shouldQuoteANCON ? generateAnconQuotes(input) : Promise.resolve({ basico: null, premium: null }),
           ]);
           
           console.log(`[Comparar] Cotizaciones completadas en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
