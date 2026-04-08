@@ -297,8 +297,8 @@ function drawCard(
   const coberturas = quote._coberturasDetalladas ?? [];
   let coberturasShown = 0;
   for (const cob of coberturas.slice(0, 4)) {
-    const check = cob.incluida ? '✓' : '✗';
-    const txt = `${check} ${cob.nombre}`;
+    // Use color to indicate inclusion, no Unicode symbols (WinAnsi font limitation)
+    const txt = cob.nombre;
     page.drawText(txt, {
       x: x + 6,
       y: contentY,
@@ -339,8 +339,8 @@ function drawCard(
     contentY -= 9;
 
     for (const ben of beneficios.slice(0, 2)) {
-      const check = ben.incluido ? '✓' : '✗';
-      const txt = `${check} ${ben.nombre}`;
+      // Use color to indicate inclusion, no Unicode symbols (WinAnsi font limitation)
+      const txt = ben.nombre;
       page.drawText(txt, {
         x: x + 6,
         y: contentY,
