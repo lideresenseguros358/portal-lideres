@@ -222,10 +222,11 @@ export async function POST(request: NextRequest) {
     const log = (step: string, msg: string) =>
       console.log(`[API ANCON Emisión] [${step}] ${msg}`);
 
-    // Normalize pep: accept '0', 'N', false → canonical ANCON catalog code '002|campo_pep'
-    const pepNormalized = (pep && pep !== '0' && pep !== 'N' && pep !== 'false')
-      ? pep
-      : '002|campo_pep';
+    // Normalize pep for EmitirDatos: docs show cod_pep = 0 (no) or 1 (si).
+    // GuardarCliente used pipe format ('002|campo_pep') but EmitirDatos uses simple numeric.
+    // Map any "no PEP" value → '0', any "si PEP" value → '1'.
+    const pepIsYes = pep && pep !== '0' && pep !== 'N' && pep !== 'false' && pep !== '002|campo_pep' && pep !== '002';
+    const pepNormalized = pepIsYes ? '1' : '0';
 
     // Resolve cod_acreedor from nombre_acreedor when not explicitly provided
     let resolvedCodAcreedor = codigo_acreedor || '';
@@ -534,11 +535,10 @@ export async function POST(request: NextRequest) {
       cod_agente: creds.codAgente,
       opcion: opcion || 'A',
       no_cotizacion: freshNoCotizacion,
-      // ListadoGrupos returns null for agent 01009 — no groups assigned.
-      // Send empty so ANCON's server uses its default/null group instead of
-      // failing with FK constraint on a non-existent group code.
-      cod_grupo: cod_grupo || '',
-      nombre_grupo: nombre_grupo || '',
+      // Docs example explicitly uses cod_grupo:'00001', nombre_grupo:'SIN GRUPO'.
+      // ListadoGrupos returns null for agent 01009 but '00001' is the ANCON default group.
+      cod_grupo: cod_grupo || '00001',
+      nombre_grupo: nombre_grupo || 'SIN GRUPO',
       token: emitToken,
       nacionalidad: nacionalidad || 'PANAMÁ',
       pep: pepNormalized,
