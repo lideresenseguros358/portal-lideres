@@ -50,7 +50,7 @@ const WHATSAPP   = '6833-9167';
 const EMAIL      = 'contacto@lideresenseguros.com';
 const LICENCIA   = 'Licencia PJ750';
 const SSRP_LINE  = `Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panama - ${LICENCIA}`;
-const OBS_LINE   = 'OBSERVACIONES: Comparativa informativa, no constituye contrato de seguro. Primas sujetas a confirmacion segun datos del vehiculo y conductor. Validez: 15 dias.';
+const OBS_LINE   = 'OBSERVACIONES: Comparativa informativa, no constituye contrato de seguro. Primas sujetas a confirmacion segun datos del vehiculo y conductor. Validez: 15 dias. Pago en cuotas: maximo 10 cuotas mensuales.';
 const TIP_LINE   = 'TIP: Los planes Premium incluyen mejores coberturas de asistencia y endosos adicionales. Consulta con tu asesor para mas detalles.';
 
 // ── Data interfaces ───────────────────────────────────────────────────────────
@@ -636,32 +636,23 @@ async function drawCoveragePage(
     return 'Incluido';  // CC always includes RC — "—" would be misleading
   };
 
-  // Lesiones Corporales — prefer user-chosen form values (same for all insurers)
-  const lesDisplay = clientInfo?.lesionCorporalPersona
-    ? `${money(clientInfo.lesionCorporalPersona)} / ${money(clientInfo.lesionCorporalAccidente)}`
-    : null;
-  const lesValues = quotes.map(q =>
-    lesDisplay ?? resolveLimit(q, ['lesiones', 'corporales'], ['lesiones', 'corporal'], true),
-  );
-  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', lesValues, {
+  // ── RC Limits: ALWAYS from portal form selection (same for all insurers) ──
+  // These are the values the user explicitly chose — do not fall back to insurer APIs.
+  const lesP = Number(clientInfo?.lesionCorporalPersona) || 0;
+  const lesA = Number(clientInfo?.lesionCorporalAccidente) || 0;
+  const lesText = lesP > 0 ? `${money(lesP)} / ${money(lesA)}` : '—';
+  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
-  // Danos Propiedad — prefer user-chosen form values
-  const dpaDisplay = clientInfo?.danoPropiedad ? money(clientInfo.danoPropiedad) : null;
-  const dpaValues = quotes.map(q =>
-    dpaDisplay ?? resolveLimit(q, ['propiedad', 'dano'], ['propiedad', 'daños', 'dano'], false),
-  );
-  drawLabelRow('Danos a la Propiedad Ajena', null, dpaValues, { rh: ROW_H });
+  const dpa = Number(clientInfo?.danoPropiedad) || 0;
+  const dpaText = dpa > 0 ? money(dpa) : '—';
+  drawLabelRow('Danos a la Propiedad Ajena', null, quotes.map(() => dpaText), { rh: ROW_H });
 
-  // Gastos Medicos — prefer user-chosen form values
-  const gmDisplay = clientInfo?.gastosMedicosPersona
-    ? `${money(clientInfo.gastosMedicosPersona)} / ${money(clientInfo.gastosMedicosAccidente)}`
-    : null;
-  const gmValues = quotes.map(q =>
-    gmDisplay ?? resolveLimit(q, ['medico', 'gastos'], ['medico', 'medic', 'gastos'], true),
-  );
-  drawLabelRow('Gastos Medicos', 'por persona / por accidente', gmValues, {
+  const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
+  const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
+  const gmText = gmP > 0 ? `${money(gmP)} / ${money(gmA)}` : '—';
+  drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
@@ -699,12 +690,19 @@ async function drawCoveragePage(
     if (d?.amount && d.amount > 0) return money(d.amount);
     const di = q._deducibleInfo;
     if (di?.dedColision && di.dedColision > 0) return money(di.dedColision);
+    // Parse from FEDPA/ANCON description text: "Comprensivo: B/.250 | Colisión/Vuelco: B/.250"
+    const desc = String(di?.descripcion || di?.tooltip || '');
+    const m = desc.match(/colisi[oó]n[^:]*:\s*(?:B\/\.?\s*)?([0-9,.]+)/i);
+    if (m) { const v = parseFloat((m[1] ?? '0').replace(/,/g, '')); if (v > 0) return money(v); }
+    // If same deductible as comprensivo (common policy structure), show that
+    const comp = q._deduciblesReales?.comprensivo;
+    if (comp?.amount && comp.amount > 0) return money(comp.amount);
     return 'Ver poliza';
   });
   drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H });
 
   // ── Section C: Precios ───────────────────────────────────────────────────
-  drawLabelRow('PRIMA ANUAL', null, Array(n).fill('Total'),
+  drawLabelRow('PRIMA', null, Array(n).fill(''),
     { bg: GREEN, labelBold: true, rh: SEC_H, fontSize: 8,
       valColor: WHITE, labelColor: WHITE },
   );
@@ -713,7 +711,7 @@ async function drawCoveragePage(
     const p = q._priceBreakdown?.totalAlContado ?? q.annualPremium;
     return money(p, 'B/.');
   });
-  drawLabelRow('Al Contado (5% descuento)', null, contadoValues, {
+  drawLabelRow('Prima al Contado', '(5% descuento pago anual)', contadoValues, {
     labelBold: false, valueBold: true, rh: ROW_H + 4,
     valColor: NAVY, labelColor: DARK,
   });
@@ -722,8 +720,8 @@ async function drawCoveragePage(
     const p = q._priceBreakdown?.totalConTarjeta ?? q.annualPremium;
     return money(p, 'B/.');
   });
-  drawLabelRow('Con Tarjeta de Credito', null, tarjetaValues, {
-    bg: STRIPE, rh: ROW_H,
+  drawLabelRow('Prima en Cuotas', '(max. 10 cuotas mensuales)', tarjetaValues, {
+    bg: STRIPE, rh: ROW_H + 2,
   });
 
   // ── Section D: Endosos Incluidos ─────────────────────────────────────────
@@ -806,6 +804,25 @@ function extractDetailFromText(rawText: string, canonicalLabel: string): string 
   // No separator — strip canonical prefix and use remainder
   return s.replace(new RegExp(`^${canonicalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim();
 }
+
+// Static detail fallback for benefits without dynamic detail from API
+const BENEFIT_STATIC_DETAILS: Record<string, string> = {
+  'Grúa':                  '1 por averia, 1 por accidente',
+  'Asistencia Vial':        'Corriente, combustible, llanta, cerrajeria',
+  'Auto de Alquiler':       'Por colision o vuelco',
+  'Muerte Accidental':      'Fallecimiento del conductor',
+  'Defensa Penal':          'Proceso penal, hasta B/.2,000',
+  'Ambulancia':             '24h / 365 dias',
+  'Efectos Personales':     'Objetos dentro del vehiculo',
+  'Asistencia en Viaje':    'Hospedaje, transporte o renta',
+  'Gastos Funerarios':      'Conductor y ocupantes',
+  'Dscto. Deducible':       'Reduccion en el deducible',
+  'Sin Depreciación':       'Perdida total, autos 0km',
+  'Extensión Territorial':  'Costa Rica, 30 dias',
+  'Cobertura de Vidrios':   'Parabrisas, faros, espejos',
+  'Revisión sin Costo':     'Revision del vehiculo',
+  'Bono de Mantenimiento':  'B/.50 en mantenimiento',
+};
 
 function buildBenefitMatrix(quotes: PDFQuote[]): BenefitRow[] {
   // label (UPPERCASED) → { displayLabel, order, perQuote: quoteIdx → { included, detail } }
@@ -904,7 +921,7 @@ async function drawBenefitsPage(
 
   let y = PH - HDR_H - 4;
   const yMin = FTR_H + 6;
-  const BEN_ROW_H = 15;   // compact: just checkmark/cross, no detail text
+  const BEN_ROW_H = 20;   // checkmark + optional detail text below
   const isPremium = quotes[0]?.planType === 'premium';
 
   // ── Insurer column header row (navy, with logos) ──────────────────────────
@@ -967,16 +984,37 @@ async function drawBenefitsPage(
       size: 7, font: fontBold, color: DARK,
     });
 
-    // Per-insurer values: green checkmark or soft gray X
+    // Per-insurer values: green checkmark (+ detail below) or soft gray X
     for (let i = 0; i < n; i++) {
       const v = row.values[i];
       if (!v) continue;
       const cx = colXs[i + 1]! + insW / 2;
-      const cy = y - BEN_ROW_H + BEN_ROW_H / 2;
+      const colLeft = colXs[i + 1]!;
 
       if (v.included) {
+        // Resolve detail: from API data first, then static map
+        const detail = safe(v.detail || BENEFIT_STATIC_DETAILS[row.label] || '').trim();
+        const hasDetail = detail.length > 0;
+
+        // Checkmark: upper portion when has detail, centered when not
+        const cy = hasDetail
+          ? y - BEN_ROW_H + BEN_ROW_H * 0.68
+          : y - BEN_ROW_H + BEN_ROW_H / 2;
         drawCheckmark(page, cx, cy, 8);
+
+        // Detail text: small gray, centered in column, below checkmark
+        if (hasDetail) {
+          const maxChars = Math.floor((insW - 6) / (4.2 * 0.56));
+          const dText = trunc(detail, maxChars);
+          const dw = textWidth(dText, 4.2);
+          page.drawText(dText, {
+            x: colLeft + Math.max(2, (insW - dw) / 2),
+            y: y - BEN_ROW_H + 3.5,
+            size: 4.2, font, color: GRAY,
+          });
+        }
       } else {
+        const cy = y - BEN_ROW_H + BEN_ROW_H / 2;
         drawCross(page, cx, cy, 8);
       }
     }

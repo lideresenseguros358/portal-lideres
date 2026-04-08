@@ -695,7 +695,10 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
       _deducibleInfo: deducibleInfoReal,
-      _deduciblesReales: deduciblesReales,
+      _deduciblesReales: {
+        comprensivo:    deducibleComprensivo > 0 ? { amount: deducibleComprensivo, label: 'Comprensivo' }    : (deduciblesReales.comprensivo    ?? null),
+        colisionVuelco: deducibleColision    > 0 ? { amount: deducibleColision,    label: 'Colision/Vuelco' } : (deduciblesReales.colisionVuelco ?? null),
+      },
       _sumaAsegurada: quoteData.valorVehiculo || 0,
       _isReal: true,
       _idCotizacion: cotizacionResult.idCotizacion,
