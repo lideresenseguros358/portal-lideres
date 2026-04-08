@@ -458,7 +458,10 @@ export async function emitirPolizaAuto(
       idPlanCobAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
       snCargo: (request.codTipoConducto && request.codTipoConducto > 0) ? 1 : 0,
       codBenef: 0,
-      txtBenef: request.txtBenef || '',
+      // Only include txtBenef when there IS an acreedor — IS renders the acreedor page
+      // whenever this field is present in the body, even as an empty string.
+      // For DT (no acreedor), omit it entirely so the acreedor page is never generated.
+      ...(request.txtBenef ? { txtBenef: request.txtBenef } : {}),
       txtComentarios: request.endosoTexto || '',
       cntTermino: request.cantCuotas || 0,
       idPlanCobAdicAsiento: 0,
