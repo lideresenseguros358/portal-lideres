@@ -1,4 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
+import fs from 'fs';
+import path from 'path';
 
 const NAVY = rgb(1/255, 1/255, 57/255);      // #010139
 const GREEN = rgb(138/255, 170/255, 25/255); // #8AAA19
@@ -34,21 +36,23 @@ interface PDFQuote {
   [key: string]: any;
 }
 
-export async function generarComparativaPDF(quotes: PDFQuote[], baseUrl: string = ''): Promise<Buffer> {
+export async function generarComparativaPDF(quotes: PDFQuote[], rootDir: string = process.cwd()): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Helper: Load image from URL
-  const loadImageFromUrl = async (path: string): Promise<any | null> => {
+  // Helper: Load image from filesystem
+  const loadImageFromDisk = async (filePath: string): Promise<any | null> => {
     try {
-      const url = baseUrl ? `${baseUrl}${path}` : path;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const arrayBuffer = await res.arrayBuffer();
-      return arrayBuffer;
+      const absolutePath = path.join(rootDir, 'public', filePath.replace(/^\//, ''));
+      if (!fs.existsSync(absolutePath)) {
+        console.warn(`Image not found: ${absolutePath}`);
+        return null;
+      }
+      const imageBytes = fs.readFileSync(absolutePath);
+      return imageBytes;
     } catch (err) {
-      console.warn(`Could not load image from ${path}:`, err);
+      console.warn(`Could not load image from ${filePath}:`, err);
       return null;
     }
   };
@@ -56,7 +60,7 @@ export async function generarComparativaPDF(quotes: PDFQuote[], baseUrl: string 
   // Load Lissa logo
   let logoImg: any = null;
   try {
-    const logoBytes = await loadImageFromUrl('/logo.png');
+    const logoBytes = await loadImageFromDisk('logo.png');
     if (logoBytes) {
       logoImg = await pdfDoc.embedPng(logoBytes);
     }
@@ -68,7 +72,7 @@ export async function generarComparativaPDF(quotes: PDFQuote[], baseUrl: string 
   const insurerLogos: Record<string, any> = {};
   for (const name of ['fedpa', 'internacional', 'regional', 'ancon']) {
     try {
-      const logoBytes = await loadImageFromUrl(`/aseguradoras/${name}.png`);
+      const logoBytes = await loadImageFromDisk(`aseguradoras/${name}.png`);
       if (logoBytes) {
         insurerLogos[name.toUpperCase()] = await pdfDoc.embedPng(logoBytes);
       }

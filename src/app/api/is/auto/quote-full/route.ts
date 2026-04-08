@@ -15,9 +15,11 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
-  
+
   try {
+    console.log('[IS QuoteFull Route] Request received');
     const body = await request.json();
+    console.log('[IS QuoteFull Route] Body parsed successfully');
     const { environment = getISDefaultEnv(), ...formData } = body;
     
     // Accept both old (vcodmarca) and new (codMarca) param names
@@ -110,8 +112,10 @@ export async function POST(request: NextRequest) {
     
   } catch (error: any) {
     console.error('[API IS QuoteFull] Error:', error);
+    console.error('[API IS QuoteFull] Error type:', error.constructor.name);
+    console.error('[API IS QuoteFull] Error stack:', error.stack);
     return NextResponse.json(
-      { success: false, error: error.message || 'Error interno' },
+      { success: false, error: error.message || 'Error interno', _debug: error.constructor.name },
       { status: 500 }
     );
   }

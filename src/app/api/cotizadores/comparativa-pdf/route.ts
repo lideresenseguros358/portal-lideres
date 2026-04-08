@@ -9,12 +9,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No quotes provided' }, { status: 400 });
     }
 
-    // Get the base URL for image fetching
-    const protocol = request.headers.get('x-forwarded-proto') || 'http';
-    const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-    const baseUrl = `${protocol}://${host}`;
-
-    const pdfBuffer = await generarComparativaPDF(quotes, baseUrl);
+    // Pass the project root directory for image loading
+    const pdfBuffer = await generarComparativaPDF(quotes, process.cwd());
 
     return new NextResponse(pdfBuffer, {
       headers: {
