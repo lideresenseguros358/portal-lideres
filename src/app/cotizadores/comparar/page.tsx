@@ -1389,7 +1389,8 @@ export default function ComparePage() {
       }
 
       // Guard: evitar doble ejecución por React StrictMode
-      if (hasLoadedRef.current) return;
+      // Only skip if we've already successfully loaded quotes
+      if (hasLoadedRef.current && quotes.length > 0) return;
       hasLoadedRef.current = true;
 
       try {
@@ -1406,14 +1407,22 @@ export default function ComparePage() {
         setQuoteData(input);
         
         const policyType = input.cobertura === 'COMPLETA' ? 'auto-completa' : input.policyType;
-        
+
         // Solo procesar si es Auto Cobertura Completa
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
 
+          // Wait for insurer settings to load (required for both master and public users)
+          if (loadingSettings) {
+            console.log('[Comparar] Esperando a que insurerSettings cargue...');
+            setLoading(true);
+            return; // Wait for settings to load before processing
+          }
+
           // Helper: Check if insurer is active (cc_activo)
           const isInsurerActive = (slug: string): boolean => {
-            if (!insurerSettings?.length) return true; // Default to all active if no settings loaded
+            // insurerSettings should now be loaded; if still missing, default to all active
+            if (!insurerSettings?.length) return true;
             const setting = insurerSettings.find(s => s.slug === slug);
             // Insurer must be explicitly enabled (cc_activo === true)
             // If setting not found, default to true (backward compat)
@@ -1627,7 +1636,7 @@ export default function ComparePage() {
     };
 
     loadQuoteData();
-  }, [router, editMode]);
+  }, [router, editMode, loadingSettings]);
 
   // Handle PDF download for master users
   const handleDownloadPDF = async () => {
