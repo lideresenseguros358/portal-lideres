@@ -542,10 +542,12 @@ export async function POST(request: NextRequest) {
       token: emitToken,
       nacionalidad: nacionalidad || 'PANAMÁ',
       pep: pepNormalized,
-      ocupacion: ocupacion || '001',
-      profesion: profesion || '1',
+      // ocupacion/profesion/actividad_economica MUST be numeric catalog codes.
+      // Guard: reject free-text values and fall back to ANCON defaults.
+      ocupacion: /^\d+$/.test(ocupacion || '') ? ocupacion! : '001',
+      profesion: /^\d+$/.test(profesion || '') ? profesion! : '1',
       pais_residencia: pais_residencia || 'PANAMÁ',
-      actividad_economica: actividad_economica || '001',
+      actividad_economica: /^\d+$/.test(actividad_economica || '') ? actividad_economica! : '001',
       representante_legal: representante_legal || '',
       nombre_comercial: nombre_comercial || '',
       aviso_operacion: aviso_operacion || '',
