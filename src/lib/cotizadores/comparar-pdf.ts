@@ -34,10 +34,11 @@ const M    = 20;       // horizontal margin
 const CW   = PW - 2*M; // content width ≈ 802
 
 const HDR_H  = 62;   // header height
+const VEH_H  = 26;   // vehicle/client info bar height (pages 1 & 3 only)
 const FTR_H  = 52;   // footer height (with observations + SSRP)
 const ROW_H  = 15;   // standard data row height
 const SEC_H  = 19;   // section header row height
-const INS_H  = 28;   // insurer column header height
+const INS_H  = 30;   // insurer column header height
 const LPAD   = 6;    // left padding inside cells
 const RPAD   = 4;    // right padding inside cells
 
@@ -277,12 +278,16 @@ function drawHeader(
   // Left accent bar
   page.drawRectangle({ x: 0, y: PH - HDR_H, width: 4, height: HDR_H, color: GREEN });
 
-  // Logo
+  // Logo — maintain natural aspect ratio
   let logoEnd = M + 4;
   if (logoImg) {
-    const lh = 42, lw = 70;
+    const maxH = HDR_H - 14;
+    const maxW = 110;
+    const ratio = logoImg.width / logoImg.height;
+    const lh = Math.min(maxH, maxW / ratio);
+    const lw = lh * ratio;
     page.drawImage(logoImg, { x: M + 8, y: PH - HDR_H + (HDR_H - lh) / 2, width: lw, height: lh });
-    logoEnd = M + 8 + lw + 12;
+    logoEnd = M + 8 + lw + 10;
   }
 
   // Title block
@@ -335,6 +340,55 @@ function drawFooter(page: PDFPage, font: PDFFont) {
   page.drawText(safe(`WA: ${WHATSAPP}`), { x: rx, y: FTR_H - 30, size: 7, font, color: GRAY });
 }
 
+// ── Vehicle / Client info bar (pages 1 & 3 only) ─────────────────────────────
+
+function drawVehicleBar(
+  page: PDFPage,
+  font: PDFFont,
+  fontBold: PDFFont,
+  quotes: PDFQuote[],
+) {
+  const q = quotes[0];
+  if (!q) return;
+
+  const barY = PH - HDR_H - VEH_H;
+
+  // Background: light navy stripe
+  page.drawRectangle({ x: 0, y: barY, width: PW, height: VEH_H, color: BLUE_LIGHT });
+
+  // Left accent
+  page.drawRectangle({ x: 0, y: barY, width: 4, height: VEH_H, color: GREEN });
+
+  // Bottom border
+  page.drawLine({ start: { x: 0, y: barY }, end: { x: PW, y: barY }, thickness: 0.8, color: NAVY });
+
+  const textY = barY + (VEH_H - 8) / 2 + 1;
+
+  // Vehicle label
+  page.drawText('VEHICULO:', { x: M + 8, y: textY, size: 7, font: fontBold, color: NAVY });
+
+  // Año + Marca + Modelo
+  const anio   = safe(String(q._anio || ''));
+  const marca  = safe(q._marcaNombre || '');
+  const modelo = safe(q._modeloNombre || '');
+  const vehicleStr = [anio, marca, modelo].filter(Boolean).join('  ');
+  page.drawText(vehicleStr, { x: M + 62, y: textY, size: 8, font: fontBold, color: DARK });
+
+  // Suma asegurada
+  if (q._sumaAsegurada && q._sumaAsegurada > 0) {
+    const valorStr = `Valor Asegurado:  ${money(q._sumaAsegurada)}`;
+    page.drawText(safe('COBERTURA COMPLETA'), { x: PW * 0.48, y: textY, size: 7, font: fontBold, color: NAVY });
+    page.drawText(safe(valorStr), { x: PW * 0.64, y: textY, size: 7.5, font, color: DARK });
+  }
+
+  // Deducible type
+  const dedType = safe(q._deducibleOriginal || '');
+  if (dedType) {
+    page.drawText(safe(`Deducible: ${dedType.charAt(0).toUpperCase() + dedType.slice(1)}`),
+      { x: PW - M - 115, y: textY, size: 7, font, color: GRAY });
+  }
+}
+
 // ── Coverage page (pages 1 & 3) ───────────────────────────────────────────────
 
 async function drawCoveragePage(
@@ -349,6 +403,7 @@ async function drawCoveragePage(
   if (!quotes.length) return;
   const page = pdfDoc.addPage([PW, PH]);
   drawHeader(page, font, fontBold, logoImg, subtitle);
+  drawVehicleBar(page, font, fontBold, quotes);
   drawFooter(page, font);
 
   const n = quotes.length;
@@ -358,8 +413,8 @@ async function drawCoveragePage(
   const isPremium = quotes[0]?.planType === 'premium';
   const planBadge = isPremium ? 'PREMIUM' : 'BASICO';
 
-  // Starting Y (just below header, with small gap)
-  let y = PH - HDR_H - 4;
+  // Starting Y (just below header + vehicle bar)
+  let y = PH - HDR_H - VEH_H - 4;
 
   // ── Row helper ────────────────────────────────────────────────────────────
   const drawLabelRow = (
@@ -420,14 +475,18 @@ async function drawCoveragePage(
     // Background
     page.drawRectangle({ x: cx, y: y - INS_H, width: insW, height: INS_H, color: NAVY });
 
-    // Insurer logo (small, left side of cell)
+    // Insurer logo — maintain aspect ratio, fit in INS_H cell
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
-    let logoEndX = cx + 4;
+    let logoEndX = cx + 6;
     if (logo) {
-      const lh = INS_H - 6, lw = Math.min(lh * 1.4, 30);
-      page.drawImage(logo, { x: cx + 3, y: y - INS_H + 3, width: lw, height: lh });
-      logoEndX = cx + 3 + lw + 2;
+      const maxH = INS_H - 8;
+      const maxW = Math.min(insW * 0.38, 52);
+      const ratio = logo.width / logo.height;
+      const lh = Math.min(maxH, maxW / ratio);
+      const lw = lh * ratio;
+      page.drawImage(logo, { x: cx + 4, y: y - INS_H + (INS_H - lh) / 2, width: lw, height: lh });
+      logoEndX = cx + 4 + lw + 4;
     }
 
     // Insurer name
@@ -460,36 +519,47 @@ async function drawCoveragePage(
     { bg: NAVY, labelBold: true, valueBold: false, rh: SEC_H, fontSize: 8 },
   );
 
+  /** Resolve limit string from _limites, with fallback to _coberturasDetalladas */
+  const resolveLimit = (
+    q: PDFQuote,
+    tipoKeywords: string[],
+    nombreKeywords: string[],
+    both = true,   // true → "persona / accidente", false → single value
+  ): string => {
+    // 1) Try _limites
+    const l = (q._limites || []).find((x: any) =>
+      tipoKeywords.some(k => (x.tipo || '').toLowerCase().includes(k)) ||
+      nombreKeywords.some(k => (x.descripcion || '').toLowerCase().includes(k))
+    );
+    if (l) {
+      const p = (l.limitePorPersona || '').replace('.00', '').trim();
+      const a = (l.limitePorAccidente || '').replace('.00', '').trim();
+      if (both) return (p && a) ? `${p} / ${a}` : p || a || 'Incluido';
+      return p || a || 'Incluido';
+    }
+    // 2) Fallback to _coberturasDetalladas
+    const cob = (q._coberturasDetalladas || []).find((c: any) =>
+      nombreKeywords.some(k =>
+        (c.nombre || '').toLowerCase().includes(k) ||
+        (c.descripcion || '').toLowerCase().includes(k)
+      )
+    );
+    if (cob) return safe(cob.limite || 'Incluido');
+    return 'Incluido';  // CC always includes RC — "—" would be misleading
+  };
+
   // Lesiones Corporales
-  const lesValues = quotes.map(q => {
-    const l = q._limites?.find(x => x.tipo.includes('lesiones') || x.tipo.includes('corporales'));
-    if (!l) return '—';
-    const p = l.limitePorPersona?.replace('.00','') || '';
-    const a = l.limitePorAccidente?.replace('.00','') || '';
-    return p && a ? `${p} / ${a}` : p || a || '—';
-  });
+  const lesValues = quotes.map(q => resolveLimit(q, ['lesiones', 'corporales'], ['lesiones', 'corporal'], true));
   drawLabelRow('Lesiones Corporales', 'por persona / por accidente', lesValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
   // Danos Propiedad
-  const dpaValues = quotes.map(q => {
-    const l = q._limites?.find(x => x.tipo.includes('propiedad') || x.tipo.includes('dano'));
-    if (!l) return '—';
-    return (l.limitePorPersona || l.limitePorAccidente || '—').replace('.00','');
-  });
+  const dpaValues = quotes.map(q => resolveLimit(q, ['propiedad', 'dano'], ['propiedad', 'daños', 'dano'], false));
   drawLabelRow('Danos a la Propiedad Ajena', null, dpaValues, { rh: ROW_H });
 
   // Gastos Medicos
-  const gmValues = quotes.map(q => {
-    const l = q._limites?.find(x =>
-      x.tipo.includes('medico') || x.tipo.includes('gastos') || x.descripcion?.toLowerCase().includes('medic')
-    );
-    if (!l) return '—';
-    const p = l.limitePorPersona?.replace('.00','') || '';
-    const a = l.limitePorAccidente?.replace('.00','') || '';
-    return p && a ? `${p} / ${a}` : p || a || '—';
-  });
+  const gmValues = quotes.map(q => resolveLimit(q, ['medico', 'gastos'], ['medico', 'medic', 'gastos'], true));
   drawLabelRow('Gastos Medicos', 'por persona / por accidente', gmValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
@@ -567,7 +637,7 @@ async function drawCoveragePage(
   });
 
   // ── Outer border for table ────────────────────────────────────────────────
-  const tableTop = PH - HDR_H - 4;
+  const tableTop = PH - HDR_H - VEH_H - 4;
   const tableH   = tableTop - y;
   page.drawRectangle({
     x: M, y, width: CW, height: tableH,

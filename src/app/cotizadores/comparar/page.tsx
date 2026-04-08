@@ -319,6 +319,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       insurerName: 'INTERNACIONAL de Seguros',
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
+      _anio: quoteData.anio || quoteData.anno || new Date().getFullYear(),
       _deducibleInfo: deducibleInfo,
       _deduciblesReales: {
         comprensivo: dedComprensivo > 0 ? { amount: dedComprensivo, label: 'Comprensivo' } : null,
@@ -1005,6 +1006,32 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
         dedComprensivo: Number(op.dedComprensivo) || 0,
       }));
 
+      // Build _limites from coberturas for PDF display
+      const regionalLimites: any[] = [];
+      const rcItem = coberturas.find((c: any) =>
+        c.nombre?.toUpperCase().includes('LESIONES') || c.descripcion?.toUpperCase().includes('LESIONES')
+      );
+      if (rcItem) {
+        const parts = (rcItem.limite || '').split('/').map((s: string) => s.trim());
+        regionalLimites.push({ tipo: 'lesiones_corporales', limitePorPersona: parts[0] || rcItem.limite || 'Incluido', limitePorAccidente: parts[1] || '', descripcion: 'Lesiones Corporales' });
+      } else {
+        // RC is bundled — mark as included
+        regionalLimites.push({ tipo: 'lesiones_corporales', limitePorPersona: 'Incluido', limitePorAccidente: '', descripcion: 'Lesiones Corporales' });
+      }
+      const propItem = coberturas.find((c: any) =>
+        c.nombre?.toUpperCase().includes('PROPIEDAD') || c.descripcion?.toUpperCase().includes('PROPIEDAD')
+      );
+      regionalLimites.push({ tipo: 'daños_propiedad', limitePorPersona: propItem?.limite || 'Incluido', descripcion: 'Daños a la Propiedad' });
+      const gmItemR = coberturas.find((c: any) =>
+        c.nombre?.toUpperCase().includes('GASTOS') || c.nombre?.toUpperCase().includes('MEDIC') || c.descripcion?.toUpperCase().includes('MEDIC')
+      );
+      if (gmItemR) {
+        const gmParts = (gmItemR.limite || '').split('/').map((s: string) => s.trim());
+        regionalLimites.push({ tipo: 'gastos_medicos', limitePorPersona: gmParts[0] || gmItemR.limite || 'Incluido', limitePorAccidente: gmParts[1] || '', descripcion: 'Gastos Médicos' });
+      } else {
+        regionalLimites.push({ tipo: 'gastos_medicos', limitePorPersona: 'Incluido', limitePorAccidente: '', descripcion: 'Gastos Médicos' });
+      }
+
       return {
         ...sharedData,
         id: `regional-${planType}`,
@@ -1014,7 +1041,7 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
         deductible: deducibleInfo.valor,
         coverages: coberturas.map((c: any) => ({ name: c.nombre, included: true })),
         _coberturasDetalladas: coberturas,
-        _limites: [],
+        _limites: regionalLimites,
         _deducibleInfo: deducibleInfo,
         _deduciblesReales: {
           comprensivo: dedComprensivo > 0 ? { amount: dedComprensivo, label: 'Comprensivo' } : null,
