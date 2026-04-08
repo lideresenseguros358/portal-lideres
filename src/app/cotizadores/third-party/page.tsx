@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FaShieldAlt, FaClock, FaCheckCircle, FaCar, FaCreditCard } from 'react-icons/fa';
 import ThirdPartyComparison from '@/components/quotes/ThirdPartyComparison';
@@ -17,6 +17,11 @@ export default function ThirdPartyPage() {
   const [loading, setLoading] = useState(false);
   const [fedpaSelection, setFedpaSelection] = useState<{ planType: 'basic' | 'premium'; plan: AutoThirdPartyPlan } | null>(null);
   const [fedpaPaymentMode, setFedpaPaymentMode] = useState<'contado' | 'cuotas'>('contado');
+
+  // Clear old selectedQuote on mount so user selects fresh plans
+  useEffect(() => {
+    sessionStorage.removeItem('selectedQuote');
+  }, []);
 
   const proceedToEmission = (
     insurerId: string,

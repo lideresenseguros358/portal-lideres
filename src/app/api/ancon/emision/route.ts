@@ -245,23 +245,23 @@ export async function POST(request: NextRequest) {
 
     const currentYear = new Date().getFullYear().toString();
 
-    // ── Resolve correct SOBAT product code from name when old sessions send 07159 ──
-    // nombre_producto was always set correctly even when _codProducto defaulted to 07159.
-    // Map name → code so old cached sessions still work.
-    const sobatNameUpper = (nombre_producto || '').toUpperCase();
-    let resolvedCodProducto = cod_producto || '';
-    if (sobatNameUpper.includes('SOBAT BASICO') || sobatNameUpper.includes('BASICO TALLER')) {
-      resolvedCodProducto = '05769';
-    } else if (sobatNameUpper.includes('SOBAT EXPRESS PLUS') || sobatNameUpper.includes('EXPRESS PLUS')) {
-      resolvedCodProducto = '01492';
-    }
-    if (resolvedCodProducto !== cod_producto) {
-      log('0/4', `Product code remapped: ${cod_producto} (${nombre_producto}) → ${resolvedCodProducto}`);
+    // CC products use ramo 001, SOBAT (SODA) use ramo 020
+    const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
+    const isSobat = cod_producto === '05769' || cod_producto === '01492'; // SODA ramo 020 — the ONLY valid DT products
+
+    // ── DT emissions MUST use SOBAT codes. Reject if not. ──
+    if (!isCC && !isSobat) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid product code for DT emission: ${cod_producto} (${nombre_producto}). DT requires SOBAT BASICO TALLER (05769) or SOBAT EXPRESS PLUS (01492). Please reload the third-party comparison page to select a valid plan.`,
+          poliza: undefined,
+        },
+        { status: 400 }
+      );
     }
 
-    // CC products use ramo 001, SOBAT (SODA) use ramo 020, other DT/RC use ramo 002
-    const isCC = resolvedCodProducto === '00312' || resolvedCodProducto === '10394' || resolvedCodProducto === '10395' || resolvedCodProducto === '10602' || resolvedCodProducto === '00318';
-    const isSobat = resolvedCodProducto === '05769' || resolvedCodProducto === '01492'; // SODA ramo 020
+    let resolvedCodProducto = cod_producto;
 
     // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
     // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),

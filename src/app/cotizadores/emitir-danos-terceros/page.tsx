@@ -1187,11 +1187,17 @@ export default function EmitirDanosTercerosPage() {
         };
         const anconOpcion = opcionLetterMap[selectedPlan?.optionName || ''] || 'A';
 
+        // ── Ensure plan is loaded from current third-party selection ──
+        // Fallback to old values (07159 / WEB-AUTORC) is no longer allowed.
+        if (!selectedPlan?._codProducto) {
+          throw new Error('Invalid plan selection. Please reload the third-party comparison page and select a plan.');
+        }
+
         const anconEmitBody = {
           no_cotizacion: noCotizacion,
           opcion: anconOpcion,
-          cod_producto: selectedPlan?._codProducto || '07159',
-          nombre_producto: selectedPlan?._nombreProducto || 'WEB - AUTORC',
+          cod_producto: selectedPlan._codProducto,
+          nombre_producto: selectedPlan._nombreProducto || '',
           suma_asegurada: String(selectedPlan?._sumaAsegurada || '0'),
           primer_nombre: emissionData.primerNombre,
           segundo_nombre: emissionData.segundoNombre || '',
