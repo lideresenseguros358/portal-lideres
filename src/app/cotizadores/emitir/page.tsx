@@ -1845,7 +1845,7 @@ export default function EmitirPage() {
         <div className="py-8 px-4">
           {/* Broker selector for master users */}
           {isMaster && availableBrokers.length > 0 && (
-            <div className="max-w-2xl mx-auto bg-white rounded-lg p-5 mb-6 shadow-sm border border-gray-200">
+            <div className="max-w-2xl mx-auto mt-6 bg-white rounded-lg p-5 mb-6 shadow-sm border border-gray-200">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-xl">🏢</span>
                 <label className="text-sm font-bold text-[#010139]">Asignar a Corredor</label>

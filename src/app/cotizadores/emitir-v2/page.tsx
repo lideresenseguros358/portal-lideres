@@ -1033,7 +1033,7 @@ export default function EmitirV2Page() {
 
               {/* Broker selector for master users */}
               {isMaster && availableBrokers.length > 0 && (
-                <div className="bg-white rounded-lg p-5 mb-6 shadow-sm border border-gray-200">
+                <div className="mt-6 bg-white rounded-lg p-5 mb-6 shadow-sm border border-gray-200">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-xl">🏢</span>
                     <label className="text-sm font-bold text-[#010139]">Asignar a Corredor</label>
