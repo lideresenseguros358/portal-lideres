@@ -434,7 +434,7 @@ export async function POST(request: NextRequest) {
         actividadEconomica: actividad_economica || '',
         nivelIngresos: nivelIngresoRaw,
         dondeTrabaja: (body as Record<string, string>).empresa || '',
-        esPEP: pepNormalized === '001|campo_pep',
+        esPEP: pepNormalized === '1',
         tipoCobertura: isCC ? 'CC' : 'DT',
         insurerName: 'ANCÓN Seguros',
         valorAsegurado: suma_asegurada && suma_asegurada !== '0' ? `$${Number(suma_asegurada).toLocaleString('en-US')}` : '',

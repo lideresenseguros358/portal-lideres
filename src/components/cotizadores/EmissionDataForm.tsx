@@ -35,6 +35,8 @@ export interface EmissionData {
   celular: string;
   direccion: string;
   actividadEconomica: string;
+  anconOcupacion: string;   // ANCON catalog code from ListaOcupacion (e.g. '001')
+  anconProfesion: string;   // ANCON catalog code from ListaProfesion  (e.g. '1')
   dondeTrabaja: string;
   nivelIngresos: '' | 'menos de 10mil' | '10mil a 30mil' | '30mil a 50mil' | 'mas de 50mil';
   // Dirección estructurada (IS)
@@ -77,6 +79,8 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
     celular: '',
     direccion: '',
     actividadEconomica: '',
+    anconOcupacion: '',
+    anconProfesion: '',
     dondeTrabaja: '',
     nivelIngresos: '',
     nacionalidad: 'Panamá',
@@ -97,6 +101,33 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
   const [acreedoresList, setAcreedoresList] = useState<Acreedor[]>(ACREEDORES_PANAMA);
+
+  // ANCON catalog dropdowns — ocupacion & profesion
+  const [ocupacionList, setOcupacionList] = useState<{ code: string; nombre: string }[]>([]);
+  const [profesionList, setProfesionList] = useState<{ code: string; nombre: string }[]>([]);
+  const anconCatalogsFetched = useRef(false);
+
+  useEffect(() => {
+    if (anconCatalogsFetched.current) return;
+    anconCatalogsFetched.current = true;
+    Promise.all([
+      fetch('/api/ancon/catalogs?type=ocupacion').then(r => r.json()),
+      fetch('/api/ancon/catalogs?type=profesion').then(r => r.json()),
+    ]).then(([ocup, prof]) => {
+      if (ocup.success && Array.isArray(ocup.data)) {
+        setOcupacionList(ocup.data.map((e: Record<string, string>) => ({
+          code: e.cod_ocupacion || e.codigo || '',
+          nombre: e.nombre || '',
+        })));
+      }
+      if (prof.success && Array.isArray(prof.data)) {
+        setProfesionList(prof.data.map((e: Record<string, string>) => ({
+          code: e.cod_profesion || e.codigo || '',
+          nombre: e.nombre || '',
+        })));
+      }
+    }).catch(() => { /* catalogs optional — defaults used if unavailable */ });
+  }, []);
 
   const acreedoresOptions = useMemo<AutocompleteOption[]>(
     () => acreedoresList.map(a => ({ value: a.codigoFEDPA, label: a.label })),
@@ -300,6 +331,8 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
     if (!formData.celular) newErrors.celular = 'Requerido';
     if (!formData.direccion) newErrors.direccion = 'Requerido';
     if (!formData.actividadEconomica) newErrors.actividadEconomica = 'Requerido';
+    if (ocupacionList.length > 0 && !formData.anconOcupacion) newErrors.anconOcupacion = 'Selecciona una ocupación';
+    if (profesionList.length > 0 && !formData.anconProfesion) newErrors.anconProfesion = 'Selecciona una profesión';
     if (!formData.dondeTrabaja) newErrors.dondeTrabaja = 'Requerido';
     if (!formData.nivelIngresos) newErrors.nivelIngresos = 'Requerido';
     
@@ -896,6 +929,54 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                 {errors.dondeTrabaja && <p className="text-xs text-red-500 mt-1">{errors.dondeTrabaja}</p>}
               </div>
             </div>
+
+            {/* ANCON catalog dropdowns — ocupacion & profesion */}
+            {(ocupacionList.length > 0 || profesionList.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ocupacionList.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Ocupación <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.anconOcupacion}
+                      onChange={(e) => setFormData({ ...formData, anconOcupacion: e.target.value })}
+                      className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                        errors.anconOcupacion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      style={{ minHeight: '50px' }}
+                    >
+                      <option value="">Seleccionar ocupación</option>
+                      {ocupacionList.map(o => (
+                        <option key={o.code} value={o.code}>{o.nombre}</option>
+                      ))}
+                    </select>
+                    {errors.anconOcupacion && <p className="text-xs text-red-500 mt-1">{errors.anconOcupacion}</p>}
+                  </div>
+                )}
+                {profesionList.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Profesión <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.anconProfesion}
+                      onChange={(e) => setFormData({ ...formData, anconProfesion: e.target.value })}
+                      className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                        errors.anconProfesion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      style={{ minHeight: '50px' }}
+                    >
+                      <option value="">Seleccionar profesión</option>
+                      {profesionList.map(p => (
+                        <option key={p.code} value={p.code}>{p.nombre}</option>
+                      ))}
+                    </select>
+                    {errors.anconProfesion && <p className="text-xs text-red-500 mt-1">{errors.anconProfesion}</p>}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">

@@ -1220,10 +1220,9 @@ export default function EmitirDanosTercerosPage() {
           pep: '0',
           // Extra fields for Solicitud de Seguros PDF
           estado_civil: emissionData.estadoCivil || '',
-          // ocupacion/profesion must be ANCON catalog codes (ListaOcupacion / ListaProfesion).
-          // actividadEconomica is free text — route.ts will use defaults ('001' / '1').
-          ocupacion: '',
-          profesion: '',
+          // ANCON catalog codes (selected by user from ListaOcupacion / ListaProfesion dropdowns)
+          ocupacion: emissionData.anconOcupacion || '',
+          profesion: emissionData.anconProfesion || '',
           actividad_economica: '',
           empresa: emissionData.dondeTrabaja || '',
           nivel_ingreso: nivelIngresoLabel,
