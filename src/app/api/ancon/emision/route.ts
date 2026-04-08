@@ -244,9 +244,24 @@ export async function POST(request: NextRequest) {
     }
 
     const currentYear = new Date().getFullYear().toString();
+
+    // ── Resolve correct SOBAT product code from name when old sessions send 07159 ──
+    // nombre_producto was always set correctly even when _codProducto defaulted to 07159.
+    // Map name → code so old cached sessions still work.
+    const sobatNameUpper = (nombre_producto || '').toUpperCase();
+    let resolvedCodProducto = cod_producto || '';
+    if (sobatNameUpper.includes('SOBAT BASICO') || sobatNameUpper.includes('BASICO TALLER')) {
+      resolvedCodProducto = '05769';
+    } else if (sobatNameUpper.includes('SOBAT EXPRESS PLUS') || sobatNameUpper.includes('EXPRESS PLUS')) {
+      resolvedCodProducto = '01492';
+    }
+    if (resolvedCodProducto !== cod_producto) {
+      log('0/4', `Product code remapped: ${cod_producto} (${nombre_producto}) → ${resolvedCodProducto}`);
+    }
+
     // CC products use ramo 001, SOBAT (SODA) use ramo 020, other DT/RC use ramo 002
-    const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
-    const isSobat = cod_producto === '05769' || cod_producto === '01492'; // SODA ramo 020
+    const isCC = resolvedCodProducto === '00312' || resolvedCodProducto === '10394' || resolvedCodProducto === '10395' || resolvedCodProducto === '10602' || resolvedCodProducto === '00318';
+    const isSobat = resolvedCodProducto === '05769' || resolvedCodProducto === '01492'; // SODA ramo 020
 
     // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
     // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),
@@ -289,7 +304,7 @@ export async function POST(request: NextRequest) {
           cod_modelo: finalCodModeloAgt || '00001',
           ano: String(ano || currentYear),
           suma_asegurada: String(suma_asegurada || '0'),
-          cod_producto: cod_producto || '07159',
+          cod_producto: resolvedCodProducto,
           cedula: cedula || '8-888-9999',
           nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
           apellido: (primer_apellido || 'WEB').toUpperCase(),
@@ -504,7 +519,7 @@ export async function POST(request: NextRequest) {
       tipo: 'POLIZA',
       fecha_de_registro: fmtDate(today),
       cantidad_de_pago: String(cantidad_de_pago || '10'),
-      codigo_producto_agt: cod_producto || '00312',
+      codigo_producto_agt: resolvedCodProducto || '00312',
       nombre_producto: nombre_producto || 'AUTO COMPLETA',
       Responsable_de_cobro: 'CORREDOR',
       suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',
