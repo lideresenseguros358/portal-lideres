@@ -24,6 +24,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
+import { getAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
@@ -74,14 +75,6 @@ async function rawSoap(method: string, params: Record<string, string>): Promise<
   try { return JSON.parse(decoded); } catch { return decoded; }
 }
 
-async function getFreshToken(): Promise<string> {
-  const creds = getAnconCredentials();
-  const login = await rawSoap('GenerarToken', { par_usuario: creds.usuario, par_password: creds.password }) as Record<string, unknown>;
-  const token = (login?.Login as Array<Record<string, string>>)?.[0]?.Token;
-  if (!token) throw new Error('ANCON login failed');
-  console.log(`[ANCON Emisión] Fresh token: ${token.substring(0, 16)}...`);
-  return token;
-}
 
 export async function POST(request: NextRequest) {
   const t0 = Date.now();
@@ -308,7 +301,7 @@ export async function POST(request: NextRequest) {
     // ═══ STEP 1: Generate policy number ═══
     log('1/4', 'Generando número de póliza...');
     const codRamo = isCC ? '001' : '002';
-    const genToken = await getFreshToken();
+    const genToken = await getAnconToken();
     const genDocRaw = await rawSoap('GenerarNodocumento', {
       cod_compania: creds.codCompania,
       cod_sucursal: creds.codSucursal,
@@ -459,7 +452,7 @@ export async function POST(request: NextRequest) {
     // EmitirDatos/EmisionServer handles client creation internally.
     // Inspection is CC-only — not called for DT.
     log('3/4', 'Emitiendo póliza (EmisionServer)...');
-    const emitToken = await getFreshToken();
+    const emitToken = await getAnconToken();
 
     const today = new Date();
     const nextYear = new Date(today);

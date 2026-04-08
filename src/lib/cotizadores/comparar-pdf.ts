@@ -564,16 +564,16 @@ async function drawCoveragePage(
       roundedRect(page, { x: cardX, y: y - 5, width: cardW, height: 5, color: GREEN, borderRadius: 3 });
     }
 
-    // Plan badge — small pill bottom-right
+    // Plan badge — rounded pill bottom-right
     const badgeColor = isPremium ? GREEN : rgb(0.32, 0.32, 0.42);
-    const badgeW = 26, badgeH = 8;
+    const badgeW = 40, badgeH = 12;
     roundedRect(page, {
-      x: cardX + cardW - badgeW - 4, y: y - INS_H + 5,
-      width: badgeW, height: badgeH, color: badgeColor, borderRadius: 3,
+      x: cardX + cardW - badgeW - 4, y: y - INS_H + 4,
+      width: badgeW, height: badgeH, color: badgeColor, borderRadius: 6,
     });
     page.drawText(safe(planBadge), {
-      x: cardX + cardW - badgeW - 2, y: y - INS_H + 7,
-      size: 5.5, font: fontBold, color: WHITE,
+      x: cardX + cardW - badgeW - 2, y: y - INS_H + 6.5,
+      size: 6.5, font: fontBold, color: WHITE,
     });
 
     // Logo — large, centered, normalized proportions, no text
