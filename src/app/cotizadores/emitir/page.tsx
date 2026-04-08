@@ -7,6 +7,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { FaLock } from 'react-icons/fa';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
@@ -34,6 +36,11 @@ export default function EmitirPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const step = searchParams.get('step') || 'payment'; // payment, emission-data, inspection, payment-info, review
+
+  // ═══ Master privileges ═══
+  const { isMaster } = useCotizadorEdit();
+  const [availableBrokers, setAvailableBrokers] = useState<{id: string, name: string}[]>([]);
+  const [masterBrokerId, setMasterBrokerId] = useState<string>('');
   
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -87,6 +94,19 @@ export default function EmitirPage() {
 
     loadData();
   }, [router]);
+
+  // ═══ Load available brokers for master users ═══
+  useEffect(() => {
+    if (isMaster && !loading) {
+      fetch('/api/brokers')
+        .then(r => r.json())
+        .then(d => {
+          const active = (d.brokers || []).filter((b: any) => b.active !== false);
+          setAvailableBrokers(active);
+        })
+        .catch(err => console.error('Error loading brokers:', err));
+    }
+  }, [isMaster, loading]);
 
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
@@ -252,7 +272,7 @@ export default function EmitirPage() {
       let pfCardDisplay: string | undefined;
 
       // ═══ IDEMPOTENCY GUARD: Check for duplicate charges BEFORE processing ═══
-      if (pfCardData && emissionData) {
+      if (!isMaster && pfCardData && emissionData) {
         setEmissionProgress(1);
         setEmissionStep('Verificando estado de su solicitud...');
 
@@ -282,7 +302,7 @@ export default function EmitirPage() {
       }
 
       // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
-      if (pfCardData && emissionData) {
+      if (!isMaster && pfCardData && emissionData) {
         setEmissionProgress(2);
         setEmissionStep('Procesando pago con tarjeta...');
 
@@ -405,6 +425,9 @@ export default function EmitirPage() {
 
         // Build multipart: emisionData JSON + File1/File2/File3
         const extFormData = new FormData();
+        if (isMaster && masterBrokerId) {
+          extFormData.append('masterBrokerId', masterBrokerId);
+        }
         extFormData.append('emisionData', JSON.stringify({
           ...emisionCommon,
           CodPlan: selectedPlan._planCode || 411,
@@ -459,19 +482,20 @@ export default function EmitirPage() {
           trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza, clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(), cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
         // FEDPA CC: always emitted as contado to insurer, but client pays via PF on their chosen schedule
-        createPaymentOnEmission({
-          insurer: 'FEDPA',
-          policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPlan?.annualPremium || 0,
-          installments,
-          ramo: 'AUTO',
-          cobertura: 'COMPLETA',
-          pfCodOper,
-          pfRecCodOper,
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'FEDPA',
+            policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPlan?.annualPremium || 0,
+            installments,
+            ramo: 'AUTO',
+            cobertura: 'COMPLETA',
+            pfCodOper,
+            pfRecCodOper,
           pfCardType,
           pfCardDisplay,
           insurerPaymentPlan: installments > 1 ? {
@@ -480,8 +504,9 @@ export default function EmitirPage() {
             clientCuotas: installments,
             mismatch: true,
           } : undefined,
-        });
-        
+          });
+        }
+
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
         setEmissionProgress(75);
         setEmissionStep('Enviando expediente y bienvenida por correo...');
@@ -671,6 +696,7 @@ export default function EmitirPage() {
             tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,
+            ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
           }),
         });
         
@@ -712,21 +738,23 @@ export default function EmitirPage() {
           trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza, clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(), cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
-        createPaymentOnEmission({
-          insurer: 'INTERNACIONAL',
-          policyNumber: emisionResult.nroPoliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPlan?.annualPremium || 0,
-          installments,
-          ramo: 'AUTO',
-          cobertura: 'COMPLETA',
-          pfCodOper,
-          pfRecCodOper,
-          pfCardType,
-          pfCardDisplay,
-        });
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'INTERNACIONAL',
+            policyNumber: emisionResult.nroPoliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPlan?.annualPremium || 0,
+            installments,
+            ramo: 'AUTO',
+            cobertura: 'COMPLETA',
+            pfCodOper,
+            pfRecCodOper,
+            pfCardType,
+            pfCardDisplay,
+          });
+        }
         
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
         setEmissionProgress(75);
@@ -939,6 +967,7 @@ export default function EmitirPage() {
           // Cuotas
           cuotas: installments || 1,
           opcionPrima: 1,
+          ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
         };
         
         setEmissionProgress(30);
@@ -987,21 +1016,23 @@ export default function EmitirPage() {
           });
         }
         
-        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
-        createPaymentOnEmission({
-          insurer: 'REGIONAL',
-          policyNumber: emisionResult.nroPoliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: selectedPlan?.annualPremium || 0,
-          installments,
-          ramo: 'AUTO',
-          cobertura: 'COMPLETA',
-          pfCodOper,
-          pfRecCodOper,
-          pfCardType,
-          pfCardDisplay,
-        });
+        // ═══ ADM COT: Auto-create pending payment + recurrence (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'REGIONAL',
+            policyNumber: emisionResult.nroPoliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: selectedPlan?.annualPremium || 0,
+            installments,
+            ramo: 'AUTO',
+            cobertura: 'COMPLETA',
+            pfCodOper,
+            pfRecCodOper,
+            pfCardType,
+            pfCardDisplay,
+          });
+        }
         
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
         setEmissionProgress(75);
@@ -1180,6 +1211,9 @@ export default function EmitirPage() {
         // Build FormData with emission data + inspection photos + documents
         const anconForm = new FormData();
         anconForm.append('emissionData', JSON.stringify(anconEmitBody));
+        if (isMaster && masterBrokerId) {
+          anconForm.append('masterBrokerId', masterBrokerId);
+        }
 
         // Attach inspection photos
         if (inspectionPhotos.length > 0) {
@@ -1232,17 +1266,19 @@ export default function EmitirPage() {
           });
         }
 
-        // ═══ ADM COT: Auto-create pending payment ═══
-        createPaymentOnEmission({
-          insurer: 'ANCON',
-          policyNumber: anconEmisionResult.poliza || '',
-          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
-          cedula: emissionData.cedula,
-          totalPremium: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
-          installments: installments || 1,
-          ramo: 'AUTO',
-          cobertura: 'COMPLETA',
-        });
+        // ═══ ADM COT: Auto-create pending payment (skip for master) ═══
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'ANCON',
+            policyNumber: anconEmisionResult.poliza || '',
+            insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+            cedula: emissionData.cedula,
+            totalPremium: installments > 1 ? (monthlyPayment * installments) : (selectedPlan?.annualPremium || 0),
+            installments: installments || 1,
+            ramo: 'AUTO',
+            cobertura: 'COMPLETA',
+          });
+        }
 
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
         setEmissionProgress(75);
@@ -1680,10 +1716,10 @@ export default function EmitirPage() {
           {/* Header */}
           <div className="text-center mb-6">
             <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">
-              Información de Pago
+              {isMaster ? 'Emisión Master' : 'Información de Pago'}
             </h2>
             <p className="text-gray-600">
-              Completa los datos de tu tarjeta para procesar el pago
+              {isMaster ? 'La emisión master no requiere pago con tarjeta' : 'Completa los datos de tu tarjeta para procesar el pago'}
             </p>
           </div>
 
@@ -1704,36 +1740,51 @@ export default function EmitirPage() {
             </div>
           </div>
 
-          {/* Tarjeta 3D */}
-          <CreditCardInput
-            onTokenReceived={(token: string, last4: string, brand: string) => {
-              setPaymentToken(token);
-              setCardData({ last4, brand });
-              setCompletedSteps(prev => [...prev, 'payment-info']);
-              toast.success(`Tarjeta ${brand} ****${last4} registrada`);
-            }}
-            onCardDataReady={(data: CardData) => setPfCardData(data)}
-            onError={handlePaymentError}
-            environment="development"
-          />
-
-          {/* Confirmación de tarjeta */}
-          {cardData && (
-            <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
-              <svg className="w-5 h-5 text-[#8AAA19] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-              <p className="text-sm font-semibold text-green-800">
-                Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
-              </p>
+          {/* Tarjeta 3D o Overlay Master */}
+          {isMaster ? (
+            <div className="flex flex-col items-center justify-center gap-4 p-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 min-h-40">
+              <FaLock className="text-4xl text-blue-600" />
+              <p className="text-lg font-bold text-[#010139]">Usuario master detectado</p>
+              <p className="text-sm text-gray-600 text-center">La emisión no requiere pago con tarjeta.<br/>Presiona Continuar para ir al resumen.</p>
             </div>
+          ) : (
+            <>
+              <CreditCardInput
+                onTokenReceived={(token: string, last4: string, brand: string) => {
+                  setPaymentToken(token);
+                  setCardData({ last4, brand });
+                  setCompletedSteps(prev => [...prev, 'payment-info']);
+                  toast.success(`Tarjeta ${brand} ****${last4} registrada`);
+                }}
+                onCardDataReady={(data: CardData) => setPfCardData(data)}
+                onError={handlePaymentError}
+                environment="development"
+              />
+
+              {/* Confirmación de tarjeta */}
+              {cardData && (
+                <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                  <svg className="w-5 h-5 text-[#8AAA19] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                  <p className="text-sm font-semibold text-green-800">
+                    Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {/* Botón Continuar al Resumen */}
           <div className="mt-6">
             <button
-              onClick={() => router.push('/cotizadores/emitir?step=review')}
-              disabled={!paymentToken}
+              onClick={() => {
+                if (isMaster) {
+                  setCompletedSteps(prev => [...prev.filter(s => s !== 'payment-info'), 'payment-info']);
+                }
+                router.push('/cotizadores/emitir?step=review');
+              }}
+              disabled={!isMaster && !paymentToken}
               className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
-                paymentToken
+                isMaster || paymentToken
                   ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
@@ -1741,7 +1792,7 @@ export default function EmitirPage() {
             >
               Continuar al Resumen
             </button>
-            {!paymentToken && (
+            {!isMaster && !paymentToken && (
               <p className="text-xs text-gray-500 text-center mt-2">
                 Ingresa los datos de tu tarjeta para continuar
               </p>
@@ -1759,9 +1810,9 @@ export default function EmitirPage() {
 
   // Step 6: Resumen final y confirmación (todos los tipos)
   if (currentStep === 'review') {
-    // For IS Internacional: require signature before emitting
+    // For IS Internacional: require signature before emitting (unless master)
     const handleEmitClick = () => {
-      if (!signatureDataUrl) {
+      if (!isMaster && !signatureDataUrl) {
         setShowSignaturePad(true);
         return;
       }
@@ -1792,6 +1843,28 @@ export default function EmitirPage() {
         
         {/* Contenido */}
         <div className="py-8 px-4">
+          {/* Broker selector for master users */}
+          {isMaster && availableBrokers.length > 0 && (
+            <div className="max-w-2xl mx-auto mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                🏢 Asignar Corredor / Broker
+              </label>
+              <select
+                value={masterBrokerId}
+                onChange={e => setMasterBrokerId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#010139] focus:outline-none"
+              >
+                <option value="">-- Portal Líderes (por defecto) --</option>
+                {availableBrokers.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Sin selección se asigna a portal@lideresenseguros.com
+              </p>
+            </div>
+          )}
+
           <FinalQuoteSummary
             quoteData={quoteData}
             selectedPlan={selectedPlan}

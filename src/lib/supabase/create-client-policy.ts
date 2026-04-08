@@ -27,6 +27,8 @@ export interface CreateClientPolicyInput {
   start_date?: string;
   /** ISO yyyy-mm-dd */
   renewal_date?: string;
+  /** Optional broker ID override (master users only) */
+  overrideBrokerId?: string;
 }
 
 export interface CreateClientPolicyResult {
@@ -55,17 +57,21 @@ export async function crearClienteYPoliza(
   try {
     const supabase = getSupabaseAdmin();
 
-    // 1. Find broker portal@lideresenseguros.com
-    const { data: broker } = await supabase
-      .from('brokers')
-      .select('id')
-      .eq('email', 'portal@lideresenseguros.com')
-      .single();
+    // 1. Find broker (override if provided, else default to portal@)
+    let broker_id = input.overrideBrokerId;
 
-    if (!broker) {
-      throw new Error('Broker portal@lideresenseguros.com no encontrado');
+    if (!broker_id) {
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('email', 'portal@lideresenseguros.com')
+        .single();
+
+      if (!broker) {
+        throw new Error('Broker portal@lideresenseguros.com no encontrado');
+      }
+      broker_id = broker.id;
     }
-    const broker_id = broker.id;
 
     // 2. Find insurer
     const { data: insurer } = await supabase

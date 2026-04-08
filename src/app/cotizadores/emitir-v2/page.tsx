@@ -10,7 +10,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaMoneyBillWave, FaUser, FaCar, FaFileUpload, FaCamera, FaCheckCircle, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
+import { FaMoneyBillWave, FaUser, FaCar, FaFileUpload, FaCamera, FaCheckCircle, FaCreditCard, FaClipboardCheck, FaLock } from 'react-icons/fa';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 
 // Componentes de secciones
 import EmissionSection, { type SectionStatus } from '@/components/cotizadores/emision/EmissionSection';
@@ -40,7 +41,12 @@ interface Section {
 
 export default function EmitirV2Page() {
   const router = useRouter();
-  
+
+  // ═══ Master privileges ═══
+  const { isMaster } = useCotizadorEdit();
+  const [availableBrokers, setAvailableBrokers] = useState<{id: string, name: string}[]>([]);
+  const [masterBrokerId, setMasterBrokerId] = useState<string>('');
+
   // Estado global
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -177,6 +183,16 @@ export default function EmitirV2Page() {
 
     loadData();
   }, [router]);
+
+  // ═══ Load available brokers for master users ═══
+  useEffect(() => {
+    if (isMaster && !loading) {
+      fetch('/api/brokers')
+        .then(r => r.json())
+        .then(d => setAvailableBrokers((d.brokers || []).filter((b: any) => b.active)))
+        .catch(err => console.error('Error fetching brokers:', err));
+    }
+  }, [isMaster, loading]);
 
   // Actualizar estado de una sección
   const updateSectionStatus = (sectionId: string, status: SectionStatus) => {
@@ -342,8 +358,8 @@ export default function EmitirV2Page() {
       let pfCardType: string | undefined;
       let pfCardDisplay: string | undefined;
 
-      // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir ═══
-      if (pfCardData && insuredData) {
+      // ═══ PAGUELOFACIL: Cobrar tarjeta ANTES de emitir (skip for master) ═══
+      if (!isMaster && pfCardData && insuredData) {
         toast.info('Procesando pago con tarjeta...');
 
         const chargeAmount = installments > 1 ? monthlyPayment : (selectedPlan?.annualPremium || 0);
@@ -440,6 +456,7 @@ export default function EmitirV2Page() {
           Pasajero: vehicleData?.pasajeros || 5,
           Puerta: vehicleData?.puertas || 4,
           PrimaTotal: selectedPlan.annualPremium,
+          ...(isMaster && masterBrokerId ? { masterBrokerId } : {}),
         };
         
         console.log('[Emisión] Payload FEDPA:', emisionPayload);
@@ -471,27 +488,29 @@ export default function EmitirV2Page() {
           });
         }
 
-        // FEDPA CC: always emitted as contado to insurer, PF recurrence handles client's installments
-        createPaymentOnEmission({
-          insurer: 'FEDPA',
-          policyNumber: emisionResult.poliza || emisionResult.nroPoliza || '',
-          insuredName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim(),
-          cedula: insuredData?.cedula,
-          totalPremium: selectedPlan.annualPremium || 0,
-          installments,
-          ramo: 'AUTO',
-          cobertura: 'COMPLETA',
-          pfCodOper,
-          pfRecCodOper,
-          pfCardType,
-          pfCardDisplay,
-          insurerPaymentPlan: installments > 1 ? {
-            insurerCuotas: 1,
-            insurerFrequency: 'CONTADO',
-            clientCuotas: installments,
-            mismatch: true,
-          } : undefined,
-        });
+        // FEDPA CC: always emitted as contado to insurer, PF recurrence handles client's installments (skip for master)
+        if (!isMaster) {
+          createPaymentOnEmission({
+            insurer: 'FEDPA',
+            policyNumber: emisionResult.poliza || emisionResult.nroPoliza || '',
+            insuredName: `${insuredData?.primerNombre || ''} ${insuredData?.primerApellido || ''}`.trim(),
+            cedula: insuredData?.cedula,
+            totalPremium: selectedPlan.annualPremium || 0,
+            installments,
+            ramo: 'AUTO',
+            cobertura: 'COMPLETA',
+            pfCodOper,
+            pfRecCodOper,
+            pfCardType,
+            pfCardDisplay,
+            insurerPaymentPlan: installments > 1 ? {
+              insurerCuotas: 1,
+              insurerFrequency: 'CONTADO',
+              clientCuotas: installments,
+              mismatch: true,
+            } : undefined,
+          });
+        }
 
         // ========== PASO 4: Enviar expediente y guardar documentos ==========
         try {
@@ -818,7 +837,7 @@ export default function EmitirV2Page() {
             <EmissionSection
               id={paymentMethodSection.id}
               title={paymentMethodSection.title}
-              subtitle={paymentMethodSection.subtitle}
+              subtitle={isMaster ? 'Emisión Master' : paymentMethodSection.subtitle}
               icon={paymentMethodSection.icon}
               status={paymentMethodSection.status}
               canAccess={paymentMethodSection.canAccess}
@@ -826,21 +845,31 @@ export default function EmitirV2Page() {
               onActivate={() => handleActivateSection(paymentMethodSection.id)}
             >
               <div className="space-y-6">
-                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-6">
-                  <p className="text-sm text-gray-700 mb-4">
-                    Ingresa los datos de tu tarjeta de crédito para procesar el pago de la póliza.
-                    Solo aceptamos Visa y Mastercard.
-                  </p>
-                </div>
+                {isMaster ? (
+                  <div className="flex flex-col items-center justify-center gap-4 p-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                    <div className="text-5xl"><FaLock /></div>
+                    <p className="text-xl font-bold text-[#010139]">Usuario master detectado</p>
+                    <p className="text-sm text-gray-500 text-center">La emisión no requiere pago con tarjeta.<br/>Presiona Continuar para ir al resumen.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-6">
+                      <p className="text-sm text-gray-700 mb-4">
+                        Ingresa los datos de tu tarjeta de crédito para procesar el pago de la póliza.
+                        Solo aceptamos Visa y Mastercard.
+                      </p>
+                    </div>
 
-                <CreditCardInput
-                  onTokenReceived={handleCreditCardComplete}
-                  onCardDataReady={(data: CardData) => setPfCardData(data)}
-                  onError={handleCreditCardError}
-                  environment={process.env.NODE_ENV === 'production' ? 'production' : 'development'}
-                />
+                    <CreditCardInput
+                      onTokenReceived={handleCreditCardComplete}
+                      onCardDataReady={(data: CardData) => setPfCardData(data)}
+                      onError={handleCreditCardError}
+                      environment={process.env.NODE_ENV === 'production' ? 'production' : 'development'}
+                    />
+                  </>
+                )}
 
-                {creditCardToken && (
+                {!isMaster && creditCardToken && (
                   <div className="flex items-center gap-2 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
                     <FaCheckCircle className="text-[#8AAA19] text-xl flex-shrink-0" />
                     <p className="text-sm font-semibold text-green-800">
@@ -852,9 +881,9 @@ export default function EmitirV2Page() {
                 <div className="pt-4 border-t-2 border-gray-200">
                   <button
                     onClick={() => unlockNextSection('payment-method')}
-                    disabled={!creditCardToken}
+                    disabled={!isMaster && !creditCardToken}
                     className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
-                      creditCardToken
+                      isMaster || creditCardToken
                         ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
@@ -863,7 +892,7 @@ export default function EmitirV2Page() {
                     <FaClipboardCheck className="text-xl" />
                     Continuar al Resumen
                   </button>
-                  {!creditCardToken && (
+                  {!isMaster && !creditCardToken && (
                     <p className="text-xs text-gray-500 text-center mt-2">
                       Ingresa los datos de tu tarjeta para continuar
                     </p>
@@ -1001,6 +1030,28 @@ export default function EmitirV2Page() {
                   </div>
                 </div>
               </div>
+
+              {/* Broker selector for master users */}
+              {isMaster && availableBrokers.length > 0 && (
+                <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                  <label className="block text-sm font-bold text-[#010139] mb-2">
+                    🏢 Asignar Corredor / Broker
+                  </label>
+                  <select
+                    value={masterBrokerId}
+                    onChange={e => setMasterBrokerId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#010139] focus:outline-none"
+                  >
+                    <option value="">-- Portal Líderes (por defecto) --</option>
+                    {availableBrokers.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sin selección se asigna a portal@lideresenseguros.com
+                  </p>
+                </div>
+              )}
 
               {/* Botón Emitir */}
               <button

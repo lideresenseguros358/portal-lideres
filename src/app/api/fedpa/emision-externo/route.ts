@@ -20,6 +20,7 @@ import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, getFedpaDefaultEnv } from '@/li
 import { crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
 import { normalizeText } from '@/lib/fedpa/utils';
 import { resolveFedpaMarca, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
+import { getSupabaseServer } from '@/lib/supabase/server';
 
 const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
@@ -91,6 +92,29 @@ export async function POST(request: NextRequest) {
     const file1 = formData.get('File1') as File | null;
     const file2 = formData.get('File2') as File | null;
     const file3 = formData.get('File3') as File | null;
+
+    // ═══ Master broker override verification ═══
+    let masterBrokerId: string | undefined;
+    const masterBrokerIdFromForm = formData.get('masterBrokerId') as string | null;
+    if (masterBrokerIdFromForm) {
+      try {
+        const supabase = await getSupabaseServer();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (profile?.role === 'master') {
+            masterBrokerId = masterBrokerIdFromForm;
+            console.log(`[EMISOR EXTERNO] ${requestId} Master broker override:`, masterBrokerId);
+          }
+        }
+      } catch (err) {
+        console.warn(`[EMISOR EXTERNO] ${requestId} Master verification failed:`, err);
+      }
+    }
 
     // Determine environment: DEV uses get_nropoliza (test), PROD uses get_nropoliza_emitir (real)
     const defaultEnv = getFedpaDefaultEnv();
@@ -408,7 +432,8 @@ export async function POST(request: NextRequest) {
 
       const { clientId, policyId, error: dbError } = await crearClienteYPolizaFEDPA(
         fakeEmitirReq as any,
-        { success: true, poliza: nroPolizaFormatted, desde: fechaDesde, hasta: fechaHasta }
+        { success: true, poliza: nroPolizaFormatted, desde: fechaDesde, hasta: fechaHasta },
+        masterBrokerId
       );
 
       if (dbError) {

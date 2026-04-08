@@ -10,6 +10,7 @@ import { emitirPolizaCC, actualizarPlanPago, imprimirPoliza } from '@/lib/region
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseServer } from '@/lib/supabase/server';
 import type { RegionalCCEmissionBody } from '@/lib/regional/types';
 
 export const maxDuration = 60;
@@ -25,6 +26,28 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+
+    // ═══ Master broker override verification ═══
+    let masterBrokerId: string | undefined;
+    if (body.masterBrokerId) {
+      try {
+        const supabase = await getSupabaseServer();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (profile?.role === 'master') {
+            masterBrokerId = body.masterBrokerId;
+            console.log('[REGIONAL CC Emit] Master broker override:', masterBrokerId);
+          }
+        }
+      } catch (err) {
+        console.warn('[REGIONAL CC Emit] Master verification failed:', err);
+      }
+    }
 
     // Accept both raw API field names AND the friendly names sent by the CC frontend
     const numcot = body.numcot;
@@ -220,6 +243,7 @@ export async function POST(request: NextRequest) {
         ].filter(Boolean).join('\n'),
         start_date: new Date().toISOString().split('T')[0],
         renewal_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        overrideBrokerId: masterBrokerId,
       });
       if (dbResult.error) {
         console.warn('[REGIONAL CC Emit] DB save warning (non-fatal):', dbResult.error);

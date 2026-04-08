@@ -25,6 +25,7 @@ import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
+import { getSupabaseServer } from '@/lib/supabase/server';
 
 export const maxDuration = 120;
 
@@ -86,6 +87,8 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get('content-type') || '';
 
+    let masterBrokerId: string | undefined;
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const emissionDataRaw = formData.get('emissionData');
@@ -94,6 +97,28 @@ export async function POST(request: NextRequest) {
       // Extract firma data URL (base64 PNG)
       const firmaRaw = formData.get('firmaDataUrl');
       if (firmaRaw && typeof firmaRaw === 'string') firmaDataUrl = firmaRaw;
+
+      // ═══ Master broker override verification ═══
+      const masterBrokerIdFromForm = formData.get('masterBrokerId');
+      if (masterBrokerIdFromForm && typeof masterBrokerIdFromForm === 'string') {
+        try {
+          const supabase = await getSupabaseServer();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .single();
+            if (profile?.role === 'master') {
+              masterBrokerId = masterBrokerIdFromForm;
+              console.log('[ANCON Emisión] Master broker override:', masterBrokerId);
+            }
+          }
+        } catch (err) {
+          console.warn('[ANCON Emisión] Master verification failed:', err);
+        }
+      }
 
       // Extract file entries
       formData.forEach((value, key) => {
@@ -498,6 +523,7 @@ export async function POST(request: NextRequest) {
       ].filter(Boolean).join('\n'),
       start_date: new Date().toISOString().split('T')[0],
       renewal_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      overrideBrokerId: masterBrokerId,
     });
 
     if (dbResult.error) {
