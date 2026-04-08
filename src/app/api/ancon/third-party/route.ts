@@ -6,11 +6,10 @@
  *   Básico  = SOBAT BASICO TALLER  (B/.145.00) — cod 05769, ramo 020 SODA
  *   Premium = SOBAT EXPRESS PLUS    (B/.189.00) — cod 01492, ramo 020 SODA
  *
- * Quotes ANCON with each SOBAT product code to get valid noCotizacion per plan.
+ * Plans are fixed pricing (no dynamic cotización for SODA ramo).
  */
 
 import { NextResponse } from 'next/server';
-import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 
 export const maxDuration = 30;
 
@@ -50,42 +49,11 @@ const SOBAT_PLANS = {
   },
 } as const;
 
-const QUOTE_PARAMS = {
-  cod_marca: '00122',   // TOYOTA
-  cod_modelo: '10393',  // COROLLA
-  ano: String(new Date().getFullYear()),
-  suma_asegurada: '0',
-  cedula: '8-888-9999',
-  nombre: 'COTIZACION',
-  apellido: 'WEB',
-  vigencia: 'A',
-  email: 'cotizacion@lideresenseguros.com',
-  tipo_persona: 'N',
-  fecha_nac: '16/06/1994',
-  nuevo: '0',
-};
-
 export async function GET() {
   const t0 = Date.now();
 
   try {
-    // Quote both SOBAT products in parallel to get valid noCotizacion per plan
-    const [basicResult, premiumResult] = await Promise.all([
-      cotizarEstandar({ ...QUOTE_PARAMS, cod_producto: SOBAT_PLANS.basic.codProducto }),
-      cotizarEstandar({ ...QUOTE_PARAMS, cod_producto: SOBAT_PLANS.premium.codProducto }),
-    ]);
-
-    const basicCotizacion = basicResult.data?.noCotizacion || '';
-    const premiumCotizacion = premiumResult.data?.noCotizacion || '';
-    const apiOnline = basicResult.success && !!basicCotizacion;
-
-    if (!apiOnline) {
-      console.warn('[API ANCON third-party] ANCON API offline');
-    }
-
-    console.log(`[API ANCON third-party] SOBAT BASICO (05769) → cotización ${basicCotizacion}`);
-    console.log(`[API ANCON third-party] SOBAT EXPRESS PLUS (01492) → cotización ${premiumCotizacion}`);
-
+    // Return fixed SOBAT plans (no dynamic cotización for SODA ramo)
     const plans = [
       {
         planType: 'basic',
@@ -94,8 +62,8 @@ export async function GET() {
         coverageList: [...SOBAT_PLANS.basic.coverageList],
         endosoBenefits: [...SOBAT_PLANS.basic.endosoBenefits],
         endoso: SOBAT_PLANS.basic.name,
-        idCotizacion: basicCotizacion,
-        noCotizacion: basicCotizacion,
+        idCotizacion: '',
+        noCotizacion: '',
         optionName: 'opcion1',
         _codProducto: SOBAT_PLANS.basic.codProducto,
         _nombreProducto: SOBAT_PLANS.basic.name,
@@ -109,8 +77,8 @@ export async function GET() {
         coverageList: [...SOBAT_PLANS.premium.coverageList],
         endosoBenefits: [...SOBAT_PLANS.premium.endosoBenefits],
         endoso: SOBAT_PLANS.premium.name,
-        idCotizacion: premiumCotizacion,
-        noCotizacion: premiumCotizacion,
+        idCotizacion: '',
+        noCotizacion: '',
         optionName: 'opcion1',
         _codProducto: SOBAT_PLANS.premium.codProducto,
         _nombreProducto: SOBAT_PLANS.premium.name,
@@ -124,10 +92,10 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      online: apiOnline,
+      online: true,
       isRealAPI: true,
       plans,
-      noCotizacion: basicCotizacion,
+      noCotizacion: '',
       _timing: { totalMs: elapsed },
     });
   } catch (error: unknown) {
