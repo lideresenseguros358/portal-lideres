@@ -2,19 +2,21 @@ import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 
-const NAVY = rgb(1/255, 1/255, 57/255);      // #010139
-const GREEN = rgb(138/255, 170/255, 25/255); // #8AAA19
+const NAVY = rgb(1/255, 1/255, 57/255);       // #010139
+const GREEN = rgb(138/255, 170/255, 25/255);  // #8AAA19
 const WHITE = rgb(1, 1, 1);
 const GRAY = rgb(0.4, 0.4, 0.4);
 const LIGHT_GRAY = rgb(0.95, 0.95, 0.95);
 const DARK_GRAY = rgb(0.3, 0.3, 0.3);
+const BLUE_LIGHT = rgb(0.96, 0.96, 0.99);     // Light blue-ish
 
-const PAGE_W = 612;
-const PAGE_H = 792;
-const MARGIN = 20;
-const CARD_MARGIN = 8;
-const HEADER_HEIGHT = 60;
-const FOOTER_HEIGHT = 30;
+// Landscape dimensions (wider for better horizontal card layout)
+const PAGE_W = 1100;
+const PAGE_H = 700;
+const MARGIN = 30;
+const CARD_MARGIN = 20;
+const HEADER_HEIGHT = 80;
+const FOOTER_HEIGHT = 40;
 
 interface PDFQuote {
   insurerName: string;
@@ -104,27 +106,19 @@ async function drawPage(
   // Draw header
   drawHeader(page, font, fontBold, logoImg, pageTitle);
 
-  // Draw 2×2 grid of cards
+  // Draw cards in horizontal layout (2-3 per row depending on content)
+  const cardsPerRow = 2;
   const gridStartY = PAGE_H - HEADER_HEIGHT - MARGIN;
-  const cardWidth = (PAGE_W - 2 * MARGIN - CARD_MARGIN) / 2;
-  const cardHeight = (gridStartY - FOOTER_HEIGHT - CARD_MARGIN) / 2;
+  const cardWidth = (PAGE_W - 2 * MARGIN - (cardsPerRow - 1) * CARD_MARGIN) / cardsPerRow;
+  const cardHeight = gridStartY - FOOTER_HEIGHT - MARGIN;
 
-  const positions = [
-    { x: MARGIN, y: gridStartY - cardHeight, col: 0, row: 0 },
-    { x: MARGIN + cardWidth + CARD_MARGIN, y: gridStartY - cardHeight, col: 1, row: 0 },
-    { x: MARGIN, y: gridStartY - cardHeight - CARD_MARGIN - cardHeight, col: 0, row: 1 },
-    {
-      x: MARGIN + cardWidth + CARD_MARGIN,
-      y: gridStartY - cardHeight - CARD_MARGIN - cardHeight,
-      col: 1,
-      row: 1,
-    },
-  ];
-
-  for (let i = 0; i < Math.min(4, quotesList.length); i++) {
+  let cardIndex = 0;
+  for (let i = 0; i < Math.min(cardsPerRow, quotesList.length); i++) {
     const quote = quotesList[i];
-    const pos = positions[i];
-    drawCard(page, font, fontBold, quote, insurerLogos, pos.x, pos.y, cardWidth, cardHeight);
+    if (!quote) continue;
+    const x = MARGIN + i * (cardWidth + CARD_MARGIN);
+    drawCard(page, font, fontBold, quote, insurerLogos, x, gridStartY - cardHeight, cardWidth, cardHeight);
+    cardIndex++;
   }
 
   // Draw footer
@@ -132,7 +126,7 @@ async function drawPage(
 }
 
 function drawHeader(page: PDFPage, font: any, fontBold: any, logoImg: any, pageTitle: string) {
-  // White background
+  // White background with bottom border
   page.drawRectangle({
     x: 0,
     y: PAGE_H - HEADER_HEIGHT,
@@ -140,32 +134,34 @@ function drawHeader(page: PDFPage, font: any, fontBold: any, logoImg: any, pageT
     height: HEADER_HEIGHT,
     color: WHITE,
     borderColor: LIGHT_GRAY,
-    borderWidth: 1,
+    borderWidth: 2,
   });
 
-  // Logo
+  // Logo - preserve aspect ratio (assuming 200x60 original size)
   if (logoImg) {
+    const logoWidth = 60;
+    const logoHeight = 50;
     page.drawImage(logoImg, {
       x: MARGIN,
       y: PAGE_H - HEADER_HEIGHT + 15,
-      width: 100,
-      height: 30,
+      width: logoWidth,
+      height: logoHeight,
     });
   }
 
   // Title
   page.drawText('Comparativa de Cobertura Completa', {
-    x: MARGIN + 110,
-    y: PAGE_H - HEADER_HEIGHT + 35,
-    size: 14,
+    x: MARGIN + 75,
+    y: PAGE_H - HEADER_HEIGHT + 40,
+    size: 16,
     font: fontBold,
     color: NAVY,
   });
 
   page.drawText(pageTitle, {
-    x: MARGIN + 110,
-    y: PAGE_H - HEADER_HEIGHT + 18,
-    size: 10,
+    x: MARGIN + 75,
+    y: PAGE_H - HEADER_HEIGHT + 20,
+    size: 12,
     font: font,
     color: GRAY,
   });
@@ -182,21 +178,23 @@ function drawCard(
   width: number,
   height: number
 ) {
-  // Card background
+  // Card border and background
   page.drawRectangle({
     x,
     y,
     width,
     height,
     color: WHITE,
-    borderColor: LIGHT_GRAY,
-    borderWidth: 1,
+    borderColor: GRAY,
+    borderWidth: 0.5,
   });
 
-  let contentY = y + height - 8;
+  let contentY = y + height - 6;
+  const padding = 10;
+  const lineHeight = 11;
 
-  // 1. Header band (NAVY + logo + plan type)
-  const headerHeight = 36;
+  // ═══ 1. HEADER (Navy background with logo, name, badge) ═══
+  const headerHeight = 45;
   page.drawRectangle({
     x,
     y: contentY - headerHeight,
@@ -205,209 +203,207 @@ function drawCard(
     color: NAVY,
   });
 
-  // Insurer logo in header (left)
+  // Insurer logo (left side of header)
   const insurerKey = quote.insurerName?.toUpperCase();
+  let logoX = x + padding;
   if (insurerKey && insurerLogos[insurerKey]) {
     page.drawImage(insurerLogos[insurerKey], {
-      x: x + 5,
-      y: contentY - headerHeight + 3,
+      x: logoX,
+      y: contentY - headerHeight + 8,
       width: 28,
       height: 28,
     });
   }
 
-  // Insurer name (white text)
-  page.drawText(quote.insurerName || 'Asegurador', {
-    x: x + 38,
-    y: contentY - headerHeight + 15,
-    size: 10,
-    font: fontBold,
-    color: WHITE,
-    maxWidth: width - 50,
-  });
-
-  // Plan type badge (right)
+  // Insurer name + plan type in header
   const planLabel = quote.planType === 'basico' ? 'BÁSICO' : 'PREMIUM';
-  page.drawText(planLabel, {
-    x: x + width - 35,
-    y: contentY - headerHeight + 15,
-    size: 7,
+  const nameAndType = `${quote.insurerName || 'Asegurador'} ${planLabel}`;
+  page.drawText(nameAndType, {
+    x: logoX + 35,
+    y: contentY - headerHeight + 18,
+    size: 9,
     font: fontBold,
     color: WHITE,
+    maxWidth: width - 60,
   });
 
   contentY -= headerHeight + 4;
 
-  // 2. Price block (GREEN background)
-  const priceBlock = 30;
+  // ═══ 2. PRICE SECTION (Light blue background) ═══
+  const priceBlockHeight = 38;
   page.drawRectangle({
     x,
-    y: contentY - priceBlock,
+    y: contentY - priceBlockHeight,
     width,
-    height: priceBlock,
-    color: GREEN,
+    height: priceBlockHeight,
+    color: BLUE_LIGHT,
   });
 
   const totalPrice = quote._priceBreakdown?.totalAlContado ?? quote.annualPremium ?? 0;
   const priceText = `$${totalPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-  page.drawText('Total al Contado', {
-    x: x + 5,
-    y: contentY - priceBlock + 18,
-    size: 7,
-    font: font,
-    color: WHITE,
-  });
-
-  page.drawText(priceText, {
-    x: x + 5,
-    y: contentY - priceBlock + 6,
-    size: 11,
-    font: fontBold,
-    color: WHITE,
-  });
-
-  contentY -= priceBlock + 4;
-
-  // 3. Deductibles
-  const deductText = formatDeductibles(quote);
-  page.drawText(deductText, {
-    x: x + 4,
-    y: contentY,
+  page.drawText('Al Contado', {
+    x: x + padding,
+    y: contentY - priceBlockHeight + 25,
     size: 7,
     font: font,
     color: DARK_GRAY,
-    maxWidth: width - 8,
   });
 
-  contentY -= 13;
-
-  // 4. Coberturas (with checkmarks)
-  const coberturaLabel = 'Coberturas:';
-  page.drawText(coberturaLabel, {
-    x: x + 4,
-    y: contentY,
-    size: 7,
+  page.drawText(priceText, {
+    x: x + padding,
+    y: contentY - priceBlockHeight + 10,
+    size: 13,
     font: fontBold,
     color: NAVY,
   });
 
+  contentY -= priceBlockHeight + 4;
+
+  // ═══ 3. DEDUCTIBLES ═══
+  const deductText = formatDeductiblesShort(quote);
+  page.drawText(deductText, {
+    x: x + padding,
+    y: contentY,
+    size: 6.5,
+    font: font,
+    color: GRAY,
+    maxWidth: width - 2 * padding,
+  });
+
   contentY -= 10;
 
+  // ═══ 4. COBERTURAS ═══
+  page.drawText('Coberturas:', {
+    x: x + padding,
+    y: contentY,
+    size: 8,
+    font: fontBold,
+    color: NAVY,
+  });
+
+  contentY -= lineHeight;
+
   const coberturas = quote._coberturasDetalladas ?? [];
-  let coberturasShown = 0;
-  for (const cob of coberturas.slice(0, 4)) {
-    // Use color to indicate inclusion, no Unicode symbols (WinAnsi font limitation)
-    const txt = cob.nombre;
+  for (const cob of coberturas.slice(0, 5)) {
+    // Bullet point with inclusion status via color
+    const bullet = '•';
+    const txt = `${bullet} ${cob.nombre}`;
+    const textColor = cob.incluida ? rgb(70/255, 130/255, 70/255) : GRAY; // Green if included, gray if not
     page.drawText(txt, {
-      x: x + 6,
+      x: x + padding,
       y: contentY,
-      size: 6,
+      size: 6.5,
       font: font,
-      color: cob.incluida ? rgb(50/255, 100/255, 50/255) : GRAY,
-      maxWidth: width - 12,
+      color: textColor,
+      maxWidth: width - 2 * padding,
     });
-    contentY -= 8;
-    coberturasShown++;
+    contentY -= lineHeight;
   }
 
-  if (coberturas.length > 4) {
-    page.drawText(`+${coberturas.length - 4} más`, {
-      x: x + 6,
+  if (coberturas.length > 5) {
+    page.drawText(`+${coberturas.length - 5} coberturas más`, {
+      x: x + padding,
       y: contentY,
       size: 6,
       font: font,
       color: GRAY,
     });
-    contentY -= 8;
+    contentY -= lineHeight;
   }
 
-  contentY -= 2;
+  contentY -= 3;
 
-  // 5. Beneficios
+  // ═══ 5. BENEFICIOS ═══
   const beneficios = quote._beneficios ?? [];
   if (beneficios.length > 0) {
-    const benLabel = 'Beneficios:';
-    page.drawText(benLabel, {
-      x: x + 4,
+    page.drawText('Beneficios:', {
+      x: x + padding,
       y: contentY,
-      size: 7,
+      size: 8,
       font: fontBold,
       color: NAVY,
     });
+    contentY -= lineHeight;
 
-    contentY -= 9;
-
-    for (const ben of beneficios.slice(0, 2)) {
-      // Use color to indicate inclusion, no Unicode symbols (WinAnsi font limitation)
-      const txt = ben.nombre;
+    for (const ben of beneficios.slice(0, 3)) {
+      const bullet = ben.incluido ? '✔' : '○';
+      const txt = `${bullet} ${ben.nombre}`;
       page.drawText(txt, {
-        x: x + 6,
+        x: x + padding,
         y: contentY,
-        size: 6,
+        size: 6.5,
         font: font,
-        color: ben.incluido ? rgb(50/255, 100/255, 50/255) : GRAY,
-        maxWidth: width - 12,
+        color: ben.incluido ? GREEN : GRAY,
+        maxWidth: width - 2 * padding,
       });
-      contentY -= 8;
+      contentY -= lineHeight;
     }
 
-    if (beneficios.length > 2) {
-      page.drawText(`+${beneficios.length - 2} más`, {
-        x: x + 6,
+    if (beneficios.length > 3) {
+      page.drawText(`+${beneficios.length - 3} beneficios más`, {
+        x: x + padding,
         y: contentY,
         size: 6,
         font: font,
         color: GRAY,
       });
-      contentY -= 8;
+      contentY -= lineHeight;
     }
   }
 
   contentY -= 2;
 
-  // 6. Endosos (if any)
+  // ═══ 6. ENDOSOS ═══
   const endosos = quote._endosos ?? [];
   const endosoIncluido = quote._endosoIncluido;
 
   if (endosos.length > 0 || endosoIncluido) {
-    const endLabel = 'Endosos:';
-    page.drawText(endLabel, {
-      x: x + 4,
+    page.drawText('Endosos:', {
+      x: x + padding,
       y: contentY,
-      size: 7,
+      size: 8,
       font: fontBold,
       color: NAVY,
     });
-
-    contentY -= 9;
+    contentY -= lineHeight;
 
     if (endosoIncluido) {
-      const endText = `+ ${endosoIncluido}`;
-      page.drawText(endText, {
-        x: x + 6,
+      page.drawText(`+ ${endosoIncluido}`, {
+        x: x + padding,
         y: contentY,
-        size: 6,
+        size: 6.5,
         font: fontBold,
         color: GREEN,
+        maxWidth: width - 2 * padding,
       });
-      contentY -= 8;
+      contentY -= lineHeight;
     }
 
-    for (const endoso of endosos.slice(0, 1)) {
+    for (const endoso of endosos.slice(0, 2)) {
       if (endoso.incluido) {
-        const txt = `+ ${endoso.nombre}`;
-        page.drawText(txt, {
-          x: x + 6,
+        page.drawText(`+ ${endoso.nombre}`, {
+          x: x + padding,
           y: contentY,
-          size: 6,
+          size: 6.5,
           font: font,
           color: GREEN,
+          maxWidth: width - 2 * padding,
         });
-        contentY -= 8;
+        contentY -= lineHeight;
       }
     }
   }
+}
+
+function formatDeductiblesShort(quote: PDFQuote): string {
+  const comp = quote._deduciblesReales?.comprensivo;
+  const colis = quote._deduciblesReales?.colisionVuelco;
+
+  const compText = comp ? `Comprensivo: ${comp.label}` : 'Comprensivo: —';
+  const colisText = colis ? `Colisión: ${colis.label}` : 'Colisión: —';
+
+  return `${compText}  |  ${colisText}`;
 }
 
 function formatDeductibles(quote: PDFQuote): string {
