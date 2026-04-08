@@ -16,12 +16,13 @@ import {
   parseEndosoBeneficiosFromAPI,
 } from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
-import { FaCar, FaCompressArrowsAlt, FaExclamationTriangle, FaDownload } from 'react-icons/fa';
+import { FaCar, FaCompressArrowsAlt, FaExclamationTriangle } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
 import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 import { useCotizadorEdit } from '@/context/CotizadorEditContext';
+import { usePDFDownload } from '@/context/PDFDownloadContext';
 
 // A7: Scroll to top al montar
 if (typeof window !== 'undefined') {
@@ -1370,13 +1371,13 @@ export default function ComparePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { editMode: contextEditMode, insurerSettings, loadingSettings, toggleInsurerSetting, isMaster } = useCotizadorEdit();
+  const { setDownloadHandler, setIsDownloading } = usePDFDownload();
   const editMode = contextEditMode || searchParams.get('edit') === '1';
 
   const [loading, setLoading] = useState(!editMode); // skip loading in edit mode
   const [quoteData, setQuoteData] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [offlineInsurers, setOfflineInsurers] = useState<string[]>([]);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -1629,7 +1630,7 @@ export default function ComparePage() {
   // Handle PDF download for master users
   const handleDownloadPDF = async () => {
     if (!quotes.length) return;
-    setDownloadingPDF(true);
+    setIsDownloading(true);
     try {
       const res = await fetch('/api/cotizadores/comparativa-pdf', {
         method: 'POST',
@@ -1649,9 +1650,21 @@ export default function ComparePage() {
       console.error('Error descargando PDF:', err);
       toast.error('No se pudo generar el PDF');
     } finally {
-      setDownloadingPDF(false);
+      setIsDownloading(false);
     }
   };
+
+  // Register PDF download handler in global context (only when on comparar page with quotes)
+  useEffect(() => {
+    if (isMaster && quotes.length > 0 && !editMode) {
+      setDownloadHandler(() => handleDownloadPDF);
+    } else {
+      setDownloadHandler(null);
+    }
+    return () => {
+      setDownloadHandler(null);
+    };
+  }, [isMaster, quotes.length, editMode, setDownloadHandler]);
 
   // ── Edit mode: skip normal flow and show insurer cards ──
   if (editMode) {
@@ -1707,25 +1720,6 @@ export default function ComparePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      {/* Download PDF Button for Master Users - Fixed in header area, left side */}
-      {isMaster && quotes.length > 0 && (
-        <button
-          onClick={handleDownloadPDF}
-          disabled={downloadingPDF}
-          title="Descargar PDF con todas las cotizaciones"
-          className="fixed top-[68px] left-4 z-50 px-3 py-2 bg-[#8AAA19] text-white rounded-lg shadow-lg hover:bg-[#7a9415] transition-colors disabled:opacity-60 text-sm font-semibold flex items-center gap-2"
-        >
-          {downloadingPDF ? (
-            <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-          ) : (
-            <>
-              <FaDownload className="w-4 h-4" />
-              <span className="hidden sm:inline">Descargar PDF</span>
-            </>
-          )}
-        </button>
-      )}
-
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <Breadcrumb 

@@ -7,11 +7,12 @@
 
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { FaSignOutAlt, FaEdit, FaTimes } from 'react-icons/fa';
+import { FaSignOutAlt, FaEdit, FaTimes, FaDownload } from 'react-icons/fa';
 import MobileBottomNav from '@/components/cotizadores/mobile/MobileBottomNav';
 import { usePathname } from 'next/navigation';
 import { supabaseClient } from '@/lib/supabase/client';
 import { CotizadorEditProvider, useCotizadorEdit } from '@/context/CotizadorEditContext';
+import { PDFDownloadProvider, usePDFDownload } from '@/context/PDFDownloadContext';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mobile animation CSS — injected once in the layout so every cotizador page
@@ -89,6 +90,7 @@ const MOBILE_ANIMATION_CSS = `
 // Header component that reads editMode from context
 function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAuth: boolean }) {
   const { editMode, setEditMode } = useCotizadorEdit();
+  const { onDownloadPDF, isDownloading } = usePDFDownload();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -117,30 +119,50 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
     <header className="bg-white shadow-md border-b-2 border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          {/* Edit button (left side, visible only if master) */}
-          {!loadingAuth && isMaster && (
-            <button
-              onClick={() => setEditMode(!editMode)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                editMode
-                  ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'bg-[#8AAA19] text-white hover:bg-[#7a9415]'
-              }`}
-              title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
-            >
-              {editMode ? (
-                <>
-                  <FaTimes className="text-lg" />
-                  <span className="hidden sm:inline">Salir edición</span>
-                </>
-              ) : (
-                <>
-                  <FaEdit className="text-lg" />
-                  <span className="hidden sm:inline">Editar</span>
-                </>
-              )}
-            </button>
-          )}
+          {/* Left side buttons (Edit + Download PDF) */}
+          <div className="flex items-center gap-2">
+            {/* Edit button (visible only if master) */}
+            {!loadingAuth && isMaster && (
+              <button
+                onClick={() => setEditMode(!editMode)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                  editMode
+                    ? 'bg-red-500 text-white hover:bg-red-600'
+                    : 'bg-[#8AAA19] text-white hover:bg-[#7a9415]'
+                }`}
+                title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
+              >
+                {editMode ? (
+                  <>
+                    <FaTimes className="text-lg" />
+                    <span className="hidden sm:inline">Salir edición</span>
+                  </>
+                ) : (
+                  <>
+                    <FaEdit className="text-lg" />
+                    <span className="hidden sm:inline">Editar</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* PDF Download button (visible only on comparar page and if master) */}
+            {!loadingAuth && isMaster && onDownloadPDF && (
+              <button
+                onClick={onDownloadPDF}
+                disabled={isDownloading}
+                className="p-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
+                title="Descargar comparativa PDF"
+              >
+                {isDownloading ? (
+                  <span className="animate-spin inline-block w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full" />
+                ) : (
+                  <FaDownload className="w-5 h-5" />
+                )}
+              </button>
+            )}
+          </div>
+
           {!isMaster && <div />} {/* Spacer if not master */}
 
           {/* Contenedor derecho con avatar y texto */}
@@ -261,8 +283,9 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
   }, [pathname]);
 
   return (
-    <CotizadorEditProvider isMaster={isMaster}>
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <PDFDownloadProvider>
+      <CotizadorEditProvider isMaster={isMaster}>
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         {/* Mobile animation engine — injected once for the entire cotizadores module */}
         <style dangerouslySetInnerHTML={{ __html: MOBILE_ANIMATION_CSS }} />
 
@@ -318,5 +341,6 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
 
       </div>
     </CotizadorEditProvider>
+    </PDFDownloadProvider>
   );
 }
