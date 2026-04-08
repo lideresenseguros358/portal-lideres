@@ -343,8 +343,14 @@ export default function EmitirV2Page() {
   // Emisión final
   const handleConfirmEmission = async () => {
     if (isEmitting) return;
+
+    if (isMaster && !masterBrokerId) {
+      toast.error('Por favor, asigna un corredor antes de emitir');
+      return;
+    }
+
     setIsEmitting(true);
-    
+
     try {
       toast.info('Emitiendo póliza...');
       
@@ -1044,11 +1050,13 @@ export default function EmitirV2Page() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 transition-colors outline-none appearance-none cursor-pointer"
                     style={{backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem'}}
                   >
-                    <option value="">Portal Líderes (por defecto)</option>
                     {availableBrokers.map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
+                  {!masterBrokerId && (
+                    <p className="text-xs text-red-600 mt-2 font-semibold">⚠️ Debes asignar un corredor antes de emitir</p>
+                  )}
                 </div>
               )}
 
