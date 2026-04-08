@@ -90,12 +90,12 @@ export function CotizadorEditProvider({ children, isMaster }: CotizadorEditProvi
     [isMaster]
   );
 
-  // Load settings on mount if master
+  // Load settings on mount (always needed for filtering active insurers, even for public users)
   useEffect(() => {
-    if (isMaster && insurerSettings.length === 0) {
+    if (insurerSettings.length === 0 && !loadingSettings) {
       loadSettings();
     }
-  }, [isMaster, loadSettings, insurerSettings.length]);
+  }, [loadSettings, insurerSettings.length, loadingSettings]);
 
   return (
     <CotizadorEditContext.Provider
