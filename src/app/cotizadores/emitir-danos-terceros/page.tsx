@@ -1163,10 +1163,11 @@ export default function EmitirDanosTercerosPage() {
 
         const tpQuoteRaw2 = sessionStorage.getItem('thirdPartyQuote');
         const tpQuote2 = tpQuoteRaw2 ? JSON.parse(tpQuoteRaw2) : null;
+        // noCotizacion can be empty — backend will generate one if needed
         const noCotizacion = selectedPlan._idCotizacion || tpQuote2?.idCotizacion || '';
 
-        if (!noCotizacion) {
-          throw new Error('No se encontró número de cotización ANCON');
+        if (!selectedPlan?._codProducto) {
+          throw new Error('Invalid plan: missing product code');
         }
 
         setEmissionProgress(20);
