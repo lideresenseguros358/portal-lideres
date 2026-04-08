@@ -30,9 +30,25 @@ const tokenFetchPromises: Record<ISEnvironment, Promise<string> | null> = {
   production: null,
 };
 
-const TOKEN_TTL_HOURS = 23;
+const TOKEN_TTL_HOURS = 23; // fallback si no podemos leer el exp del JWT
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Extrae la fecha de expiración real del JWT (campo `exp`).
+ * Retorna null si no se puede leer.
+ */
+function getJwtExpiry(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    const exp = typeof payload.exp === 'string' ? parseInt(payload.exp, 10) : payload.exp;
+    return typeof exp === 'number' && !isNaN(exp) ? exp * 1000 : null; // → ms
+  } catch {
+    return null;
+  }
+}
 
 function getPrimaryToken(env: ISEnvironment): string {
   const token = env === 'production'
@@ -87,9 +103,15 @@ async function callTokenEndpoint(
   label: string,
   method: 'GET' | 'POST' = 'GET',
 ): Promise<string> {
+  const isPost = method === 'POST';
   const response = await fetch(url, {
     method,
-    headers: { Authorization: `Bearer ${primaryToken}`, Accept: 'application/json' },
+    headers: {
+      Authorization: `Bearer ${primaryToken}`,
+      Accept: 'application/json',
+      ...(isPost ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(isPost ? { body: '{}' } : {}),
   });
 
   const status = response.status;
@@ -125,8 +147,17 @@ async function readTokenFromSupabase(env: ISEnvironment): Promise<string | null>
     if (!data) return null;
 
     const expiresAt = new Date(data.expires_at).getTime();
-    if (expiresAt <= Date.now() + 5 * 60 * 1000) {
-      // Expira en menos de 5 min → no usarlo
+    const minValid = Date.now() + 5 * 60 * 1000; // al menos 5 min de vida
+
+    if (expiresAt <= minValid) {
+      // Expiró según nuestro registro → no usarlo
+      return null;
+    }
+
+    // Verificar también el exp real del JWT (IS puede devolver tokens con vida más corta)
+    const jwtExp = getJwtExpiry(data.token);
+    if (jwtExp && jwtExp <= minValid) {
+      console.warn(`[IS Token Manager] Token en Supabase tiene JWT expirado (exp: ${new Date(jwtExp).toISOString()}), descartando`);
       return null;
     }
 
@@ -185,10 +216,17 @@ async function fetchTokenFromIS(env: ISEnvironment): Promise<string> {
     console.log('[IS Token Manager] Paso 1: Recuperando token con GET /tokens/diario...');
     const token = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario', 'GET');
     if (token && token !== primaryToken) {
-      console.log('[IS Token Manager] ✅ Token diario RECUPERADO vía GET /tokens/diario');
-      return token;
+      // Verificar que el token no esté expirado (IS a veces devuelve tokens viejos)
+      const exp = getJwtExpiry(token);
+      const minValid = Date.now() + 5 * 60 * 1000; // debe tener al menos 5 min de vida
+      if (exp && exp > minValid) {
+        console.log(`[IS Token Manager] ✅ Token diario RECUPERADO vía GET /tokens/diario (exp: ${new Date(exp).toISOString()})`);
+        return token;
+      }
+      console.warn(`[IS Token Manager] /tokens/diario devolvió token EXPIRADO o a punto de expirar (exp: ${exp ? new Date(exp).toISOString() : 'desconocido'}). Generando nuevo...`);
+    } else {
+      console.warn('[IS Token Manager] /tokens/diario devolvió el token principal, intentando generar...');
     }
-    console.warn('[IS Token Manager] /tokens/diario devolvió el token principal, intentando generar...');
   } catch (e: any) {
     console.warn(`[IS Token Manager] GET /tokens/diario falló: ${e.message}. Intentando generar...`);
   }
@@ -236,7 +274,11 @@ export async function getDailyToken(env: ISEnvironment): Promise<string> {
 
       // L3: IS API
       const token = await fetchTokenFromIS(env);
-      const expiresAt = now + TOKEN_TTL_HOURS * 60 * 60 * 1000;
+
+      // Usar el exp real del JWT; si no disponible, fallback a TOKEN_TTL_HOURS
+      const jwtExp = getJwtExpiry(token);
+      const expiresAt = (jwtExp && jwtExp > now) ? jwtExp : now + TOKEN_TTL_HOURS * 60 * 60 * 1000;
+      console.log(`[IS Token Manager] TTL token: hasta ${new Date(expiresAt).toISOString()}`);
 
       // Guardar en L1
       tokenCache[env] = { token, expiresAt };
@@ -254,10 +296,20 @@ export async function getDailyToken(env: ISEnvironment): Promise<string> {
 }
 
 /**
- * Invalidar caché de token (fuerza renovación en la próxima llamada)
+ * Invalidar caché de token (fuerza renovación en la próxima llamada).
+ * Limpia L1 (memoria) Y L2 (Supabase) para que la siguiente llamada
+ * vaya directo a IS API y no reutilice un token ya rechazado.
  */
-export function invalidateToken(env: ISEnvironment): void {
+export async function invalidateToken(env: ISEnvironment): Promise<void> {
   tokenCache[env] = null;
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const sb = getSupabaseAdmin();
+    await sb.from('is_daily_tokens').delete().eq('environment', env);
+    console.log('[IS Token Manager] Cache L2 invalidado (Supabase)');
+  } catch (e: any) {
+    console.warn('[IS Token Manager] No se pudo invalidar cache L2:', e?.message);
+  }
 }
 
 /**
@@ -269,7 +321,7 @@ export async function getDailyTokenWithRetry(env: ISEnvironment, maxRetries = 1)
   } catch (error: any) {
     if (maxRetries > 0 && error.message?.includes('WAF')) {
       console.warn('[IS Token Manager] Bloqueo WAF, invalidando cache y reintentando...');
-      invalidateToken(env);
+      await invalidateToken(env);
       return getDailyTokenWithRetry(env, maxRetries - 1);
     }
     throw error;

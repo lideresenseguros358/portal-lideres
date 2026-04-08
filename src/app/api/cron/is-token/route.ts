@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   
   for (const env of ['development', 'production'] as ISEnvironment[]) {
     try {
-      invalidateToken(env);
+      await invalidateToken(env);
       const token = await getDailyTokenWithRetry(env);
       results[env] = token ? `OK (${token.substring(0, 20)}...)` : 'FAILED';
     } catch (error: any) {

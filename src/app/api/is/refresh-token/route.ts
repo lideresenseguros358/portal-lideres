@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
     
     console.log(`[Token API] Renovando token diario para ${env}...`);
     
-    // Invalidar cache actual
-    invalidateToken(env);
+    // Invalidar cache actual (L1+L2)
+    await invalidateToken(env);
     
     // Obtener nuevo token
     const newToken = await getDailyTokenWithRetry(env);

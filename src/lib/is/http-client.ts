@@ -302,9 +302,9 @@ export async function isRequest<T = any>(
       if (response.status === 401 && !skipTokenRefresh && attempt === 0) {
         console.log('[IS] 401 recibido. Token usado (primeros 30 chars):', authToken.substring(0, 30) + '...');
         console.log('[IS] 401 response body:', responseText.substring(0, 200));
-        console.log('[IS] INVALIDANDO cache y regenerando token diario...');
-        // CRÍTICO: Invalidar cache ANTES de pedir nuevo token
-        invalidateToken(env);
+        console.log('[IS] INVALIDANDO cache L1+L2 y regenerando token diario...');
+        // CRÍTICO: Invalidar L1+L2 ANTES de pedir nuevo token (L2=Supabase)
+        await invalidateToken(env);
         const newToken = await refreshDailyToken(env);
         if (newToken) {
           console.log('[IS] Nuevo token (primeros 30 chars):', newToken.substring(0, 30) + '...');
