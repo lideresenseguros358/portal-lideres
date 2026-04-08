@@ -441,7 +441,8 @@ export async function uploadInspectionAndDocuments(
   tipoPersona: string,
   polizaNumber: string,     // Policy number from GenerarNodocumento — required by REST endpoint
   files: Record<string, { buffer: Buffer; name: string; type: string }>,
-  solicitudBuffer?: Buffer  // Pre-generated Solicitud de Seguros PDF (doc id=1)
+  solicitudBuffer?: Buffer,   // Pre-generated Solicitud de Seguros PDF (doc id=1)
+  diligenciaBuffer?: Buffer   // Pre-generated Debida Diligencia PDF (doc id=2, "Conoce a tu cliente")
 ): Promise<{ success: boolean; uploaded: number; failed: number; errors: string[] }> {
   const docsResult = await getRequiredDocuments(tipoPersona);
   if (!docsResult.success || !docsResult.data?.listado?.length) {
@@ -457,11 +458,14 @@ export async function uploadInspectionAndDocuments(
     const id = doc.id_archivo;
     let fileData: { buffer: Buffer; name: string; type: string } | undefined;
 
-    if ((id === '1' || id === '2') && solicitudBuffer) {
-      // Doc 1: Solicitud de Seguros — generated PDF
-      // Doc 2: Conoce a tu cliente — requerida=1, mapped to the same solicitud PDF
-      const docName = id === '2' ? 'conoce_a_tu_cliente.pdf' : 'solicitud_ancon.pdf';
-      fileData = { buffer: solicitudBuffer, name: docName, type: 'application/pdf' };
+    if (id === '1' && solicitudBuffer) {
+      // Doc 1: Solicitud de Seguros — official ANCON form filled with client data
+      fileData = { buffer: solicitudBuffer, name: 'solicitud_ancon.pdf', type: 'application/pdf' };
+    } else if (id === '2' && (diligenciaBuffer || solicitudBuffer)) {
+      // Doc 2: Conoce a tu cliente (requerida=1) — Debida Diligencia y Autorización PDF
+      // Falls back to solicitud if diligencia not available
+      const buf = diligenciaBuffer || solicitudBuffer!;
+      fileData = { buffer: buf, name: 'debida_diligencia.pdf', type: 'application/pdf' };
     } else if (id === '3' || id === '4') {
       // Cédula contratante (3) and cédula asegurado (4) — same person for Natural
       fileData = files['cedulaFile'] || files['cedula'];

@@ -22,6 +22,7 @@ import {
   uploadInspectionAndDocuments,
 } from '@/lib/ancon/emission.service';
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
+import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
@@ -397,14 +398,51 @@ export async function POST(request: NextRequest) {
       log('2/4', `Error generando solicitud PDF (soft-fail): ${solicitudErr}`);
     }
 
+    // Generate Debida Diligencia y Autorización PDF (doc 2 "Conoce a tu cliente", requerida=1)
+    let diligenciaBuffer: Buffer | undefined;
+    try {
+      diligenciaBuffer = await generateAuthorizationPdf({
+        nombreCompleto,
+        cedula: cedula || pasaporte || ruc || '',
+        email: email || '',
+        direccion: direccion || 'Panamá',
+        nroPoliza: polizaNumber,
+        marca: nombre_marca || '',
+        modelo: nombre_modelo || '',
+        anio: ano || currentYear,
+        placa: placa || '',
+        chasis: no_chasis || vin || '',
+        motor: no_motor || '',
+        color: nombre_color_agt || '',
+        firmaDataUrl: firmaDataUrl || '',
+        fecha: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        fechaNacimiento: fecha_nacimiento || '',
+        sexo: sexo || '',
+        estadoCivil: (body as Record<string, string>).estado_civil || '',
+        telefono: telefono_residencial || '',
+        celular: telefono_celular || '',
+        actividadEconomica: actividad_economica || '',
+        nivelIngresos: nivelIngresoRaw,
+        dondeTrabaja: (body as Record<string, string>).empresa || '',
+        esPEP: pepNormalized === '001|campo_pep',
+        tipoCobertura: isCC ? 'CC' : 'DT',
+        insurerName: 'ANCÓN Seguros',
+        valorAsegurado: suma_asegurada && suma_asegurada !== '0' ? `$${Number(suma_asegurada).toLocaleString('en-US')}` : '',
+      });
+      log('2/4', `Debida Diligencia PDF generada: ${diligenciaBuffer.length} bytes`);
+    } catch (diligenciaErr) {
+      log('2/4', `Error generando Debida Diligencia PDF (soft-fail): ${diligenciaErr}`);
+    }
+
     const hasFiles = Object.keys(files).length > 0 || !!solicitudBuffer;
     if (hasFiles) {
-      log('2/4', `Subiendo ${Object.keys(files).length} archivo(s) + solicitud PDF...`);
+      log('2/4', `Subiendo ${Object.keys(files).length} archivo(s) + solicitud + debida diligencia...`);
       const uploadResult = await uploadInspectionAndDocuments(
         tipo_de_cliente || 'N',
         polizaNumber,
         files,
-        solicitudBuffer
+        solicitudBuffer,
+        diligenciaBuffer
       );
       log('2/4', `Subidos: ${uploadResult.uploaded}, Fallidos: ${uploadResult.failed}`);
     } else {
