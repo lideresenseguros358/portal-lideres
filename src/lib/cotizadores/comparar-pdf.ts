@@ -791,10 +791,8 @@ const CANONICAL_KEYS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /asistencia vial/i,                              label: 'Asistencia Vial' },
   { pattern: /alquiler.*auto|auto.*alquiler|auto.*sustituto|sustituto.*auto/i, label: 'Auto de Alquiler' },
   { pattern: /muerte accidental/i,                            label: 'Muerte Accidental' },
-  { pattern: /gastos m[eé]dicos|adelanto.*m[eé]dic|hospitali[sz]/i, label: 'Gastos Médicos' },
+  { pattern: /defensa penal|asistencia legal|gastos legales.*penal/i, label: 'Asistencia Legal' }, // Unify legal & penal
   { pattern: /efectos personales/i,                           label: 'Efectos Personales' },
-  { pattern: /defensa penal|gastos legales.*penal/i,          label: 'Defensa Penal' },
-  { pattern: /asistencia legal/i,                             label: 'Asistencia Legal' },
   { pattern: /extensi[oó]n territorial|extraterritorial/i,    label: 'Extensión Territorial' },
   { pattern: /ambulancia/i,                                   label: 'Ambulancia' },
   { pattern: /deprecia/i,                                     label: 'Sin Depreciación' },
@@ -808,6 +806,7 @@ const CANONICAL_KEYS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /asistencia en viaje|hospedaje.*transporte/i,    label: 'Asistencia en Viaje' },
   { pattern: /optiseguro|seguro residencial/i,                label: 'Dscto. Seguro Residencial' },
   { pattern: /dscto.*alarma|descuento.*alarma/i,              label: 'Dscto. Alarmas' },
+  // Filter out: Gastos Médicos should never appear as a benefit (it's a coverage limit)
 ];
 
 function canonicalize(text: string): string {
@@ -842,7 +841,7 @@ const BENEFIT_STATIC_DETAILS: Record<string, string> = {
   'Asistencia Vial':        'Corriente, combustible, llanta, cerrajeria',
   'Auto de Alquiler':       'Por colision o vuelco',
   'Muerte Accidental':      'Fallecimiento del conductor',
-  'Defensa Penal':          'Proceso penal, hasta B/.2,000',
+  'Asistencia Legal':       'Asesoría legal y procesos penal/administrativo',
   'Ambulancia':             '24h / 365 dias',
   'Efectos Personales':     'Objetos dentro del vehiculo',
   'Asistencia en Viaje':    'Hospedaje, transporte o renta',
@@ -853,6 +852,7 @@ const BENEFIT_STATIC_DETAILS: Record<string, string> = {
   'Cobertura de Vidrios':   'Parabrisas, faros, espejos',
   'Revisión sin Costo':     'Revision del vehiculo',
   'Bono de Mantenimiento':  'B/.50 en mantenimiento',
+  'Accidentes Personales':  'Cobertura conductor y pasajeros',
 };
 
 function buildBenefitMatrix(quotes: PDFQuote[]): BenefitRow[] {
@@ -868,6 +868,9 @@ function buildBenefitMatrix(quotes: PDFQuote[]): BenefitRow[] {
     (q._beneficios || []).forEach((b: any) => {
       const rawName = safe(b.nombre || '').trim();
       if (!rawName) return;
+
+      // Filter out: Gastos Médicos is a coverage limit, not a benefit
+      if (/gastos m[eé]dic/i.test(rawName)) return;
 
       const label = canonicalize(rawName);
       const key   = label.toUpperCase();

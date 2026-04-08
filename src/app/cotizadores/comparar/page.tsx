@@ -79,7 +79,7 @@ const IS_ENDOSOS = {
   },
   // Beneficios base del plan (aplican a Básico y Premium)
   BENEFICIOS_GENERALES: [
-    'Grúa: Mecánica — 3 eventos/año, máx. B/.150',
+    'Grúa: Por avería y por accidente — 3 eventos/año, máx. B/.150',
     'Auto de Alquiler: Robo — 30 días (desde 72h)',
     'Sin Depreciación: Pérdida total, autos nuevos 0km',
     'Extensión Territorial: Costa Rica, 30 días',
@@ -930,7 +930,6 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
       { codigo: 'COMP', nombre: 'Comprensivo', descripcion: 'Cobertura contra robo, hurto, incendio, fenómenos naturales', incluida: true },
       { codigo: 'COLV', nombre: 'Colisión y Vuelco', descripcion: 'Daños por colisión y/o vuelco del vehículo', incluida: true },
       { codigo: 'RC', nombre: 'Responsabilidad Civil', descripcion: 'Daños a terceros: lesiones corporales y daños a propiedad', incluida: true },
-      { codigo: 'GM', nombre: 'Gastos Médicos', descripcion: 'Gastos médicos del conductor y pasajeros', incluida: true },
       { codigo: 'AV', nombre: 'Asistencia Vial', descripcion: 'Grúa, cerrajería, paso de corriente, cambio de llanta', incluida: true },
     ];
 

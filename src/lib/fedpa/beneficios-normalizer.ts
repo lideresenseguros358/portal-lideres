@@ -601,12 +601,8 @@ export const FEDPA_ENDOSO_BASE_ITEMS: FedpaBeneficioItem[] = [
     descripcion: 'Por avería y accidente — 1 evento c/u, máx. B/.150 c/u al año',
   },
   {
-    nombre: 'Defensa Penal',
-    descripcion: 'Proceso penal por accidente de tránsito — hasta B/.2,000',
-  },
-  {
     nombre: 'Asistencia Legal',
-    descripcion: 'Procesos administrativos de tránsito, sin costo',
+    descripcion: 'Asesoría legal y defensa en procesos penales/administrativos — hasta B/.2,000',
   },
   {
     nombre: 'Auto de Alquiler',
@@ -615,6 +611,10 @@ export const FEDPA_ENDOSO_BASE_ITEMS: FedpaBeneficioItem[] = [
   {
     nombre: 'Muerte Accidental',
     descripcion: 'Fallecimiento del conductor por accidente — B/.5,000',
+  },
+  {
+    nombre: 'Ambulancia',
+    descripcion: 'Servicio de ambulancia 24 horas — disponible 365 días al año',
   },
 ];
 
