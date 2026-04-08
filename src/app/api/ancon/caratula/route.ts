@@ -57,21 +57,38 @@ async function handleCaratula(poliza: string) {
     const result = await imprimirPoliza(poliza);
 
     if (!result.success || !result.data?.enlace_poliza) {
+      console.error(`[API ANCON Carátula] ${requestId} imprimirPoliza failed:`, result.error, 'raw:', JSON.stringify(result.raw).substring(0, 300));
       return NextResponse.json(
-        { success: false, error: result.error || 'No se pudo obtener la carátula', requestId },
+        { success: false, error: result.error || 'No se pudo obtener la carátula', raw: result.raw, requestId },
         { status: 400 }
       );
     }
 
-    const pdfUrl = result.data.enlace_poliza;
-    console.log(`[API ANCON Carátula] ${requestId} PDF URL: ${pdfUrl}`);
+    const pdfEnlace = result.data.enlace_poliza;
+    console.log(`[API ANCON Carátula] ${requestId} enlace_poliza: ${pdfEnlace.substring(0, 80)}`);
 
-    // Fetch the actual PDF from ANCON's server
-    const pdfRes = await fetch(pdfUrl, { signal: AbortSignal.timeout(15000) });
+    // Case A: base64 data URI — decode and return directly, no HTTP fetch needed
+    if (pdfEnlace.startsWith('data:application/pdf;base64,')) {
+      const b64 = pdfEnlace.replace('data:application/pdf;base64,', '');
+      const pdfBuffer = Buffer.from(b64, 'base64');
+      console.log(`[API ANCON Carátula] ${requestId} Serving base64 PDF (${pdfBuffer.length} bytes)`);
+      return new NextResponse(pdfBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="poliza-ancon-${poliza}.pdf"`,
+          'Content-Length': String(pdfBuffer.length),
+        },
+      });
+    }
+
+    // Case B: HTTP URL — fetch from ANCON and proxy
+    const pdfRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(15000) });
+    console.log(`[API ANCON Carátula] ${requestId} Fetch from ANCON: HTTP ${pdfRes.status} content-type=${pdfRes.headers.get('content-type')}`);
 
     if (!pdfRes.ok) {
       return NextResponse.json(
-        { success: false, error: `Error descargando PDF: HTTP ${pdfRes.status}`, requestId },
+        { success: false, error: `Error descargando PDF de ANCON: HTTP ${pdfRes.status}`, requestId },
         { status: 502 }
       );
     }

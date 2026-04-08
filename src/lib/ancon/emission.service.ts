@@ -186,7 +186,7 @@ export async function imprimirPoliza(
   noPoliza: string,
   sharedToken?: string
 ): Promise<AnconSoapResponse<AnconImpresionPolizaResponse>> {
-  console.log(`[ANCON Print] Printing policy: ${noPoliza}`);
+  console.log(`[ANCON Print] Requesting ImpresionPoliza for: ${noPoliza}`);
 
   const params = { no_poliza: noPoliza };
   const result = sharedToken
@@ -194,27 +194,55 @@ export async function imprimirPoliza(
     : await anconCall<unknown>(ANCON_EMISSION_METHODS.IMPRESION_POLIZA, params);
 
   if (!result.success) {
+    console.error(`[ANCON Print] SOAP call failed: ${result.error}`);
     return { success: false, error: result.error || 'Error imprimiendo póliza' };
   }
 
   const raw = result.data;
+  // Log the full raw response so we can inspect it in Vercel logs
+  console.log(`[ANCON Print] Raw response:`, JSON.stringify(raw).substring(0, 500));
+
+  // ANCON may return the data in several forms — try all known structures:
+  //   1. Array: [{ enlace_poliza: "..." }]
+  //   2. Object: { enlace_poliza: "..." }
+  //   3. Nested: { ImpresionPoliza: [{ enlace_poliza: "..." }] }
+  //   4. Base64 PDF: enlace_poliza starts with "JVBERi0x" (%PDF-)
   let enlace: string | undefined;
 
   if (Array.isArray(raw)) {
-    enlace = (raw[0] as Record<string, string>)?.enlace_poliza;
+    const first = raw[0] as Record<string, string>;
+    enlace = first?.enlace_poliza ?? first?.enlace ?? first?.url ?? first?.link;
   } else if (raw && typeof raw === 'object') {
-    enlace = (raw as Record<string, string>).enlace_poliza;
+    const obj = raw as Record<string, unknown>;
+    // Direct field
+    enlace = obj.enlace_poliza as string | undefined;
+    // Nested under method name
+    if (!enlace) {
+      const nested = Object.values(obj).find(v => Array.isArray(v)) as Array<Record<string, string>> | undefined;
+      if (nested?.[0]) enlace = nested[0].enlace_poliza ?? nested[0].enlace ?? nested[0].url;
+    }
+  } else if (typeof raw === 'string') {
+    // Might be a plain URL or base64 string returned directly
+    enlace = raw as string;
   }
 
-  if (!enlace || enlace.includes('no disponible')) {
+  if (!enlace || enlace.toLowerCase().includes('no disponible') || enlace.toLowerCase().includes('error')) {
+    console.error(`[ANCON Print] No valid link found. enlace="${enlace}" raw=${JSON.stringify(raw).substring(0, 300)}`);
     return {
       success: false,
-      error: enlace || 'Póliza no disponible',
+      error: enlace || 'Carátula no disponible — ANCON no retornó enlace',
       raw,
     };
   }
 
-  console.log(`[ANCON Print] PDF link: ${enlace}`);
+  // If ANCON returned base64 PDF data instead of a URL, wrap it as a data URI
+  const isBase64Pdf = enlace.startsWith('JVBERi0x') || enlace.startsWith('%PDF') || (enlace.length > 200 && !enlace.startsWith('http'));
+  if (isBase64Pdf) {
+    console.log(`[ANCON Print] Response is base64 PDF (${enlace.length} chars) — wrapping as data URI`);
+    enlace = `data:application/pdf;base64,${enlace.replace(/^data:application\/pdf;base64,/, '')}`;
+  }
+
+  console.log(`[ANCON Print] PDF link resolved: ${enlace.substring(0, 80)}...`);
   return { success: true, data: { enlace_poliza: enlace } };
 }
 
