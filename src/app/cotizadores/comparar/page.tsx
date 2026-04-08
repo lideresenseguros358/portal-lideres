@@ -1415,7 +1415,9 @@ export default function ComparePage() {
           const isInsurerActive = (slug: string): boolean => {
             if (!insurerSettings?.length) return true; // Default to all active if no settings loaded
             const setting = insurerSettings.find(s => s.slug === slug);
-            return setting?.cc_activo !== false;
+            // Insurer must be explicitly enabled (cc_activo === true)
+            // If setting not found, default to true (backward compat)
+            return setting ? setting.cc_activo === true : true;
           };
 
           // Only quote active insurers
