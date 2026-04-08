@@ -11,7 +11,6 @@
 
 import { NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
-import { ANCON_PRODUCTS } from '@/lib/ancon/config';
 
 export const maxDuration = 30;
 
@@ -19,7 +18,7 @@ const SOBAT_PLANS = {
   basic: {
     name: 'SOBAT BASICO TALLER',
     annualPremium: 145.00,
-    codProducto: ANCON_PRODUCTS.SOBAT_BASICO_TALLER, // '05769'
+    codProducto: '05769', // SOBAT BASICO TALLER
     coverageList: [
       { code: 'LC', name: 'LESIONES CORPORALES', limit: '$5,000.00', prima: 42.00 },
       { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$5,000.00', prima: 82.00 },
@@ -35,7 +34,7 @@ const SOBAT_PLANS = {
   premium: {
     name: 'SOBAT EXPRESS PLUS',
     annualPremium: 189.00,
-    codProducto: ANCON_PRODUCTS.SOBAT_EXPRESS_PLUS, // '01492'
+    codProducto: '01492', // SOBAT EXPRESS PLUS
     coverageList: [
       { code: 'LC', name: 'LESIONES CORPORALES', limit: '$10,000.00', prima: 55.00 },
       { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$10,000.00', prima: 100.00 },
