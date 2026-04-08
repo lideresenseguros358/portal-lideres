@@ -847,6 +847,13 @@ export default function ThirdPartyComparison({
     );
   }
 
+  // Filter insurers based on tp_activo setting if available
+  const filteredInsurersData = insurersData.filter((insurer) => {
+    if (!insurerSettings || insurerSettings.length === 0) return true;
+    const setting = insurerSettings.find(s => s.slug === insurer.id);
+    return setting?.tp_activo !== false;
+  });
+
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════
@@ -1014,7 +1021,7 @@ export default function ThirdPartyComparison({
           Se oculta en mobile con `hidden md:grid`.
       ═══════════════════════════════════════════════════════════ */}
       <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {insurersData.map((insurer) => {
+        {filteredInsurersData.map((insurer) => {
           const isOffline = !!offlineInsurers[insurer.id];
           if (isOffline) return null;
           return (
@@ -1049,7 +1056,7 @@ export default function ThirdPartyComparison({
           className="tp-carousel"
           aria-label="Comparativa de aseguradoras"
         >
-          {insurersData.map((insurer, idx) => {
+          {filteredInsurersData.map((insurer, idx) => {
             if (!!offlineInsurers[insurer.id]) return null;
             const isActive   = idx === activeCardIndex;
             const currentPlan = globalPlan;
@@ -1100,7 +1107,7 @@ export default function ThirdPartyComparison({
 
         {/* ── Indicadores de posición (dot pills) ── */}
         <div className="flex justify-center items-center gap-2 mt-3 pb-1">
-          {insurersData.map((_, idx) => (
+          {filteredInsurersData.map((_, idx) => (
             <div key={idx} className={`tp-dot ${idx === activeCardIndex ? 'tp-dot-active' : ''}`} />
           ))}
         </div>

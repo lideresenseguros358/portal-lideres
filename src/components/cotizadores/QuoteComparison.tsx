@@ -439,6 +439,32 @@ export default function QuoteComparison({
     );
   }
 
+  // Filter quotes based on cc_activo setting if available
+  // Map insurerName to slug for lookup
+  const insurerNameToSlug: { [key: string]: string } = {
+    'FEDPA Seguros': 'fedpa',
+    'INTERNACIONAL de Seguros': 'internacional',
+    'La Regional de Seguros': 'regional',
+    'ANCÓN Seguros': 'ancon',
+  };
+
+  const filteredQuotes = quotes.filter((quote) => {
+    if (!insurerSettings || insurerSettings.length === 0) return true;
+    const slug = insurerNameToSlug[quote.insurerName];
+    if (!slug) return true; // Unknown insurer, show it anyway
+    const setting = insurerSettings.find(s => s.slug === slug);
+    return setting?.cc_activo !== false;
+  });
+
+  // Filter insurerGroups to exclude inactive insurers
+  const filteredInsurerGroups = insurerGroups.filter(([insurerName]) => {
+    if (!insurerSettings || insurerSettings.length === 0) return true;
+    const slug = insurerNameToSlug[insurerName];
+    if (!slug) return true;
+    const setting = insurerSettings.find(s => s.slug === slug);
+    return setting?.cc_activo !== false;
+  });
+
   return (
     <>
       <style jsx global>{`
@@ -680,7 +706,7 @@ export default function QuoteComparison({
         ═══════════════════════════════════════════════════════ */}
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
         <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
-          {quotes.map((quote) => (
+          {filteredQuotes.map((quote) => (
             <div key={quote.id} className={`relative overflow-visible ${quote.isRecommended ? 'md:-mt-2 md:mb-2' : ''}`}>
               {/* Recommended Badge - Flotante ARRIBA del card, centrado */}
               {quote.isRecommended && (
@@ -952,7 +978,7 @@ export default function QuoteComparison({
             className="cc-carousel"
             aria-label="Comparativa de cotizaciones"
           >
-            {insurerGroups.map(([insurerName, insurerQuotes], idx) => {
+            {filteredInsurerGroups.map(([insurerName, insurerQuotes], idx) => {
               const isActive   = idx === activeCCCardIndex;
               const basicPlan  = insurerQuotes.find(q => q.planType === 'basico');
               const premiumPlan = insurerQuotes.find(q => q.planType === 'premium');
@@ -1213,7 +1239,7 @@ export default function QuoteComparison({
 
           {/* ── Indicadores de posición (dot pills) ── */}
           <div className="flex justify-center items-center gap-2 mt-3 pb-1">
-            {insurerGroups.map((_, idx) => (
+            {filteredInsurerGroups.map((_, idx) => (
               <div key={idx} className={`cc-dot ${idx === activeCCCardIndex ? 'cc-dot-active' : ''}`} />
             ))}
           </div>
