@@ -583,7 +583,7 @@ async function drawCoveragePage(
     if (logo) {
       const maxH = INS_H - 10;
       const maxW = cardW - 16;
-      const minW = maxW * 0.65;  // Guarantee minimum 65% of max width (prevents FEDPA from being too small)
+      const minW = maxW * 0.42;  // Guarantee minimum 42% of max width (prevents FEDPA from being tiny)
       const normalized = normalizeLogo(logo, maxH);
       let { width: lw, height: lh } = normalized;
 
@@ -660,7 +660,7 @@ async function drawCoveragePage(
     ? `${money(lesP)} / ${money(lesA)}`
     : resolveLimit(quotes[0]!, ['lesiones', 'corporales'], ['lesion', 'corporal'], true);
   drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
-    bg: STRIPE, rh: ROW_H + 2, valColor: GREEN, subLabelColor: DARK,
+    bg: STRIPE, rh: ROW_H + 8, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
   });
 
   const dpa = Number(clientInfo?.danoPropiedad) || 0;
@@ -675,7 +675,7 @@ async function drawCoveragePage(
     ? `${money(gmP)} / ${money(gmA)}`
     : resolveLimit(quotes[0]!, ['medic', 'gastos'], ['medic', 'gasto'], true);
   drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
-    bg: STRIPE, rh: ROW_H + 2, valColor: GREEN, subLabelColor: DARK,
+    bg: STRIPE, rh: ROW_H + 8, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
   });
 
   // Comprensivo (valor asegurado)
@@ -690,7 +690,7 @@ async function drawCoveragePage(
     const sa = q._sumaAsegurada;
     return sa ? money(sa) : 'Valor del Auto';
   });
-  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: ROW_H, valColor: GREEN });
+  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: ROW_H, labelColor: DARK, valColor: GREEN });
 
   // ── Section B: Deducibles ────────────────────────────────────────────────
   drawLabelRow('DEDUCIBLES', null, Array(n).fill(''),
@@ -716,7 +716,7 @@ async function drawCoveragePage(
     if (comp?.amount && comp.amount > 0) return money(comp.amount);
     return 'Ver poliza';
   });
-  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H, valColor: GREEN });
+  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H, labelColor: DARK, valColor: GREEN });
 
   // ── Section C: Precios ───────────────────────────────────────────────────
   drawLabelRow('PRIMA', null, Array(n).fill(''),
@@ -729,8 +729,8 @@ async function drawCoveragePage(
     return money(p, 'B/.');
   });
   drawLabelRow('Prima al Contado', '(5% descuento pago anual)', contadoValues, {
-    labelBold: false, valueBold: true, rh: ROW_H + 4,
-    valColor: NAVY, labelColor: DARK,
+    labelBold: false, valueBold: true, rh: ROW_H + 8,
+    valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
   });
 
   const tarjetaValues = quotes.map(q => {
@@ -738,7 +738,7 @@ async function drawCoveragePage(
     return money(p, 'B/.');
   });
   drawLabelRow('Prima en Cuotas', '(max. 10 cuotas mensuales)', tarjetaValues, {
-    bg: STRIPE, rh: ROW_H + 2, valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
+    bg: STRIPE, rh: ROW_H + 8, valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
   });
 
   // ── Section D: Endosos Incluidos ─────────────────────────────────────────
