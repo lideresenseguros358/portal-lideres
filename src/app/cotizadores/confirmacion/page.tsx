@@ -18,6 +18,9 @@ export default function ConfirmacionPage() {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const caratulaRef = useRef<HTMLDivElement>(null);
 
+  // Only one visual indicator: disabled state on button
+  // The spinner inside the button is the only feedback during download
+
   useEffect(() => {
     setMounted(true);
 
@@ -393,7 +396,7 @@ export default function ConfirmacionPage() {
               <button
                 onClick={handleDownloadFedpaPdf}
                 disabled={downloadingPdf}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
               >
                 {downloadingPdf ? (
                   <>
@@ -418,7 +421,7 @@ export default function ConfirmacionPage() {
               <button
                 onClick={handleDownloadAnconPdf}
                 disabled={downloadingPdf}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
               >
                 {downloadingPdf ? (
                   <>
@@ -443,7 +446,7 @@ export default function ConfirmacionPage() {
               <button
                 onClick={handleDownloadRegionalPdf}
                 disabled={downloadingPdf}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-60 disabled:transform-none disabled:cursor-wait"
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
               >
                 {downloadingPdf ? (
                   <>

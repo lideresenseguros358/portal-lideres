@@ -258,6 +258,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fix 3: normalize empty codes so re-quote and EmitirDatos use the same fallback
+    if (!finalCodMarcaAgt) finalCodMarcaAgt = '00001';
+    if (!finalCodModeloAgt) finalCodModeloAgt = '00001';
+
     let freshNoCotizacion = no_cotizacion;
     if (!isCC) {
       log('0/4', 'Re-cotizando con datos reales del vehículo (DT)...');
@@ -509,14 +513,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!emitSuccess && emitError) {
+    if (!emitSuccess) {
       const elapsed = Date.now() - t0;
-      console.error(`[API ANCON Emisión] FAILED in ${elapsed}ms:`, emitError);
+      console.error(`[API ANCON Emisión] FAILED in ${elapsed}ms — emitError=${emitError} raw=${emitStr.substring(0, 400)}`);
       return NextResponse.json(
         {
           success: false,
-          error: emitError,
+          error: emitError || 'EmitirDatos no devolvió éxito',
           poliza: polizaNumber,
+          emitRaw: typeof emitRaw === 'object' ? emitRaw : emitStr.substring(0, 500),
         },
         { status: 500 }
       );

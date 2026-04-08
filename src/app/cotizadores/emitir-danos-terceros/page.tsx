@@ -1181,9 +1181,15 @@ export default function EmitirDanosTercerosPage() {
         };
         const nivelIngresoLabel = nivelIngresoMap[emissionData.nivelIngresos || ''] || emissionData.nivelIngresos || '';
 
+        // Map optionName (opcion1-opcion4) → ANCON opcion letter (A-D)
+        const opcionLetterMap: Record<string, string> = {
+          opcion1: 'A', opcion2: 'B', opcion3: 'C', opcion4: 'D',
+        };
+        const anconOpcion = opcionLetterMap[selectedPlan?.optionName || ''] || 'A';
+
         const anconEmitBody = {
           no_cotizacion: noCotizacion,
-          opcion: 'A',
+          opcion: anconOpcion,
           cod_producto: selectedPlan?._codProducto || '07159',
           nombre_producto: selectedPlan?._nombreProducto || 'WEB - AUTORC',
           suma_asegurada: String(selectedPlan?._sumaAsegurada || '0'),
