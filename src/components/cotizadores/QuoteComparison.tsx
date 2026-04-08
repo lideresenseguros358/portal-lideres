@@ -448,7 +448,9 @@ export default function QuoteComparison({
     'ANCÓN Seguros': 'ancon',
   };
 
-  const filteredQuotes = quotes.filter((quote) => {
+  const ignoreInsurerSettings = process.env.NEXT_PUBLIC_IGNORE_INSURER_SETTINGS === 'true';
+
+  const filteredQuotes = ignoreInsurerSettings ? quotes : quotes.filter((quote) => {
     if (!insurerSettings || insurerSettings.length === 0) return true;
     const slug = insurerNameToSlug[quote.insurerName];
     if (!slug) return true; // Unknown insurer, show it anyway
@@ -457,7 +459,7 @@ export default function QuoteComparison({
   });
 
   // Filter insurerGroups to exclude inactive insurers
-  const filteredInsurerGroups = insurerGroups.filter(([insurerName]) => {
+  const filteredInsurerGroups = ignoreInsurerSettings ? insurerGroups : insurerGroups.filter(([insurerName]) => {
     if (!insurerSettings || insurerSettings.length === 0) return true;
     const slug = insurerNameToSlug[insurerName];
     if (!slug) return true;

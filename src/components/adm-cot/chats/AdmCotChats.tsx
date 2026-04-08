@@ -426,7 +426,7 @@ function ChatView({
   onSend: (body: string) => void;
   sending: boolean;
   onToggleConfig: () => void;
-  scrollRef: React.RefObject<HTMLDivElement>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [input, setInput] = useState('');
 

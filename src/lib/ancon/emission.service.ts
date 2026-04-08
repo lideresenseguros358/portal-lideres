@@ -354,9 +354,14 @@ export async function uploadDocumentREST(
     const finalMimeType = effectiveMimeType || 'application/octet-stream';
 
     // Safe Buffer → Blob conversion using explicit byte range to avoid pool buffer contamination
+    // file is guaranteed to be Buffer here (Blob case handled above)
     const blob = file instanceof Blob
       ? file
-      : new Blob([new Uint8Array(file instanceof Buffer ? file.buffer : file, (file as Buffer).byteOffset ?? 0, (file as Buffer).byteLength ?? (file as Buffer).length)], { type: finalMimeType });
+      : new Blob([new Uint8Array(
+          (file as Buffer).buffer,
+          (file as Buffer).byteOffset,
+          (file as Buffer).byteLength,
+        ) as unknown as BlobPart], { type: finalMimeType });
 
     // Append file extension to the ANCÓN hash filename so the server can identify the format.
     // Some ANCÓN versions use the extension to validate the file type on ingest.

@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseServer();
+    const supabase = await getSupabaseServer();
 
     // Update thread blocked status
     const { error } = await supabase
       .from('chat_threads')
-      .update({ is_blocked })
+      .update({ is_blocked } as any)
       .eq('id', thread_id);
 
     if (error) {

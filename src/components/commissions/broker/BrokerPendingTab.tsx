@@ -517,10 +517,10 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                                           <TableCell>{pending?.insured_name || '—'}</TableCell>
                                           <TableCell>{pending?.insurers?.name || '—'}</TableCell>
                                           <TableCell className="text-right font-mono">
-                                            {formatMoney(Math.abs(item.commission_raw || 0))}
+                                            {formatMoney(item.commission_raw || 0)}
                                           </TableCell>
                                           <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
-                                            {formatMoney(Math.abs(item.broker_commission || 0))}
+                                            {formatMoney(item.broker_commission || 0)}
                                           </TableCell>
                                         </TableRow>
                                       );
@@ -642,10 +642,10 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                                           <TableCell>{pending?.insured_name || '—'}</TableCell>
                                           <TableCell>{pending?.insurers?.name || '—'}</TableCell>
                                           <TableCell className="text-right font-mono">
-                                            {formatMoney(Math.abs(item.commission_raw || 0))}
+                                            {formatMoney(item.commission_raw || 0)}
                                           </TableCell>
                                           <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
-                                            {formatMoney(Math.abs(item.broker_commission || 0))}
+                                            {formatMoney(item.broker_commission || 0)}
                                           </TableCell>
                                         </TableRow>
                                       );

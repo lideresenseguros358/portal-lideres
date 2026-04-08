@@ -219,7 +219,7 @@ function deriveBrandCode(nombreMarca: string): string {
   if (overrides[norm]) return overrides[norm];
 
   // Single brand / first 3 chars
-  const word = norm.split(' ')[0];
+  const word = norm.split(' ')[0] ?? '';
   if (word.length >= 3) return word.substring(0, 3);
   return word.padEnd(3, 'X');
 }
@@ -265,7 +265,7 @@ export async function resolveFedpaMarca(
     const match = findBestBrandMatch(nombreMarca, catalog);
     if (match) {
       const result = { code: match.code, matchMethod: 'dynamic' };
-      _brandCodeCache.set(cacheKey, { ...result, cachedAt: Date.now() });
+      _brandCodeCache.set(cacheKey, { code: match.code, method: 'dynamic', cachedAt: Date.now() });
       console.log(`[FEDPA Vehicle Mapper] Dynamic brand match: "${nombreMarca}" (IS ${isCodigoMarca}) → ${match.code}`);
       return result;
     }
@@ -274,7 +274,7 @@ export async function resolveFedpaMarca(
   // 3. Derive from name
   const code = deriveBrandCode(nombreMarca);
   const result = { code, matchMethod: 'derived' };
-  _brandCodeCache.set(cacheKey, { ...result, cachedAt: Date.now() });
+  _brandCodeCache.set(cacheKey, { code, method: 'derived', cachedAt: Date.now() });
   console.warn(`[FEDPA Vehicle Mapper] Brand not in catalog, derived: "${nombreMarca}" (IS ${isCodigoMarca}) → ${code}`);
   return result;
 }

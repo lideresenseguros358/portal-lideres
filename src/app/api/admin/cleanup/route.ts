@@ -155,10 +155,8 @@ export async function POST(request: NextRequest) {
 }
 
 // Helper functions
-async function countRows(
-  sb: ReturnType<typeof createClient>,
-  table: string
-): Promise<number> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function countRows(sb: any, table: string): Promise<number> {
   try {
     const { count } = await sb
       .from(table)
@@ -169,10 +167,8 @@ async function countRows(
   }
 }
 
-async function deleteAll(
-  sb: ReturnType<typeof createClient>,
-  table: string
-): Promise<number> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteAll(sb: any, table: string): Promise<number> {
   try {
     const { count } = await sb.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
     return count || 0;
@@ -181,11 +177,8 @@ async function deleteAll(
   }
 }
 
-async function deleteByFilter(
-  sb: ReturnType<typeof createClient>,
-  table: string,
-  filter: Record<string, any>
-): Promise<number> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteByFilter(sb: any, table: string, filter: Record<string, any>): Promise<number> {
   try {
     let query = sb.from(table).delete();
     for (const [key, value] of Object.entries(filter)) {

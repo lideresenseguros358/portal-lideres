@@ -1680,7 +1680,20 @@ export default function ComparePage() {
       const res = await fetch('/api/cotizadores/comparativa-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quotes }),
+        body: JSON.stringify({
+          quotes,
+          clientInfo: {
+            nombreCompleto: quoteData?.nombreCompleto,
+            fechaNacimiento: quoteData?.fechaNacimiento,
+            estadoCivil: quoteData?.estadoCivil,
+            codProvincia: quoteData?.codProvincia,
+            lesionCorporalPersona: quoteData?.lesionCorporalPersona,
+            lesionCorporalAccidente: quoteData?.lesionCorporalAccidente,
+            danoPropiedad: quoteData?.danoPropiedad,
+            gastosMedicosPersona: quoteData?.gastosMedicosPersona,
+            gastosMedicosAccidente: quoteData?.gastosMedicosAccidente,
+          },
+        }),
       });
       if (!res.ok) throw new Error('Error generando PDF');
       const blob = await res.blob();

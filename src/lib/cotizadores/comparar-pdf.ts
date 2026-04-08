@@ -26,6 +26,8 @@ const STRIPE      = rgb(0.965, 0.965, 0.965);
 const GREEN_CELL  = rgb(0.88, 0.96, 0.72);
 const BLUE_LIGHT  = rgb(0.92, 0.95, 1.0);
 const NAVY_LIGHT  = rgb(0.12, 0.12, 0.28);
+const CROSS_GRAY  = rgb(0.72, 0.72, 0.72);  // soft gray for ✗
+const ROW_LINE    = rgb(0.91, 0.91, 0.91);  // ultra-light row separator
 
 // ── Page layout (A4 Landscape) ────────────────────────────────────────────────
 const PW   = 841.89;  // page width  (pt)
@@ -34,11 +36,11 @@ const M    = 20;       // horizontal margin
 const CW   = PW - 2*M; // content width ≈ 802
 
 const HDR_H  = 62;   // header height
-const VEH_H  = 26;   // vehicle/client info bar height (pages 1 & 3 only)
+const VEH_H  = 42;   // vehicle/client info bar height (pages 1 & 3 only)
 const FTR_H  = 52;   // footer height (with observations + SSRP)
 const ROW_H  = 15;   // standard data row height
 const SEC_H  = 19;   // section header row height
-const INS_H  = 30;   // insurer column header height
+const INS_H  = 40;   // insurer column header height
 const LPAD   = 6;    // left padding inside cells
 const RPAD   = 4;    // right padding inside cells
 
@@ -103,6 +105,44 @@ export interface PDFQuote {
   _endosoIncluido?: string;
   _sumaAsegurada?: number;
   [key: string]: any;
+}
+
+export interface ClientInfo {
+  nombreCompleto?: string;
+  fechaNacimiento?: string;   // YYYY-MM-DD
+  estadoCivil?: string;       // soltero, casado, divorciado, viudo
+  codProvincia?: number;
+  lesionCorporalPersona?: number;
+  lesionCorporalAccidente?: number;
+  danoPropiedad?: number;
+  gastosMedicosPersona?: number;
+  gastosMedicosAccidente?: number;
+}
+
+// Province code → name (Panama)
+const PROV_MAP: Record<number, string> = {
+  1: 'Bocas del Toro', 2: 'Cocle', 3: 'Colon', 4: 'Chiriqui',
+  5: 'Darien', 6: 'Herrera', 7: 'Los Santos', 8: 'Panama',
+  9: 'Veraguas', 10: 'Guna Yala', 11: 'Embera', 12: 'Ngobe-Bugle',
+  13: 'Panama Oeste',
+};
+function provinciaName(cod: number | undefined): string {
+  if (!cod) return '';
+  return PROV_MAP[cod] || `Prov. ${cod}`;
+}
+
+/** Convert YYYY-MM-DD to DD/MM/YYYY */
+function formatDate(iso: string | undefined): string {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+/** Capitalize first letter */
+function capitalize(s: string | undefined): string {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -229,9 +269,33 @@ function drawCell(
   page.drawText(displayText, { x: tx, y: ty, size, font: f, color: textColor });
 }
 
+/** drawRectangle wrapper that supports borderRadius (not in @types/pdf-lib but supported at runtime) */
+function roundedRect(
+  page: PDFPage,
+  opts: { x: number; y: number; width: number; height: number; color?: ReturnType<typeof rgb>; borderRadius?: number },
+) {
+  page.drawRectangle(opts as any);
+}
+
 /** Draw a full-width horizontal rule */
 function hLine(page: PDFPage, x: number, y: number, w: number, thickness = 0.5, color = GRAY_LIGHT) {
   page.drawLine({ start: { x, y }, end: { x: x + w, y }, thickness, color });
+}
+
+/** Draw a minimal green checkmark (no box) centered at (cx, cy) */
+function drawCheckmark(page: PDFPage, cx: number, cy: number, sz: number) {
+  const p1 = { x: cx - sz * 0.40, y: cy + sz * 0.05 };
+  const p2 = { x: cx - sz * 0.08, y: cy - sz * 0.30 };
+  const p3 = { x: cx + sz * 0.46, y: cy + sz * 0.42 };
+  page.drawLine({ start: p1, end: p2, thickness: 1.35, color: GREEN });
+  page.drawLine({ start: p2, end: p3, thickness: 1.35, color: GREEN });
+}
+
+/** Draw a soft gray X centered at (cx, cy) */
+function drawCross(page: PDFPage, cx: number, cy: number, sz: number) {
+  const d = sz * 0.30;
+  page.drawLine({ start: { x: cx - d, y: cy - d }, end: { x: cx + d, y: cy + d }, thickness: 1.1, color: CROSS_GRAY });
+  page.drawLine({ start: { x: cx + d, y: cy - d }, end: { x: cx - d, y: cy + d }, thickness: 1.1, color: CROSS_GRAY });
 }
 
 /** Draw vertical borders for a row (left + right + dividers between columns) */
@@ -275,19 +339,16 @@ function drawHeader(
   // White header background
   page.drawRectangle({ x: 0, y: PH - HDR_H, width: PW, height: HDR_H, color: WHITE });
 
-  // Left accent bar
-  page.drawRectangle({ x: 0, y: PH - HDR_H, width: 4, height: HDR_H, color: GREEN });
-
-  // Logo — maintain natural aspect ratio
-  let logoEnd = M + 4;
+  // Logo — maintain natural aspect ratio, left-aligned
+  let logoEnd = M;
   if (logoImg) {
-    const maxH = HDR_H - 14;
-    const maxW = 110;
+    const maxH = HDR_H - 12;
+    const maxW = 130;
     const ratio = logoImg.width / logoImg.height;
     const lh = Math.min(maxH, maxW / ratio);
     const lw = lh * ratio;
-    page.drawImage(logoImg, { x: M + 8, y: PH - HDR_H + (HDR_H - lh) / 2, width: lw, height: lh });
-    logoEnd = M + 8 + lw + 10;
+    page.drawImage(logoImg, { x: M, y: PH - HDR_H + (HDR_H - lh) / 2, width: lw, height: lh });
+    logoEnd = M + lw + 14;
   }
 
   // Title block
@@ -295,7 +356,7 @@ function drawHeader(
     x: logoEnd, y: PH - HDR_H + 36, size: 14, font: fontBold, color: NAVY,
   });
   page.drawText(safe(subtitle), {
-    x: logoEnd, y: PH - HDR_H + 20, size: 10, font, color: GRAY,
+    x: logoEnd, y: PH - HDR_H + 20, size: 9.5, font, color: GRAY,
   });
 
   // Right block: contact
@@ -304,11 +365,11 @@ function drawHeader(
   page.drawText(safe(`WhatsApp: ${WHATSAPP}`), { x: rx, y: PH - HDR_H + 28, size: 8, font, color: GRAY });
   page.drawText(safe(EMAIL), { x: rx, y: PH - HDR_H + 15, size: 7, font, color: GRAY });
 
-  // Bottom border
+  // Subtle bottom separator
   page.drawLine({
     start: { x: 0, y: PH - HDR_H },
     end:   { x: PW, y: PH - HDR_H },
-    thickness: 1.5, color: NAVY,
+    thickness: 0.6, color: ROW_LINE,
   });
 }
 
@@ -347,45 +408,65 @@ function drawVehicleBar(
   font: PDFFont,
   fontBold: PDFFont,
   quotes: PDFQuote[],
+  clientInfo?: ClientInfo,
 ) {
   const q = quotes[0];
   if (!q) return;
 
   const barY = PH - HDR_H - VEH_H;
+  const rowH = VEH_H / 2;  // each row is half the bar height
 
   // Background: light navy stripe
   page.drawRectangle({ x: 0, y: barY, width: PW, height: VEH_H, color: BLUE_LIGHT });
 
-  // Left accent
-  page.drawRectangle({ x: 0, y: barY, width: 4, height: VEH_H, color: GREEN });
+  // Mid divider between client row and vehicle row
+  page.drawLine({ start: { x: M, y: barY + rowH }, end: { x: PW - M, y: barY + rowH }, thickness: 0.4, color: GRAY_LIGHT });
 
   // Bottom border
   page.drawLine({ start: { x: 0, y: barY }, end: { x: PW, y: barY }, thickness: 0.8, color: NAVY });
 
-  const textY = barY + (VEH_H - 8) / 2 + 1;
+  // ── Row 1: Client info ────────────────────────────────────────────────────
+  const clientY = barY + rowH + (rowH - 7) / 2 + 1;
 
-  // Vehicle label
-  page.drawText('VEHICULO:', { x: M + 8, y: textY, size: 7, font: fontBold, color: NAVY });
+  page.drawText('CLIENTE:', { x: M + 8, y: clientY, size: 6.5, font: fontBold, color: NAVY });
 
-  // Año + Marca + Modelo
+  let clientX = M + 58;
+
+  if (clientInfo?.nombreCompleto) {
+    page.drawText(safe(clientInfo.nombreCompleto), { x: clientX, y: clientY, size: 7.5, font: fontBold, color: DARK });
+    clientX += Math.min(textWidth(safe(clientInfo.nombreCompleto), 7.5) + 16, 220);
+  }
+
+  if (clientInfo?.fechaNacimiento) {
+    page.drawText('Nac.:', { x: clientX, y: clientY, size: 6.5, font: fontBold, color: NAVY });
+    page.drawText(safe(formatDate(clientInfo.fechaNacimiento)), { x: clientX + 28, y: clientY, size: 7, font, color: DARK });
+    clientX += 90;
+  }
+
+  if (clientInfo?.estadoCivil) {
+    page.drawText(safe(capitalize(clientInfo.estadoCivil)), { x: clientX, y: clientY, size: 7, font, color: DARK });
+    clientX += Math.min(textWidth(safe(clientInfo.estadoCivil), 7) + 16, 80);
+  }
+
+  if (clientInfo?.codProvincia) {
+    const prov = provinciaName(clientInfo.codProvincia);
+    page.drawText(safe(prov), { x: clientX, y: clientY, size: 7, font, color: DARK });
+  }
+
+  // ── Row 2: Vehicle info ────────────────────────────────────────────────────
+  const vehicleY = barY + (rowH - 7) / 2 + 1;
+
+  page.drawText('VEHICULO:', { x: M + 8, y: vehicleY, size: 6.5, font: fontBold, color: NAVY });
+
   const anio   = safe(String(q._anio || ''));
   const marca  = safe(q._marcaNombre || '');
   const modelo = safe(q._modeloNombre || '');
   const vehicleStr = [anio, marca, modelo].filter(Boolean).join('  ');
-  page.drawText(vehicleStr, { x: M + 62, y: textY, size: 8, font: fontBold, color: DARK });
+  page.drawText(vehicleStr, { x: M + 62, y: vehicleY, size: 7.5, font: fontBold, color: DARK });
 
-  // Suma asegurada
   if (q._sumaAsegurada && q._sumaAsegurada > 0) {
-    const valorStr = `Valor Asegurado:  ${money(q._sumaAsegurada)}`;
-    page.drawText(safe('COBERTURA COMPLETA'), { x: PW * 0.48, y: textY, size: 7, font: fontBold, color: NAVY });
-    page.drawText(safe(valorStr), { x: PW * 0.64, y: textY, size: 7.5, font, color: DARK });
-  }
-
-  // Deducible type
-  const dedType = safe(q._deducibleOriginal || '');
-  if (dedType) {
-    page.drawText(safe(`Deducible: ${dedType.charAt(0).toUpperCase() + dedType.slice(1)}`),
-      { x: PW - M - 115, y: textY, size: 7, font, color: GRAY });
+    page.drawText(safe('COBERTURA COMPLETA'), { x: PW * 0.48, y: vehicleY, size: 6.5, font: fontBold, color: NAVY });
+    page.drawText(safe(`Valor Asegurado:  ${money(q._sumaAsegurada)}`), { x: PW * 0.63, y: vehicleY, size: 7, font, color: DARK });
   }
 }
 
@@ -399,11 +480,12 @@ async function drawCoveragePage(
   insurerLogos: Record<string, any>,
   quotes: PDFQuote[],
   subtitle: string,
+  clientInfo?: ClientInfo,
 ) {
   if (!quotes.length) return;
   const page = pdfDoc.addPage([PW, PH]);
   drawHeader(page, font, fontBold, logoImg, subtitle);
-  drawVehicleBar(page, font, fontBold, quotes);
+  drawVehicleBar(page, font, fontBold, quotes, clientInfo);
   drawFooter(page, font);
 
   const n = quotes.length;
@@ -452,8 +534,8 @@ async function drawCoveragePage(
       });
     }
 
-    // Horizontal rule below row
-    hLine(page, M, y - rh, CW, 0.3);
+    // Subtle row separator
+    hLine(page, M, y - rh, CW, 0.2, ROW_LINE);
 
     y -= rh;
   };
@@ -466,51 +548,57 @@ async function drawCoveragePage(
     size: 7.5, font: fontBold, color: NAVY,
   });
 
-  // Insurer columns
+  // Insurer columns — card style, logo centered, no text
+  const COV_CARD_GAP = 3;
   for (let i = 0; i < n; i++) {
     const q = quotes[i]!;
     const cx = colXs[i + 1]!;
-    const isRec = q.isRecommended;
+    const cardX = cx + COV_CARD_GAP / 2;
+    const cardW = insW - COV_CARD_GAP;
 
-    // Background
-    page.drawRectangle({ x: cx, y: y - INS_H, width: insW, height: INS_H, color: NAVY });
+    // Rounded card
+    roundedRect(page, { x: cardX, y: y - INS_H, width: cardW, height: INS_H, color: NAVY, borderRadius: 5 });
 
-    // Insurer logo — maintain aspect ratio, fit in INS_H cell
+    // Recommended top accent
+    if (q.isRecommended) {
+      roundedRect(page, { x: cardX, y: y - 5, width: cardW, height: 5, color: GREEN, borderRadius: 3 });
+    }
+
+    // Plan badge — small pill bottom-right
+    const badgeColor = isPremium ? GREEN : rgb(0.32, 0.32, 0.42);
+    const badgeW = 26, badgeH = 8;
+    roundedRect(page, {
+      x: cardX + cardW - badgeW - 4, y: y - INS_H + 5,
+      width: badgeW, height: badgeH, color: badgeColor, borderRadius: 3,
+    });
+    page.drawText(safe(planBadge), {
+      x: cardX + cardW - badgeW - 2, y: y - INS_H + 7,
+      size: 5.5, font: fontBold, color: WHITE,
+    });
+
+    // Logo — large, centered, no text
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
-    let logoEndX = cx + 6;
     if (logo) {
-      const maxH = INS_H - 8;
-      const maxW = Math.min(insW * 0.38, 52);
+      const maxH = INS_H - 10;
+      const maxW = cardW - 16;
       const ratio = logo.width / logo.height;
       const lh = Math.min(maxH, maxW / ratio);
       const lw = lh * ratio;
-      page.drawImage(logo, { x: cx + 4, y: y - INS_H + (INS_H - lh) / 2, width: lw, height: lh });
-      logoEndX = cx + 4 + lw + 4;
-    }
-
-    // Insurer name
-    const sName = trunc(shortInsurerName(q.insurerName), 18);
-    page.drawText(safe(sName), {
-      x: logoEndX, y: y - INS_H + INS_H / 2 + 1,
-      size: 7.5, font: fontBold, color: WHITE,
-    });
-
-    // Plan badge
-    const badgeColor = isPremium ? GREEN : rgb(0.5, 0.5, 0.55);
-    page.drawRectangle({ x: cx + insW - 38, y: y - INS_H + 6, width: 34, height: 12, color: badgeColor });
-    page.drawText(safe(planBadge), {
-      x: cx + insW - 36, y: y - INS_H + 9,
-      size: 6, font: fontBold, color: WHITE,
-    });
-
-    // Recommended star
-    if (isRec) {
-      page.drawRectangle({ x: cx, y: y - INS_H, width: insW, height: 3, color: GREEN });
+      page.drawImage(logo, {
+        x: cardX + (cardW - lw) / 2,
+        y: y - INS_H + (INS_H - lh) / 2,
+        width: lw, height: lh,
+      });
+    } else {
+      page.drawText(safe(trunc(shortInsurerName(q.insurerName), 18)), {
+        x: cardX + LPAD, y: y - INS_H + INS_H / 2 - 3,
+        size: 7, font: fontBold, color: WHITE,
+      });
     }
   }
 
-  hLine(page, M, y - INS_H, CW, 0.8, NAVY);
+  hLine(page, M, y - INS_H, CW, 0.3, ROW_LINE);
   y -= INS_H;
 
   // ── Section A: Coberturas RC (Límites de responsabilidad) ────────────────
@@ -548,18 +636,31 @@ async function drawCoveragePage(
     return 'Incluido';  // CC always includes RC — "—" would be misleading
   };
 
-  // Lesiones Corporales
-  const lesValues = quotes.map(q => resolveLimit(q, ['lesiones', 'corporales'], ['lesiones', 'corporal'], true));
+  // Lesiones Corporales — prefer user-chosen form values (same for all insurers)
+  const lesDisplay = clientInfo?.lesionCorporalPersona
+    ? `${money(clientInfo.lesionCorporalPersona)} / ${money(clientInfo.lesionCorporalAccidente)}`
+    : null;
+  const lesValues = quotes.map(q =>
+    lesDisplay ?? resolveLimit(q, ['lesiones', 'corporales'], ['lesiones', 'corporal'], true),
+  );
   drawLabelRow('Lesiones Corporales', 'por persona / por accidente', lesValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
-  // Danos Propiedad
-  const dpaValues = quotes.map(q => resolveLimit(q, ['propiedad', 'dano'], ['propiedad', 'daños', 'dano'], false));
+  // Danos Propiedad — prefer user-chosen form values
+  const dpaDisplay = clientInfo?.danoPropiedad ? money(clientInfo.danoPropiedad) : null;
+  const dpaValues = quotes.map(q =>
+    dpaDisplay ?? resolveLimit(q, ['propiedad', 'dano'], ['propiedad', 'daños', 'dano'], false),
+  );
   drawLabelRow('Danos a la Propiedad Ajena', null, dpaValues, { rh: ROW_H });
 
-  // Gastos Medicos
-  const gmValues = quotes.map(q => resolveLimit(q, ['medico', 'gastos'], ['medico', 'medic', 'gastos'], true));
+  // Gastos Medicos — prefer user-chosen form values
+  const gmDisplay = clientInfo?.gastosMedicosPersona
+    ? `${money(clientInfo.gastosMedicosPersona)} / ${money(clientInfo.gastosMedicosAccidente)}`
+    : null;
+  const gmValues = quotes.map(q =>
+    gmDisplay ?? resolveLimit(q, ['medico', 'gastos'], ['medico', 'medic', 'gastos'], true),
+  );
   drawLabelRow('Gastos Medicos', 'por persona / por accidente', gmValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
@@ -585,13 +686,20 @@ async function drawCoveragePage(
 
   const dedCompValues = quotes.map(q => {
     const d = q._deduciblesReales?.comprensivo;
-    return d ? money(d.amount) : '—';
+    if (d?.amount && d.amount > 0) return money(d.amount);
+    // Fallback: try deducibleInfo or _deducibleInfo
+    const di = q._deducibleInfo;
+    if (di?.dedComprensivo && di.dedComprensivo > 0) return money(di.dedComprensivo);
+    return 'Ver poliza';
   });
   drawLabelRow('Comprensivo', null, dedCompValues, { rh: ROW_H });
 
   const dedColValues = quotes.map(q => {
     const d = q._deduciblesReales?.colisionVuelco;
-    return d ? money(d.amount) : '—';
+    if (d?.amount && d.amount > 0) return money(d.amount);
+    const di = q._deducibleInfo;
+    if (di?.dedColision && di.dedColision > 0) return money(di.dedColision);
+    return 'Ver poliza';
   });
   drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H });
 
@@ -636,21 +744,6 @@ async function drawCoveragePage(
     rh: ROW_H, valColor: GREEN,
   });
 
-  // ── Outer border for table ────────────────────────────────────────────────
-  const tableTop = PH - HDR_H - VEH_H - 4;
-  const tableH   = tableTop - y;
-  page.drawRectangle({
-    x: M, y, width: CW, height: tableH,
-    borderColor: GRAY_LIGHT, borderWidth: 0.6,
-  });
-
-  // Vertical dividers
-  for (let i = 1; i < colXs.length; i++) {
-    page.drawLine({
-      start: { x: colXs[i]!, y }, end: { x: colXs[i]!, y: tableTop },
-      thickness: 0.4, color: GRAY_LIGHT,
-    });
-  }
 }
 
 // ── Benefits page (pages 2 & 4) ───────────────────────────────────────────────
@@ -811,7 +904,7 @@ async function drawBenefitsPage(
 
   let y = PH - HDR_H - 4;
   const yMin = FTR_H + 6;
-  const BEN_ROW_H = 18;   // taller to fit detail text below "Si"
+  const BEN_ROW_H = 15;   // compact: just checkmark/cross, no detail text
   const isPremium = quotes[0]?.planType === 'premium';
 
   // ── Insurer column header row (navy, with logos) ──────────────────────────
@@ -819,26 +912,35 @@ async function drawBenefitsPage(
   page.drawText(safe(isPremium ? 'Plan Premium' : 'Plan Básico'), {
     x: M + LPAD, y: y - INS_H + (INS_H - 8) / 2 + 1, size: 7.5, font: fontBold, color: NAVY,
   });
+  const BEN_CARD_GAP = 3;
   for (let i = 0; i < n; i++) {
-    const q   = quotes[i]!;
-    const cx  = colXs[i + 1]!;
-    page.drawRectangle({ x: cx, y: y - INS_H, width: insW, height: INS_H, color: NAVY });
+    const q = quotes[i]!;
+    const cx = colXs[i + 1]!;
+    const cardX = cx + BEN_CARD_GAP / 2;
+    const cardW = insW - BEN_CARD_GAP;
+
+    roundedRect(page, { x: cardX, y: y - INS_H, width: cardW, height: INS_H, color: NAVY, borderRadius: 5 });
+
     const key  = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
-    let logoEndX = cx + 6;
     if (logo) {
-      const maxH = INS_H - 8, maxW = Math.min(insW * 0.36, 48);
+      const maxH = INS_H - 10, maxW = cardW - 16;
       const ratio = logo.width / logo.height;
       const lh = Math.min(maxH, maxW / ratio);
       const lw = lh * ratio;
-      page.drawImage(logo, { x: cx + 4, y: y - INS_H + (INS_H - lh) / 2, width: lw, height: lh });
-      logoEndX = cx + 4 + lw + 4;
+      page.drawImage(logo, {
+        x: cardX + (cardW - lw) / 2,
+        y: y - INS_H + (INS_H - lh) / 2,
+        width: lw, height: lh,
+      });
+    } else {
+      page.drawText(safe(trunc(shortInsurerName(q.insurerName), 18)), {
+        x: cardX + LPAD, y: y - INS_H + INS_H / 2 - 3,
+        size: 7, font: fontBold, color: WHITE,
+      });
     }
-    page.drawText(safe(trunc(shortInsurerName(q.insurerName), 18)), {
-      x: logoEndX, y: y - INS_H + INS_H / 2 + 1, size: 7, font: fontBold, color: WHITE,
-    });
   }
-  hLine(page, M, y - INS_H, CW, 0.8, NAVY);
+  hLine(page, M, y - INS_H, CW, 0.3, ROW_LINE);
   y -= INS_H;
 
   // ── Section header helper ─────────────────────────────────────────────────
@@ -849,23 +951,11 @@ async function drawBenefitsPage(
       x: M + LPAD, y: y - SEC_H + (SEC_H - 8) / 2 + 1,
       size: 8, font: fontBold, color: WHITE,
     });
-    // Insurer names in section header
-    for (let i = 0; i < n; i++) {
-      const q = quotes[i]!;
-      const sName = trunc(shortInsurerName(q.insurerName), 20);
-      page.drawText(safe(sName), {
-        x: colXs[i + 1]! + LPAD, y: y - SEC_H + (SEC_H - 8) / 2 + 1,
-        size: 7, font: fontBold, color: WHITE,
-      });
-    }
-    hLine(page, M, y - SEC_H, CW, 0.3);
+    hLine(page, M, y - SEC_H, CW, 0.2, ROW_LINE);
     y -= SEC_H;
   };
 
   // ── Benefit row helper ────────────────────────────────────────────────────
-  // Layout inside each BEN_ROW_H (18pt) cell:
-  //   Top 10pt:  "Si" green badge  OR  "—" gray line
-  //   Bottom 7pt: detail text (small, centered) when included
   const drawBenRow = (row: BenefitRow, stripe: boolean) => {
     if (y - BEN_ROW_H < yMin) return;
     const bg = stripe ? STRIPE : WHITE;
@@ -877,44 +967,21 @@ async function drawBenefitsPage(
       size: 7, font: fontBold, color: DARK,
     });
 
-    // Per-insurer values
+    // Per-insurer values: green checkmark or soft gray X
     for (let i = 0; i < n; i++) {
       const v = row.values[i];
       if (!v) continue;
-      const cx = colXs[i + 1]!;
+      const cx = colXs[i + 1]! + insW / 2;
+      const cy = y - BEN_ROW_H + BEN_ROW_H / 2;
 
       if (v.included) {
-        // Green "Si" badge in upper portion of cell
-        const badgeW = 20, badgeH = 8;
-        const bx = cx + (insW - badgeW) / 2;
-        const by = y - BEN_ROW_H + BEN_ROW_H - badgeH - 2; // near top
-        page.drawRectangle({ x: bx, y: by, width: badgeW, height: badgeH, color: GREEN });
-        page.drawText('Si', {
-          x: bx + (badgeW - textWidth('Si', 6.5)) / 2,
-          y: by + (badgeH - 6.5) / 2 + 0.5,
-          size: 6.5, font: fontBold, color: WHITE,
-        });
-        // Detail text in lower portion — truncated to fit column, centered
-        if (v.detail) {
-          const maxChars = Math.floor((insW - 8) / (5 * 0.56));
-          const dText = trunc(v.detail, maxChars);
-          const dw = textWidth(dText, 5);
-          page.drawText(safe(dText), {
-            x: cx + Math.max(2, (insW - dw) / 2),
-            y: y - BEN_ROW_H + 2.5,
-            size: 5, font, color: GRAY,
-          });
-        }
+        drawCheckmark(page, cx, cy, 8);
       } else {
-        // Clear "—" indicator: a short horizontal line in GRAY, visually distinct
-        const lineY  = y - BEN_ROW_H + BEN_ROW_H / 2;
-        const lineX1 = cx + insW * 0.30;
-        const lineX2 = cx + insW * 0.70;
-        page.drawLine({ start: { x: lineX1, y: lineY }, end: { x: lineX2, y: lineY }, thickness: 1.5, color: GRAY });
+        drawCross(page, cx, cy, 8);
       }
     }
 
-    hLine(page, M, y - BEN_ROW_H, CW, 0.25);
+    hLine(page, M, y - BEN_ROW_H, CW, 0.2, ROW_LINE);
     y -= BEN_ROW_H;
   };
 
@@ -933,19 +1000,6 @@ async function drawBenefitsPage(
     }
   }
 
-  // ── Outer border ─────────────────────────────────────────────────────────
-  if (y < tableTop) {
-    page.drawRectangle({
-      x: M, y, width: CW, height: tableTop - y,
-      borderColor: GRAY_LIGHT, borderWidth: 0.6,
-    });
-    for (let i = 1; i < colXs.length; i++) {
-      page.drawLine({
-        start: { x: colXs[i]!, y }, end: { x: colXs[i]!, y: tableTop },
-        thickness: 0.4, color: GRAY_LIGHT,
-      });
-    }
-  }
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -953,6 +1007,7 @@ async function drawBenefitsPage(
 export async function generarComparativaPDF(
   quotes: PDFQuote[],
   rootDir: string = process.cwd(),
+  clientInfo?: ClientInfo,
 ): Promise<Buffer> {
   const pdfDoc  = await PDFDocument.create();
   const font     = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -967,7 +1022,7 @@ export async function generarComparativaPDF(
   // Page 1: Basic coverages
   await drawCoveragePage(
     pdfDoc, font, fontBold, logoImg, insurerLogos,
-    basicQuotes, 'Planes Basicos — Coberturas',
+    basicQuotes, 'Planes Basicos — Coberturas', clientInfo,
   );
 
   // Page 2: Basic benefits comparison
@@ -979,7 +1034,7 @@ export async function generarComparativaPDF(
   // Page 3: Premium coverages
   await drawCoveragePage(
     pdfDoc, font, fontBold, logoImg, insurerLogos,
-    premiumQuotes, 'Planes Premium — Coberturas',
+    premiumQuotes, 'Planes Premium — Coberturas', clientInfo,
   );
 
   // Page 4: Premium benefits comparison

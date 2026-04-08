@@ -13,11 +13,9 @@ async function handleGET() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return [];
-          },
+          getAll() { return []; },
           setAll() {},
-        },
+        } as any,
       }
     );
 
@@ -67,7 +65,7 @@ async function handlePATCH(request: NextRequest) {
               request.cookies.set(name, value)
             );
           },
-        },
+        } as any,
       }
     );
 

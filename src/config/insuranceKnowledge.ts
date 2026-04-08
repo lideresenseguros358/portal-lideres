@@ -98,55 +98,204 @@ Registro: Resolución DRLA-012 del 13 de marzo de 2024. Código TN-2.12.03-REV.1
 - Suicidio: Excluido en los primeros 2 años; cubierto a partir del tercer año.
 - Beneficiarios: Asegurado puede cambiarlos en cualquier momento (salvo beneficiario irrevocable). Si el beneficiario muere antes, el capital va a los herederos legales del asegurado.
 - Documentos en siniestro: Certificado de defunción + información médica de la causa de muerte + póliza original.
+Contratos complementarios disponibles: EG, AP, BCMA, BSCA, BACI, Exoneración de Primas por Incapacidad.
 
 ## Plan 2: UNIVERSAL I (Plan ASSA Universal)
 Registro: NoAU 15.05.04.
 - Naturaleza: Vida universal con componente de ahorro (valor acumulado). Configurable bajo Opción A u Opción B (ver concepto fundamental arriba).
-- DIFERENCIA CLAVE vs Universal II — CLÁUSULA DE MADURACIÓN A LOS 95 AÑOS: Si el asegurado llega con vida a los 95 años, ASSA le paga en vida la suma asegurada más el valor acumulado, y la póliza se cancela automáticamente. Este es un beneficio en vida que no tiene el Universal II.
-- IMPACTO EN COSTO: La cláusula de maduración hace que el costo de seguro del Universal I sea más alto que el del Universal II. Consecuencia: si un cliente paga la misma prima mensual en ambos planes, el Universal I generará MENOS ahorro acumulado a largo plazo, porque una mayor porción de la prima se destina al costo del seguro.
+- CLÁUSULA DE MADURACIÓN A LOS 95 AÑOS: Si el asegurado llega con vida a los 95 años, ASSA le paga en vida el BENEFICIO DE MUERTE (Opción A = Suma Asegurada; Opción B = Suma Asegurada + Valor Acumulado) y la póliza se cancela automáticamente. Este beneficio en vida NO existe en Universal II ni Patrimonial II.
+- IMPACTO EN COSTO: La cláusula de maduración hace el costo de seguro del Universal I más alto que el del Universal II. Con la misma prima mensual, Universal I genera MENOS ahorro acumulado a largo plazo.
 - Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
 - Tasa corriente: puede ser mayor a la garantizada según las inversiones de ASSA.
-- Rescate parcial: Disponible hasta el valor de rescate menos $1,000.00.
+- Rescate parcial: Disponible a partir del año 2. Hasta el valor de rescate menos $1,000.00.
 - Cargo por rescate: Se aplica durante los primeros 10 años.
 - Primas flexibles: Prima mínima o depósitos adicionales en cualquier momento.
 - Deducción mensual del valor acumulado: costo de mortalidad + cargos sobre prima + cargo por derecho de póliza.
-- Préstamos: disponibles sobre el valor de rescate.
+- Préstamos: Disponibles sobre el valor de rescate.
+Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
 
 ## Plan 3: UNIVERSAL II
 Registro: AUII 15.05.07.
 - Naturaleza: Vida universal con componente de ahorro (valor acumulado). Configurable bajo Opción A u Opción B (ver concepto fundamental arriba).
-- DIFERENCIA CLAVE vs Universal I: El Universal II NO tiene cláusula de maduración a los 95 años. No existe un pago garantizado en vida al llegar a esa edad. El seguro simplemente vence.
-- IMPACTO EN COSTO: Al no tener la cláusula de maduración, el costo de seguro del Universal II es más bajo que el del Universal I. Consecuencia: con la misma prima mensual, el Universal II acumula MÁS ahorro a largo plazo que el Universal I.
+- SIN cláusula de maduración a los 95 años. Al vencimiento (95 años), la póliza entrega únicamente el VALOR ACUMULADO. No existe pago del beneficio de muerte en vida.
+- IMPACTO EN COSTO: Sin la cláusula de maduración, el costo de seguro es más bajo que Universal I. Con la misma prima mensual, Universal II acumula MÁS ahorro a largo plazo.
 - Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
-- Rescate parcial: Hasta el valor de rescate menos $1,000.00.
+- Rescate parcial: Disponible a partir del año 2. Hasta el valor de rescate menos $1,000.00.
 - Cargo por rescate: Primeros 10 años.
-- Vencimiento: Al cumplir 95 años.
+- Préstamos: Disponibles sobre el valor de rescate.
 - Primas flexibles: Prima mínima + depósitos adicionales en cualquier momento.
+Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
 
 ## Plan 4: PATRIMONIAL II
 Registro: APII 15.05.07.
 - Naturaleza: Vida universal con mayor énfasis en ahorro/inversión. Configurable bajo Opción A u Opción B.
 - Tasa de interés garantizada: mínimo 4.5% anual (la más alta de los 3 planes universales).
 - Ideal para: Acumulación de patrimonio + protección. El plan más orientado al ahorro a largo plazo.
-- Rescate parcial: Hasta el valor de rescate menos $2,500.00 (umbral más alto que Universal I y II).
+- Al vencimiento (95 años): entrega únicamente el VALOR ACUMULADO.
+- Rescate parcial: Disponible a partir del año 6 (más restrictivo que los planes Universal). Hasta el valor de rescate menos $2,500.00.
 - Cargo por rescate: Primeros 10 años.
-- Vencimiento: Al cumplir 95 años.
+- Préstamos: NO disponibles (a diferencia de Universal I y II).
 - Primas flexibles: Prima mínima + depósitos adicionales.
+Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
 
 ## Características comunes a los 3 Planes Universales (I, II, Patrimonial II):
-- Disputabilidad: Primeros 2 años.
+- Disputabilidad: Primeros 2 años desde la fecha de emisión.
 - Suicidio: Excluido en los primeros 2 años.
 - Condiciones preexistentes: Excluidas — enfermedades conocidas antes del inicio de la cobertura.
-- Préstamos: Disponibles sobre el valor de rescate.
 - Exámenes médicos: Requeridos antes de otorgar cobertura.
+- Invalidez Total y Permanente (definición legal): Incapacidad de realizar cualquier trabajo remunerado de forma continua durante 6 meses o más.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTRATOS COMPLEMENTARIOS (ANEXOS) ASSA VIDA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+REGLA: Estos contratos son riders/anexos adicionales que se adosan a la póliza base. Un asegurado puede tener varios simultáneamente. Cuando el cliente mencione siglas como BIPA, ECM, EG, AP, OA, BCMA, BSCA o BACI, SIEMPRE explica qué es cada una con detalle.
+
+## BIPA — Beneficio de Incapacidad – Pago Anticipado
+Código: BIPA-17.05.01 | Código interno: 69M00051
+Planes que lo ofrecen: Universal I, Universal II, Patrimonial II (NO disponible en Término Nivelado).
+¿Qué hace?: Ante una invalidez total y permanente antes de los 60 años del asegurado, BIPA paga la suma asegurada de ESTE contrato complementario en mensualidades durante un máximo de 60 meses. Este pago es ADICIONAL al beneficio de muerte de la póliza base y a cualquier otro complementario — no reemplaza nada.
+Proceso de activación:
+- La invalidez debe mantenerse durante 6 meses continuos (período de espera).
+- El BIPA comienza a pagar a partir del 7° mes de invalidez.
+- Plazo de aviso: máximo 1 año desde la fecha de la invalidez declarada.
+Causas de terminación del contrato BIPA:
+- Al cumplir 60 años el asegurado.
+- Al vencer o cancelarse la póliza base.
+- Al liquidarse la póliza.
+
+## ECM — Exoneración del Costo de Mortalidad
+Código: ECM-17.05.011 | Código interno: 69M00013
+Planes que lo ofrecen: Universal I, Universal II, Patrimonial II (NO en Término Nivelado — para ese plan existe "Exoneración de Primas").
+¿Qué hace?: En caso de invalidez total y permanente antes de los 60 años, ECM exonera (waiver) TODAS las deducciones mensuales de la póliza: costo de mortalidad de la póliza base, cargos de todos los contratos suplementarios y cargos sobre la prima. La póliza continúa vigente sin que el asegurado tenga que pagar absolutamente nada.
+Activación: La exoneración comienza desde el 7° mes de invalidez continua.
+Lo que ECM NO cubre (exclusiones):
+- Lesiones autoinfligidas intencionalmente.
+- Actos criminales cometidos por el asegurado.
+- Uso o abuso de drogas o alcohol.
+- Embarazo o complicaciones del parto.
+- Guerra, revolución o servicio militar activo.
+- Riesgos aeronáuticos (excepto como pasajero en aerolíneas comerciales regulares).
+
+## EG — Enfermedades Graves
+Código: EG-17.05.01 | Código interno: 69M00014
+Planes que lo ofrecen: TODOS (Término Nivelado, Universal I, Universal II, Patrimonial II).
+¿Qué hace?: Paga la suma asegurada de ESTE contrato ante el diagnóstico de una de las 4 enfermedades cubiertas. El beneficio de EG es independiente y no reduce la póliza base — la póliza base CONTINÚA vigente por su monto original.
+Las 4 enfermedades cubiertas (SOLO estas 4, ninguna más):
+1. Infarto del Miocardio (ataque al corazón).
+2. Derrame Cerebral o Hemorragia Cerebral.
+3. Cirugía de Puente Arteriocoronario (bypass cardíaco abierto).
+4. Cáncer (ver exclusiones específicas abajo).
+Período de espera: 3 meses desde la emisión. Diagnósticos dentro de los primeros 3 meses NO están cubiertos.
+Plazo de aviso al siniestro: máximo 3 meses después del diagnóstico.
+Terminación: Al cumplir 65 años el asegurado.
+Lo que EG NO cubre (exclusiones críticas):
+- Angioplastia (incluso con inserción de stent) — NO es lo mismo que cirugía de bypass.
+- Cirugías de válvulas cardíacas.
+- Cáncer no invasivo o in situ.
+- Cáncer de piel (EXCEPCIÓN: melanoma maligno invasivo SÍ está cubierto).
+- Cualquier condición relacionada con VIH/SIDA.
+- Secuelas de accidentes (EG es exclusivo para enfermedades, no traumas).
+- Condiciones preexistentes al momento de la emisión.
+- Intento de suicidio o lesiones autoinfligidas.
+- Uso o abuso de alcohol o drogas.
+
+## AP — Accidentes Personales
+Código: AP-17.05.01
+Planes que lo ofrecen: TODOS (Término Nivelado, Universal I, Universal II, Patrimonial II).
+¿Qué hace?: Agrega cobertura por accidentes personales con los siguientes beneficios:
+  A. Muerte Accidental — pago adicional si la muerte es consecuencia de un accidente.
+  B. Invalidez Total y Permanente por Accidente.
+  C. Desmembramiento — indemnización según tabla por pérdida de extremidades o sentidos.
+  D. Homicidio Culposo — homicidio accidental o por negligencia de tercero (NO cubre homicidio doloso/intencional).
+  E. Muerte en Accidente Aéreo — EXCLUSIVO como pasajero en aerolíneas comerciales regulares.
+  F. Cobertura mundial: 24 horas al día, 365 días al año, en cualquier parte del mundo.
+  G. Opción de recibir el beneficio en hasta 60 mensualidades en lugar de pago único.
+DEFINICIÓN DE ACCIDENTE (para efectos de AP): Acción súbita, externa, violenta, fortuita e independiente de la voluntad del asegurado. Se considera accidente: asfixia, intoxicación por ingestión accidental, mordeduras de serpientes o insectos, rabia, carbunco o tétanos derivados de un trauma.
+Condición para pago por muerte accidental: La muerte debe ocurrir dentro de los 6 meses siguientes al accidente que la causó.
+Plazo de aviso: 15 días en siniestros no fatales; inmediatamente en caso de muerte.
+Terminación: Al cumplir 70 años el asegurado.
+
+## OA — Otro Asegurado
+Código: OA-17.05.01 | Código interno: 69M00011
+Planes que lo ofrecen: Universal I, Universal II, Patrimonial II (NO en Término Nivelado).
+¿Qué hace?: Asegura la vida de UNA persona adicional — normalmente el cónyuge o pareja — bajo la misma póliza del titular, sin necesidad de una póliza separada.
+Suma asegurada mínima del OA: B/.25,000.
+Disputabilidad del OA: 2 años desde la fecha de emisión.
+PRIVILEGIO DE CONVERSIÓN DEL SOBREVIVIENTE: Si el asegurado titular fallece mientras el Otro Asegurado tiene menos de 65 años, el Otro Asegurado tiene derecho a convertir su cobertura a un plan de vida permanente individual, SIN necesidad de nuevo examen médico ni evidencia de asegurabilidad. Plazo para ejercer este privilegio: 60 días después del fallecimiento del titular.
+Terminación: Al cumplir 95 años el Otro Asegurado, o al cancelarse la póliza base.
+
+## BCMA — Beneficio Complementario por Muerte Accidental y Desmembramiento
+Código interno: 69M00028
+Planes que lo ofrecen: Término Nivelado, Universal I (para Término Nivelado principalmente).
+¿Qué hace?: Paga una suma ADICIONAL a los beneficios de la póliza base exclusivamente en caso de muerte accidental o desmembramiento. No reemplaza el beneficio base — es dinero extra.
+Requisitos para el pago de muerte accidental:
+- Debe existir contusión o herida externa visible, O
+- Ahogamiento comprobado, O
+- Lesión interna confirmada por autopsia.
+- La muerte debe ocurrir dentro de los 90 días del accidente o lesión que la causó.
+Importante: La cláusula de disputabilidad NO aplica a este contrato (no tiene período contestable).
+Terminación: Al aniversario de póliza más cercano a los 65 años del asegurado.
+Tabla de Indemnizaciones BCMA (% del Valor Nominal de este contrato):
+- Fractura de columna vertebral / pérdida de mano+pie / pérdida de ambas manos o ambos pies / pérdida de ambos ojos → 100%
+- Sordera total / ablación de mandíbula / pérdida de 1 mano o 1 pie → 50%
+- Anquilosis de hombro, cadera o codo / pérdida de visión de 1 ojo → 33%
+- Anquilosis de rodilla / pérdida del pulgar → 25%
+- Anquilosis de muñeca o empeine / pérdida del dedo índice → 10%
+- Pérdida de dedos medios → 5%
+
+## BACI — Beneficio Adicional de Anticipación del Capital por Invalidez
+Código interno: 69M00053
+Planes que lo ofrecen: Término Nivelado ÚNICAMENTE.
+¿Qué hace?: En caso de invalidez total y permanente antes de los 60 años, BACI paga el Valor Nominal de este contrato EN LUGAR DE todos los demás beneficios de la póliza base (excepto desmembramiento). Es la alternativa al BIPA para Término Nivelado, dado que este plan no tiene valor acumulado.
+Forma de pago: Mensualidades durante un máximo de 60 meses.
+Condición: La invalidez debe comenzar antes de los 60 años del asegurado.
+Plazo de aviso: máximo 1 año desde la fecha de invalidez declarada.
+Terminación automática: Al cumplir 60 años el asegurado.
+
+## BSCA — Beneficio Suplementario para el Cuidado del Asegurado
+Código: PA-ED-60-BSCA 13.05.2021 | Resolución DRLA-055 del 23/08/2021
+Planes que lo ofrecen: Término Nivelado (y universales según condiciones contratadas).
+¿Qué hace?: Anticipa hasta B/.100,000 o el 50% de la Suma Asegurada (lo que sea menor) cuando el asegurado es diagnosticado con una ENFERMEDAD TERMINAL.
+DEFINICIÓN DE ENFERMEDAD TERMINAL: Condición médica irreversible que los médicos estiman causará la muerte dentro de los próximos 12 meses.
+Condición de elegibilidad: El diagnóstico debe ocurrir al menos 90 días DESPUÉS de la fecha de vigencia de la póliza.
+Después de rehabilitación: Se requiere un período adicional de 90 días de espera.
+IMPORTANTE — Naturaleza del pago: Este anticipo NO es dinero extra. Se DESCUENTA del beneficio de muerte que recibirán los beneficiarios al momento del fallecimiento. Es un pago anticipado del capital asegurado, no un beneficio adicional.
+Exclusiones de BSCA:
+- Enfermedad terminal diagnosticada dentro de los primeros 90 días de la póliza.
+- Condiciones preexistentes.
+- Lesiones autoinfligidas intencionalmente.
+
+## Exoneración de Primas por Incapacidad
+Código: 69M00020
+Planes que lo ofrecen: Término Nivelado ÚNICAMENTE.
+¿Qué hace?: Exonera (waiver) todos los pagos de primas mientras el asegurado esté en invalidez total y permanente. La póliza permanece vigente sin costo para el asegurado.
+Activación: Desde el 7° mes de invalidez continua.
+Terminación: Al cumplir 60 años el asegurado.
+DIFERENCIA con otros contratos: BACI paga capital al asegurado; ECM aplica a planes universales; este contrato de Exoneración aplica solo a Término Nivelado y elimina el cobro de primas sin pagar capital.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISPONIBILIDAD DE CONTRATOS COMPLEMENTARIOS POR PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+| Contrato                   | Término Nivelado | Universal I | Universal II | Patrimonial II |
+|----------------------------|:----------------:|:-----------:|:------------:|:--------------:|
+| BIPA (Incap. Pago Anticip.)| ✗                | ✓           | ✓            | ✓              |
+| ECM (Exon. Costo Mortalid.)| ✗                | ✓           | ✓            | ✓              |
+| EG  (Enfermedades Graves)  | ✓                | ✓           | ✓            | ✓              |
+| AP  (Accidentes Personales)| ✓                | ✓           | ✓            | ✓              |
+| OA  (Otro Asegurado)       | ✗                | ✓           | ✓            | ✓              |
+| BCMA (Muerte Acc. y Desm.) | ✓                | ✓           | ✗            | ✗              |
+| BSCA (Cuidado Asegurado)   | ✓                | ✗           | ✗            | ✗              |
+| BACI (Anticip. Cap. Inval.)| ✓                | ✗           | ✗            | ✗              |
+| Exoneración de Primas      | ✓                | ✗           | ✗            | ✗              |
 
 ## Tabla comparativa de los 4 planes ASSA:
-| Plan             | Ahorro | Tasa garantizada | Cláusula maduración 95 años | Rescate parcial mín.  | Ideal para                          |
-|------------------|:------:|:----------------:|:---------------------------:|:---------------------:|-------------------------------------|
-| Término Nivelado | No     | N/A              | No                          | N/A (sin valor)       | Protección pura, menor costo        |
-| Universal I      | Sí     | 3.5%             | SÍ — paga SA + ahorro en vida | Valor rescate -$1,000 | Protección + pago garantizado a 95  |
-| Universal II     | Sí     | 3.5%             | No                          | Valor rescate -$1,000 | Mayor ahorro acumulado a igual prima |
-| Patrimonial II   | Sí     | 4.5%             | No                          | Valor rescate -$2,500 | Máximo ahorro / patrimonio           |
+| Plan             | Ahorro | Tasa garantizada | Al llegar a 95 años            | Rescate desde | Préstamos | Ideal para                          |
+|------------------|:------:|:----------------:|:------------------------------:|:-------------:|:---------:|-------------------------------------|
+| Término Nivelado | No     | N/A              | No aplica (plazo fijo)         | N/A           | No        | Protección pura, menor costo        |
+| Universal I      | Sí     | 3.5%             | Paga Beneficio de Muerte (vivo)| Año 2         | Sí        | Protección + pago garantizado a 95  |
+| Universal II     | Sí     | 3.5%             | Entrega Valor Acumulado        | Año 2         | Sí        | Mayor ahorro acumulado a igual prima |
+| Patrimonial II   | Sí     | 4.5%             | Entrega Valor Acumulado        | Año 6         | No        | Máximo ahorro / patrimonio           |
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECCIÓN INCENDIO / MULTIRRIESGO (BASE: ANCÓN)

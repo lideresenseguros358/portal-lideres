@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { compressImageFile } from '@/lib/utils/compress-image';
 import CedulaQRScanner from './CedulaQRScanner';
 import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
@@ -342,32 +343,48 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
     reader.readAsDataURL(file);
   };
 
-  const handleCedulaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCedulaFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('El archivo debe ser menor a 5MB');
+    if (!file) return;
+    let ready = file;
+    if (file.type !== 'application/pdf' && file.size > 5 * 1024 * 1024) {
+      const toastId = toast.loading('Optimizando imagen de cédula…');
+      try {
+        ready = await compressImageFile(file);
+        toast.dismiss(toastId);
+        toast.success(`Imagen optimizada (${(ready.size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch {
+        toast.dismiss(toastId);
+        toast.error('No se pudo comprimir la imagen. Usa una de menor tamaño.');
         return;
       }
-      setFormData({ ...formData, cedulaFile: file });
-      setCedulaFileName(file.name);
-      setErrors({ ...errors, cedulaFile: '' });
-      cacheFileToStorage('emissionCedulaFile', file);
     }
+    setFormData({ ...formData, cedulaFile: ready });
+    setCedulaFileName(ready.name);
+    setErrors({ ...errors, cedulaFile: '' });
+    cacheFileToStorage('emissionCedulaFile', ready);
   };
 
-  const handleLicenciaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLicenciaFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('El archivo debe ser menor a 5MB');
+    if (!file) return;
+    let ready = file;
+    if (file.type !== 'application/pdf' && file.size > 5 * 1024 * 1024) {
+      const toastId = toast.loading('Optimizando imagen de licencia…');
+      try {
+        ready = await compressImageFile(file);
+        toast.dismiss(toastId);
+        toast.success(`Imagen optimizada (${(ready.size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch {
+        toast.dismiss(toastId);
+        toast.error('No se pudo comprimir la imagen. Usa una de menor tamaño.');
         return;
       }
-      setFormData({ ...formData, licenciaFile: file });
-      setLicenciaFileName(file.name);
-      setErrors({ ...errors, licenciaFile: '' });
-      cacheFileToStorage('emissionLicenciaFile', file);
     }
+    setFormData({ ...formData, licenciaFile: ready });
+    setLicenciaFileName(ready.name);
+    setErrors({ ...errors, licenciaFile: '' });
+    cacheFileToStorage('emissionLicenciaFile', ready);
   };
 
   const handleQRScanSuccess = (data: any) => {
@@ -1205,8 +1222,8 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                 </label>
                 <Autocomplete
                   options={acreedoresOptions}
-                  value={formData.acreedor}
-                  onChange={(val) => setFormData({ ...formData, acreedor: val as string })}
+                  value={formData.acreedor ?? ''}
+                  onChange={(val) => setFormData({ ...formData, acreedor: String(val) })}
                   placeholder="Sin acreedor (no financiado)"
                   emptyMessage="No se encontró ningún acreedor con ese nombre"
                 />

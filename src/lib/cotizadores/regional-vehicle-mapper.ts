@@ -57,7 +57,7 @@ async function supabaseReadMarcas(): Promise<RegionalMarca[] | null> {
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
     const sb = getSupabaseAdmin();
-    const { data } = await sb
+    const { data } = await (sb as any)
       .from('insurer_vehicle_catalogs')
       .select('catalog_data, expires_at')
       .eq('insurer', 'REGIONAL')
@@ -65,9 +65,9 @@ async function supabaseReadMarcas(): Promise<RegionalMarca[] | null> {
       .single();
 
     if (!data) return null;
-    if (new Date(data.expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
+    if (new Date((data as any).expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
 
-    const marcas = data.catalog_data as RegionalMarca[];
+    const marcas = (data as any).catalog_data as RegionalMarca[];
     _memMarcas = marcas;
     _memMarcasAt = Date.now();
     console.log(`[REGIONAL Vehicle Mapper] ✅ marcas from Supabase L2 (${marcas.length} entries)`);
@@ -82,7 +82,7 @@ function supabaseSaveMarcas(marcas: RegionalMarca[]): void {
     try {
       const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
       const sb = getSupabaseAdmin();
-      await sb.from('insurer_vehicle_catalogs').upsert(
+      await (sb as any).from('insurer_vehicle_catalogs').upsert(
         {
           insurer: 'REGIONAL',
           catalog_key: 'marcas',
@@ -103,7 +103,7 @@ async function supabaseReadModelos(codMarca: number): Promise<RegionalModelo[] |
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
     const sb = getSupabaseAdmin();
-    const { data } = await sb
+    const { data } = await (sb as any)
       .from('insurer_vehicle_catalogs')
       .select('catalog_data, expires_at')
       .eq('insurer', 'REGIONAL')
@@ -111,9 +111,9 @@ async function supabaseReadModelos(codMarca: number): Promise<RegionalModelo[] |
       .single();
 
     if (!data) return null;
-    if (new Date(data.expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
+    if (new Date((data as any).expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null;
 
-    const modelos = data.catalog_data as RegionalModelo[];
+    const modelos = (data as any).catalog_data as RegionalModelo[];
     _memModelos.set(codMarca, { data: modelos, ts: Date.now() });
     console.log(`[REGIONAL Vehicle Mapper] ✅ modelos_${codMarca} from Supabase L2 (${modelos.length} entries)`);
     return modelos;
@@ -127,7 +127,7 @@ function supabaseSaveModelos(codMarca: number, modelos: RegionalModelo[]): void 
     try {
       const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
       const sb = getSupabaseAdmin();
-      await sb.from('insurer_vehicle_catalogs').upsert(
+      await (sb as any).from('insurer_vehicle_catalogs').upsert(
         {
           insurer: 'REGIONAL',
           catalog_key: `modelos_${codMarca}`,

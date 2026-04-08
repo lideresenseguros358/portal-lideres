@@ -39,7 +39,7 @@ async function supabaseRead(catalogKey: string): Promise<AnconMarcaModelo[] | nu
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
     const sb = getSupabaseAdmin();
-    const { data } = await sb
+    const { data } = await (sb as any)
       .from('insurer_vehicle_catalogs')
       .select('catalog_data, expires_at')
       .eq('insurer', 'ANCON')
@@ -47,9 +47,9 @@ async function supabaseRead(catalogKey: string): Promise<AnconMarcaModelo[] | nu
       .single();
 
     if (!data) return null;
-    if (new Date(data.expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null; // expires in <5min
+    if (new Date((data as any).expires_at).getTime() <= Date.now() + 5 * 60 * 1000) return null; // expires in <5min
 
-    const catalog = data.catalog_data as AnconMarcaModelo[];
+    const catalog = (data as any).catalog_data as AnconMarcaModelo[];
     // Warm L1 as well
     memSet(catalogKey, catalog);
     console.log(`[ANCON Catalogs] ✅ ${catalogKey} from Supabase L2 (${catalog.length} entries)`);
@@ -65,7 +65,7 @@ function supabaseSave(catalogKey: string, data: AnconMarcaModelo[]): void {
     try {
       const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
       const sb = getSupabaseAdmin();
-      await sb.from('insurer_vehicle_catalogs').upsert(
+      await (sb as any).from('insurer_vehicle_catalogs').upsert(
         {
           insurer: 'ANCON',
           catalog_key: catalogKey,

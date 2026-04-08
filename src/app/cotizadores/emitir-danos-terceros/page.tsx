@@ -619,7 +619,7 @@ export default function EmitirDanosTercerosPage() {
             cantidadCuotas: selectedPaymentMode === 'cuotas' ? selectedInstallmentsCount : 1,
             montoCuota: selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : undefined,
             // Insurer payment plan mismatch info for welcome email
-            insurerPaymentPlan: selectedPaymentMode === 'cuotas' && isFedpaCuotasMismatch ? {
+            insurerPaymentPlan: selectedPaymentMode === 'cuotas' && selectedInstallmentsCount !== 10 ? {
               insurerCuotas: 10,
               insurerFrequency: 'mensual',
               clientCuotas: selectedInstallmentsCount,

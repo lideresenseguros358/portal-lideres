@@ -25,6 +25,7 @@ import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
+import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 import { getSupabaseServer } from '@/lib/supabase/server';
 
 export const maxDuration = 120;
@@ -231,11 +232,70 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ═══ STEP 1: Generate policy number ═══
-    log('1/5', 'Generando número de póliza...');
     const currentYear = new Date().getFullYear().toString();
     // CC products use ramo 001, DT/RC products use ramo 002
     const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
+
+    // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
+    // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),
+    // so its noCotizacion won't match the actual emission vehicle data.
+    // We resolve the vehicle codes and re-quote with the real form data to get a
+    // fresh noCotizacion that ANCON will accept in EmitirDatos.
+    let finalCodMarcaAgt = cod_marca_agt || '';
+    let finalCodModeloAgt = cod_modelo_agt || '';
+    if (nombre_marca && nombre_modelo) {
+      try {
+        const resolved = await resolveAnconVehicleCodes(nombre_marca, nombre_modelo);
+        if (resolved) {
+          finalCodMarcaAgt = resolved.codMarca;
+          finalCodModeloAgt = resolved.codModelo;
+          log('0/4', `Vehicle codes resolved: "${nombre_marca}/${nombre_modelo}" → marca=${finalCodMarcaAgt}, modelo=${finalCodModeloAgt} (${resolved.matchMethod})`);
+        } else {
+          log('0/4', `Vehicle resolution returned null for "${nombre_marca}/${nombre_modelo}" — sending empty codes`);
+        }
+      } catch (err: unknown) {
+        log('0/4', `Vehicle resolution error for "${nombre_marca}/${nombre_modelo}": ${err instanceof Error ? err.message : String(err)} — sending empty codes`);
+      }
+    }
+
+    let freshNoCotizacion = no_cotizacion;
+    if (!isCC) {
+      log('0/4', 'Re-cotizando con datos reales del vehículo (DT)...');
+      // Normalize fecha_nacimiento to DD/MM/YYYY for the ANCON quote API
+      let fechaNacFormatted = fecha_nacimiento || '01/01/1990';
+      if (fecha_nacimiento && !fecha_nacimiento.includes('/')) {
+        const parts = fecha_nacimiento.split('-');
+        if (parts.length === 3) fechaNacFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      try {
+        const freshQuote = await cotizarEstandar({
+          cod_marca: finalCodMarcaAgt || '00001',
+          cod_modelo: finalCodModeloAgt || '00001',
+          ano: String(ano || currentYear),
+          suma_asegurada: String(suma_asegurada || '0'),
+          cod_producto: cod_producto || '07159',
+          cedula: cedula || '8-888-9999',
+          nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
+          apellido: (primer_apellido || 'WEB').toUpperCase(),
+          vigencia: 'A',
+          email: email || 'cotizacion@lideresenseguros.com',
+          tipo_persona: tipo_de_cliente || 'N',
+          fecha_nac: fechaNacFormatted,
+          nuevo: '0',
+        });
+        if (freshQuote.success && freshQuote.data?.noCotizacion) {
+          freshNoCotizacion = freshQuote.data.noCotizacion;
+          log('0/4', `Re-cotización exitosa → noCotizacion=${freshNoCotizacion}`);
+        } else {
+          log('0/4', `Re-cotización fallida (${freshQuote.error}) — usando noCotizacion original: ${no_cotizacion}`);
+        }
+      } catch (err: unknown) {
+        log('0/4', `Re-cotización error: ${err instanceof Error ? err.message : String(err)} — usando noCotizacion original`);
+      }
+    }
+
+    // ═══ STEP 1: Generate policy number ═══
+    log('1/4', 'Generando número de póliza...');
     const codRamo = isCC ? '001' : '002';
     const genToken = await getFreshToken();
     const genDocRaw = await rawSoap('GenerarNodocumento', {
@@ -347,26 +407,6 @@ export async function POST(request: NextRequest) {
       log('2/4', 'Sin archivos adjuntos — continuando sin documentos');
     }
 
-    // ═══ Resolve ANCON vehicle codes from name strings ═══
-    // Always resolve from names when available — incoming cod_marca_agt may be
-    // an IS numeric code (e.g. "74" for Suzuki) which is invalid in ANCON's catalog.
-    let finalCodMarcaAgt = cod_marca_agt || '';
-    let finalCodModeloAgt = cod_modelo_agt || '';
-    if (nombre_marca && nombre_modelo) {
-      try {
-        const resolved = await resolveAnconVehicleCodes(nombre_marca, nombre_modelo);
-        if (resolved) {
-          finalCodMarcaAgt = resolved.codMarca;
-          finalCodModeloAgt = resolved.codModelo;
-          log('3/4', `Vehicle codes resolved: "${nombre_marca}/${nombre_modelo}" → marca=${finalCodMarcaAgt}, modelo=${finalCodModeloAgt} (${resolved.matchMethod})`);
-        } else {
-          log('3/4', `Vehicle resolution returned null for "${nombre_marca}/${nombre_modelo}" — sending empty codes`);
-        }
-      } catch (err: any) {
-        log('3/4', `Vehicle resolution error for "${nombre_marca}/${nombre_modelo}": ${err.message} — sending empty codes`);
-      }
-    }
-
     // ═══ STEP 3: Emit policy ═══
     // EmitirDatos/EmisionServer handles client creation internally.
     // Inspection is CC-only — not called for DT.
@@ -434,7 +474,7 @@ export async function POST(request: NextRequest) {
       fecha_primer_pago: fecha_primer_pago || fmtDate(today),
       cod_agente: creds.codAgente,
       opcion: opcion || 'A',
-      no_cotizacion: no_cotizacion,
+      no_cotizacion: freshNoCotizacion,
       cod_grupo: cod_grupo || '00001',
       nombre_grupo: nombre_grupo || 'SIN GRUPO',
       token: emitToken,
@@ -534,7 +574,7 @@ export async function POST(request: NextRequest) {
       success: true,
       poliza: polizaNumber,
       nroPoliza: polizaNumber,
-      noCotizacion: no_cotizacion,
+      noCotizacion: freshNoCotizacion,
       insurer: 'ANCON',
       clientId: dbResult.clientId,
       policyId: dbResult.policyId,

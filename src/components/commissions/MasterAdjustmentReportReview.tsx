@@ -512,7 +512,7 @@ export default function MasterAdjustmentReportReview({
                           <Badge variant="outline">{item.insurer_name || '—'}</Badge>
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {formatCurrency(Math.abs(item.commission_raw))}
+                          {formatCurrency(item.commission_raw)}
                         </TableCell>
                         <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
                           {formatCurrency(item.broker_commission)}
@@ -549,7 +549,7 @@ export default function MasterAdjustmentReportReview({
                     <div className="flex justify-between pt-2 border-t">
                       <div>
                         <p className="text-xs text-gray-500">Monto Crudo</p>
-                        <p className="text-sm font-mono">{formatCurrency(Math.abs(item.commission_raw))}</p>
+                        <p className="text-sm font-mono">{formatCurrency(item.commission_raw)}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">Comisión</p>

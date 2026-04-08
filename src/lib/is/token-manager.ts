@@ -42,7 +42,7 @@ function getJwtExpiry(token: string): number | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString());
     const exp = typeof payload.exp === 'string' ? parseInt(payload.exp, 10) : payload.exp;
     return typeof exp === 'number' && !isNaN(exp) ? exp * 1000 : null; // → ms
   } catch {

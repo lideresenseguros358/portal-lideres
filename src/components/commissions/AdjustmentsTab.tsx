@@ -104,8 +104,8 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
           item.insured_name || '\u2014',
           item.policy_number,
           item.insurer_name || '\u2014',
-          formatMoney(Math.abs(item.commission_raw || 0)),
-          formatMoney(Math.abs(item.broker_commission || 0)),
+          formatMoney(item.commission_raw || 0),
+          formatMoney(item.broker_commission || 0),
         ]);
 
         autoTable(doc, {
@@ -216,7 +216,7 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
                     </span>
                     <span className="flex items-center gap-1 font-bold text-[#8AAA19] text-lg">
                       <FaDollarSign className="text-green-600" size={14} />
-                      {formatMoney(Math.abs(report.total_amount || 0))}
+                      {formatMoney(report.total_amount || 0)}
                     </span>
                   </div>
                 </div>
@@ -258,10 +258,10 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
                             <TableCell>{item.insured_name || '—'}</TableCell>
                             <TableCell>{item.insurer_name || '—'}</TableCell>
                             <TableCell className="text-right font-mono">
-                              {formatMoney(Math.abs(item.commission_raw || 0))}
+                              {formatMoney(item.commission_raw || 0)}
                             </TableCell>
                             <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
-                              {formatMoney(Math.abs(item.broker_commission || 0))}
+                              {formatMoney(item.broker_commission || 0)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -289,7 +289,7 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
                 Reporte de Ajustes
               </p>
               <p className="text-xs text-gray-500 mb-4">
-                {(downloadModal.items || []).length} item(s) · {formatMoney(Math.abs(downloadModal.total_amount || 0))}
+                {(downloadModal.items || []).length} item(s) · {formatMoney(downloadModal.total_amount || 0)}
               </p>
               <div className="flex gap-3">
                 <Button
@@ -416,7 +416,7 @@ function BrokerReportsList({ reports }: { reports: any[] }) {
                     </span>
                     <span className="flex items-center gap-1 font-semibold text-[#010139]">
                       <FaDollarSign className="text-green-600" size={12} />
-                      {formatMoney(Math.abs(report.total_amount || 0))}
+                      {formatMoney(report.total_amount || 0)}
                     </span>
                   </div>
                 </div>
@@ -454,10 +454,10 @@ function BrokerReportsList({ reports }: { reports: any[] }) {
                             <TableCell>{item.insured_name || '—'}</TableCell>
                             <TableCell>{item.insurer_name || '—'}</TableCell>
                             <TableCell className="text-right font-mono">
-                              {formatMoney(Math.abs(item.commission_raw || 0))}
+                              {formatMoney(item.commission_raw || 0)}
                             </TableCell>
                             <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
-                              {formatMoney(Math.abs(item.broker_commission || 0))}
+                              {formatMoney(item.broker_commission || 0)}
                             </TableCell>
                           </TableRow>
                         ))}

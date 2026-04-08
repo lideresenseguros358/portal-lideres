@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { FaCar, FaCamera, FaArrowRight, FaArrowLeft } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { compressImageFile } from '@/lib/utils/compress-image';
 import Image from 'next/image';
 import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useISCatalogs } from '@/hooks/useISCatalogs';
@@ -168,15 +169,9 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
     reader.readAsDataURL(file);
   };
 
-  const handleRegistroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRegistroChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Validar tamaño (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('El archivo no debe superar 5MB');
-      return;
-    }
 
     // Validar tipo
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
@@ -185,17 +180,31 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
       return;
     }
 
-    setRegistroVehicular(file);
-    setRegistroFileName(file.name);
-    cacheFileToStorage('vehicleRegistroFile', file);
+    let ready = file;
+    if (file.type !== 'application/pdf' && file.size > 5 * 1024 * 1024) {
+      const toastId = toast.loading('Optimizando imagen de registro vehicular…');
+      try {
+        ready = await compressImageFile(file);
+        toast.dismiss(toastId);
+        toast.success(`Imagen optimizada (${(ready.size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch {
+        toast.dismiss(toastId);
+        toast.error('No se pudo comprimir la imagen. Usa una de menor tamaño.');
+        return;
+      }
+    }
+
+    setRegistroVehicular(ready);
+    setRegistroFileName(ready.name);
+    cacheFileToStorage('vehicleRegistroFile', ready);
 
     // Preview solo para imágenes
-    if (file.type.startsWith('image/')) {
+    if (ready.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setRegistroPreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(ready);
     } else {
       setRegistroPreview('');
     }

@@ -823,7 +823,7 @@ export async function actionUploadImport(formData: FormData) {
         const stillUnmatched = unmatchedPolicyNumbers.filter(pn => !exactMatchedPNs.has(pn));
 
         if (stillUnmatched.length > 0) {
-          const { data: allInsurerPrelim } = await supabase
+          const { data: allInsurerPrelim } = await (supabase as any)
             .from('temp_client_import')
             .select(`
               policy_number,

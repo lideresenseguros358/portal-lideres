@@ -3,16 +3,16 @@ import { generarComparativaPDF } from '@/lib/cotizadores/comparar-pdf';
 
 export async function POST(request: NextRequest) {
   try {
-    const { quotes } = await request.json();
+    const { quotes, clientInfo } = await request.json();
 
     if (!quotes || !Array.isArray(quotes) || quotes.length === 0) {
       return NextResponse.json({ error: 'No quotes provided' }, { status: 400 });
     }
 
     // Pass the project root directory for image loading
-    const pdfBuffer = await generarComparativaPDF(quotes, process.cwd());
+    const pdfBuffer = await generarComparativaPDF(quotes, process.cwd(), clientInfo);
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename="comparativa-cobertura-completa.pdf"',
