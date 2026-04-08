@@ -125,24 +125,14 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
             {!loadingAuth && isMaster && (
               <button
                 onClick={() => setEditMode(!editMode)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                className={`p-2 rounded-lg transition-all ${
                   editMode
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-[#8AAA19] text-white hover:bg-[#7a9415]'
+                    ? 'text-red-500 hover:text-red-600 hover:bg-red-50'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
                 title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
               >
-                {editMode ? (
-                  <>
-                    <FaTimes className="text-lg" />
-                    <span className="hidden sm:inline">Salir edición</span>
-                  </>
-                ) : (
-                  <>
-                    <FaEdit className="text-lg" />
-                    <span className="hidden sm:inline">Editar</span>
-                  </>
-                )}
+                {editMode ? <FaTimes className="w-4 h-4" /> : <FaEdit className="w-4 h-4" />}
               </button>
             )}
 
