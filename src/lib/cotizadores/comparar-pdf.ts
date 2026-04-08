@@ -503,6 +503,7 @@ async function drawCoveragePage(
     label: string, subLabel: string | null, values: string[],
     opts: { bg?: ReturnType<typeof rgb>; labelBold?: boolean; valueBold?: boolean;
             valColor?: ReturnType<typeof rgb>; labelColor?: ReturnType<typeof rgb>;
+            subLabelColor?: ReturnType<typeof rgb>;
             rh?: number; fontSize?: number; }  = {},
   ) => {
     const rh = opts.rh ?? ROW_H;
@@ -518,7 +519,7 @@ async function drawCoveragePage(
     if (subLabel) {
       page.drawText(safe(subLabel), {
         x: M + LPAD, y: y - rh + 2,
-        size: 6, font, color: bg ? WHITE : GRAY,
+        size: 6, font, color: opts.subLabelColor ?? (bg ? GRAY : GRAY),
       });
     }
 
@@ -582,14 +583,23 @@ async function drawCoveragePage(
     if (logo) {
       const maxH = INS_H - 10;
       const maxW = cardW - 16;
+      const minW = maxW * 0.65;  // Guarantee minimum 65% of max width (prevents FEDPA from being too small)
       const normalized = normalizeLogo(logo, maxH);
-      // Don't exceed max width
       let { width: lw, height: lh } = normalized;
+
+      // Scale down if exceeds max width
       if (lw > maxW) {
         const scale = maxW / lw;
         lw *= scale;
         lh *= scale;
       }
+      // Scale up if below minimum width (ensures FEDPA matches INTERNACIONAL size)
+      else if (lw < minW) {
+        const scale = minW / lw;
+        lw *= scale;
+        lh *= scale;
+      }
+
       page.drawImage(logo, {
         x: cardX + (cardW - lw) / 2,
         y: y - INS_H + (INS_H - lh) / 2,
@@ -650,7 +660,7 @@ async function drawCoveragePage(
     ? `${money(lesP)} / ${money(lesA)}`
     : resolveLimit(quotes[0]!, ['lesiones', 'corporales'], ['lesion', 'corporal'], true);
   drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
-    bg: STRIPE, rh: ROW_H + 2,
+    bg: STRIPE, rh: ROW_H + 2, valColor: GREEN, subLabelColor: DARK,
   });
 
   const dpa = Number(clientInfo?.danoPropiedad) || 0;
@@ -665,7 +675,7 @@ async function drawCoveragePage(
     ? `${money(gmP)} / ${money(gmA)}`
     : resolveLimit(quotes[0]!, ['medic', 'gastos'], ['medic', 'gasto'], true);
   drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
-    bg: STRIPE, rh: ROW_H + 2,
+    bg: STRIPE, rh: ROW_H + 2, valColor: GREEN, subLabelColor: DARK,
   });
 
   // Comprensivo (valor asegurado)
@@ -680,7 +690,7 @@ async function drawCoveragePage(
     const sa = q._sumaAsegurada;
     return sa ? money(sa) : 'Valor del Auto';
   });
-  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: ROW_H });
+  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: ROW_H, valColor: GREEN });
 
   // ── Section B: Deducibles ────────────────────────────────────────────────
   drawLabelRow('DEDUCIBLES', null, Array(n).fill(''),
@@ -706,7 +716,7 @@ async function drawCoveragePage(
     if (comp?.amount && comp.amount > 0) return money(comp.amount);
     return 'Ver poliza';
   });
-  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H });
+  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H, valColor: GREEN });
 
   // ── Section C: Precios ───────────────────────────────────────────────────
   drawLabelRow('PRIMA', null, Array(n).fill(''),
@@ -728,7 +738,7 @@ async function drawCoveragePage(
     return money(p, 'B/.');
   });
   drawLabelRow('Prima en Cuotas', '(max. 10 cuotas mensuales)', tarjetaValues, {
-    bg: STRIPE, rh: ROW_H + 2,
+    bg: STRIPE, rh: ROW_H + 2, valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
   });
 
   // ── Section D: Endosos Incluidos ─────────────────────────────────────────
