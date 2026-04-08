@@ -862,7 +862,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                                 key={`expediente-${(client as any).id}`}
                                 clientId={(client as any).id}
                                 showClientDocs={true}
-                                showPolicyDocs={false}
+                                showPolicyDocs={true}
                                 showOtros={true}
                                 readOnly={role !== 'master'}
                                 externalModalOpen={expedienteModalOpen[(client as any).id]}
@@ -1211,7 +1211,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                           key={`expediente-grid-${(client as any).id}`}
                           clientId={(client as any).id}
                           showClientDocs={true}
-                          showPolicyDocs={false}
+                          showPolicyDocs={true}
                           showOtros={true}
                           readOnly={role !== 'master'}
                           externalModalOpen={expedienteModalOpen[(client as any).id]}
@@ -1861,7 +1861,7 @@ export default function DatabaseTabs({
           <ExpedienteManager
             clientId={(clientToEdit as any).id}
             showClientDocs={true}
-            showPolicyDocs={false}
+            showPolicyDocs={true}
             showOtros={true}
             readOnly={false}
           />

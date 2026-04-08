@@ -213,7 +213,7 @@ export async function uploadExpedienteDocument(
 }
 
 /**
- * Get all documents for a client
+ * Get client-level documents only (cedula, licencia — those with policy_id IS NULL)
  */
 export async function getClientDocuments(
   clientId: string
@@ -236,6 +236,34 @@ export async function getClientDocuments(
     return { ok: true, data: data as unknown as ExpedienteDocument[] };
   } catch (error: any) {
     console.error('Unexpected error fetching client documents:', error);
+    return { ok: false, error: error.message || 'Error inesperado' };
+  }
+}
+
+/**
+ * Get ALL documents for a client regardless of policy (cedula, licencia, registro vehicular,
+ * debida diligencia, carátula — everything linked to this client_id).
+ */
+export async function getAllClientDocuments(
+  clientId: string
+): Promise<{ ok: boolean; data?: ExpedienteDocument[]; error?: string }> {
+  try {
+    const supabase = supabaseClient();
+
+    const { data, error } = await supabase
+      .from('expediente_documents')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all client documents:', error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true, data: data as unknown as ExpedienteDocument[] };
+  } catch (error: any) {
+    console.error('Unexpected error fetching all client documents:', error);
     return { ok: false, error: error.message || 'Error inesperado' };
   }
 }

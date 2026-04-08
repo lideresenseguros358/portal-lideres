@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   uploadExpedienteDocument,
   getClientDocuments,
+  getAllClientDocuments,
   getPolicyDocuments,
   deleteExpedienteDocument,
   getExpedienteDocumentUrl,
@@ -101,19 +102,28 @@ export default function ExpedienteManager({
     try {
       let allDocs: ExpedienteDocument[] = [];
 
-      // Load client documents
-      if (showClientDocs) {
-        const clientDocsResult = await getClientDocuments(clientId);
-        if (clientDocsResult.ok && clientDocsResult.data) {
-          allDocs = [...allDocs, ...clientDocsResult.data];
+      if (showPolicyDocs && !policyId) {
+        // Show ALL documents for this client (cedula, licencia, registro vehicular,
+        // debida diligencia, carátula) regardless of which policy they belong to
+        const allDocsResult = await getAllClientDocuments(clientId);
+        if (allDocsResult.ok && allDocsResult.data) {
+          allDocs = [...allDocs, ...allDocsResult.data];
         }
-      }
+      } else {
+        // Load client documents (policy_id IS NULL: cedula, licencia)
+        if (showClientDocs) {
+          const clientDocsResult = await getClientDocuments(clientId);
+          if (clientDocsResult.ok && clientDocsResult.data) {
+            allDocs = [...allDocs, ...clientDocsResult.data];
+          }
+        }
 
-      // Load policy documents
-      if (showPolicyDocs && policyId) {
-        const policyDocsResult = await getPolicyDocuments(policyId);
-        if (policyDocsResult.ok && policyDocsResult.data) {
-          allDocs = [...allDocs, ...policyDocsResult.data];
+        // Load specific policy's documents
+        if (showPolicyDocs && policyId) {
+          const policyDocsResult = await getPolicyDocuments(policyId);
+          if (policyDocsResult.ok && policyDocsResult.data) {
+            allDocs = [...allDocs, ...policyDocsResult.data];
+          }
         }
       }
 
