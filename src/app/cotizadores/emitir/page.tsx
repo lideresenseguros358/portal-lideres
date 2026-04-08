@@ -1845,23 +1845,21 @@ export default function EmitirPage() {
         <div className="py-8 px-4">
           {/* Broker selector for master users */}
           {isMaster && availableBrokers.length > 0 && (
-            <div className="max-w-2xl mx-auto mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
-              <label className="block text-sm font-bold text-[#010139] mb-2">
-                🏢 Asignar Corredor / Broker
-              </label>
+            <div className="max-w-2xl mx-auto mb-8">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🏢</span>
+                <label className="text-sm font-semibold text-gray-700">Asignar a Corredor</label>
+              </div>
               <select
                 value={masterBrokerId}
                 onChange={e => setMasterBrokerId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-[#010139] focus:outline-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:border-gray-400 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 transition-colors outline-none"
               >
-                <option value="">-- Portal Líderes (por defecto) --</option>
+                <option value="">Portal Líderes (por defecto)</option>
                 {availableBrokers.map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Sin selección se asigna a portal@lideresenseguros.com
-              </p>
             </div>
           )}
 
