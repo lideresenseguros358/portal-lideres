@@ -428,14 +428,14 @@ export async function uploadDocumentREST(
 
 // ═══ Upload all required documents for a cotización ═══
 //
-// ANCON Natural docs (id_archivo):
-//   1 = Solicitud de seguros   (requerida) ← generated PDF from portal
-//   2 = Conoce a tu cliente    (opcional)
-//   3 = Cédula del contratante (requerida)
-//   4 = Cédula del asegurado   (requerida) ← same person as contratante for Natural
-//   5 = Licencia del asegurado (requerida)
-//   6 = Licencia conductor habitual (opcional)
-//   7 = Registro vehicular     (opcional)
+// ANCON Natural docs (id_archivo) — confirmed by ANCON 2026-04-08:
+//   1 = Solicitud de seguros       (requerida=1) ← generated PDF from portal
+//   2 = Conoce a tu cliente        (requerida=1) ← also mapped to solicitud PDF
+//   3 = Cédula del contratante     (requerida=1)
+//   4 = Cédula del asegurado       (requerida=1) ← same person as contratante for Natural
+//   5 = Licencia del asegurado     (requerida=1)
+//   6 = Licencia conductor habitual (requerida=0) ← optional
+//   7 = Registro vehicular          (requerida=0) ← optional
 
 export async function uploadInspectionAndDocuments(
   tipoPersona: string,
@@ -457,9 +457,11 @@ export async function uploadInspectionAndDocuments(
     const id = doc.id_archivo;
     let fileData: { buffer: Buffer; name: string; type: string } | undefined;
 
-    if (id === '1' && solicitudBuffer) {
-      // Solicitud de Seguros — generated PDF
-      fileData = { buffer: solicitudBuffer, name: 'solicitud_ancon.pdf', type: 'application/pdf' };
+    if ((id === '1' || id === '2') && solicitudBuffer) {
+      // Doc 1: Solicitud de Seguros — generated PDF
+      // Doc 2: Conoce a tu cliente — requerida=1, mapped to the same solicitud PDF
+      const docName = id === '2' ? 'conoce_a_tu_cliente.pdf' : 'solicitud_ancon.pdf';
+      fileData = { buffer: solicitudBuffer, name: docName, type: 'application/pdf' };
     } else if (id === '3' || id === '4') {
       // Cédula contratante (3) and cédula asegurado (4) — same person for Natural
       fileData = files['cedulaFile'] || files['cedula'];
