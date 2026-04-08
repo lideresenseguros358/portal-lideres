@@ -57,6 +57,16 @@ function decodeEntities(s: string): string {
 
 async function rawSoap(method: string, params: Record<string, string>): Promise<unknown> {
   const body = buildEnvelope(method, params);
+
+  // Log full XML request for EmitirDatos so ANCON support can diagnose issues
+  if (method === 'EmitirDatos') {
+    const CHUNK = 1000;
+    console.log(`[SOAP EmitirDatos] REQUEST XML (${body.length} chars total):`);
+    for (let i = 0; i < body.length; i += CHUNK) {
+      console.log(`[SOAP EmitirDatos] XML[${i}]: ${body.substring(i, i + CHUNK)}`);
+    }
+  }
+
   const res = await fetch(ANCON_SOAP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: `urn:server_otros#${method}` },
