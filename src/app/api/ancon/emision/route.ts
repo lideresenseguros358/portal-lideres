@@ -528,7 +528,7 @@ export async function POST(request: NextRequest) {
     log('4/4', 'Obteniendo carátula PDF...');
     let pdfUrl: string | null = null;
     try {
-      const printRaw = await rawSoap('ImpresionPoliza', { poliza: polizaNumber, token: emitToken });
+      const printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: emitToken });
       if (Array.isArray(printRaw)) {
         pdfUrl = (printRaw[0] as Record<string, string>)?.enlace_poliza || null;
       } else if (typeof printRaw === 'object' && printRaw !== null) {
