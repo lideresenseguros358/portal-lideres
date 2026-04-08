@@ -23,10 +23,10 @@ import {
 } from '@/lib/ancon/emission.service';
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
-import { getAnconCredentials, ANCON_SOAP_URL, ANCON_PRODUCTS } from '@/lib/ancon/config';
+import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
 import { getAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
-import { resolveAnconVehicleCodes, getAcreedores, getProductos } from '@/lib/ancon/catalogs.service';
+import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 import { getSupabaseServer } from '@/lib/supabase/server';
 
@@ -244,31 +244,9 @@ export async function POST(request: NextRequest) {
     }
 
     const currentYear = new Date().getFullYear().toString();
-    // CC products use ramo 001, DT/RC products use ramo 002
+    // CC products use ramo 001, SOBAT (SODA) use ramo 020, other DT/RC use ramo 002
     const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
-
-    // Resolve SOBAT product code from catalog if not provided correctly
-    let finalCodProducto = cod_producto || '07159';
-    if (!cod_producto || cod_producto === '07159') {
-      try {
-        const productosCatalog = await getProductos();
-        if (productosCatalog.success && Array.isArray(productosCatalog.data)) {
-          const autoProducts = productosCatalog.data.filter(p => p.codigo_ramo === '002');
-          // Try to match product name if provided
-          if (nombre_producto) {
-            const match = autoProducts.find(p =>
-              p.nombre_producto?.toUpperCase().includes(nombre_producto.toUpperCase().replace('WEB - ', ''))
-            );
-            if (match) {
-              finalCodProducto = match.codigo_producto;
-              log('0/4', `Resolved product code from catalog: ${nombre_producto} → ${match.codigo_producto}`);
-            }
-          }
-        }
-      } catch (err) {
-        log('0/4', `Product code resolution error: ${err instanceof Error ? err.message : String(err)} — using fallback ${finalCodProducto}`);
-      }
-    }
+    const isSobat = cod_producto === '05769' || cod_producto === '01492'; // SODA ramo 020
 
     // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
     // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),
@@ -311,7 +289,7 @@ export async function POST(request: NextRequest) {
           cod_modelo: finalCodModeloAgt || '00001',
           ano: String(ano || currentYear),
           suma_asegurada: String(suma_asegurada || '0'),
-          cod_producto: finalCodProducto,
+          cod_producto: cod_producto || '07159',
           cedula: cedula || '8-888-9999',
           nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
           apellido: (primer_apellido || 'WEB').toUpperCase(),
@@ -334,7 +312,8 @@ export async function POST(request: NextRequest) {
 
     // ═══ STEP 1: Generate policy number ═══
     log('1/4', 'Generando número de póliza...');
-    const codRamo = isCC ? '001' : '002';
+    // ramo 001 = CC, ramo 020 = SODA/SOBAT, ramo 002 = otros DT/RC
+    const codRamo = isCC ? '001' : isSobat ? '020' : '002';
     const genToken = await getAnconToken();
     const genDocRaw = await rawSoap('GenerarNodocumento', {
       cod_compania: creds.codCompania,
@@ -496,7 +475,7 @@ export async function POST(request: NextRequest) {
 
     const emitRaw = await rawSoap('EmitirDatos', {
       poliza: polizaNumber,
-      ramo_agt: 'AUTOMOVIL',
+      ramo_agt: isSobat ? 'SODA' : 'AUTOMOVIL',
       vigencia_inicial: fmtDate(today),
       vigencia_final: fmtDate(nextYear),
       primer_nombre: (primer_nombre || '').toUpperCase(),
@@ -525,7 +504,7 @@ export async function POST(request: NextRequest) {
       tipo: 'POLIZA',
       fecha_de_registro: fmtDate(today),
       cantidad_de_pago: String(cantidad_de_pago || '10'),
-      codigo_producto_agt: finalCodProducto || '00312',
+      codigo_producto_agt: cod_producto || '00312',
       nombre_producto: nombre_producto || 'AUTO COMPLETA',
       Responsable_de_cobro: 'CORREDOR',
       suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',

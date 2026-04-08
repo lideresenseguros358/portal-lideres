@@ -80,13 +80,16 @@ export const ANCON_EMISSION_METHODS = {
 
 // ═══ Product Codes ═══
 export const ANCON_PRODUCTS = {
-  AUTO_COMPLETA: '00312',  // Cobertura Completa
-  AUTO_RC: '07159',         // WEB - AUTORC (Daños a Terceros / RC)
+  AUTO_COMPLETA: '00312',         // Cobertura Completa (ramo 002)
+  AUTO_RC: '07159',               // WEB - AUTORC — DO NOT USE for SOBAT DT
+  SOBAT_BASICO_TALLER: '05769',  // SOBAT BASICO TALLER B/.145.00 (ramo 020)
+  SOBAT_EXPRESS_PLUS: '01492',   // SOBAT EXPRESS PLUS B/.189.00 (ramo 020)
 } as const;
 
 // ═══ Ramo/Subramo for auto ═══
 export const ANCON_RAMO = {
   AUTOMOVIL: { codigo: '002', subramo: '001' },
+  SODA:      { codigo: '020', subramo: '001' }, // SOBAT plans (DT)
 } as const;
 
 // ═══ Token TTL ═══

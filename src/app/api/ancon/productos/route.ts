@@ -13,7 +13,7 @@ export const revalidate = 3600; // 1 hour
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const ramo = searchParams.get('ramo') || '002'; // Default to AUTOMOVIL
+    const ramo = searchParams.get('ramo'); // null = all ramos
 
     const result = await getProductos();
 

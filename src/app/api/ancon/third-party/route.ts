@@ -3,25 +3,23 @@
  * GET /api/ancon/third-party
  *
  * Returns SOBAT RC plans for particulares:
- *   Básico  = SOBAT BASICO TALLER  (B/.145.00) — SODA / PARTICULAR
- *   Premium = SOBAT EXPRESS PLUS    (B/.189.00) — SODA / PARTICULAR
+ *   Básico  = SOBAT BASICO TALLER  (B/.145.00) — cod 05769, ramo 020 SODA
+ *   Premium = SOBAT EXPRESS PLUS    (B/.189.00) — cod 01492, ramo 020 SODA
  *
- * Calls ANCON cotización with product 07159 to get a valid noCotizacion
- * for the emission flow, then maps to fixed SOBAT pricing.
+ * Quotes ANCON with each SOBAT product code to get valid noCotizacion per plan.
  */
 
 import { NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 import { ANCON_PRODUCTS } from '@/lib/ancon/config';
-import { getProductos } from '@/lib/ancon/catalogs.service';
 
 export const maxDuration = 30;
 
-// ═══ SOBAT fixed plans (SODA / PARTICULAR) ═══
 const SOBAT_PLANS = {
   basic: {
     name: 'SOBAT BASICO TALLER',
     annualPremium: 145.00,
+    codProducto: ANCON_PRODUCTS.SOBAT_BASICO_TALLER, // '05769'
     coverageList: [
       { code: 'LC', name: 'LESIONES CORPORALES', limit: '$5,000.00', prima: 42.00 },
       { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$5,000.00', prima: 82.00 },
@@ -37,6 +35,7 @@ const SOBAT_PLANS = {
   premium: {
     name: 'SOBAT EXPRESS PLUS',
     annualPremium: 189.00,
+    codProducto: ANCON_PRODUCTS.SOBAT_EXPRESS_PLUS, // '01492'
     coverageList: [
       { code: 'LC', name: 'LESIONES CORPORALES', limit: '$10,000.00', prima: 55.00 },
       { code: 'DPA', name: 'DAÑOS A LA PROPIEDAD AJENA', limit: '$10,000.00', prima: 100.00 },
@@ -52,86 +51,84 @@ const SOBAT_PLANS = {
   },
 } as const;
 
+const QUOTE_PARAMS = {
+  cod_marca: '00122',   // TOYOTA
+  cod_modelo: '10393',  // COROLLA
+  ano: String(new Date().getFullYear()),
+  suma_asegurada: '0',
+  cedula: '8-888-9999',
+  nombre: 'COTIZACION',
+  apellido: 'WEB',
+  vigencia: 'A',
+  email: 'cotizacion@lideresenseguros.com',
+  tipo_persona: 'N',
+  fecha_nac: '16/06/1994',
+  nuevo: '0',
+};
+
 export async function GET() {
   const t0 = Date.now();
 
   try {
-    // ═══ Step 1: Obtain correct product codes from ANCON catalog ═══
-    const productosCatalog = await getProductos();
+    // Quote both SOBAT products in parallel to get valid noCotizacion per plan
+    const [basicResult, premiumResult] = await Promise.all([
+      cotizarEstandar({ ...QUOTE_PARAMS, cod_producto: SOBAT_PLANS.basic.codProducto }),
+      cotizarEstandar({ ...QUOTE_PARAMS, cod_producto: SOBAT_PLANS.premium.codProducto }),
+    ]);
 
-    // Map SOBAT plan names to their ANCON product codes (ramo 002 = AUTOMOVIL)
-    let sobatBasicoCode = ANCON_PRODUCTS.AUTO_RC; // fallback to 07159
-    let sobatExpressCode = ANCON_PRODUCTS.AUTO_RC; // fallback to 07159
-
-    if (productosCatalog.success && Array.isArray(productosCatalog.data)) {
-      const autoProducts = productosCatalog.data.filter(p => p.codigo_ramo === '002');
-      const basicMatch = autoProducts.find(p =>
-        p.nombre_producto?.toUpperCase().includes('SOBAT') &&
-        p.nombre_producto?.toUpperCase().includes('BASICO')
-      );
-      const premiumMatch = autoProducts.find(p =>
-        p.nombre_producto?.toUpperCase().includes('SOBAT') &&
-        p.nombre_producto?.toUpperCase().includes('EXPRESS')
-      );
-
-      if (basicMatch) {
-        sobatBasicoCode = basicMatch.codigo_producto;
-        console.log(`[API ANCON third-party] SOBAT BASICO → código ${basicMatch.codigo_producto}`);
-      }
-      if (premiumMatch) {
-        sobatExpressCode = premiumMatch.codigo_producto;
-        console.log(`[API ANCON third-party] SOBAT EXPRESS → código ${premiumMatch.codigo_producto}`);
-      }
-    } else {
-      console.warn('[API ANCON third-party] Error loading productos catalog, using fallback codes');
-    }
-
-    // ═══ Step 2: Call ANCON to get a valid noCotizacion for the emission flow ═══
-    // Use the correct product code (basic plan for initial quote)
-    const result = await cotizarEstandar({
-      cod_marca: '00122',   // TOYOTA
-      cod_modelo: '10393',  // COROLLA
-      ano: String(new Date().getFullYear()),
-      suma_asegurada: '0',
-      cod_producto: sobatBasicoCode,
-      cedula: '8-888-9999',
-      nombre: 'COTIZACION',
-      apellido: 'WEB',
-      vigencia: 'A',
-      email: 'cotizacion@lideresenseguros.com',
-      tipo_persona: 'N',
-      fecha_nac: '16/06/1994',
-      nuevo: '0',
-    });
-
-    // Use noCotizacion from API if available; plans use fixed SOBAT pricing
-    const noCotizacion = result.data?.noCotizacion || '';
-    const apiOnline = result.success && !!noCotizacion;
+    const basicCotizacion = basicResult.data?.noCotizacion || '';
+    const premiumCotizacion = premiumResult.data?.noCotizacion || '';
+    const apiOnline = basicResult.success && !!basicCotizacion;
 
     if (!apiOnline) {
-      console.warn('[API ANCON third-party] ANCON API offline, returning SOBAT plans without cotización');
+      console.warn('[API ANCON third-party] ANCON API offline');
     }
 
-    // opcion1 = basic (for linking to ANCON emission)
-    const basicOptionName = result.data?.options?.find(o => o.name === 'opcion1')?.name || 'opcion1';
-    const premiumOptionName = result.data?.options?.find(o => o.name === 'opcion4')?.name
-      || result.data?.options?.find(o => o.name === 'opcion3')?.name || 'opcion3';
+    console.log(`[API ANCON third-party] SOBAT BASICO (05769) → cotización ${basicCotizacion}`);
+    console.log(`[API ANCON third-party] SOBAT EXPRESS PLUS (01492) → cotización ${premiumCotizacion}`);
 
-    // ═══ Step 3: Build plans with correct product codes ═══
     const plans = [
-      buildSobatPlan('basic', noCotizacion, basicOptionName, sobatBasicoCode),
-      buildSobatPlan('premium', noCotizacion, premiumOptionName, sobatExpressCode),
+      {
+        planType: 'basic',
+        name: SOBAT_PLANS.basic.name,
+        annualPremium: SOBAT_PLANS.basic.annualPremium,
+        coverageList: [...SOBAT_PLANS.basic.coverageList],
+        endosoBenefits: [...SOBAT_PLANS.basic.endosoBenefits],
+        endoso: SOBAT_PLANS.basic.name,
+        idCotizacion: basicCotizacion,
+        noCotizacion: basicCotizacion,
+        optionName: 'opcion1',
+        _codProducto: SOBAT_PLANS.basic.codProducto,
+        _nombreProducto: SOBAT_PLANS.basic.name,
+        _sumaAsegurada: '0',
+        installments: [{ count: 1, amount: SOBAT_PLANS.basic.annualPremium }],
+      },
+      {
+        planType: 'premium',
+        name: SOBAT_PLANS.premium.name,
+        annualPremium: SOBAT_PLANS.premium.annualPremium,
+        coverageList: [...SOBAT_PLANS.premium.coverageList],
+        endosoBenefits: [...SOBAT_PLANS.premium.endosoBenefits],
+        endoso: SOBAT_PLANS.premium.name,
+        idCotizacion: premiumCotizacion,
+        noCotizacion: premiumCotizacion,
+        optionName: 'opcion1',
+        _codProducto: SOBAT_PLANS.premium.codProducto,
+        _nombreProducto: SOBAT_PLANS.premium.name,
+        _sumaAsegurada: '0',
+        installments: [{ count: 1, amount: SOBAT_PLANS.premium.annualPremium }],
+      },
     ];
 
     const elapsed = Date.now() - t0;
-    console.log(`[API ANCON third-party] SOBAT plans ready in ${elapsed}ms (cotización: ${noCotizacion || 'N/A'})`);
+    console.log(`[API ANCON third-party] SOBAT plans ready in ${elapsed}ms`);
 
     return NextResponse.json({
       success: true,
       online: apiOnline,
       isRealAPI: true,
       plans,
-      noCotizacion,
+      noCotizacion: basicCotizacion,
       _timing: { totalMs: elapsed },
     });
   } catch (error: unknown) {
@@ -144,31 +141,4 @@ export async function GET() {
       plans: [],
     });
   }
-}
-
-function buildSobatPlan(
-  planType: 'basic' | 'premium',
-  noCotizacion: string,
-  optionName: string,
-  codProducto: string = ANCON_PRODUCTS.AUTO_RC,
-) {
-  const sobat = SOBAT_PLANS[planType];
-
-  return {
-    planType,
-    name: sobat.name,
-    annualPremium: sobat.annualPremium,
-    coverageList: [...sobat.coverageList],
-    endosoBenefits: [...sobat.endosoBenefits],
-    endoso: sobat.name,
-    idCotizacion: noCotizacion,
-    noCotizacion,
-    optionName,
-    _codProducto: codProducto,
-    _nombreProducto: sobat.name,
-    _sumaAsegurada: '0',
-    installments: [
-      { count: 1, amount: sobat.annualPremium },
-    ],
-  };
 }
