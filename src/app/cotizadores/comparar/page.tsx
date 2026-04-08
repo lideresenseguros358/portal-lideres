@@ -16,7 +16,7 @@ import {
   parseEndosoBeneficiosFromAPI,
 } from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
-import { FaCar, FaCompressArrowsAlt, FaExclamationTriangle } from 'react-icons/fa';
+import { FaCar, FaCompressArrowsAlt, FaExclamationTriangle, FaDownload } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
@@ -1369,13 +1369,14 @@ const generateAnconQuotes = async (quoteData: any): Promise<{ basico: any | null
 export default function ComparePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { editMode: contextEditMode, insurerSettings, loadingSettings, toggleInsurerSetting } = useCotizadorEdit();
+  const { editMode: contextEditMode, insurerSettings, loadingSettings, toggleInsurerSetting, isMaster } = useCotizadorEdit();
   const editMode = contextEditMode || searchParams.get('edit') === '1';
 
   const [loading, setLoading] = useState(!editMode); // skip loading in edit mode
   const [quoteData, setQuoteData] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [offlineInsurers, setOfflineInsurers] = useState<string[]>([]);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -1605,6 +1606,33 @@ export default function ComparePage() {
     loadQuoteData();
   }, [router, editMode]);
 
+  // Handle PDF download for master users
+  const handleDownloadPDF = async () => {
+    if (!quotes.length) return;
+    setDownloadingPDF(true);
+    try {
+      const res = await fetch('/api/cotizadores/comparativa-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quotes }),
+      });
+      if (!res.ok) throw new Error('Error generando PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'comparativa-cobertura-completa.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF descargado correctamente');
+    } catch (err: any) {
+      console.error('Error descargando PDF:', err);
+      toast.error('No se pudo generar el PDF');
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
+
   // ── Edit mode: skip normal flow and show insurer cards ──
   if (editMode) {
     if (loadingSettings) {
@@ -1659,6 +1687,22 @@ export default function ComparePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+      {/* Download PDF Button for Master Users */}
+      {isMaster && quotes.length > 0 && (
+        <button
+          onClick={handleDownloadPDF}
+          disabled={downloadingPDF}
+          title="Descargar comparativa PDF"
+          className="fixed top-4 right-4 z-50 p-3 bg-[#010139] text-white rounded-full shadow-lg hover:bg-[#020260] transition-colors disabled:opacity-60"
+        >
+          {downloadingPDF ? (
+            <span className="animate-spin block w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+          ) : (
+            <FaDownload className="w-5 h-5" />
+          )}
+        </button>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <Breadcrumb 
