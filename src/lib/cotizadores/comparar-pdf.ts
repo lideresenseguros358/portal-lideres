@@ -342,13 +342,13 @@ function drawHeader(
   // Logo — maintain natural aspect ratio, left-aligned
   let logoEnd = M;
   if (logoImg) {
-    const maxH = HDR_H - 12;
-    const maxW = 130;
+    const maxH = HDR_H - 18;
+    const maxW = 110;
     const ratio = logoImg.width / logoImg.height;
     const lh = Math.min(maxH, maxW / ratio);
     const lw = lh * ratio;
     page.drawImage(logoImg, { x: M, y: PH - HDR_H + (HDR_H - lh) / 2, width: lw, height: lh });
-    logoEnd = M + lw + 14;
+    logoEnd = M + lw + 12;
   }
 
   // Title block
@@ -577,28 +577,18 @@ async function drawCoveragePage(
       size: 6.5, font: fontBold, color: WHITE,
     });
 
-    // Logo — large, centered, normalized proportions, no text
+    // Logo — centered, fit within card bounds
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
       const maxH = INS_H - 10;
-      const maxW = cardW - 16;
-      const minW = maxW * 0.42;  // Guarantee minimum 42% of max width (prevents FEDPA from being tiny)
-      const normalized = normalizeLogo(logo, maxH);
-      let { width: lw, height: lh } = normalized;
+      const maxW = cardW - 14;
+      const ratio = logo.width / logo.height;
 
-      // Scale down if exceeds max width
-      if (lw > maxW) {
-        const scale = maxW / lw;
-        lw *= scale;
-        lh *= scale;
-      }
-      // Scale up if below minimum width (ensures FEDPA matches INTERNACIONAL size)
-      else if (lw < minW) {
-        const scale = minW / lw;
-        lw *= scale;
-        lh *= scale;
-      }
+      // Fit to maxH, then cap width
+      let lh = maxH;
+      let lw = lh * ratio;
+      if (lw > maxW) { lw = maxW; lh = lw / ratio; }
 
       page.drawImage(logo, {
         x: cardX + (cardW - lw) / 2,
@@ -969,14 +959,23 @@ async function drawBenefitsPage(
     const key  = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
-      const maxH = INS_H - 10, maxW = cardW - 16;
-      const normalized = normalizeLogo(logo, maxH);
-      let { width: lw, height: lh } = normalized;
-      if (lw > maxW) {
-        const scale = maxW / lw;
-        lw *= scale;
-        lh *= scale;
+      const maxH = INS_H - 10;
+      const maxW = cardW - 14;
+      const minW = maxW * 0.45;
+      const ratio = logo.width / logo.height;
+
+      // Fit to maxH, then cap width
+      let lh = maxH;
+      let lw = lh * ratio;
+      if (lw > maxW) { lw = maxW; lh = lw / ratio; }
+
+      // Scale up if too narrow — only if height stays within bounds
+      if (lw < minW) {
+        const scaledLw = minW;
+        const scaledLh = scaledLw / ratio;
+        if (scaledLh <= maxH) { lw = scaledLw; lh = scaledLh; }
       }
+
       page.drawImage(logo, {
         x: cardX + (cardW - lw) / 2,
         y: y - INS_H + (INS_H - lh) / 2,
