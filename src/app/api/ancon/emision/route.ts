@@ -562,13 +562,19 @@ export async function POST(request: NextRequest) {
       ? (typeof emitObj.Respuesta === 'string' ? emitObj.Respuesta : (emitObj.Respuesta as Array<Record<string, string>>)?.[0]?.Respuesta)
       : (emitStr.includes('Token Inactivo') ? 'Token Inactivo' : null);
 
-    // Check for success: { "": [{ "p1": "0", "p2": "Exito" }] }
+    // Check for success — two known formats:
+    // Format 1 (flat): { "p1": "0", "p2": "Actualización Exitosa", "no_cotizacion": "..." }
+    // Format 2 (wrapped): { "": [{ "p1": "0", "p2": "Exito" }] }
     let emitSuccess = false;
     if (emitObj) {
-      for (const val of Object.values(emitObj)) {
-        if (Array.isArray(val) && val.length > 0 && (val[0] as Record<string, string>)?.p1 === '0') {
-          emitSuccess = true;
-          break;
+      if ((emitObj as Record<string, string>).p1 === '0') {
+        emitSuccess = true;
+      } else {
+        for (const val of Object.values(emitObj)) {
+          if (Array.isArray(val) && val.length > 0 && (val[0] as Record<string, string>)?.p1 === '0') {
+            emitSuccess = true;
+            break;
+          }
         }
       }
     }
