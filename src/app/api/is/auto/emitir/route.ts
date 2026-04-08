@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaAuto, generarCotizacionAuto, crearClienteYPolizaIS } from '@/lib/is/quotes.service';
 import { ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseServer } from '@/lib/supabase/server';
 import { findAcreedor } from '@/lib/constants/acreedores';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
@@ -118,7 +119,8 @@ export async function POST(request: NextRequest) {
     let effectiveBrokerId = cachedBrokerId;
     if (masterBrokerId) {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const supabaseServer = await getSupabaseServer();
+        const { data: { user } } = await supabaseServer.auth.getUser();
         if (user) {
           const { data: profile } = await supabase
             .from('profiles')
