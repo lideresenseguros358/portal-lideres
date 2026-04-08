@@ -9,7 +9,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No quotes provided' }, { status: 400 });
     }
 
-    const pdfBuffer = await generarComparativaPDF(quotes);
+    // Get the base URL for image fetching
+    const protocol = request.headers.get('x-forwarded-proto') || 'http';
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+    const baseUrl = `${protocol}://${host}`;
+
+    const pdfBuffer = await generarComparativaPDF(quotes, baseUrl);
 
     return new NextResponse(pdfBuffer, {
       headers: {

@@ -1,6 +1,4 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
-import fs from 'fs';
-import path from 'path';
 
 const NAVY = rgb(1/255, 1/255, 57/255);      // #010139
 const GREEN = rgb(138/255, 170/255, 25/255); // #8AAA19
@@ -36,30 +34,46 @@ interface PDFQuote {
   [key: string]: any;
 }
 
-export async function generarComparativaPDF(quotes: PDFQuote[]): Promise<Buffer> {
+export async function generarComparativaPDF(quotes: PDFQuote[], baseUrl: string = ''): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  // Helper: Load image from URL
+  const loadImageFromUrl = async (path: string): Promise<any | null> => {
+    try {
+      const url = baseUrl ? `${baseUrl}${path}` : path;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      return arrayBuffer;
+    } catch (err) {
+      console.warn(`Could not load image from ${path}:`, err);
+      return null;
+    }
+  };
+
   // Load Lissa logo
-  const logoPath = path.join(process.cwd(), 'public', 'logo.png');
   let logoImg: any = null;
   try {
-    const logoBytes = fs.readFileSync(logoPath);
-    logoImg = await pdfDoc.embedPng(logoBytes);
+    const logoBytes = await loadImageFromUrl('/logo.png');
+    if (logoBytes) {
+      logoImg = await pdfDoc.embedPng(logoBytes);
+    }
   } catch (err) {
-    console.warn('Could not load logo.png:', err);
+    console.warn('Error embedding logo:', err);
   }
 
   // Load insurer logos
   const insurerLogos: Record<string, any> = {};
   for (const name of ['fedpa', 'internacional', 'regional', 'ancon']) {
     try {
-      const imgPath = path.join(process.cwd(), 'public', 'aseguradoras', `${name}.png`);
-      const imgBytes = fs.readFileSync(imgPath);
-      insurerLogos[name.toUpperCase()] = await pdfDoc.embedPng(imgBytes);
+      const logoBytes = await loadImageFromUrl(`/aseguradoras/${name}.png`);
+      if (logoBytes) {
+        insurerLogos[name.toUpperCase()] = await pdfDoc.embedPng(logoBytes);
+      }
     } catch (err) {
-      console.warn(`Could not load ${name}.png:`, err);
+      console.warn(`Error embedding ${name} logo:`, err);
     }
   }
 
