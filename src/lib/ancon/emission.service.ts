@@ -339,9 +339,34 @@ export async function uploadDocumentREST(
     form.append('Tipo', '1');
     form.append('NroRegistro', nroRegistro);
 
-    // ANCON requires the file to be uploaded with the hash from SubirDocumentos as its filename
-    const blob = file instanceof Blob ? file : new Blob([new Uint8Array(file)], { type: mimeType });
-    form.append('files', blob, nombreArchivo);
+    // Detect MIME type from magic bytes when not provided — ANCÓN needs a valid Content-Type
+    // to identify file format. Empty type defaults to application/octet-stream which ANCÓN rejects.
+    let effectiveMimeType = mimeType;
+    if (!effectiveMimeType && !(file instanceof Blob) && file.length > 4) {
+      if (file[0] === 0xFF && file[1] === 0xD8 && file[2] === 0xFF) {
+        effectiveMimeType = 'image/jpeg';
+      } else if (file[0] === 0x89 && file[1] === 0x50 && file[2] === 0x4E && file[3] === 0x47) {
+        effectiveMimeType = 'image/png';
+      } else if (file.slice(0, 4).toString('ascii') === '%PDF') {
+        effectiveMimeType = 'application/pdf';
+      }
+    }
+    const finalMimeType = effectiveMimeType || 'application/octet-stream';
+
+    // Safe Buffer → Blob conversion using explicit byte range to avoid pool buffer contamination
+    const blob = file instanceof Blob
+      ? file
+      : new Blob([new Uint8Array(file instanceof Buffer ? file.buffer : file, (file as Buffer).byteOffset ?? 0, (file as Buffer).byteLength ?? (file as Buffer).length)], { type: finalMimeType });
+
+    // Append file extension to the ANCÓN hash filename so the server can identify the format.
+    // Some ANCÓN versions use the extension to validate the file type on ingest.
+    const ext = finalMimeType.includes('pdf') ? '.pdf'
+      : finalMimeType.includes('jpeg') || finalMimeType.includes('jpg') ? '.jpg'
+      : finalMimeType.includes('png') ? '.png'
+      : '';
+    const uploadName = /\.\w{2,5}$/.test(nombreArchivo) ? nombreArchivo : `${nombreArchivo}${ext}`;
+    form.append('files', blob, uploadName);
+    console.log(`[ANCON REST Upload] Uploading ${uploadName} — type=${finalMimeType}, size=${blob.size}b`);
 
     const res = await fetch(`${ANCON_REST_URL}/api/Polizas/post_add_documentos_polizas_emision`, {
       method: 'POST',

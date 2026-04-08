@@ -1243,7 +1243,16 @@ export default function EmitirPage() {
           body: anconForm,
         });
 
-        const anconEmisionResult = await anconEmisionResponse.json();
+        if (!anconEmisionResponse.ok && anconEmisionResponse.status === 413) {
+          throw new Error('Los archivos adjuntos son demasiado grandes. Intente con imágenes de menor tamaño (menos de 5 MB en total).');
+        }
+
+        let anconEmisionResult: Record<string, any>;
+        try {
+          anconEmisionResult = await anconEmisionResponse.json();
+        } catch {
+          throw new Error(`Error del servidor ANCÓN (${anconEmisionResponse.status}). Intente nuevamente.`);
+        }
 
         if (!anconEmisionResponse.ok || !anconEmisionResult.success) {
           throw new Error(anconEmisionResult.error || 'Error emitiendo póliza con ANCON');

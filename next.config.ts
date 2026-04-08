@@ -9,8 +9,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '5mb',
+      bodySizeLimit: '20mb',
     },
+    serverBodySizeLimit: '20mb',
   },
   // Excluir imapflow y mailparser del bundle de Next.js (usan imports de Node.js)
   serverExternalPackages: ['imapflow', 'mailparser'],
