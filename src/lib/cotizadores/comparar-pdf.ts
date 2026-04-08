@@ -576,15 +576,20 @@ async function drawCoveragePage(
       size: 5.5, font: fontBold, color: WHITE,
     });
 
-    // Logo — large, centered, no text
+    // Logo — large, centered, normalized proportions, no text
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
       const maxH = INS_H - 10;
       const maxW = cardW - 16;
-      const ratio = logo.width / logo.height;
-      const lh = Math.min(maxH, maxW / ratio);
-      const lw = lh * ratio;
+      const normalized = normalizeLogo(logo, maxH);
+      // Don't exceed max width
+      let { width: lw, height: lh } = normalized;
+      if (lw > maxW) {
+        const scale = maxW / lw;
+        lw *= scale;
+        lh *= scale;
+      }
       page.drawImage(logo, {
         x: cardX + (cardW - lw) / 2,
         y: y - INS_H + (INS_H - lh) / 2,
@@ -636,23 +641,54 @@ async function drawCoveragePage(
     return 'Incluido';  // CC always includes RC — "—" would be misleading
   };
 
-  // ── RC Limits: ALWAYS from portal form selection (same for all insurers) ──
-  // These are the values the user explicitly chose — do not fall back to insurer APIs.
-  const lesP = Number(clientInfo?.lesionCorporalPersona) || 0;
-  const lesA = Number(clientInfo?.lesionCorporalAccidente) || 0;
-  const lesText = lesP > 0 ? `${money(lesP)} / ${money(lesA)}` : '—';
-  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
+  // ── RC Limits: Use _limites from API, fallback to clientInfo ──
+  // All insurers quote the same limits (user-chosen form values or API extracted)
+  const lesValues = quotes.map(q => {
+    // Priority 1: _limites from API (FEDPA, ANCON, REGIONAL all populate this)
+    const lesLim = (q._limites || []).find((l: any) =>
+      l.tipo?.includes('lesiones') || l.descripcion?.toLowerCase().includes('lesion')
+    );
+    if (lesLim?.limitePorPersona && lesLim?.limitePorAccidente) {
+      return `${lesLim.limitePorPersona} / ${lesLim.limitePorAccidente}`;
+    }
+    // Priority 2: clientInfo (user form selection)
+    const lesP = Number(clientInfo?.lesionCorporalPersona) || 0;
+    const lesA = Number(clientInfo?.lesionCorporalAccidente) || 0;
+    if (lesP > 0 && lesA > 0) return `${money(lesP)} / ${money(lesA)}`;
+    return '—';
+  });
+  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', lesValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
-  const dpa = Number(clientInfo?.danoPropiedad) || 0;
-  const dpaText = dpa > 0 ? money(dpa) : '—';
-  drawLabelRow('Danos a la Propiedad Ajena', null, quotes.map(() => dpaText), { rh: ROW_H });
+  const dpaValues = quotes.map(q => {
+    // Priority 1: _limites from API
+    const dpaLim = (q._limites || []).find((l: any) =>
+      l.tipo?.includes('propiedad') || l.descripcion?.toLowerCase().includes('propiedad')
+    );
+    if (dpaLim?.limitePorPersona) return dpaLim.limitePorPersona;
+    // Priority 2: clientInfo
+    const dpa = Number(clientInfo?.danoPropiedad) || 0;
+    if (dpa > 0) return money(dpa);
+    return '—';
+  });
+  drawLabelRow('Danos a la Propiedad Ajena', null, dpaValues, { rh: ROW_H });
 
-  const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
-  const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
-  const gmText = gmP > 0 ? `${money(gmP)} / ${money(gmA)}` : '—';
-  drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
+  const gmValues = quotes.map(q => {
+    // Priority 1: _limites from API
+    const gmLim = (q._limites || []).find((l: any) =>
+      l.tipo?.includes('medic') || l.descripcion?.toLowerCase().includes('medic') || l.descripcion?.toLowerCase().includes('gasto')
+    );
+    if (gmLim?.limitePorPersona && gmLim?.limitePorAccidente) {
+      return `${gmLim.limitePorPersona} / ${gmLim.limitePorAccidente}`;
+    }
+    // Priority 2: clientInfo
+    const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
+    const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
+    if (gmP > 0 && gmA > 0) return `${money(gmP)} / ${money(gmA)}`;
+    return '—';
+  });
+  drawLabelRow('Gastos Medicos', 'por persona / por accidente', gmValues, {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
@@ -686,15 +722,10 @@ async function drawCoveragePage(
   drawLabelRow('Comprensivo', null, dedCompValues, { rh: ROW_H });
 
   const dedColValues = quotes.map(q => {
-    const d = q._deduciblesReales?.colisionVuelco;
-    if (d?.amount && d.amount > 0) return money(d.amount);
-    const di = q._deducibleInfo;
-    if (di?.dedColision && di.dedColision > 0) return money(di.dedColision);
-    // Parse from FEDPA/ANCON description text: "Comprensivo: B/.250 | Colisión/Vuelco: B/.250"
-    const desc = String(di?.descripcion || di?.tooltip || '');
-    const m = desc.match(/colisi[oó]n[^:]*:\s*(?:B\/\.?\s*)?([0-9,.]+)/i);
-    if (m) { const v = parseFloat((m[1] ?? '0').replace(/,/g, '')); if (v > 0) return money(v); }
-    // If same deductible as comprensivo (common policy structure), show that
+    // Priority 1: colisionVuelco from _deduciblesReales
+    const col = q._deduciblesReales?.colisionVuelco;
+    if (col?.amount && col.amount > 0) return money(col.amount);
+    // Priority 2: Use comprensivo if colisión is same (many policies unify these)
     const comp = q._deduciblesReales?.comprensivo;
     if (comp?.amount && comp.amount > 0) return money(comp.amount);
     return 'Ver poliza';
@@ -897,6 +928,14 @@ function buildEndosoMatrix(quotes: PDFQuote[]): BenefitRow[] {
   return result;
 }
 
+/** Normalize logo dimensions — scale proportionally to max height */
+function normalizeLogo(logo: any, maxH: number): { width: number; height: number } {
+  if (!logo) return { width: 0, height: 0 };
+  const ratio = logo.width / logo.height;
+  const h = Math.min(maxH, maxH);
+  return { width: h * ratio, height: h };
+}
+
 async function drawBenefitsPage(
   pdfDoc: PDFDocument,
   font: PDFFont,
@@ -942,9 +981,13 @@ async function drawBenefitsPage(
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
       const maxH = INS_H - 10, maxW = cardW - 16;
-      const ratio = logo.width / logo.height;
-      const lh = Math.min(maxH, maxW / ratio);
-      const lw = lh * ratio;
+      const normalized = normalizeLogo(logo, maxH);
+      let { width: lw, height: lh } = normalized;
+      if (lw > maxW) {
+        const scale = maxW / lw;
+        lw *= scale;
+        lh *= scale;
+      }
       page.drawImage(logo, {
         x: cardX + (cardW - lw) / 2,
         y: y - INS_H + (INS_H - lh) / 2,
