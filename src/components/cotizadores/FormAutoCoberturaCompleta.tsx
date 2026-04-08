@@ -92,7 +92,7 @@ export default function FormAutoCoberturaCompleta() {
   useEffect(() => {
     const savedData = sessionStorage.getItem('quoteInput');
     const isEditMode = sessionStorage.getItem('editMode') === 'true';
-    
+
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
@@ -116,12 +116,12 @@ export default function FormAutoCoberturaCompleta() {
             gastosMedicosAccidente: parsed.gastosMedicosAccidente || 10000,
             deducible: parsed.deducible || 'medio',
           });
-          
+
           // Si tiene marca seleccionada, restaurar la selección para cargar modelos
           if (parsed.marcaCodigo) {
             setSelectedMarca(parsed.marcaCodigo);
           }
-          
+
           // Mensaje apropiado según contexto
           if (isEditMode) {
             toast.success('📝 Datos cargados para edición. Modifica lo que necesites y recotiza.');
@@ -130,9 +130,14 @@ export default function FormAutoCoberturaCompleta() {
           } else {
             toast.info('Datos cargados. Puedes editarlos y recotizar.');
           }
+        } else {
+          // Si los datos guardados no son de AUTO CC, limpiar sessionStorage
+          console.warn('[FormAutoCoberturaCompleta] Datos en sessionStorage no son de AUTO CC, limpiando...');
+          sessionStorage.removeItem('quoteInput');
         }
       } catch (error) {
         console.error('Error al cargar datos guardados:', error);
+        sessionStorage.removeItem('quoteInput');
       }
     }
   }, [setSelectedMarca]);
