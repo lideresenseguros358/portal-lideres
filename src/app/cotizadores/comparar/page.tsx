@@ -273,40 +273,32 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       tieneDescuento: c.SN_DESCUENTO === 'S',
     }));
     
-    // Límites de responsabilidad civil
+    // Límites de responsabilidad civil — built from form values (same values used for plan selection)
+    // IS API doesn't return separate RC sub-categories (Lesiones/Daños/Gastos as individual items)
     const limites: any[] = [];
-    const lesionesCobertura = apiCoberturas.find((c: any) => 
-      c.COBERTURA?.toUpperCase().includes('LESIONES') || 
-      c.COBERTURA?.toUpperCase().includes('CORPORALES')
-    );
-    if (lesionesCobertura) {
+    if (quoteData.lesionCorporalPersona) {
       limites.push({
         tipo: 'lesiones_corporales' as const,
-        limitePorPersona: lesionesCobertura.LIMITES?.split('/')[0]?.trim() || '',
-        limitePorAccidente: lesionesCobertura.LIMITES?.split('/')[1]?.trim() || '',
+        limitePorPersona: `B/. ${Number(quoteData.lesionCorporalPersona).toLocaleString('en-US')}`,
+        limitePorAccidente: `B/. ${Number(quoteData.lesionCorporalAccidente || 0).toLocaleString('en-US')}`,
         descripcion: 'Lesiones Corporales'
       });
     }
-    const propiedadCobertura = apiCoberturas.find((c: any) => 
-      c.COBERTURA?.toUpperCase().includes('PROPIEDAD') || 
-      c.COBERTURA?.toUpperCase().includes('DAÑOS')
-    );
-    if (propiedadCobertura) {
+    // IS returns "RESPONSABILIDAD CIVIL" as the RC limit — not "DAÑOS A LA PROPIEDAD"
+    // Use quoteData form values for property damage limit (same as what's used for plan selection)
+    if (quoteData.danoPropiedad) {
       limites.push({
         tipo: 'daños_propiedad' as const,
-        limitePorPersona: propiedadCobertura.LIMITES || '',
+        limitePorPersona: `B/. ${Number(quoteData.danoPropiedad).toLocaleString('en-US')}`,
         descripcion: 'Daños a la Propiedad'
       });
     }
-    const medicosCobertura = apiCoberturas.find((c: any) => 
-      c.COBERTURA?.toUpperCase().includes('MÉDICOS') || 
-      c.COBERTURA?.toUpperCase().includes('MEDICOS')
-    );
-    if (medicosCobertura) {
+    // IS returns "GASTOS MEDICOS" with a single limit — per-accident from form is more accurate
+    if (quoteData.gastosMedicosPersona) {
       limites.push({
         tipo: 'gastos_medicos' as const,
-        limitePorPersona: medicosCobertura.LIMITES?.split('/')[0]?.trim() || '',
-        limitePorAccidente: medicosCobertura.LIMITES?.split('/')[1]?.trim() || '',
+        limitePorPersona: `B/. ${Number(quoteData.gastosMedicosPersona).toLocaleString('en-US')}`,
+        limitePorAccidente: `B/. ${Number(quoteData.gastosMedicosAccidente || 0).toLocaleString('en-US')}`,
         descripcion: 'Gastos Médicos'
       });
     }

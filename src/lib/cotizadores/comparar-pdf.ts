@@ -641,54 +641,30 @@ async function drawCoveragePage(
     return 'Incluido';  // CC always includes RC — "—" would be misleading
   };
 
-  // ── RC Limits: Use _limites from API, fallback to clientInfo ──
-  // All insurers quote the same limits (user-chosen form values or API extracted)
-  const lesValues = quotes.map(q => {
-    // Priority 1: _limites from API (FEDPA, ANCON, REGIONAL all populate this)
-    const lesLim = (q._limites || []).find((l: any) =>
-      l.tipo?.includes('lesiones') || l.descripcion?.toLowerCase().includes('lesion')
-    );
-    if (lesLim?.limitePorPersona && lesLim?.limitePorAccidente) {
-      return `${lesLim.limitePorPersona} / ${lesLim.limitePorAccidente}`;
-    }
-    // Priority 2: clientInfo (user form selection)
-    const lesP = Number(clientInfo?.lesionCorporalPersona) || 0;
-    const lesA = Number(clientInfo?.lesionCorporalAccidente) || 0;
-    if (lesP > 0 && lesA > 0) return `${money(lesP)} / ${money(lesA)}`;
-    return '—';
-  });
-  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', lesValues, {
+  // ── RC Limits: clientInfo (form values) is the authoritative source ──
+  // All insurers quote IDENTICAL RC limits defined by user's form inputs.
+  // API _limites are used only as fallback if clientInfo is not available.
+  const lesP = Number(clientInfo?.lesionCorporalPersona) || 0;
+  const lesA = Number(clientInfo?.lesionCorporalAccidente) || 0;
+  const lesText = lesP > 0
+    ? `${money(lesP)} / ${money(lesA)}`
+    : resolveLimit(quotes[0]!, ['lesiones', 'corporales'], ['lesion', 'corporal'], true);
+  drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
-  const dpaValues = quotes.map(q => {
-    // Priority 1: _limites from API
-    const dpaLim = (q._limites || []).find((l: any) =>
-      l.tipo?.includes('propiedad') || l.descripcion?.toLowerCase().includes('propiedad')
-    );
-    if (dpaLim?.limitePorPersona) return dpaLim.limitePorPersona;
-    // Priority 2: clientInfo
-    const dpa = Number(clientInfo?.danoPropiedad) || 0;
-    if (dpa > 0) return money(dpa);
-    return '—';
-  });
-  drawLabelRow('Danos a la Propiedad Ajena', null, dpaValues, { rh: ROW_H });
+  const dpa = Number(clientInfo?.danoPropiedad) || 0;
+  const dpaText = dpa > 0
+    ? money(dpa)
+    : resolveLimit(quotes[0]!, ['propiedad'], ['propiedad', 'dano'], false);
+  drawLabelRow('Danos a la Propiedad Ajena', null, quotes.map(() => dpaText), { rh: ROW_H });
 
-  const gmValues = quotes.map(q => {
-    // Priority 1: _limites from API
-    const gmLim = (q._limites || []).find((l: any) =>
-      l.tipo?.includes('medic') || l.descripcion?.toLowerCase().includes('medic') || l.descripcion?.toLowerCase().includes('gasto')
-    );
-    if (gmLim?.limitePorPersona && gmLim?.limitePorAccidente) {
-      return `${gmLim.limitePorPersona} / ${gmLim.limitePorAccidente}`;
-    }
-    // Priority 2: clientInfo
-    const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
-    const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
-    if (gmP > 0 && gmA > 0) return `${money(gmP)} / ${money(gmA)}`;
-    return '—';
-  });
-  drawLabelRow('Gastos Medicos', 'por persona / por accidente', gmValues, {
+  const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
+  const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
+  const gmText = gmP > 0
+    ? `${money(gmP)} / ${money(gmA)}`
+    : resolveLimit(quotes[0]!, ['medic', 'gastos'], ['medic', 'gasto'], true);
+  drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
     bg: STRIPE, rh: ROW_H + 2,
   });
 
@@ -714,9 +690,9 @@ async function drawCoveragePage(
   const dedCompValues = quotes.map(q => {
     const d = q._deduciblesReales?.comprensivo;
     if (d?.amount && d.amount > 0) return money(d.amount);
-    // Fallback: try deducibleInfo or _deducibleInfo
+    // Fallback: _deducibleInfo.valor stores comprensivo amount
     const di = q._deducibleInfo;
-    if (di?.dedComprensivo && di.dedComprensivo > 0) return money(di.dedComprensivo);
+    if (di?.valor && di.valor > 0) return money(di.valor);
     return 'Ver poliza';
   });
   drawLabelRow('Comprensivo', null, dedCompValues, { rh: ROW_H });
