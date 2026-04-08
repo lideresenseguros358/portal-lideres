@@ -63,7 +63,13 @@ async function rawSoap(method: string, params: Record<string, string>): Promise<
   });
   const text = await res.text();
   const m = text.match(/<data[^>]*>([\s\S]*?)<\/data>/) || text.match(/<return[^>]*>([\s\S]*?)<\/return>/);
-  if (!m) return text.substring(0, 500);
+  if (!m) {
+    // Log full SOAP response when we can't parse it — helps diagnose ANCON server errors
+    if (method === 'EmitirDatos') {
+      console.error(`[SOAP ${method}] Unparseable response (HTTP ${res.status}, ${text.length} chars): ${text.substring(0, 3000)}`);
+    }
+    return text.substring(0, 500);
+  }
   const decoded = decodeEntities(m[1]!);
   try { return JSON.parse(decoded); } catch { return decoded; }
 }
@@ -475,7 +481,15 @@ export async function POST(request: NextRequest) {
       cedula: cedula || '',
       pasaporte: pasaporte || '',
       ruc: ruc || '',
-      fecha_nacimiento: fecha_nacimiento || '',
+      fecha_nacimiento: (() => {
+        // Normalize to DD/MM/YYYY — HTML date inputs send YYYY-MM-DD
+        const fn = fecha_nacimiento || '';
+        if (fn && !fn.includes('/')) {
+          const p = fn.split('-');
+          if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+        }
+        return fn;
+      })(),
       sexo: sexo || 'M',
       telefono_Residencial: telefono_residencial || '',
       telefono_oficina: telefono_oficina || '',
@@ -517,8 +531,11 @@ export async function POST(request: NextRequest) {
       cod_agente: creds.codAgente,
       opcion: opcion || 'A',
       no_cotizacion: freshNoCotizacion,
-      cod_grupo: cod_grupo || '00001',
-      nombre_grupo: nombre_grupo || 'SIN GRUPO',
+      // ListadoGrupos returns null for agent 01009 — no groups assigned.
+      // Send empty so ANCON's server uses its default/null group instead of
+      // failing with FK constraint on a non-existent group code.
+      cod_grupo: cod_grupo || '',
+      nombre_grupo: nombre_grupo || '',
       token: emitToken,
       nacionalidad: nacionalidad || 'PANAMÁ',
       pep: pepNormalized,
