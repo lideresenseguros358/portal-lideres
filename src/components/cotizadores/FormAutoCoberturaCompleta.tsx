@@ -878,6 +878,18 @@ export default function FormAutoCoberturaCompleta() {
             </div>
           </div>
 
+          {/* Debug: Mostrar estado del formulario */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+              <p className="font-semibold">Debug: isFormComplete = {String(isFormComplete)}</p>
+              <p>nombre: {formData.nombreCompleto ? '✓' : '✗'}</p>
+              <p>fecha: {formData.fechaNacimiento ? '✓' : '✗'}</p>
+              <p>marca: {formData.marca ? '✓' : '✗'}</p>
+              <p>modelo: {formData.modelo ? '✓' : '✗'}</p>
+              <p>valor: {formData.valorVehiculo > 0 ? '✓' : '✗'}</p>
+            </div>
+          )}
+
           {/* Sticky Bottom Bar con Botones - Solo visible cuando formulario está completo */}
           {isFormComplete && (
             <div 
