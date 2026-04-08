@@ -54,10 +54,10 @@ const IS_ENDOSOS = {
     nombre: 'Endoso Plus',
     costoAnual: 35.00,
     beneficios: [
-      'Alquiler de auto por colisión: Hasta 10 días',
-      'Muerte accidental: B/.10,000 por asegurado',
-      'Pérdida de efectos personales: Hasta B/.100 por asegurado',
-      'Adelanto de gastos médicos por hospitalización: Hasta B/.500 por cada 1 conductor y 4 ocupantes',
+      'Auto de Alquiler: Colisión — hasta 10 días',
+      'Muerte Accidental: B/.10,000 por asegurado',
+      'Efectos Personales: hasta B/.100 por asegurado',
+      'Gastos Médicos: Hospitalización, B/.500 por ocupante',
     ],
   },
   CENTENARIO: {
@@ -65,28 +65,27 @@ const IS_ENDOSOS = {
     nombre: 'Endoso Plus Centenario',
     costoAnual: 60.00,
     beneficios: [
-      'Alquiler de auto por colisión: Hasta 15 días',
-      'Muerte accidental: B/.15,000 por asegurado',
-      'Revisado sin costo',
-      'Pérdida de efectos personales: Hasta B/.350 por asegurado',
-      'Adelanto de gastos médicos por hospitalización: Hasta B/.500 por cada 1 conductor y 4 ocupantes',
-      'Bono de mantenimiento: B/.50',
-      'Descuento en deducible de comprensivo: 20%',
-      'Asistencia en viaje, hospedaje, transporte o renta de vehículo: Hasta B/.100',
-      'Descuento en póliza de optiseguro residencial: 30%',
-      'Adelanto de gastos funerarios: Hasta B/.1,500 para la conductora y hasta B/.500 por ocupante',
+      'Auto de Alquiler: Colisión — hasta 15 días',
+      'Muerte Accidental: B/.15,000 por asegurado',
+      'Revisión sin Costo',
+      'Efectos Personales: hasta B/.350 por asegurado',
+      'Gastos Médicos: Hospitalización, B/.500 por ocupante',
+      'Bono de Mantenimiento: B/.50',
+      'Dscto. en Deducible: Comprensivo, 20%',
+      'Asistencia en Viaje: hospedaje, transporte o renta, B/.100',
+      'Dscto. Seguro Residencial: Optiseguro 30%',
+      'Gastos Funerarios: B/.1,500 conductora + B/.500 por ocupante',
     ],
   },
-  // Beneficios exclusivos del plan (no endoso)
+  // Beneficios base del plan (aplican a Básico y Premium)
   BENEFICIOS_GENERALES: [
-    'Grúa (desperfectos mecánicos) hasta B/.150 o máximo 3 eventos por año',
-    'Alquiler de auto por 30 días en caso de robo, después de las 72 horas',
-    'No aplica depreciación para autos nuevos 0 kms en caso de pérdida total el primer año',
-    'Cobertura extraterritorial por 30 días a Costa Rica',
-    'Servicios de Ambulancia, 24 horas los 365 días de año',
-    'Descuentos especiales en la instalación de sistemas de alarma y accesorios en centros autorizados',
+    'Grúa: Mecánica — 3 eventos/año, máx. B/.150',
+    'Auto de Alquiler: Robo — 30 días (desde 72h)',
+    'Sin Depreciación: Pérdida total, autos nuevos 0km',
+    'Extensión Territorial: Costa Rica, 30 días',
+    'Ambulancia: 24h, 365 días/año',
     'Asistencia Legal',
-    'Devolución del 100% en el deducible de colisión',
+    'Dscto. en Deducible: Colisión, 100% reembolso',
   ],
 };
 
@@ -387,7 +386,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         ahorroContado: Math.round(primaBasico * 0.05 * 100) / 100,
         descuentoProntoPago: Math.round(primaBasico * 0.05 * 100) / 100,
       },
-      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
+      _beneficios: [
+        ...IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
+        ...IS_ENDOSOS.PLUS.beneficios.map(b => ({ nombre: b, incluido: true })),
+      ],
       _endosos: basicoEndosos,
       _endosoIncluido: 'Endoso Plus',
       _endosoTexto: 'ENDOSO PLUS',
@@ -442,7 +444,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         ahorroContado: Math.round(primaPremium * 0.05 * 100) / 100,
         descuentoProntoPago: Math.round(primaPremium * 0.05 * 100) / 100,
       },
-      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
+      _beneficios: [
+        ...IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, incluido: true })),
+        ...IS_ENDOSOS.CENTENARIO.beneficios.map(b => ({ nombre: b, incluido: true })),
+      ],
       _endosos: premiumEndosos,
       _endosoIncluido: 'Endoso Plus Centenario',
       _endosoTexto: 'ENDOSO PLUS CENTENARIO',
@@ -734,9 +739,9 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     // Primary: use items from the API (via parseEndosoBeneficiosFromAPI)
     // Fallback: static guide constants when API returns nothing useful
     const toBendef = (texts: string[]) =>
-      texts.map(t => ({ nombre: t, descripcion: '', incluido: true }));
+      texts.map(t => ({ nombre: t, descripcion: '', detalle: '', incluido: true }));
     const toFallback = (items: { nombre: string; descripcion: string }[]) =>
-      items.map(b => ({ nombre: b.nombre, descripcion: b.descripcion, incluido: true }));
+      items.map(b => ({ nombre: b.nombre, descripcion: b.descripcion, detalle: b.descripcion, incluido: true }));
 
     const baseBendef = fullExtrasBeneficiosAPI.length > 0
       ? toBendef(fullExtrasBeneficiosAPI)
@@ -928,15 +933,17 @@ const generateRegionalQuotes = async (quoteData: any): Promise<{ basico: any | n
 
     // Beneficios by endoso type
     const beneficiosBasico = [
-      { nombre: 'Asistencia vial 24/7', descripcion: 'Servicio de grúa, cerrajería, paso de corriente', incluido: true },
-      { nombre: 'Cobertura de vidrios', descripcion: 'Reparación o reemplazo de parabrisas', incluido: true },
-      { nombre: 'Responsabilidad civil ampliada', descripcion: 'Cobertura de daños a terceros', incluido: true },
+      { nombre: 'Grúa', descripcion: 'Incluida en Asistencia Vial 24/7', detalle: 'Incluida en Asistencia Vial', incluido: true },
+      { nombre: 'Asistencia Vial', descripcion: '24/7: grúa, cerrajería, paso de corriente, cambio de llanta', detalle: '24/7: grúa, cerrajería, corriente, llanta', incluido: true },
+      { nombre: 'Cobertura de Vidrios', descripcion: 'Reparación o reemplazo de parabrisas', incluido: true },
     ];
     const beneficiosPlus = [
-      ...beneficiosBasico,
-      { nombre: 'Auto sustituto', descripcion: 'Vehículo de reemplazo mientras el suyo está en reparación', incluido: true },
-      { nombre: 'Accidentes personales', descripcion: 'Cobertura de accidentes para conductor y pasajeros', incluido: true },
-      { nombre: 'Extensión territorial', descripcion: 'Cobertura extendida fuera del territorio nacional', incluido: true },
+      { nombre: 'Grúa', descripcion: 'Incluida en Asistencia Vial 24/7', detalle: 'Incluida en Asistencia Vial', incluido: true },
+      { nombre: 'Asistencia Vial', descripcion: '24/7: grúa, cerrajería, paso de corriente, cambio de llanta', detalle: '24/7: grúa, cerrajería, corriente, llanta', incluido: true },
+      { nombre: 'Cobertura de Vidrios', descripcion: 'Reparación o reemplazo de parabrisas', incluido: true },
+      { nombre: 'Auto de Alquiler', descripcion: 'Vehículo de reemplazo mientras el suyo está en reparación', detalle: 'Mientras vehículo en reparación', incluido: true },
+      { nombre: 'Accidentes Personales', descripcion: 'Cobertura de accidentes para conductor y pasajeros', incluido: true },
+      { nombre: 'Extensión Territorial', descripcion: 'Cobertura extendida fuera del territorio nacional', incluido: true },
     ];
 
     // Helper to build a quote object from REGIONAL CC response

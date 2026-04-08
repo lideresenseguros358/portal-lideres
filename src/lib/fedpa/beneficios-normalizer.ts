@@ -597,44 +597,40 @@ export interface FedpaBeneficioItem {
 /** Beneficios del Endoso Base (Full Extras / K1) */
 export const FEDPA_ENDOSO_BASE_ITEMS: FedpaBeneficioItem[] = [
   {
-    nombre: 'Grúa por Avería',
-    descripcion: '1 evento por avería mecánica — máximo B/.150.00 al año',
-  },
-  {
-    nombre: 'Grúa por Accidente',
-    descripcion: '1 evento por accidente — máximo B/.150.00 al año',
+    nombre: 'Grúa',
+    descripcion: 'Por avería y accidente — 1 evento c/u, máx. B/.150 c/u al año',
   },
   {
     nombre: 'Defensa Penal',
-    descripcion: 'Gastos legales en proceso penal derivado de accidente de tránsito — hasta B/.2,000',
+    descripcion: 'Proceso penal por accidente de tránsito — hasta B/.2,000',
   },
   {
-    nombre: 'Asistencia Legal Administrativa',
-    descripcion: 'Asesoría en procesos administrativos de tránsito, sin costo para el asegurado',
+    nombre: 'Asistencia Legal',
+    descripcion: 'Procesos administrativos de tránsito, sin costo',
   },
   {
-    nombre: 'Auto de Alquiler (Colisión o Vuelco)',
-    descripcion: 'Vehículo de reemplazo tipo sedán compacto en caso de accidente cubierto — hasta 10 días',
+    nombre: 'Auto de Alquiler',
+    descripcion: 'Colisión o Vuelco — sedán compacto, hasta 10 días',
   },
   {
-    nombre: 'Muerte Accidental del Conductor',
-    descripcion: 'Indemnización en caso de fallecimiento del conductor por accidente — B/.5,000',
+    nombre: 'Muerte Accidental',
+    descripcion: 'Fallecimiento del conductor por accidente — B/.5,000',
   },
 ];
 
 /** Beneficios adicionales del Endoso Porcelana (mejoras sobre Full Extras) */
 export const FEDPA_ENDOSO_PORCELANA_ITEMS: FedpaBeneficioItem[] = [
   {
-    nombre: 'Pérdida de Efectos Personales',
-    descripcion: 'Pérdida o daño de objetos personales dentro del vehículo — hasta B/.300',
+    nombre: 'Efectos Personales',
+    descripcion: 'Objetos personales dentro del vehículo — hasta B/.300',
   },
   {
-    nombre: 'Auto de Alquiler Mejorado',
-    descripcion: 'Extensión del beneficio de alquiler — hasta 15 días (vehículos sobre B/.30,000 o 4x4)',
+    nombre: 'Auto de Alquiler',
+    descripcion: 'Mejorado — hasta 15 días (vehículos >B/.30,000 o 4x4)',
   },
   {
-    nombre: 'Descuento en Deducible',
-    descripcion: '20% de reducción en el deducible por robo total si el vehículo tiene GPS activado',
+    nombre: 'Dscto. en Deducible',
+    descripcion: 'Robo total con GPS activo — 20% de reducción',
   },
 ];
 

@@ -660,29 +660,108 @@ interface BenefitRow {
   values: Array<{ included: boolean; detail?: string }>;
 }
 
+// ── Canonical benefit normalization ──────────────────────────────────────────
+// Maps any insurer-specific benefit text to a single shared label used as the
+// deduplication key across all insurers in the benefits matrix.
+
+const CANONICAL_KEYS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /gr[uú]a/i,                                     label: 'Grúa' },
+  { pattern: /asistencia vial/i,                              label: 'Asistencia Vial' },
+  { pattern: /alquiler.*auto|auto.*alquiler|auto.*sustituto|sustituto.*auto/i, label: 'Auto de Alquiler' },
+  { pattern: /muerte accidental/i,                            label: 'Muerte Accidental' },
+  { pattern: /gastos m[eé]dicos|adelanto.*m[eé]dic|hospitali[sz]/i, label: 'Gastos Médicos' },
+  { pattern: /efectos personales/i,                           label: 'Efectos Personales' },
+  { pattern: /defensa penal|gastos legales.*penal/i,          label: 'Defensa Penal' },
+  { pattern: /asistencia legal/i,                             label: 'Asistencia Legal' },
+  { pattern: /extensi[oó]n territorial|extraterritorial/i,    label: 'Extensión Territorial' },
+  { pattern: /ambulancia/i,                                   label: 'Ambulancia' },
+  { pattern: /deprecia/i,                                     label: 'Sin Depreciación' },
+  { pattern: /dscto.*deducible|descuento.*deducible|devoluci[oó]n.*deducible/i, label: 'Dscto. Deducible' },
+  { pattern: /cobertura.*vidrios|vidrios|parabrisas/i,        label: 'Cobertura de Vidrios' },
+  { pattern: /accidentes personales/i,                        label: 'Accidentes Personales' },
+  { pattern: /bono.*mantenimiento/i,                          label: 'Bono de Mantenimiento' },
+  { pattern: /gastos funerarios|funerario/i,                  label: 'Gastos Funerarios' },
+  { pattern: /mensajes urgentes|transmisi[oó]n.*mensajes/i,   label: 'Mensajes Urgentes' },
+  { pattern: /revisi[oó]n sin costo|revisado sin/i,           label: 'Revisión sin Costo' },
+  { pattern: /asistencia en viaje|hospedaje.*transporte/i,    label: 'Asistencia en Viaje' },
+  { pattern: /optiseguro|seguro residencial/i,                label: 'Dscto. Seguro Residencial' },
+  { pattern: /dscto.*alarma|descuento.*alarma/i,              label: 'Dscto. Alarmas' },
+];
+
+function canonicalize(text: string): string {
+  for (const { pattern, label } of CANONICAL_KEYS) {
+    if (pattern.test(text)) return label;
+  }
+  const s = safe(text).trim();
+  return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** Extract the detail portion from benefit text: what comes after ": " or " — " */
+function extractDetailFromText(rawText: string, canonicalLabel: string): string {
+  const s = safe(rawText).trim();
+  const colonIdx = s.indexOf(': ');
+  const dashIdx  = s.indexOf(' — ');
+  let startIdx = -1;
+  if (colonIdx >= 0 && (dashIdx < 0 || colonIdx < dashIdx)) {
+    startIdx = colonIdx + 2;
+  } else if (dashIdx >= 0) {
+    startIdx = dashIdx + 3;
+  }
+  if (startIdx > 0) {
+    return s.slice(startIdx).replace(/\s+/g, ' ').trim();
+  }
+  // No separator — strip canonical prefix and use remainder
+  return s.replace(new RegExp(`^${canonicalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), '').trim();
+}
+
 function buildBenefitMatrix(quotes: PDFQuote[]): BenefitRow[] {
-  // Collect all unique benefit names in order of appearance
-  const seen = new Map<string, Map<number, { included: boolean; detail?: string }>>();
+  // label (UPPERCASED) → { displayLabel, order, perQuote: quoteIdx → { included, detail } }
+  const matrix = new Map<string, {
+    label: string;
+    order: number;
+    perQuote: Map<number, { included: boolean; detail: string }>;
+  }>();
+  let order = 0;
 
   quotes.forEach((q, qi) => {
-    (q._beneficios || []).forEach(b => {
-      const key = safe(b.nombre).trim().toUpperCase();
-      if (!key) return;
-      if (!seen.has(key)) seen.set(key, new Map());
-      seen.get(key)!.set(qi, { included: b.incluido });
+    (q._beneficios || []).forEach((b: any) => {
+      const rawName = safe(b.nombre || '').trim();
+      if (!rawName) return;
+
+      const label = canonicalize(rawName);
+      const key   = label.toUpperCase();
+
+      if (!matrix.has(key)) {
+        matrix.set(key, { label, order: order++, perQuote: new Map() });
+      }
+
+      const entry = matrix.get(key)!;
+
+      // Resolve detail: explicit detalle field > descripcion field > extracted from rawName
+      const detail = safe(b.detalle || b.descripcion || extractDetailFromText(rawName, label)).trim();
+
+      const existing = entry.perQuote.get(qi);
+      if (existing) {
+        // Same insurer has multiple benefits mapping to this canonical key
+        // (e.g., FEDPA: Auto de Alquiler base + Auto de Alquiler mejorado → one row)
+        if (b.incluido) existing.included = true;
+        if (detail && !existing.detail.toLowerCase().includes(detail.toLowerCase().slice(0, 15))) {
+          existing.detail = existing.detail ? `${existing.detail} / ${detail}` : detail;
+        }
+      } else {
+        entry.perQuote.set(qi, { included: !!b.incluido, detail });
+      }
     });
   });
 
-  const result: BenefitRow[] = [];
-  for (const [key, insurerMap] of seen) {
-    // Use first non-empty original name as display label
-    const displayLabel = key.charAt(0) + key.slice(1).toLowerCase();
-    result.push({
-      label: displayLabel,
-      values: quotes.map((_, qi) => insurerMap.get(qi) ?? { included: false }),
-    });
-  }
-  return result;
+  const sorted = [...matrix.values()].sort((a, b) => a.order - b.order);
+  return sorted.map(entry => ({
+    label: entry.label,
+    values: quotes.map((_, qi) => {
+      const e = entry.perQuote.get(qi);
+      return e ? { included: e.included, detail: e.detail } : { included: false, detail: '' };
+    }),
+  }));
 }
 
 function buildEndosoMatrix(quotes: PDFQuote[]): BenefitRow[] {
@@ -713,6 +792,7 @@ async function drawBenefitsPage(
   font: PDFFont,
   fontBold: PDFFont,
   logoImg: any,
+  insurerLogos: Record<string, any>,
   quotes: PDFQuote[],
   subtitle: string,
 ) {
@@ -731,8 +811,35 @@ async function drawBenefitsPage(
 
   let y = PH - HDR_H - 4;
   const yMin = FTR_H + 6;
-  const BEN_ROW_H = 14;
+  const BEN_ROW_H = 18;   // taller to fit detail text below "Si"
   const isPremium = quotes[0]?.planType === 'premium';
+
+  // ── Insurer column header row (navy, with logos) ──────────────────────────
+  page.drawRectangle({ x: M, y: y - INS_H, width: labelW, height: INS_H, color: STRIPE });
+  page.drawText(safe(isPremium ? 'Plan Premium' : 'Plan Básico'), {
+    x: M + LPAD, y: y - INS_H + (INS_H - 8) / 2 + 1, size: 7.5, font: fontBold, color: NAVY,
+  });
+  for (let i = 0; i < n; i++) {
+    const q   = quotes[i]!;
+    const cx  = colXs[i + 1]!;
+    page.drawRectangle({ x: cx, y: y - INS_H, width: insW, height: INS_H, color: NAVY });
+    const key  = insurerKey(q.insurerName);
+    const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
+    let logoEndX = cx + 6;
+    if (logo) {
+      const maxH = INS_H - 8, maxW = Math.min(insW * 0.36, 48);
+      const ratio = logo.width / logo.height;
+      const lh = Math.min(maxH, maxW / ratio);
+      const lw = lh * ratio;
+      page.drawImage(logo, { x: cx + 4, y: y - INS_H + (INS_H - lh) / 2, width: lw, height: lh });
+      logoEndX = cx + 4 + lw + 4;
+    }
+    page.drawText(safe(trunc(shortInsurerName(q.insurerName), 18)), {
+      x: logoEndX, y: y - INS_H + INS_H / 2 + 1, size: 7, font: fontBold, color: WHITE,
+    });
+  }
+  hLine(page, M, y - INS_H, CW, 0.8, NAVY);
+  y -= INS_H;
 
   // ── Section header helper ─────────────────────────────────────────────────
   const drawSectionHeader = (title: string, bg: ReturnType<typeof rgb> = NAVY) => {
@@ -756,43 +863,54 @@ async function drawBenefitsPage(
   };
 
   // ── Benefit row helper ────────────────────────────────────────────────────
+  // Layout inside each BEN_ROW_H (18pt) cell:
+  //   Top 10pt:  "Si" green badge  OR  "—" gray line
+  //   Bottom 7pt: detail text (small, centered) when included
   const drawBenRow = (row: BenefitRow, stripe: boolean) => {
     if (y - BEN_ROW_H < yMin) return;
     const bg = stripe ? STRIPE : WHITE;
     page.drawRectangle({ x: M, y: y - BEN_ROW_H, width: CW, height: BEN_ROW_H, color: bg });
 
-    // Label
-    page.drawText(safe(trunc(row.label, 52)), {
+    // Label — bold, vertically centered
+    page.drawText(safe(trunc(row.label, 46)), {
       x: M + LPAD, y: y - BEN_ROW_H + (BEN_ROW_H - 7) / 2 + 1,
-      size: 7, font, color: DARK,
+      size: 7, font: fontBold, color: DARK,
     });
 
-    // Insurer values
+    // Per-insurer values
     for (let i = 0; i < n; i++) {
       const v = row.values[i];
       if (!v) continue;
       const cx = colXs[i + 1]!;
 
       if (v.included) {
-        // Green indicator rectangle
-        page.drawRectangle({ x: cx + insW / 2 - 8, y: y - BEN_ROW_H + 4, width: 16, height: 6, color: GREEN });
+        // Green "Si" badge in upper portion of cell
+        const badgeW = 20, badgeH = 8;
+        const bx = cx + (insW - badgeW) / 2;
+        const by = y - BEN_ROW_H + BEN_ROW_H - badgeH - 2; // near top
+        page.drawRectangle({ x: bx, y: by, width: badgeW, height: badgeH, color: GREEN });
         page.drawText('Si', {
-          x: cx + insW / 2 - 4, y: y - BEN_ROW_H + 5,
-          size: 5.5, font: fontBold, color: WHITE,
+          x: bx + (badgeW - textWidth('Si', 6.5)) / 2,
+          y: by + (badgeH - 6.5) / 2 + 0.5,
+          size: 6.5, font: fontBold, color: WHITE,
         });
-        // Detail below if available
+        // Detail text in lower portion — truncated to fit column, centered
         if (v.detail) {
-          const dText = trunc(v.detail, 20);
+          const maxChars = Math.floor((insW - 8) / (5 * 0.56));
+          const dText = trunc(v.detail, maxChars);
+          const dw = textWidth(dText, 5);
           page.drawText(safe(dText), {
-            x: cx + LPAD, y: y - BEN_ROW_H + 1.5,
-            size: 4.5, font, color: GRAY,
+            x: cx + Math.max(2, (insW - dw) / 2),
+            y: y - BEN_ROW_H + 2.5,
+            size: 5, font, color: GRAY,
           });
         }
       } else {
-        page.drawText('--', {
-          x: cx + insW / 2 - 3, y: y - BEN_ROW_H + (BEN_ROW_H - 7) / 2 + 1,
-          size: 7, font, color: GRAY_LIGHT,
-        });
+        // Clear "—" indicator: a short horizontal line in GRAY, visually distinct
+        const lineY  = y - BEN_ROW_H + BEN_ROW_H / 2;
+        const lineX1 = cx + insW * 0.30;
+        const lineX2 = cx + insW * 0.70;
+        page.drawLine({ start: { x: lineX1, y: lineY }, end: { x: lineX2, y: lineY }, thickness: 1.5, color: GRAY });
       }
     }
 
@@ -854,7 +972,7 @@ export async function generarComparativaPDF(
 
   // Page 2: Basic benefits comparison
   await drawBenefitsPage(
-    pdfDoc, font, fontBold, logoImg,
+    pdfDoc, font, fontBold, logoImg, insurerLogos,
     basicQuotes, 'Planes Basicos — Beneficios y Asistencia',
   );
 
@@ -866,7 +984,7 @@ export async function generarComparativaPDF(
 
   // Page 4: Premium benefits comparison
   await drawBenefitsPage(
-    pdfDoc, font, fontBold, logoImg,
+    pdfDoc, font, fontBold, logoImg, insurerLogos,
     premiumQuotes, 'Planes Premium — Beneficios y Asistencia',
   );
 
