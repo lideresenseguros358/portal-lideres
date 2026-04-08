@@ -1687,18 +1687,21 @@ export default function ComparePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      {/* Download PDF Button for Master Users */}
+      {/* Download PDF Button for Master Users - Fixed in header area, left side */}
       {isMaster && quotes.length > 0 && (
         <button
           onClick={handleDownloadPDF}
           disabled={downloadingPDF}
-          title="Descargar comparativa PDF"
-          className="fixed top-4 right-4 z-50 p-3 bg-[#010139] text-white rounded-full shadow-lg hover:bg-[#020260] transition-colors disabled:opacity-60"
+          title="Descargar PDF con todas las cotizaciones"
+          className="fixed top-[68px] left-4 z-50 px-3 py-2 bg-[#8AAA19] text-white rounded-lg shadow-lg hover:bg-[#7a9415] transition-colors disabled:opacity-60 text-sm font-semibold flex items-center gap-2"
         >
           {downloadingPDF ? (
-            <span className="animate-spin block w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+            <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
           ) : (
-            <FaDownload className="w-5 h-5" />
+            <>
+              <FaDownload className="w-4 h-4" />
+              <span className="hidden sm:inline">Descargar PDF</span>
+            </>
           )}
         </button>
       )}
