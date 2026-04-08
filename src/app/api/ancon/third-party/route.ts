@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 import { ANCON_PRODUCTS } from '@/lib/ancon/config';
+import { getProductos } from '@/lib/ancon/catalogs.service';
 
 export const maxDuration = 30;
 
@@ -55,13 +56,44 @@ export async function GET() {
   const t0 = Date.now();
 
   try {
-    // Call ANCON to get a valid noCotizacion for the emission flow
+    // ═══ Step 1: Obtain correct product codes from ANCON catalog ═══
+    const productosCatalog = await getProductos();
+
+    // Map SOBAT plan names to their ANCON product codes (ramo 002 = AUTOMOVIL)
+    let sobatBasicoCode = ANCON_PRODUCTS.AUTO_RC; // fallback to 07159
+    let sobatExpressCode = ANCON_PRODUCTS.AUTO_RC; // fallback to 07159
+
+    if (productosCatalog.success && Array.isArray(productosCatalog.data)) {
+      const autoProducts = productosCatalog.data.filter(p => p.codigo_ramo === '002');
+      const basicMatch = autoProducts.find(p =>
+        p.nombre_producto?.toUpperCase().includes('SOBAT') &&
+        p.nombre_producto?.toUpperCase().includes('BASICO')
+      );
+      const premiumMatch = autoProducts.find(p =>
+        p.nombre_producto?.toUpperCase().includes('SOBAT') &&
+        p.nombre_producto?.toUpperCase().includes('EXPRESS')
+      );
+
+      if (basicMatch) {
+        sobatBasicoCode = basicMatch.codigo_producto;
+        console.log(`[API ANCON third-party] SOBAT BASICO → código ${basicMatch.codigo_producto}`);
+      }
+      if (premiumMatch) {
+        sobatExpressCode = premiumMatch.codigo_producto;
+        console.log(`[API ANCON third-party] SOBAT EXPRESS → código ${premiumMatch.codigo_producto}`);
+      }
+    } else {
+      console.warn('[API ANCON third-party] Error loading productos catalog, using fallback codes');
+    }
+
+    // ═══ Step 2: Call ANCON to get a valid noCotizacion for the emission flow ═══
+    // Use the correct product code (basic plan for initial quote)
     const result = await cotizarEstandar({
       cod_marca: '00122',   // TOYOTA
       cod_modelo: '10393',  // COROLLA
       ano: String(new Date().getFullYear()),
       suma_asegurada: '0',
-      cod_producto: ANCON_PRODUCTS.AUTO_RC, // 07159
+      cod_producto: sobatBasicoCode,
       cedula: '8-888-9999',
       nombre: 'COTIZACION',
       apellido: 'WEB',
@@ -85,9 +117,10 @@ export async function GET() {
     const premiumOptionName = result.data?.options?.find(o => o.name === 'opcion4')?.name
       || result.data?.options?.find(o => o.name === 'opcion3')?.name || 'opcion3';
 
+    // ═══ Step 3: Build plans with correct product codes ═══
     const plans = [
-      buildSobatPlan('basic', noCotizacion, basicOptionName),
-      buildSobatPlan('premium', noCotizacion, premiumOptionName),
+      buildSobatPlan('basic', noCotizacion, basicOptionName, sobatBasicoCode),
+      buildSobatPlan('premium', noCotizacion, premiumOptionName, sobatExpressCode),
     ];
 
     const elapsed = Date.now() - t0;
@@ -113,7 +146,12 @@ export async function GET() {
   }
 }
 
-function buildSobatPlan(planType: 'basic' | 'premium', noCotizacion: string, optionName: string) {
+function buildSobatPlan(
+  planType: 'basic' | 'premium',
+  noCotizacion: string,
+  optionName: string,
+  codProducto: string = ANCON_PRODUCTS.AUTO_RC,
+) {
   const sobat = SOBAT_PLANS[planType];
 
   return {
@@ -126,7 +164,7 @@ function buildSobatPlan(planType: 'basic' | 'premium', noCotizacion: string, opt
     idCotizacion: noCotizacion,
     noCotizacion,
     optionName,
-    _codProducto: ANCON_PRODUCTS.AUTO_RC,
+    _codProducto: codProducto,
     _nombreProducto: sobat.name,
     _sumaAsegurada: '0',
     installments: [

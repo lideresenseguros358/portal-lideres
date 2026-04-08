@@ -23,10 +23,10 @@ import {
 } from '@/lib/ancon/emission.service';
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
-import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
+import { getAnconCredentials, ANCON_SOAP_URL, ANCON_PRODUCTS } from '@/lib/ancon/config';
 import { getAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
-import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
+import { resolveAnconVehicleCodes, getAcreedores, getProductos } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
 import { getSupabaseServer } from '@/lib/supabase/server';
 
@@ -247,6 +247,29 @@ export async function POST(request: NextRequest) {
     // CC products use ramo 001, DT/RC products use ramo 002
     const isCC = cod_producto === '00312' || cod_producto === '10394' || cod_producto === '10395' || cod_producto === '10602' || cod_producto === '00318';
 
+    // Resolve SOBAT product code from catalog if not provided correctly
+    let finalCodProducto = cod_producto || '07159';
+    if (!cod_producto || cod_producto === '07159') {
+      try {
+        const productosCatalog = await getProductos();
+        if (productosCatalog.success && Array.isArray(productosCatalog.data)) {
+          const autoProducts = productosCatalog.data.filter(p => p.codigo_ramo === '002');
+          // Try to match product name if provided
+          if (nombre_producto) {
+            const match = autoProducts.find(p =>
+              p.nombre_producto?.toUpperCase().includes(nombre_producto.toUpperCase().replace('WEB - ', ''))
+            );
+            if (match) {
+              finalCodProducto = match.codigo_producto;
+              log('0/4', `Resolved product code from catalog: ${nombre_producto} → ${match.codigo_producto}`);
+            }
+          }
+        }
+      } catch (err) {
+        log('0/4', `Product code resolution error: ${err instanceof Error ? err.message : String(err)} — using fallback ${finalCodProducto}`);
+      }
+    }
+
     // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
     // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),
     // so its noCotizacion won't match the actual emission vehicle data.
@@ -288,7 +311,7 @@ export async function POST(request: NextRequest) {
           cod_modelo: finalCodModeloAgt || '00001',
           ano: String(ano || currentYear),
           suma_asegurada: String(suma_asegurada || '0'),
-          cod_producto: cod_producto || '07159',
+          cod_producto: finalCodProducto,
           cedula: cedula || '8-888-9999',
           nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
           apellido: (primer_apellido || 'WEB').toUpperCase(),
@@ -502,7 +525,7 @@ export async function POST(request: NextRequest) {
       tipo: 'POLIZA',
       fecha_de_registro: fmtDate(today),
       cantidad_de_pago: String(cantidad_de_pago || '10'),
-      codigo_producto_agt: cod_producto || '00312',
+      codigo_producto_agt: finalCodProducto || '00312',
       nombre_producto: nombre_producto || 'AUTO COMPLETA',
       Responsable_de_cobro: 'CORREDOR',
       suma_asegurada: suma_asegurada !== undefined && suma_asegurada !== null ? String(suma_asegurada) : '15000',

@@ -311,6 +311,25 @@ export async function getAcreedores(): Promise<AnconSoapResponse<AnconAcreedor[]
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Productos (ANCON catalog for product codes)
+// ═══════════════════════════════════════════════════════════════
+
+export async function getProductos(): Promise<AnconSoapResponse<AnconProducto[]>> {
+  const KEY = 'productos';
+  const mem = memGet<AnconProducto[]>(KEY);
+  if (mem) return { success: true, data: mem };
+
+  const result = await anconCall<AnconProducto[]>(ANCON_CATALOG_METHODS.LISTA_PRODUCTOS);
+
+  if (result.success && Array.isArray(result.data)) {
+    memSet(KEY, result.data);
+    return { success: true, data: result.data };
+  }
+
+  return { success: false, error: result.error || 'Error loading productos' };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Generic catalog loader (for non-vehicle ANCON catalogs)
 // ═══════════════════════════════════════════════════════════════
 
