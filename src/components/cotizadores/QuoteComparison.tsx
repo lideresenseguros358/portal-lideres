@@ -701,269 +701,266 @@ export default function QuoteComparison({
         </div>
 
         {/* ═══════════════════════════════════════════════════════
-            DESKTOP — Grid original sin cambios (md y superior).
-            Oculto en mobile con `hidden md:grid`.
+            DESKTOP — Cards agrupados por aseguradora (md y superior).
+            Mismo diseño que mobile: 1 card por aseguradora con toggle
+            Básico/Premium. Sin carrusel: grid horizontal.
         ═══════════════════════════════════════════════════════ */}
-        {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
-          {filteredQuotes.map((quote) => (
-            <div key={quote.id} className={`relative overflow-visible ${quote.isRecommended ? 'md:-mt-2 md:mb-2' : ''}`}>
-              {/* Recommended Badge - Flotante ARRIBA del card, centrado */}
-              {quote.isRecommended && (
-                <div className="absolute -top-5 sm:-top-6 left-0 right-0 z-20 flex justify-center">
-                  <span className="inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-8 py-2 sm:py-2.5 bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white text-[11px] sm:text-sm font-extrabold rounded-full border-2 border-white shadow-xl premium-badge whitespace-nowrap tracking-wide">
-                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
-                    RECOMENDADA
-                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
-                    <span className="absolute inset-0 premium-badge-shimmer pointer-events-none rounded-full"></span>
-                  </span>
+        <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mt-6 pt-8 sm:pt-10">
+          {filteredInsurerGroups.map(([insurerName, insurerQuotes]) => {
+            const basicPlan   = insurerQuotes.find(q => q.planType === 'basico');
+            const premiumPlan = insurerQuotes.find(q => q.planType === 'premium');
+            const hasBoth     = !!basicPlan && !!premiumPlan;
+            const currentPlanType = hasBoth ? globalPlanCC : (premiumPlan ? 'premium' : 'basico');
+            const currentPlan = currentPlanType === 'premium' ? (premiumPlan ?? basicPlan) : (basicPlan ?? premiumPlan);
+            if (!currentPlan) return null;
+
+            return (
+            <div key={insurerName} className={`rounded-xl overflow-hidden border-2 flex flex-col ${
+              currentPlan.isRecommended
+                ? 'border-[#8AAA19] shadow-xl bg-gradient-to-b from-white to-green-50/30'
+                : 'border-gray-200 shadow-md bg-white hover:border-[#8AAA19] hover:shadow-xl transition-all duration-300'
+            }`}>
+              {/* Recommended Badge */}
+              {currentPlan.isRecommended && (
+                <div className="bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white text-center py-1.5 text-[11px] font-extrabold tracking-wide flex items-center justify-center gap-2">
+                  <FaStar className="text-yellow-300 animate-pulse" />
+                  RECOMENDADA
+                  <FaStar className="text-yellow-300 animate-pulse" />
                 </div>
               )}
-              
-              {/* Card principal - Premium gets enhanced styling */}
-              <div 
-                className={`rounded-xl overflow-visible transition-all duration-300 flex flex-col ${
-                  quote.isRecommended 
-                    ? 'border-2 border-[#8AAA19] shadow-xl shadow-[#8AAA19]/20 ring-1 ring-[#8AAA19]/30 bg-gradient-to-b from-white to-green-50/30' 
-                    : 'border-2 border-gray-200 hover:border-[#010139] shadow-md bg-white'
-                } ${
-                  selectedQuote === quote.id 
-                    ? 'shadow-2xl shadow-[#010139]/40 scale-[1.02]' 
-                    : ''
-                }`}
-              >
-                {/* Header con Logo - Premium gets golden accent */}
-              <div className={`p-4 text-white flex-shrink-0 overflow-visible rounded-t-xl ${
-                quote.isRecommended
+
+              {/* Header */}
+              <div className={`p-4 text-white ${
+                currentPlan.isRecommended
                   ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#0a0a5c] border-b-4 border-[#8AAA19]'
                   : 'bg-gradient-to-br from-[#010139] to-[#020270]'
               }`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <InsurerLogo 
-                    logoUrl={getLogoUrl(quote.insurerName)}
-                    insurerName={quote.insurerName}
-                    size="md"
-                  />
+                <div className="flex items-center gap-2 mb-1.5">
+                  <InsurerLogo logoUrl={getLogoUrl(insurerName)} insurerName={insurerName} size="md" />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-sm leading-tight truncate">{quote.insurerName}</h3>
+                    <h3 className="font-bold text-sm leading-tight truncate">{insurerName}</h3>
                   </div>
+                  <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold flex-shrink-0 ${
+                    currentPlanType === 'premium'
+                      ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white'
+                      : 'bg-white/20 text-white'
+                  }`}>
+                    {currentPlanType === 'premium' ? '⭐ Premium' : 'Básico'}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                      quote.planType === 'premium' 
-                        ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white shadow-sm'
-                        : 'bg-white/20 text-white'
-                    }`}>
-                      {quote.planType === 'premium' ? 'Premium' : 'Básico'}
-                    </span>
-                    {quote._endosoIncluido && (
-                      <span className="text-[9px] text-white/80 font-medium truncate max-w-[120px]">
-                        {quote._endosoIncluido}
-                      </span>
-                    )}
-                  </div>
-                  {quote.isRecommended && (
-                    <FaStar className="text-[#8AAA19] text-lg drop-shadow-sm" />
-                  )}
-                </div>
+                {currentPlan._endosoIncluido && (
+                  <span className="text-[9px] text-white/75 font-medium">{currentPlan._endosoIncluido}</span>
+                )}
               </div>
 
-              {/* Card Content */}
-              <div className="p-5 md:p-6 flex flex-col flex-1">
+              {/* Plan Toggle */}
+              {hasBoth && (
+                <div className="cc-plan-toggle">
+                  <button
+                    onClick={() => setGlobalPlanCC('basico')}
+                    className={currentPlanType === 'basico' ? 'cc-toggle-basic' : ''}
+                  >
+                    Básico · ${basicPlan!.annualPremium.toFixed(0)}
+                  </button>
+                  <button
+                    onClick={() => setGlobalPlanCC('premium')}
+                    className={currentPlanType === 'premium' ? 'cc-toggle-premium' : 'cc-toggle-premium-idle'}
+                  >
+                    ⭐ Premium · ${premiumPlan!.annualPremium.toFixed(0)}
+                  </button>
+                </div>
+              )}
 
-                {/* Price Section con Selector Contado/Tarjeta - DEFAULT CONTADO */}
-                <div className="mb-5 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 flex-shrink-0">
-                  {/* Si tiene breakdown, mostrar con selector */}
-                  {quote._priceBreakdown ? (
+              {/* Card Content */}
+              <div className="p-4 flex flex-col flex-1">
+                {/* Precio */}
+                <div className="mb-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-3">
+                  {currentPlan._priceBreakdown ? (
                     <>
-                      {/* Selector de Forma de Pago */}
-                      <div className="flex gap-2 mb-4">
-                        <div className="flex-1">
-                          <button
-                            onClick={() => setPaymentMode('contado')}
-                            className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                              paymentMode === 'contado'
-                                ? 'bg-[#8AAA19] text-white shadow-md'
-                                : 'bg-white text-gray-600 border border-gray-300 hover:border-[#8AAA19]'
-                            }`}
-                          >
-                            Al Contado
-                            {quote._priceBreakdown && quote._priceBreakdown.totalConTarjeta > quote._priceBreakdown.totalAlContado && (() => {
-                              const pct = Math.round((quote._priceBreakdown!.totalConTarjeta - quote._priceBreakdown!.totalAlContado) / quote._priceBreakdown!.totalConTarjeta * 100);
-                              return pct > 0 ? (
-                                <span className={`block text-[9px] font-bold mt-0.5 ${paymentMode === 'contado' ? 'text-white/80' : 'text-[#8AAA19]'}`}>
-                                  Ahorra {pct}%
-                                </span>
-                              ) : null;
-                            })()}
-                          </button>
-                          <p className="text-[10px] text-gray-500 text-center mt-1">(1 cuota)</p>
-                        </div>
-                        <div className="flex-1">
-                          <button
-                            onClick={() => setPaymentMode('tarjeta')}
-                            className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                              paymentMode === 'tarjeta'
-                                ? 'bg-[#010139] text-white shadow-md'
-                                : 'bg-white text-gray-600 border border-gray-300 hover:border-[#010139]'
-                            }`}
-                          >
-                            En Cuotas
-                          </button>
-                          <p className="text-[10px] text-gray-500 text-center mt-1">(2-10 cuotas)</p>
-                        </div>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          onClick={() => setPaymentMode('contado')}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'contado' ? 'bg-[#8AAA19] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
+                        >
+                          Al Contado
+                          {currentPlan._priceBreakdown && currentPlan._priceBreakdown.totalConTarjeta > currentPlan._priceBreakdown.totalAlContado && (() => {
+                            const pct = Math.round((currentPlan._priceBreakdown!.totalConTarjeta - currentPlan._priceBreakdown!.totalAlContado) / currentPlan._priceBreakdown!.totalConTarjeta * 100);
+                            return pct > 0 ? (
+                              <span className={`block text-[9px] font-bold mt-0.5 ${paymentMode === 'contado' ? 'text-white/80' : 'text-[#8AAA19]'}`}>
+                                Ahorra {pct}%
+                              </span>
+                            ) : null;
+                          })()}
+                        </button>
+                        <button
+                          onClick={() => setPaymentMode('tarjeta')}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${paymentMode === 'tarjeta' ? 'bg-[#010139] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-300'}`}
+                        >En Cuotas</button>
                       </div>
-                      
-                      {/* Precio Principal Dinámico */}
                       <div className="text-center">
-                        <div className="flex items-center justify-center gap-2 mb-1">
-                          <span className="text-xs text-gray-600 font-medium">
-                            {paymentMode === 'contado' ? 'Pago al Contado' : 'Pago en Cuotas'}
-                          </span>
-                          <AutoCloseTooltip 
-                            content={paymentMode === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta}
-                          />
+                        <div className={`text-3xl font-bold mb-1 ${paymentMode === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'}`}>
+                          ${(paymentMode === 'contado'
+                            ? (currentPlan._priceBreakdown.totalAlContado ?? 0)
+                            : (currentPlan._priceBreakdown.totalConTarjeta ?? 0)
+                          ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <div className={`text-3xl md:text-4xl font-bold mb-2 ${
-                          paymentMode === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'
-                        }`}>
-                          ${(paymentMode === 'contado' 
-                            ? (quote._priceBreakdown.totalAlContado ?? 0) 
-                            : (quote._priceBreakdown.totalConTarjeta ?? 0)
-                          ).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                        </div>
-                        
-                        {/* Info adicional según modo */}
-                        {paymentMode === 'contado' ? (
-                          quote._priceBreakdown.descuentoProntoPago && quote._priceBreakdown.descuentoProntoPago > 0 && (
-                            <div className="text-xs text-[#8AAA19] font-semibold">
-                              ✓ Ahorro: ${quote._priceBreakdown.descuentoProntoPago.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                            </div>
-                          )
-                        ) : (
-                          <div className="text-xs text-gray-500">
-                            Elige de 2 a 10 cuotas en el proceso de emisión
-                          </div>
+                        {paymentMode === 'tarjeta' && (
+                          <p className="text-xs text-gray-500">Elige de 2 a 10 cuotas en emisión</p>
                         )}
                       </div>
                     </>
                   ) : (
-                    /* Precio simple sin breakdown */
                     <div className="text-center">
                       <div className="text-xs text-gray-600 mb-1 font-medium">Prima Anual</div>
-                      <div className="text-3xl md:text-4xl font-bold text-[#010139] mb-2">
-                        ${(quote.annualPremium ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      <div className="text-3xl font-bold text-[#010139]">
+                        ${(currentPlan.annualPremium ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
                   )}
-                  
-                  {/* Deducibles: mostrar Comprensivo + Colisión/Vuelco si disponibles */}
-                  {quote._deduciblesReales?.comprensivo || quote._deduciblesReales?.colisionVuelco ? (
-                    <div className="mt-3 space-y-1">
-                      {quote._deduciblesReales.comprensivo && (
-                        <div className="flex items-center justify-center gap-1 text-xs text-gray-600">
+
+                  {/* Deducibles */}
+                  {currentPlan._deduciblesReales?.comprensivo || currentPlan._deduciblesReales?.colisionVuelco ? (
+                    <div className="mt-2 space-y-1">
+                      {currentPlan._deduciblesReales.comprensivo && (
+                        <div className="flex justify-center gap-1 text-xs text-gray-600">
                           <span className="font-medium">Comprensivo:</span>
-                          <span className="font-semibold text-[#010139]">
-                            B/.{quote._deduciblesReales.comprensivo.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
+                          <span className="font-semibold text-[#010139]">B/.{currentPlan._deduciblesReales.comprensivo.amount.toFixed(2)}</span>
                         </div>
                       )}
-                      {quote._deduciblesReales.colisionVuelco && (
-                        <div className="flex items-center justify-center gap-1 text-xs text-gray-600">
+                      {currentPlan._deduciblesReales.colisionVuelco && (
+                        <div className="flex justify-center gap-1 text-xs text-gray-600">
                           <span className="font-medium">Colisión/Vuelco:</span>
-                          <span className="font-semibold text-[#010139]">
-                            B/.{quote._deduciblesReales.colisionVuelco.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
+                          <span className="font-semibold text-[#010139]">B/.{currentPlan._deduciblesReales.colisionVuelco.amount.toFixed(2)}</span>
                         </div>
                       )}
                     </div>
-                  ) : quote._deducibleInfo?.tooltip ? (
-                    <div className="mt-3 space-y-1">
-                      {quote._deducibleInfo.tooltip.split('\n').map((line: string, i: number) => (
-                        <div key={i} className="flex items-center justify-center gap-1 text-xs text-gray-600">
-                          <span className="font-semibold text-[#010139]">{line}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
-                      <span>Deducible desde ${(quote.deductible ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                      {quote._deducibleOriginal && (
-                        <AutoCloseTooltip 
-                          content={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')}
-                        />
-                      )}
+                  ) : currentPlan.deductible > 0 && (
+                    <div className="text-center mt-2 text-xs text-gray-600">
+                      Deducible desde ${currentPlan.deductible.toFixed(2)}
                     </div>
                   )}
                 </div>
 
-                {/* Endoso Highlight - Visual differentiator */}
-                {quote._endosoIncluido && (
-                  <div className={`mb-4 p-3 rounded-xl border-2 ${
-                    quote.planType === 'premium' 
-                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-[#8AAA19]/40' 
-                      : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <FaShieldAlt className={`text-sm ${quote.planType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`} />
-                      <span className="text-xs font-bold text-[#010139]">Endosos del Plan</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(quote._endosos || []).map((endoso: any, eIdx: number) => {
-                        const isExclusive = endoso.codigo === 'PORCELANA' || endoso.codigo === 'VA' || endoso.codigo === 'CENTENARIO';
+                {/* Coberturas RC */}
+                {currentPlan._limites && currentPlan._limites.length > 0 && (
+                  <div className="mb-3">
+                    <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5 px-1">
+                      <FaShieldAlt className="text-[#010139]" size={11} />
+                      Coberturas
+                    </h5>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      {currentPlan._limites.map((limite: any, limIdx: number) => {
+                        const tooltipKey =
+                          limite.tipo === 'lesiones_corporales' ? 'bodilyInjury'
+                          : limite.tipo === 'daños_propiedad'   ? 'propertyDamage'
+                          : 'medicalExpenses';
+                        const tooltipText = CC_COVERAGE_TOOLTIPS[tooltipKey];
+                        const icon = limite.tipo === 'lesiones_corporales' ? '🩹'
+                          : limite.tipo === 'daños_propiedad' ? '🚗💥'
+                          : '🏥';
+                        const limiteDisplay = [limite.limitePorPersona, limite.limitePorAccidente]
+                          .filter(Boolean).join(' / ');
+
                         return (
-                          <span 
-                            key={eIdx}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold ${
-                              isExclusive && quote.planType === 'premium'
-                                ? 'bg-[#8AAA19] text-white shadow-sm'
-                                : 'bg-white text-gray-600 border border-gray-200'
-                            }`}
+                          <div
+                            key={limIdx}
+                            className={`flex items-center gap-2 px-3 py-2 text-xs ${limIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} ${limIdx < currentPlan._limites.length - 1 ? 'border-b border-gray-100' : ''}`}
                           >
-                            {isExclusive && quote.planType === 'premium' ? '⭐' : '✓'} {endoso.nombre}
-                          </span>
+                            <span className="text-sm flex-shrink-0">{icon}</span>
+                            <div className="flex-1 min-w-0 flex items-center gap-1">
+                              <span className="font-semibold text-gray-800 text-xs">{limite.descripcion}</span>
+                              {tooltipText && (
+                                <AutoCloseTooltip content={tooltipText} />
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              <span className="text-[#010139] font-bold text-xs whitespace-nowrap">
+                                {limiteDisplay || 'Incluido'}
+                              </span>
+                              {(limite.tipo === 'lesiones_corporales' || limite.tipo === 'gastos_medicos') &&
+                                limite.limitePorPersona && limite.limitePorAccidente && (
+                                <p className="text-[10px] text-gray-400 leading-tight mt-0.5">p.persona / p.accidente</p>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
                   </div>
                 )}
 
-                {/* Detalle Completo */}
-                {quote._isReal && (quote._coberturasDetalladas || quote._limites || quote._beneficios || quote._endosos) && (
-                  <QuoteDetailsCard
-                    aseguradora={quote.insurerName}
-                    coberturasDetalladas={quote._coberturasDetalladas}
-                    limites={quote._limites}
-                    beneficios={quote._beneficios}
-                    endosos={quote._endosos}
-                    deducibleInfo={quote._deducibleInfo}
-                    sumaAsegurada={quote._sumaAsegurada}
-                    primaBase={quote._primaBase}
-                    impuesto1={quote._impuesto1}
-                    impuesto2={quote._impuesto2}
-                    primaTotal={quote.annualPremium}
-                  />
-                )}
+                {/* Beneficios y Endosos (collapsible) */}
+                {currentPlan._isReal && (currentPlan._beneficios?.length > 0 || currentPlan._endosos?.length > 0) && (() => {
+                  const isExpanded = expandedBenefitsCC;
+                  return (
+                    <div className="mb-4">
+                      <button
+                        onClick={() => setExpandedBenefitsCC(prev => !prev)}
+                        className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <FaShieldAlt className="text-[#8AAA19]" size={12} />
+                          Beneficios y Asistencia
+                        </span>
+                        {isExpanded ? <FaChevronUp className="text-gray-400" size={11} /> : <FaChevronDown className="text-gray-400" size={11} />}
+                      </button>
 
-                {/* Actions */}
-                <div className="space-y-3 flex-shrink-0 mt-4">
-                  <button
-                    onClick={() => handleSelectPlan(quote.id)}
-                    className={`w-full py-4 rounded-xl font-bold text-base transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                      quote.isRecommended
-                        ? 'bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white hover:shadow-xl hover:scale-[1.02] shadow-lg shadow-[#8AAA19]/30'
-                        : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-xl'
-                    }`}
-                  >
-                    <FaCheckCircle className="text-white text-lg" />
-                    Seleccionar Este Plan
-                  </button>
-                </div>
+                      {isExpanded && (
+                        <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
+                          {(currentPlan._beneficios || []).filter((b: any) => b.incluido).map((b: any, bIdx: number) => (
+                            <div key={bIdx} className={`flex items-start gap-2 px-3 py-2 text-xs ${bIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/70'} border-b border-gray-100 last:border-b-0`}>
+                              <span className="text-[#8AAA19] flex-shrink-0 mt-0.5">✓</span>
+                              <span className="font-medium text-gray-700">{b.nombre}</span>
+                            </div>
+                          ))}
+                          {(currentPlan._endosos || []).filter((e: any) => e.incluido).map((e: any, eIdx: number) => {
+                            const isExclusive = e.codigo === 'PORCELANA' || e.codigo === 'VA' || e.codigo === 'CENTENARIO';
+                            const subBeneficios: string[] = e.subBeneficios || [];
+                            return (
+                              <div key={`e-${eIdx}`} className="border-b border-gray-100 last:border-b-0">
+                                <div className={`flex items-center gap-2 px-3 py-2 text-xs ${isExclusive && currentPlanType === 'premium' ? 'bg-green-50' : 'bg-gray-50'}`}>
+                                  <span className={`flex-shrink-0 ${isExclusive && currentPlanType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`}>
+                                    {isExclusive && currentPlanType === 'premium' ? '⭐' : '✓'}
+                                  </span>
+                                  <span className={`font-semibold ${isExclusive && currentPlanType === 'premium' ? 'text-[#010139]' : 'text-gray-700'}`}>
+                                    {e.nombre}
+                                  </span>
+                                </div>
+                                {subBeneficios.length > 0 && (
+                                  <div className="px-3 pb-2 pt-1 space-y-1">
+                                    {subBeneficios.map((sub: string, sIdx: number) => (
+                                      <div key={sIdx} className="flex items-start gap-1.5 text-[10px] text-gray-600">
+                                        <span className="text-[#8AAA19] flex-shrink-0 mt-0.5">›</span>
+                                        <span>{sub}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Botón de acción */}
+                <button
+                  onClick={() => handleSelectPlan(currentPlan.id)}
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 mt-auto ${
+                    currentPlan.isRecommended
+                      ? 'bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white shadow-lg shadow-[#8AAA19]/30'
+                      : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white'
+                  }`}
+                >
+                  <FaCheckCircle className="text-white" />
+                  Seleccionar Este Plan
+                </button>
               </div>
             </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ═══════════════════════════════════════════════════════

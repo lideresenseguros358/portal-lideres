@@ -1034,8 +1034,28 @@ export default function ThirdPartyComparison({
                 </div>
                 <div className="text-sm text-white/80 font-medium">Emisión inmediata • Sin inspección</div>
               </div>
-              {renderPlanSection(insurer, insurer.basicPlan, 'basic', false)}
-              {renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)}
+              {/* Plan toggle — reuses same CSS as mobile */}
+              <div className="pt-3 pb-1">
+                <div className="tp-plan-toggle">
+                  <button
+                    onClick={() => setGlobalPlan('basic')}
+                    className={globalPlan === 'basic' ? 'tp-toggle-basic' : ''}
+                  >
+                    Básico · B/.{insurer.basicPlan.annualPremium.toFixed(0)}
+                  </button>
+                  <button
+                    onClick={() => setGlobalPlan('premium')}
+                    className={globalPlan === 'premium' ? 'tp-toggle-premium' : 'tp-toggle-premium-idle'}
+                  >
+                    ⭐ Premium · B/.{insurer.premiumPlan.annualPremium.toFixed(0)}
+                  </button>
+                </div>
+              </div>
+              {/* Only the selected plan */}
+              {globalPlan === 'basic'
+                ? renderPlanSection(insurer, insurer.basicPlan, 'basic', false)
+                : renderPlanSection(insurer, insurer.premiumPlan, 'premium', true)
+              }
             </div>
           );
         })}
