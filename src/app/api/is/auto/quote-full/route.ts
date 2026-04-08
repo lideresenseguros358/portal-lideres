@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
     }
     
     console.log(`[IS QuoteFull] Iniciando cotización completa...`);
-    
+    console.log(`[IS QuoteFull] Cliente: ${nombre} ${apellido} (Doc: ${nroDoc})`);
+    console.log(`[IS QuoteFull] Vehículo: Marca=${codMarca} Modelo=${codModelo} Año=${anioAuto}`);
+    console.log(`[IS QuoteFull] Plan: ${codPlanCobertura}, Grupo: ${codGrupoTarifa}`);
+
     // Step 1: Generate quote (this is the slow part — IS API call)
     const quoteResult = await generarCotizacionAuto(
       {
