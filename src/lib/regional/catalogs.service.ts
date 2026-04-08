@@ -55,6 +55,13 @@ export async function getMarcas(): Promise<RegionalMarca[]> {
   } else {
     raw = extractArray(res.data || res.raw) as any[];
   }
+
+  // If API failed and returned no data, throw error so caller can use fallback (stale cache)
+  if (!res.success || raw.length === 0) {
+    const errorMsg = res.error || 'Empty response from Regional marcas endpoint';
+    throw new Error(`getMarcas API error: ${errorMsg}`);
+  }
+
   // Normalize: Regional API may return different field names across environments
   // codmarca variants: codmarca | cod_marca | CodMarca | codMarca | id_marca | idmarca
   const normalized: RegionalMarca[] = raw.map((m: any) => ({
@@ -81,6 +88,13 @@ export async function getModelos(codMarca: number): Promise<RegionalModelo[]> {
   } else {
     raw = extractArray(res.data || res.raw) as any[];
   }
+
+  // If API failed and returned no data, throw error so caller can use fallback (stale cache)
+  if (!res.success || raw.length === 0) {
+    const errorMsg = res.error || `Empty response from Regional modelos endpoint for marca ${codMarca}`;
+    throw new Error(`getModelos API error: ${errorMsg}`);
+  }
+
   // Normalize: Regional API may return different field names across environments
   // codmodelo variants: codmodelo | cod_modelo | CodModelo | codModelo | id_modelo
   const normalized: RegionalModelo[] = raw.map((m: any) => ({
