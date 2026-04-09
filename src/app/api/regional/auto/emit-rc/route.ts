@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { emitirPolizaRC } from '@/lib/regional/emission.service';
+import { emitirPolizaRC, imprimirPoliza } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import { getRegionalCredentials } from '@/lib/regional/config';
 import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
@@ -194,20 +194,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Capture policy document from Regional immediately after emission ──
-    // REGIONAL sometimes embeds the carátula HTML directly in the emission response.
-    // imprimirPoliza is NOT called here — it consistently returns null immediately
-    // after RC emission (the document isn't ready yet). The /api/regional/auto/print
-    // endpoint handles it lazily when the user clicks the download button.
+    // ── Capture policy document from Regional after emission ──
+    // Emission response only returns {"mensaje":"Poliza emitida","poliza":"..."} — no HTML.
+    // imprimirPoliza at /regional/util/imprimirPoliza works for RC with a short delay
+    // (Regional generates the document asynchronously). Confirmed via smoke tests on real
+    // customer data; test-data smoke tests show ORA-01422 due to PROD DB data conflicts.
     let documentStorageUrl: string | null = null;
 
     if (result.poliza) {
       try {
-        const htmlToStore = (result as Record<string, unknown>).documentHtml as string | null || null;
+        let htmlToStore: string | null = (result as Record<string, unknown>).documentHtml as string | null || null;
         let pdfToStore: string | null = null;
 
         if (htmlToStore) {
-          console.log(`[REGIONAL RC Emit] Using HTML from emission response (${htmlToStore.length} bytes) — storing...`);
+          console.log(`[REGIONAL RC Emit] Using HTML from emission response (${htmlToStore.length} bytes)`);
+        } else {
+          // Give Regional a few seconds to finalize the policy before printing
+          await new Promise(r => setTimeout(r, 3000));
+          const printResult = await imprimirPoliza(result.poliza, 'rc');
+          if (printResult.success) {
+            htmlToStore = printResult.html || null;
+            pdfToStore = printResult.pdf || null;
+            console.log(`[REGIONAL RC Emit] imprimirPoliza: ${htmlToStore ? `HTML ${htmlToStore.length}b` : pdfToStore ? `PDF` : 'no document'}`);
+          } else {
+            console.warn('[REGIONAL RC Emit] imprimirPoliza failed (non-fatal):', printResult.message);
+          }
         }
 
         if (htmlToStore || pdfToStore) {
@@ -237,9 +248,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Regional's imprimirPoliza endpoint is CC-only — returns {} for RC policies.
-    // RC emission response also never contains HTML. No document available via API.
-    const pdfUrl = documentStorageUrl || null;
+    // Prefer stored document URL; fall back to live print endpoint (lazy retry on user click)
+    const pdfUrl = documentStorageUrl
+      || (result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}&type=rc` : null);
 
     // ── Auto-save client + policy to Supabase ──
     const cedula = prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || '');
