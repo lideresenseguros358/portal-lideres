@@ -183,46 +183,14 @@ export default function ConfirmacionPage() {
     }
   };
 
-  const handleDownloadRegionalPdf = async () => {
+  const handleDownloadRegionalPdf = () => {
     const poliza = policyData?.regionalPoliza || policyData?.nroPoliza;
-    if (!poliza || downloadingPdf) return;
-    setDownloadingPdf(true);
-    setPdfError(null);
-
-    try {
-      const response = await fetch('/api/regional/auto/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poliza }),
-      });
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('application/pdf')) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `poliza-regional-${poliza}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } else {
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.error || 'No se pudo obtener la póliza');
-        } else {
-          handleDownloadCaratula();
-        }
-      }
-    } catch (err: any) {
-      console.error('[Confirmación] Error descargando PDF REGIONAL:', err);
-      setPdfError(err.message || 'Error descargando póliza');
-      handleDownloadCaratula();
-    } finally {
-      setDownloadingPdf(false);
-    }
+    if (!poliza) return;
+    // RC for DT, CC for Cobertura Completa
+    const type = policyData?.tipoCobertura === 'Daños a Terceros' ? 'rc' : 'cc';
+    // Synchronous window.open avoids popup blocker.
+    // The print route checks Supabase storage first (captured at emission), then falls back to live print.
+    window.open(`/api/regional/auto/print?poliza=${encodeURIComponent(poliza)}&type=${type}`, '_blank');
   };
 
   const handleDownloadAnconPdf = () => {

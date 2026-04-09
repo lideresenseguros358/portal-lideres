@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { imprimirPoliza } from '@/lib/regional/emission.service';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 // ── GET: For email download links ──
 export async function GET(request: NextRequest) {
@@ -54,6 +55,28 @@ async function handlePrint(poliza: string, tokenType: 'rc' | 'cc' = 'cc') {
 
   try {
     console.log(`[API REGIONAL Print] ${requestId} Printing poliza: ${poliza} (type: ${tokenType})`);
+
+    // ── Check Supabase Storage first (captured during emission) ──
+    try {
+      const supabaseAdmin = getSupabaseAdmin();
+      const cleanPoliza = poliza.replace(/-0$/, '').replace(/\//g, '-');
+      const folderPath = `regional-policies/${cleanPoliza}`;
+      const { data: files } = await supabaseAdmin.storage.from('expediente').list(folderPath);
+      const stored = files?.find(f => f.name.startsWith('caratula'));
+      if (stored) {
+        const filePath = `${folderPath}/${stored.name}`;
+        const { data: urlData } = supabaseAdmin.storage.from('expediente').getPublicUrl(filePath);
+        const storedUrl = urlData?.publicUrl;
+        if (storedUrl) {
+          console.log(`[API REGIONAL Print] ${requestId} ✅ Serving from Supabase storage: ${filePath}`);
+          // Redirect for both GET and POST — browser follows and opens the document
+          return NextResponse.redirect(storedUrl, 302);
+        }
+      }
+    } catch (storageErr: any) {
+      console.warn(`[API REGIONAL Print] ${requestId} Storage lookup failed (non-fatal):`, storageErr.message);
+    }
+
     const result = await imprimirPoliza(poliza, tokenType);
 
     if (!result.success) {

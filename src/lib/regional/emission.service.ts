@@ -18,6 +18,25 @@ import type {
   RegionalImprimirResponse,
 } from './types';
 
+// ═══ Helpers ═══
+
+/**
+ * Scan all string fields in a REGIONAL API response for embedded HTML content.
+ * REGIONAL sometimes returns the carátula HTML directly inside the emission response body
+ * rather than requiring a separate imprimirPoliza call.
+ */
+function extractHtmlFromData(data: Record<string, unknown>): string | null {
+  for (const val of Object.values(data)) {
+    if (typeof val === 'string' && val.length > 200) {
+      const t = val.trimStart();
+      if (t.startsWith('<!') || /^<html/i.test(t)) {
+        return val;
+      }
+    }
+  }
+  return null;
+}
+
 // ═══ RC (DT) Emission ═══
 
 export async function emitirPolizaRC(
@@ -51,10 +70,16 @@ export async function emitirPolizaRC(
   const poliza = (data.poliza || data.numpoliza || data.nroPoliza) as string | undefined;
   const numcot = (data.numcot || data.numCot) as number | undefined;
 
+  const documentHtml = extractHtmlFromData(data);
+  if (documentHtml) {
+    console.log('[REGIONAL RC Emission] ✅ HTML document found in emission response:', documentHtml.length, 'bytes');
+  }
+
   return {
     success: true,
     poliza,
     numcot,
+    documentHtml,
     ...data,
   };
 }
@@ -91,11 +116,16 @@ export async function emitirPolizaCC(
   }
 
   const poliza = (data.poliza || data.numpoliza || data.nroPoliza) as string | undefined;
+  const documentHtml = extractHtmlFromData(data);
+  if (documentHtml) {
+    console.log('[REGIONAL CC Emission] ✅ HTML document found in emission response:', documentHtml.length, 'bytes');
+  }
 
   return {
     success: true,
     poliza,
     numcot: body.numcot,
+    documentHtml,
     ...data,
   };
 }

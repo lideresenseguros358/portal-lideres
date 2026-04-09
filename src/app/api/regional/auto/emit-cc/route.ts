@@ -186,21 +186,40 @@ export async function POST(request: NextRequest) {
     console.log(`[REGIONAL CC Emit] Completed in ${elapsed}ms. Poliza: ${emitResult.poliza}`);
 
     // ── Capture policy document from Regional immediately after emission ──
+    // REGIONAL sometimes embeds the carátula HTML directly in the emission response.
+    // If not, fall back to a separate imprimirPoliza call with a short delay.
     let documentStorageUrl: string | null = null;
     if (emitResult.poliza) {
       try {
         console.log(`[REGIONAL CC Emit] Capturing policy document for ${emitResult.poliza}...`);
-        const printResult = await imprimirPoliza(emitResult.poliza, 'cc');
-        if (printResult.success && (printResult.html || printResult.pdf)) {
+
+        let htmlToStore: string | null = (emitResult as Record<string, unknown>).documentHtml as string | null || null;
+        let pdfToStore: string | null = null;
+
+        if (htmlToStore) {
+          console.log(`[REGIONAL CC Emit] Using HTML from emission response (${htmlToStore.length} bytes)`);
+        } else {
+          // Small delay to let Regional finalize the policy before printing
+          await new Promise(r => setTimeout(r, 300));
+          const printResult = await imprimirPoliza(emitResult.poliza, 'cc');
+          if (printResult.success) {
+            htmlToStore = printResult.html || null;
+            pdfToStore = printResult.pdf || null;
+          } else {
+            console.warn('[REGIONAL CC Emit] imprimirPoliza failed (non-fatal):', printResult.message);
+          }
+        }
+
+        if (htmlToStore || pdfToStore) {
           const supabaseAdmin = getSupabaseAdmin();
           const BUCKET = 'expediente';
-          const timestamp = Date.now();
-          const ext = printResult.pdf ? 'pdf' : 'html';
-          const mimeType = printResult.pdf ? 'application/pdf' : 'text/html';
-          const fileBuffer = printResult.pdf
-            ? Buffer.from(printResult.pdf, 'base64')
-            : Buffer.from(printResult.html!, 'utf8');
-          const filePath = `regional-policies/${emitResult.poliza.replace(/\//g, '-')}/${timestamp}_caratula.${ext}`;
+          const ext = pdfToStore ? 'pdf' : 'html';
+          const mimeType = pdfToStore ? 'application/pdf' : 'text/html';
+          const fileBuffer = pdfToStore
+            ? Buffer.from(pdfToStore, 'base64')
+            : Buffer.from(htmlToStore!, 'utf8');
+          // Fixed filename (no timestamp) so upsert replaces on retry
+          const filePath = `regional-policies/${emitResult.poliza.replace(/\//g, '-')}/caratula.${ext}`;
           const { error: uploadError } = await supabaseAdmin.storage
             .from(BUCKET)
             .upload(filePath, fileBuffer, { contentType: mimeType, cacheControl: '86400', upsert: true });
@@ -212,7 +231,7 @@ export async function POST(request: NextRequest) {
             console.log(`[REGIONAL CC Emit] ✅ Document stored: ${filePath} (${fileBuffer.length} bytes)`);
           }
         } else {
-          console.warn('[REGIONAL CC Emit] Document capture failed (non-fatal):', printResult.message);
+          console.warn('[REGIONAL CC Emit] No document obtained — download will fall back to live print');
         }
       } catch (printErr: any) {
         console.warn('[REGIONAL CC Emit] Document capture error (non-fatal):', printErr.message);

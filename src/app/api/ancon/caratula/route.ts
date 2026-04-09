@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { imprimirPoliza } from '@/lib/ancon/emission.service';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const maxDuration = 30;
 
@@ -84,14 +85,57 @@ async function handleCaratula(poliza: string, redirectIfHtml = false) {
       });
     }
 
-    // Case B: HTTP URL — probe content-type first, then proxy or redirect
+    // Case B: HTTP URL — check Supabase storage first, then probe ANCON URL
+    // Supabase path for ANCON documents
+    const anconStoragePath = `ancon-policies/${poliza.replace(/\//g, '-')}/caratula.html`;
+    try {
+      const supabaseAdmin = getSupabaseAdmin();
+      const folderPath = `ancon-policies/${poliza.replace(/\//g, '-')}`;
+      const { data: files } = await supabaseAdmin.storage.from('expediente').list(folderPath);
+      const stored = files?.find(f => f.name.startsWith('caratula'));
+      if (stored) {
+        const { data: urlData } = supabaseAdmin.storage.from('expediente').getPublicUrl(`${folderPath}/${stored.name}`);
+        const storedUrl = urlData?.publicUrl;
+        if (storedUrl) {
+          console.log(`[API ANCON Carátula] ${requestId} ✅ Serving from Supabase storage`);
+          return NextResponse.redirect(storedUrl, 302);
+        }
+      }
+    } catch (storageErr: any) {
+      console.warn(`[API ANCON Carátula] ${requestId} Storage lookup failed (non-fatal):`, storageErr.message);
+    }
+
     const headRes = await fetch(pdfEnlace, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).catch(() => null);
     const probeContentType = headRes?.headers.get('content-type') || '';
     console.log(`[API ANCON Carátula] ${requestId} HEAD probe: HTTP ${headRes?.status} content-type=${probeContentType}`);
 
-    // ANCON returns HTML for print_pol.php
+    // ANCON returns HTML for print_pol.php — fetch, store permanently, then redirect
     if (probeContentType.includes('text/html') || !probeContentType.includes('pdf')) {
-      console.log(`[API ANCON Carátula] ${requestId} HTML carátula detected — ${redirectIfHtml ? 'redirecting' : 'returning URL'}`);
+      console.log(`[API ANCON Carátula] ${requestId} HTML carátula — fetching and storing in Supabase...`);
+      try {
+        const htmlRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(15000) });
+        if (htmlRes.ok) {
+          const html = await htmlRes.text();
+          const supabaseAdmin = getSupabaseAdmin();
+          const { error: uploadErr } = await supabaseAdmin.storage
+            .from('expediente')
+            .upload(anconStoragePath, Buffer.from(html, 'utf8'), { contentType: 'text/html', cacheControl: '86400', upsert: true });
+          if (!uploadErr) {
+            const { data: urlData } = supabaseAdmin.storage.from('expediente').getPublicUrl(anconStoragePath);
+            const storedUrl = urlData?.publicUrl;
+            if (storedUrl) {
+              console.log(`[API ANCON Carátula] ${requestId} ✅ Stored in Supabase (${html.length} bytes) — redirecting`);
+              return NextResponse.redirect(storedUrl, 302);
+            }
+          } else {
+            console.warn(`[API ANCON Carátula] ${requestId} Supabase upload failed:`, uploadErr.message);
+          }
+        }
+      } catch (fetchErr: any) {
+        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch/store failed (non-fatal):`, fetchErr.message);
+      }
+
+      // Fallback: redirect directly to ANCON URL
       if (redirectIfHtml) {
         return NextResponse.redirect(pdfEnlace, 302);
       }

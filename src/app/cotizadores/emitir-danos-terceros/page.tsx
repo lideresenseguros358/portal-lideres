@@ -1136,6 +1136,7 @@ export default function EmitirDanosTercerosPage() {
         setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.poliza,
+          pdfUrl: emisionResult.pdfUrl || '',
           insurer: 'La Regional de Seguros',
           regionalPoliza: emisionResult.poliza,
           asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
