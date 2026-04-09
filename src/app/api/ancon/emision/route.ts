@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   uploadInspectionAndDocuments,
+  getRequiredDocuments,
 } from '@/lib/ancon/emission.service';
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
@@ -258,119 +259,21 @@ export async function POST(request: NextRequest) {
     const isCC = resolvedCodProducto === '00312' || resolvedCodProducto === '10394' || resolvedCodProducto === '10395' || resolvedCodProducto === '10602' || resolvedCodProducto === '00318';
     const isSobat = resolvedCodProducto === '05769' || resolvedCodProducto === '01492'; // SODA ramo 020
 
-    // ═══ STEP 0: Resolve vehicle codes + re-quote (DT only) ═══
-    // The comparison-page quote is generated with a test vehicle (TOYOTA COROLLA),
-    // so its noCotizacion won't match the actual emission vehicle data.
-    // We resolve the vehicle codes and re-quote with the real form data to get a
-    // fresh noCotizacion that ANCON will accept in EmitirDatos.
-    let finalCodMarcaAgt = cod_marca_agt || '';
-    let finalCodModeloAgt = cod_modelo_agt || '';
-    if (nombre_marca && nombre_modelo) {
-      try {
-        const resolved = await resolveAnconVehicleCodes(nombre_marca, nombre_modelo);
-        if (resolved) {
-          finalCodMarcaAgt = resolved.codMarca;
-          finalCodModeloAgt = resolved.codModelo;
-          log('0/4', `Vehicle codes resolved: "${nombre_marca}/${nombre_modelo}" → marca=${finalCodMarcaAgt}, modelo=${finalCodModeloAgt} (${resolved.matchMethod})`);
-        } else {
-          log('0/4', `Vehicle resolution returned null for "${nombre_marca}/${nombre_modelo}" — sending empty codes`);
-        }
-      } catch (err: unknown) {
-        log('0/4', `Vehicle resolution error for "${nombre_marca}/${nombre_modelo}": ${err instanceof Error ? err.message : String(err)} — sending empty codes`);
-      }
-    }
-
-    // Fix 3: normalize empty codes so re-quote and EmitirDatos use the same fallback
-    if (!finalCodMarcaAgt) finalCodMarcaAgt = '00001';
-    if (!finalCodModeloAgt) finalCodModeloAgt = '00001';
-
-    let freshNoCotizacion = no_cotizacion;
-    if (!isCC) {
-      log('0/4', 'Re-cotizando con datos reales del vehículo (DT)...');
-      // Normalize fecha_nacimiento to DD/MM/YYYY for the ANCON quote API
-      let fechaNacFormatted = fecha_nacimiento || '01/01/1990';
-      if (fecha_nacimiento && !fecha_nacimiento.includes('/')) {
-        const parts = fecha_nacimiento.split('-');
-        if (parts.length === 3) fechaNacFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-      try {
-        const freshQuote = await cotizarEstandar({
-          cod_marca: finalCodMarcaAgt || '00001',
-          cod_modelo: finalCodModeloAgt || '00001',
-          ano: String(ano || currentYear),
-          suma_asegurada: String(suma_asegurada || '0'),
-          cod_producto: resolvedCodProducto,
-          cedula: cedula || '8-888-9999',
-          nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
-          apellido: (primer_apellido || 'WEB').toUpperCase(),
-          vigencia: 'A',
-          email: email || 'cotizacion@lideresenseguros.com',
-          tipo_persona: tipo_de_cliente || 'N',
-          fecha_nac: fechaNacFormatted,
-          nuevo: '0',
-        });
-        if (freshQuote.success && freshQuote.data?.noCotizacion) {
-          freshNoCotizacion = freshQuote.data.noCotizacion;
-          log('0/4', `Re-cotización exitosa → noCotizacion=${freshNoCotizacion}`);
-        } else {
-          log('0/4', `Re-cotización fallida (${freshQuote.error}) — usando noCotizacion original: ${no_cotizacion}`);
-        }
-      } catch (err: unknown) {
-        log('0/4', `Re-cotización error: ${err instanceof Error ? err.message : String(err)} — usando noCotizacion original`);
-      }
-    }
-
-    // ═══ STEP 1: Generate policy number ═══
-    log('1/4', 'Generando número de póliza...');
-    // ramo 001 = CC, ramo 020 = SODA/SOBAT, ramo 002 = otros DT/RC
-    const codRamo = isCC ? '001' : isSobat ? '020' : '002';
-    const genToken = await getAnconToken();
-    const genDocRaw = await rawSoap('GenerarNodocumento', {
-      cod_compania: creds.codCompania,
-      cod_sucursal: creds.codSucursal,
-      ano: currentYear,
-      cod_ramo: codRamo,
-      cod_subramo: '001',
-      token: genToken,
-    });
-    const polizaNumber = Array.isArray(genDocRaw)
-      ? (genDocRaw[0] as Record<string, string>)?.no_documento
-      : typeof genDocRaw === 'object' && genDocRaw !== null
-        ? (genDocRaw as Record<string, string>).no_documento
-        : undefined;
-
-    if (!polizaNumber) {
-      return NextResponse.json(
-        { success: false, error: `Error generando número de póliza: ${JSON.stringify(genDocRaw).substring(0, 200)}` },
-        { status: 500 }
-      );
-    }
-    log('1/4', `Póliza generada: ${polizaNumber}`);
-
-    // ═══ STEP 2: Generate Solicitud de Seguros PDF + upload all documents ═══
-    log('2/4', 'Generando y subiendo documentos...');
-
-    // Build solicitud PDF data from emission body
+    // ── Pre-compute PDF/form fields (needed by Phase A Track 3 at start time) ──
     const nombreCompleto = [
       primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, apellido_casada
     ].filter(Boolean).join(' ').toUpperCase();
 
-    // Parse fecha_nacimiento (format: DD/MM/YYYY or YYYY-MM-DD)
     let fnDia = '', fnMes = '', fnAnio = '';
     if (fecha_nacimiento) {
       const parts = fecha_nacimiento.includes('/') ? fecha_nacimiento.split('/') : fecha_nacimiento.split('-');
       if (fecha_nacimiento.includes('/')) {
-        fnDia  = parts[0] || '';
-        fnMes  = parts[1] || '';
-        fnAnio = parts[2] || '';
+        fnDia = parts[0] || ''; fnMes = parts[1] || ''; fnAnio = parts[2] || '';
       } else {
-        fnAnio = parts[0] || '';
-        fnMes  = parts[1] || '';
-        fnDia  = parts[2] || '';
+        fnAnio = parts[0] || ''; fnMes = parts[1] || ''; fnDia = parts[2] || '';
       }
     }
 
-    // Map nivelIngreso from ANCON catalog code or portal label
     const nivelIngresoRaw = (body as Record<string, string>).nivel_ingreso || (body as Record<string, string>).nivelIngreso || '';
     const INGRESO_LABEL_MAP: Record<string, string> = {
       '001': 'Menos de $10,000', 'menos_10k': 'Menos de $10,000',
@@ -379,13 +282,114 @@ export async function POST(request: NextRequest) {
       '004': 'Más de $50,000', 'mas_50k': 'Más de $50,000',
     };
     const nivelIngresoLabel = INGRESO_LABEL_MAP[nivelIngresoRaw] || nivelIngresoRaw;
-
-    // Only fill valor_vehiculo for CC products
     const valorVehiculo = isCC ? (suma_asegurada || '') : '';
-
-    // Generate both PDFs in parallel — they are independent of each other
     const fechaEmisionStr = new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const [solicitudBuffer, diligenciaBuffer] = await Promise.all([
+
+    // ═══ PARALLEL PHASE A ═══
+    // Three independent tracks start simultaneously:
+    //   Track 1 (sequential chain): vehicle resolve → re-cotización
+    //   Track 2: GenerarNodocumento (needs no cotización)
+    //   Track 3: Solicitud PDF generation (needs no polizaNumber)
+    //   Track 4: getRequiredDocuments SOAP (pre-warm cache; cached after first call)
+    //
+    // After Phase A: diligencia PDF (needs polizaNumber, fast ~14KB) → uploads → EmitirDatos
+
+    const codRamo = isCC ? '001' : isSobat ? '020' : '002';
+    // Declared here so Track 1 can write resolved codes for later use in EmitirDatos
+    let finalCodMarcaAgt = cod_marca_agt || '';
+    let finalCodModeloAgt = cod_modelo_agt || '';
+
+    // Normalize fecha for re-quote before launching parallel tasks
+    let fechaNacFormatted = fecha_nacimiento || '01/01/1990';
+    if (fecha_nacimiento && !fecha_nacimiento.includes('/')) {
+      const parts = fecha_nacimiento.split('-');
+      if (parts.length === 3) fechaNacFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+
+    const tPhaseA = Date.now();
+    log('0-2/4', 'Iniciando resolución, cotización, póliza y PDFs en paralelo...');
+
+    const [freshNoCotizacion, polizaNumber, solicitudBuffer] = await Promise.all([
+
+      // ── Track 1: Vehicle resolve → re-cotización (sequential chain) ──
+      (async (): Promise<string> => {
+        let codMarca = cod_marca_agt || '';
+        let codModelo = cod_modelo_agt || '';
+        if (nombre_marca && nombre_modelo) {
+          try {
+            const resolved = await resolveAnconVehicleCodes(nombre_marca, nombre_modelo);
+            if (resolved) {
+              codMarca = resolved.codMarca;
+              codModelo = resolved.codModelo;
+              log('0/4', `Vehicle codes resolved: "${nombre_marca}/${nombre_modelo}" → marca=${codMarca}, modelo=${codModelo} (${resolved.matchMethod})`);
+            } else {
+              log('0/4', `Vehicle resolution returned null — using empty codes`);
+            }
+          } catch (err: unknown) {
+            log('0/4', `Vehicle resolution error: ${err instanceof Error ? err.message : String(err)} — using empty codes`);
+          }
+        }
+        if (!codMarca) codMarca = '00001';
+        if (!codModelo) codModelo = '00001';
+
+        // Store resolved codes for EmitirDatos (track 1 completes first)
+        finalCodMarcaAgt = codMarca;
+        finalCodModeloAgt = codModelo;
+
+        if (isCC) return no_cotizacion || '';
+
+        log('0/4', 'Re-cotizando con datos reales del vehículo (DT)...');
+        try {
+          const freshQuote = await cotizarEstandar({
+            cod_marca: codMarca,
+            cod_modelo: codModelo,
+            ano: String(ano || currentYear),
+            suma_asegurada: String(suma_asegurada || '0'),
+            cod_producto: resolvedCodProducto,
+            cedula: cedula || '8-888-9999',
+            nombre: (primer_nombre || 'COTIZACION').toUpperCase(),
+            apellido: (primer_apellido || 'WEB').toUpperCase(),
+            vigencia: 'A',
+            email: email || 'cotizacion@lideresenseguros.com',
+            tipo_persona: tipo_de_cliente || 'N',
+            fecha_nac: fechaNacFormatted,
+            nuevo: '0',
+          });
+          if (freshQuote.success && freshQuote.data?.noCotizacion) {
+            log('0/4', `Re-cotización exitosa → noCotizacion=${freshQuote.data.noCotizacion}`);
+            return freshQuote.data.noCotizacion;
+          }
+          log('0/4', `Re-cotización fallida (${freshQuote.error}) — usando noCotizacion original: ${no_cotizacion}`);
+          return no_cotizacion || '';
+        } catch (err: unknown) {
+          log('0/4', `Re-cotización error: ${err instanceof Error ? err.message : String(err)} — usando noCotizacion original`);
+          return no_cotizacion || '';
+        }
+      })(),
+
+      // ── Track 2: GenerarNodocumento (independent of re-cotización) ──
+      (async (): Promise<string> => {
+        log('1/4', 'Generando número de póliza...');
+        const genToken = await getAnconToken();
+        const genDocRaw = await rawSoap('GenerarNodocumento', {
+          cod_compania: creds.codCompania,
+          cod_sucursal: creds.codSucursal,
+          ano: currentYear,
+          cod_ramo: codRamo,
+          cod_subramo: '001',
+          token: genToken,
+        });
+        const poliza = Array.isArray(genDocRaw)
+          ? (genDocRaw[0] as Record<string, string>)?.no_documento
+          : typeof genDocRaw === 'object' && genDocRaw !== null
+            ? (genDocRaw as Record<string, string>).no_documento
+            : undefined;
+        if (!poliza) throw new Error(`Error generando número de póliza: ${JSON.stringify(genDocRaw).substring(0, 200)}`);
+        log('1/4', `Póliza generada: ${poliza}`);
+        return poliza;
+      })(),
+
+      // ── Track 3: Solicitud PDF (no polizaNumber needed — start immediately) ──
       generateAnconSolicitudPdf({
         nombreCompleto,
         genero: (sexo === 'M' || sexo === 'MASCULINO' || sexo === '1') ? 'M' : 'F',
@@ -415,40 +419,47 @@ export async function POST(request: NextRequest) {
         acreedorHipotecario: nombre_acreedor || '',
         firmaDataUrl,
         fechaEmision: fechaEmisionStr,
-      }).then(buf => { log('2/4', `Solicitud PDF generada: ${buf.length} bytes`); return buf; })
-        .catch((e: unknown) => { log('2/4', `Error generando solicitud PDF (soft-fail): ${e}`); return undefined; }),
+      }).then(buf => { log('2/4', `Solicitud PDF generada: ${buf.length} bytes`); return buf as Buffer | undefined; })
+        .catch((e: unknown) => { log('2/4', `Error solicitud PDF (soft-fail): ${e}`); return undefined as Buffer | undefined; }),
 
-      generateAuthorizationPdf({
-        nombreCompleto,
-        cedula: cedula || pasaporte || ruc || '',
-        email: email || '',
-        direccion: direccion || 'Panamá',
-        nroPoliza: polizaNumber,
-        marca: nombre_marca || '',
-        modelo: nombre_modelo || '',
-        anio: ano || currentYear,
-        placa: placa || '',
-        chasis: no_chasis || vin || '',
-        motor: no_motor || '',
-        color: nombre_color_agt || '',
-        firmaDataUrl: firmaDataUrl || '',
-        fecha: fechaEmisionStr,
-        fechaNacimiento: fecha_nacimiento || '',
-        sexo: sexo || '',
-        estadoCivil: (body as Record<string, string>).estado_civil || '',
-        telefono: telefono_residencial || '',
-        celular: telefono_celular || '',
-        actividadEconomica: actividad_economica || '',
-        nivelIngresos: nivelIngresoRaw,
-        dondeTrabaja: (body as Record<string, string>).empresa || '',
-        esPEP: pepNormalized === '1',
-        tipoCobertura: isCC ? 'CC' : 'DT',
-        insurerName: 'ANCÓN Seguros',
-        valorAsegurado: suma_asegurada && suma_asegurada !== '0' ? `$${Number(suma_asegurada).toLocaleString('en-US')}` : '',
-      }).then(buf => { log('2/4', `Debida Diligencia PDF generada: ${buf.length} bytes`); return buf; })
-        .catch((e: unknown) => { log('2/4', `Error generando Debida Diligencia PDF (soft-fail): ${e}`); return undefined; }),
+      // ── Track 4: Pre-warm getRequiredDocuments cache (silent — result used by uploadInspectionAndDocuments) ──
+      getRequiredDocuments(tipo_de_cliente || 'N').catch(() => undefined),
     ]);
 
+    log('0-2/4', `Phase A completado en ${Date.now() - tPhaseA}ms`);
+
+    // ── Phase B: Debida diligencia PDF (needs polizaNumber — fast, ~14KB) ──
+    const diligenciaBuffer = await generateAuthorizationPdf({
+      nombreCompleto,
+      cedula: cedula || pasaporte || ruc || '',
+      email: email || '',
+      direccion: direccion || 'Panamá',
+      nroPoliza: polizaNumber,
+      marca: nombre_marca || '',
+      modelo: nombre_modelo || '',
+      anio: ano || currentYear,
+      placa: placa || '',
+      chasis: no_chasis || vin || '',
+      motor: no_motor || '',
+      color: nombre_color_agt || '',
+      firmaDataUrl: firmaDataUrl || '',
+      fecha: fechaEmisionStr,
+      fechaNacimiento: fecha_nacimiento || '',
+      sexo: sexo || '',
+      estadoCivil: (body as Record<string, string>).estado_civil || '',
+      telefono: telefono_residencial || '',
+      celular: telefono_celular || '',
+      actividadEconomica: actividad_economica || '',
+      nivelIngresos: nivelIngresoRaw,
+      dondeTrabaja: (body as Record<string, string>).empresa || '',
+      esPEP: pepNormalized === '1',
+      tipoCobertura: isCC ? 'CC' : 'DT',
+      insurerName: 'ANCÓN Seguros',
+      valorAsegurado: suma_asegurada && suma_asegurada !== '0' ? `$${Number(suma_asegurada).toLocaleString('en-US')}` : '',
+    }).then(buf => { log('2/4', `Debida Diligencia PDF generada: ${buf.length} bytes`); return buf; })
+      .catch((e: unknown) => { log('2/4', `Error generando Debida Diligencia PDF (soft-fail): ${e}`); return undefined; });
+
+    // ── Phase C: Upload all documents in parallel ──
     const hasFiles = Object.keys(files).length > 0 || !!solicitudBuffer;
     if (hasFiles) {
       log('2/4', `Subiendo ${Object.keys(files).length} archivo(s) + solicitud + debida diligencia...`);

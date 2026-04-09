@@ -66,9 +66,16 @@ const INGRESO_MAP: Record<string, IngresoPos> = {
   mas_50k:                { x: 178, yFT: 380 },
 };
 
+// Cache the template bytes at module level — avoids re-reading a 1.29MB file from disk
+// on every emission in the same server instance.
+let _cachedTemplateBytes: Buffer | null = null;
+
 export async function generateAnconSolicitudPdf(data: AnconSolicitudData): Promise<Buffer> {
   const templatePath = path.join(process.cwd(), 'public', 'API ANCON', 'SOLICITUD AUTO.pdf');
-  const templateBytes = fs.readFileSync(templatePath);
+  if (!_cachedTemplateBytes) {
+    _cachedTemplateBytes = fs.readFileSync(templatePath);
+  }
+  const templateBytes = _cachedTemplateBytes;
 
   const pdfDoc = await PDFDocument.load(templateBytes);
   const pages  = pdfDoc.getPages();

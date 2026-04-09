@@ -159,9 +159,19 @@ export async function emitirPoliza(
 
 // ═══ Document Upload (get required docs list) ═══
 
+// Module-level cache — the required documents list for a given tipoPersona never changes.
+// Avoids a SOAP round-trip on every emission after the first one in this server instance.
+const _docListCache = new Map<string, { data: AnconSubirDocumentosResponse; expiresAt: number }>();
+const DOC_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 export async function getRequiredDocuments(
   tipoPersona: string
 ): Promise<AnconSoapResponse<AnconSubirDocumentosResponse>> {
+  const cached = _docListCache.get(tipoPersona);
+  if (cached && Date.now() < cached.expiresAt) {
+    return { success: true, data: cached.data };
+  }
+
   const result = await anconCall<unknown>(
     ANCON_EMISSION_METHODS.SUBIR_DOCUMENTOS,
     { tipo: tipoPersona }
@@ -173,11 +183,11 @@ export async function getRequiredDocuments(
 
   const raw = result.data as Record<string, unknown>;
   const listado = raw?.listado || raw;
+  const data = { listado: Array.isArray(listado) ? listado : [] } as AnconSubirDocumentosResponse;
 
-  return {
-    success: true,
-    data: { listado: Array.isArray(listado) ? listado : [] } as AnconSubirDocumentosResponse,
-  };
+  _docListCache.set(tipoPersona, { data, expiresAt: Date.now() + DOC_CACHE_TTL_MS });
+
+  return { success: true, data };
 }
 
 // ═══ Print Policy (Carátula) ═══
