@@ -33,29 +33,34 @@ function getCredentials() {
 
 /**
  * Format current datetime as "yyyy-MM-dd HH:mm:ss tt" for Oracle
+ * Uses Panama timezone (America/Panama = UTC-5, no DST) to match FEDPA's local time.
  * Example: "2026-03-04 01:30:00 PM"
  */
 function formatDateTimeOracle(date: Date): string {
-  const yyyy = date.getFullYear();
-  const MM = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  let hh = date.getHours();
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  const ss = String(date.getSeconds()).padStart(2, '0');
-  const tt = hh >= 12 ? 'PM' : 'AM';
-  if (hh > 12) hh -= 12;
-  if (hh === 0) hh = 12;
-  return `${yyyy}-${MM}-${dd} ${String(hh).padStart(2, '0')}:${mm}:${ss} ${tt}`;
+  const str = date.toLocaleString('en-US', {
+    timeZone: 'America/Panama',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+  // "04/08/2026, 11:23:46 PM" → "2026-04-08 11:23:46 PM"
+  const match = str.match(/(\d{2})\/(\d{2})\/(\d{4}),\s+(\d{2}):(\d{2}):(\d{2})\s+(AM|PM)/);
+  if (!match) return str;
+  const [, mm, dd, yyyy, hh, min, ss, tt] = match;
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss} ${tt}`;
 }
 
 /**
  * Format date as "yyyy-MM-dd" for Oracle date fields
+ * Uses Panama timezone (America/Panama = UTC-5, no DST) to match FEDPA's local time.
  */
 function formatDateOracle(date: Date): string {
-  const yyyy = date.getFullYear();
-  const MM = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `${yyyy}-${MM}-${dd}`;
+  // en-CA locale returns YYYY-MM-DD format
+  return date.toLocaleDateString('en-CA', { timeZone: 'America/Panama' });
 }
 
 /**
@@ -268,10 +273,11 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const fechaHora = formatDateTimeOracle(now);
     const fechaDesde = formatDateOracle(now);
-    // Vigencia: 1 año
-    const nextYear = new Date(now);
-    nextYear.setFullYear(nextYear.getFullYear() + 1);
-    const fechaHasta = formatDateOracle(nextYear);
+    // Vigencia: 1 año — compute by incrementing the year in the Panama date string
+    const fechaHasta = (() => {
+      const [y, m, d] = fechaDesde.split('-').map(Number);
+      return `${y + 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    })();
 
     // Convert FechaNacimiento from dd/mm/yyyy or yyyy-MM-dd to yyyy-MM-dd
     const fechaNacimiento = convertDDMMYYYY(body.FechaNacimiento || '');

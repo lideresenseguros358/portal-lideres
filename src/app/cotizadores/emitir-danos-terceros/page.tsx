@@ -432,7 +432,7 @@ export default function EmitirDanosTercerosPage() {
           Color: vehicleData?.color || '',
           Pasajero: vehicleData?.pasajeros || 5,
           Puerta: vehicleData?.puertas || 4,
-          PrimaTotal: selectedPlan.annualPremium, // Always contado price — FedPa calculates cuotas surcharge internally
+          PrimaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : selectedPlan.annualPremium,
           cantidadPago: selectedPaymentMode === 'cuotas' ? 2 : 1,
         };
 
