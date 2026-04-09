@@ -57,7 +57,13 @@ export async function emitirPolizaRC(
   }
 
   const data = (res.data || res.raw) as Record<string, unknown>;
-  console.log('[REGIONAL RC Emission] Full response:', JSON.stringify(data));
+
+  // Log full response — filter out long HTML blobs to keep logs readable
+  const logData = Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[string ${v.length}ch]` : v])
+  );
+  console.log('[REGIONAL RC Emission] Full response fields:', JSON.stringify(logData));
+  console.log('[REGIONAL RC Emission] poliza:', data.poliza, '| numpoliza:', data.numpoliza, '| nroPoliza:', data.nroPoliza, '| success:', data.success, '| message:', data.message || data.mensaje);
 
   // Normalize response
   if (data.success === false) {
@@ -68,6 +74,16 @@ export async function emitirPolizaRC(
   }
 
   const poliza = (data.poliza || data.numpoliza || data.nroPoliza) as string | undefined;
+
+  // If REGIONAL returned HTTP 200 but no poliza number, treat as failure
+  if (!poliza) {
+    console.error('[REGIONAL RC Emission] ⚠️ HTTP 200 but no poliza field in response! Full data:', JSON.stringify(logData));
+    return {
+      success: false,
+      message: `Emisión sin número de póliza. Respuesta: ${JSON.stringify(logData).slice(0, 400)}`,
+    };
+  }
+
   const numcot = (data.numcot || data.numCot) as number | undefined;
 
   const documentHtml = extractHtmlFromData(data);
@@ -106,7 +122,13 @@ export async function emitirPolizaCC(
   }
 
   const data = (res.data || res.raw) as Record<string, unknown>;
-  console.log('[REGIONAL CC Emission] Response:', JSON.stringify(data).slice(0, 500));
+
+  // Log full response — filter out long HTML blobs to keep logs readable
+  const logData = Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [k, typeof v === 'string' && v.length > 200 ? `[string ${v.length}ch]` : v])
+  );
+  console.log('[REGIONAL CC Emission] Full response fields:', JSON.stringify(logData));
+  console.log('[REGIONAL CC Emission] poliza:', data.poliza, '| numpoliza:', data.numpoliza, '| nroPoliza:', data.nroPoliza, '| success:', data.success, '| message:', data.message || data.mensaje);
 
   if (data.success === false) {
     return {
@@ -116,6 +138,16 @@ export async function emitirPolizaCC(
   }
 
   const poliza = (data.poliza || data.numpoliza || data.nroPoliza) as string | undefined;
+
+  // If REGIONAL returned HTTP 200 but no poliza number, treat as failure
+  if (!poliza) {
+    console.error('[REGIONAL CC Emission] ⚠️ HTTP 200 but no poliza field in response! Full data:', JSON.stringify(logData));
+    return {
+      success: false,
+      message: `Emisión sin número de póliza. Respuesta: ${JSON.stringify(logData).slice(0, 400)}`,
+    };
+  }
+
   const documentHtml = extractHtmlFromData(data);
   if (documentHtml) {
     console.log('[REGIONAL CC Emission] ✅ HTML document found in emission response:', documentHtml.length, 'bytes');
@@ -151,7 +183,7 @@ export async function actualizarPlanPago(
   }
 
   const data = (res.data || res.raw) as Record<string, unknown>;
-  console.log('[REGIONAL Plan Pago] Response:', JSON.stringify(data).slice(0, 500));
+  console.log('[REGIONAL Plan Pago] Response:', JSON.stringify(data));
 
   return {
     success: true,

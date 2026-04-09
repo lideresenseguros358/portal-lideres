@@ -454,26 +454,23 @@ export async function uploadInspectionAndDocuments(
   let failed = 0;
   const errors: string[] = [];
 
+  // Resolve file data for each required document, then upload all in parallel
+  const docsToUpload: Array<{ doc: typeof docList[number]; fileData: { buffer: Buffer; name: string; type: string } }> = [];
+
   for (const doc of docList) {
     const id = doc.id_archivo;
     let fileData: { buffer: Buffer; name: string; type: string } | undefined;
 
     if (id === '1' && solicitudBuffer) {
-      // Doc 1: Solicitud de Seguros — official ANCON form filled with client data
       fileData = { buffer: solicitudBuffer, name: 'solicitud_ancon.pdf', type: 'application/pdf' };
     } else if (id === '2' && (diligenciaBuffer || solicitudBuffer)) {
-      // Doc 2: Conoce a tu cliente (requerida=1) — Debida Diligencia y Autorización PDF
-      // Falls back to solicitud if diligencia not available
       const buf = diligenciaBuffer || solicitudBuffer!;
       fileData = { buffer: buf, name: 'debida_diligencia.pdf', type: 'application/pdf' };
     } else if (id === '3' || id === '4') {
-      // Cédula contratante (3) and cédula asegurado (4) — same person for Natural
       fileData = files['cedulaFile'] || files['cedula'];
     } else if (id === '5') {
-      // Licencia del asegurado
       fileData = files['licenciaFile'] || files['licencia'];
     } else if (id === '7') {
-      // Registro vehicular
       fileData = files['registroVehicularFile'] || files['registroVehicular'];
     }
 
@@ -484,21 +481,26 @@ export async function uploadInspectionAndDocuments(
       continue;
     }
 
-    const result = await uploadDocumentREST(
-      doc.nombre_archivo,
-      polizaNumber,
-      fileData.buffer,
-      fileData.name,
-      fileData.type
-    );
+    docsToUpload.push({ doc, fileData });
+  }
 
+  // Upload all documents concurrently
+  const uploadResults = await Promise.all(
+    docsToUpload.map(({ doc, fileData }) =>
+      uploadDocumentREST(doc.nombre_archivo, polizaNumber, fileData.buffer, fileData.name, fileData.type)
+        .then(result => ({ doc, result }))
+        .catch((err: unknown) => ({ doc, result: { success: false, message: err instanceof Error ? err.message : String(err) } }))
+    )
+  );
+
+  for (const { doc, result } of uploadResults) {
     if (result.success) {
       uploaded++;
-      console.log(`[ANCON Upload] ✅ doc ${id} (${doc.nombre}) subido`);
+      console.log(`[ANCON Upload] ✅ doc ${doc.id_archivo} (${doc.nombre}) subido`);
     } else {
       failed++;
-      errors.push(`doc ${id} ${doc.nombre}: ${result.message}`);
-      console.warn(`[ANCON Upload] ❌ doc ${id} (${doc.nombre}): ${result.message}`);
+      errors.push(`doc ${doc.id_archivo} ${doc.nombre}: ${result.message}`);
+      console.warn(`[ANCON Upload] ❌ doc ${doc.id_archivo} (${doc.nombre}): ${result.message}`);
     }
   }
 

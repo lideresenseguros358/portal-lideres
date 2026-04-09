@@ -24,7 +24,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
-import { getAnconToken, invalidateAnconToken } from '@/lib/ancon/http-client';
+import { getAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
@@ -383,9 +383,10 @@ export async function POST(request: NextRequest) {
     // Only fill valor_vehiculo for CC products
     const valorVehiculo = isCC ? (suma_asegurada || '') : '';
 
-    let solicitudBuffer: Buffer | undefined;
-    try {
-      solicitudBuffer = await generateAnconSolicitudPdf({
+    // Generate both PDFs in parallel — they are independent of each other
+    const fechaEmisionStr = new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const [solicitudBuffer, diligenciaBuffer] = await Promise.all([
+      generateAnconSolicitudPdf({
         nombreCompleto,
         genero: (sexo === 'M' || sexo === 'MASCULINO' || sexo === '1') ? 'M' : 'F',
         fechaNacDia: fnDia || '',
@@ -413,17 +414,11 @@ export async function POST(request: NextRequest) {
         valorVehiculo,
         acreedorHipotecario: nombre_acreedor || '',
         firmaDataUrl,
-        fechaEmision: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      });
-      log('2/4', `Solicitud PDF generada: ${solicitudBuffer.length} bytes`);
-    } catch (solicitudErr) {
-      log('2/4', `Error generando solicitud PDF (soft-fail): ${solicitudErr}`);
-    }
+        fechaEmision: fechaEmisionStr,
+      }).then(buf => { log('2/4', `Solicitud PDF generada: ${buf.length} bytes`); return buf; })
+        .catch((e: unknown) => { log('2/4', `Error generando solicitud PDF (soft-fail): ${e}`); return undefined; }),
 
-    // Generate Debida Diligencia y Autorización PDF (doc 2 "Conoce a tu cliente", requerida=1)
-    let diligenciaBuffer: Buffer | undefined;
-    try {
-      diligenciaBuffer = await generateAuthorizationPdf({
+      generateAuthorizationPdf({
         nombreCompleto,
         cedula: cedula || pasaporte || ruc || '',
         email: email || '',
@@ -437,7 +432,7 @@ export async function POST(request: NextRequest) {
         motor: no_motor || '',
         color: nombre_color_agt || '',
         firmaDataUrl: firmaDataUrl || '',
-        fecha: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        fecha: fechaEmisionStr,
         fechaNacimiento: fecha_nacimiento || '',
         sexo: sexo || '',
         estadoCivil: (body as Record<string, string>).estado_civil || '',
@@ -450,11 +445,9 @@ export async function POST(request: NextRequest) {
         tipoCobertura: isCC ? 'CC' : 'DT',
         insurerName: 'ANCÓN Seguros',
         valorAsegurado: suma_asegurada && suma_asegurada !== '0' ? `$${Number(suma_asegurada).toLocaleString('en-US')}` : '',
-      });
-      log('2/4', `Debida Diligencia PDF generada: ${diligenciaBuffer.length} bytes`);
-    } catch (diligenciaErr) {
-      log('2/4', `Error generando Debida Diligencia PDF (soft-fail): ${diligenciaErr}`);
-    }
+      }).then(buf => { log('2/4', `Debida Diligencia PDF generada: ${buf.length} bytes`); return buf; })
+        .catch((e: unknown) => { log('2/4', `Error generando Debida Diligencia PDF (soft-fail): ${e}`); return undefined; }),
+    ]);
 
     const hasFiles = Object.keys(files).length > 0 || !!solicitudBuffer;
     if (hasFiles) {
@@ -546,7 +539,7 @@ export async function POST(request: NextRequest) {
       fecha_primer_pago: fecha_primer_pago || fmtDate(today),
       cod_agente: creds.codAgente,
       opcion: opcion || 'A',
-      no_cotizacion: freshNoCotizacion,
+      no_cotizacion: freshNoCotizacion || '',
       // Docs example explicitly uses cod_grupo:'00001', nombre_grupo:'SIN GRUPO'.
       // ListadoGrupos returns null for agent 01009 but '00001' is the ANCON default group.
       cod_grupo: cod_grupo || '00001',
@@ -607,36 +600,12 @@ export async function POST(request: NextRequest) {
 
     log('3/4', `Póliza emitida: ${polizaNumber}`);
 
-    // ═══ STEP 4: Get carátula PDF link ═══
-    // ANCON invalidates the token after EmitirDatos, so we must get a fresh token here.
-    log('4/4', 'Obteniendo carátula PDF...');
-    let pdfUrl: string | null = null;
-    try {
-      // Force-invalidate so getAnconToken() generates a brand-new token for this step
-      invalidateAnconToken();
-      const printToken = await getAnconToken();
-      log('4/4', `Fresh token for ImpresionPoliza: ${printToken.substring(0, 16)}...`);
-
-      let printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: printToken });
-
-      // If still "Token Inactivo", try once more with another fresh token
-      const printStr = JSON.stringify(printRaw);
-      if (printStr.includes('Token Inactivo')) {
-        log('4/4', 'ImpresionPoliza → Token Inactivo, reintentando con token nuevo...');
-        invalidateAnconToken();
-        const retryToken = await getAnconToken();
-        printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: retryToken });
-      }
-
-      if (Array.isArray(printRaw)) {
-        pdfUrl = (printRaw[0] as Record<string, string>)?.enlace_poliza || null;
-      } else if (typeof printRaw === 'object' && printRaw !== null) {
-        pdfUrl = (printRaw as Record<string, string>).enlace_poliza || null;
-      }
-      log('4/4', pdfUrl ? `PDF: ${pdfUrl}` : `PDF no disponible: ${JSON.stringify(printRaw).substring(0, 200)}`);
-    } catch (printErr) {
-      log('4/4', `Error obteniendo PDF: ${printErr}`);
-    }
+    // ═══ STEP 4: PDF link ═══
+    // ImpresionPoliza is NOT called here — it always returns "Token Inactivo" immediately
+    // after EmitirDatos (ANCON timing issue). The /api/ancon/caratula endpoint handles it
+    // lazily on first download: fetches ImpresionPoliza with a fresh token, stores the HTML
+    // in Supabase, and serves it from storage on all subsequent requests.
+    const pdfUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(polizaNumber)}`;
 
     const elapsed = Date.now() - t0;
     log('DONE', `SUCCESS in ${elapsed}ms. Poliza: ${polizaNumber}`);

@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
     const creds = getRegionalCredentials();
 
     const emissionBody: RegionalCCEmissionBody = {
+      codInter: creds.codInter,
       numcot: parseInt(String(numcot)),
       cliente: {
         direccion: {
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
     };
 
     console.log(`[REGIONAL CC Emit] Field lengths: dirhab=${dirhab.length}, placa=${numplaca.length}, carroceria=${serialcarroceria.length}, motor=${serialmotor.length}, color=${colorCode.length}`);
-    console.log('[REGIONAL CC Emit] Emitting...', JSON.stringify(emissionBody).slice(0, 500));
+    console.log('[REGIONAL CC Emit] Emitting...', JSON.stringify(emissionBody));
 
     // Retry logic for transient REGIONAL Oracle errors (ORA-03150 DB link, timeouts)
     const isTransientError = (msg: string) =>

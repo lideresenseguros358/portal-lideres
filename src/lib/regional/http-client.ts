@@ -115,7 +115,7 @@ export async function regionalRequest<T = unknown>(
   for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
     try {
       console.log(
-        `[REGIONAL] ${method} ${endpoint}${attempt > 0 ? ` (attempt ${attempt + 1})` : ''}`
+        `[REGIONAL] ${method} ${url}${attempt > 0 ? ` (attempt ${attempt + 1})` : ''}`
       );
 
       const rawBody = body ? JSON.stringify(body) : undefined;
@@ -149,7 +149,7 @@ export async function regionalRequest<T = unknown>(
       }
 
       console.log(
-        `[REGIONAL] ${method} ${endpoint} → ${resStatus}${resOk ? '' : ` ERROR: ${JSON.stringify(data)}`}`
+        `[REGIONAL] ${method} ${url} → ${resStatus}${resOk ? '' : ` ERROR: ${JSON.stringify(data)}`}`
       );
 
       if (!resOk) {
@@ -190,7 +190,7 @@ export async function regionalRequest<T = unknown>(
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[REGIONAL] ${method} ${endpoint} ERROR: ${errMsg}`);
+      console.error(`[REGIONAL] ${method} ${url} ERROR: ${errMsg}`);
 
       if (attempt < RETRY_CONFIG.maxRetries) {
         const delay = RETRY_CONFIG.baseDelays[attempt] || 3000;
