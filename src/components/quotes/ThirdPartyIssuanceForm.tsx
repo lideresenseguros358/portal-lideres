@@ -788,7 +788,6 @@ export default function ThirdPartyIssuanceForm({
           setPaymentValid(false);
           toast.error(message);
         }}
-        environment="development"
       />
     </div>
   );

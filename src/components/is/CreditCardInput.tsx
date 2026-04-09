@@ -44,10 +44,10 @@ interface CreditCardInputProps {
   /** Called with structured card data for PagueloFacil direct charge */
   onCardDataReady?: (data: CardData) => void;
   onError: (error: string) => void;
-  environment?: 'development' | 'production';
 }
 
-export default function CreditCardInput({ onTokenReceived, onCardDataReady, onError, environment = (process.env.NODE_ENV === 'production' ? 'production' : 'development') }: CreditCardInputProps) {
+export default function CreditCardInput({ onTokenReceived, onCardDataReady, onError }: CreditCardInputProps) {
+  const isSandbox = process.env.NODE_ENV !== 'production';
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [bankName, setBankName] = useState('');
@@ -480,7 +480,7 @@ export default function CreditCardInput({ onTokenReceived, onCardDataReady, onEr
         </div>
       </form>
 
-      {environment === 'development' && (
+      {isSandbox && (
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
           <div className="font-semibold text-yellow-800 mb-1">🧪 Modo Desarrollo (PagueloFacil Sandbox)</div>
           <div className="text-yellow-700">

@@ -1767,7 +1767,6 @@ export default function EmitirPage() {
                 }}
                 onCardDataReady={(data: CardData) => setPfCardData(data)}
                 onError={handlePaymentError}
-                environment="development"
               />
 
               {/* Confirmación de tarjeta */}

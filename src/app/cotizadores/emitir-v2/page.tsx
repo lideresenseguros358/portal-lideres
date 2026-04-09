@@ -870,7 +870,6 @@ export default function EmitirV2Page() {
                       onTokenReceived={handleCreditCardComplete}
                       onCardDataReady={(data: CardData) => setPfCardData(data)}
                       onError={handleCreditCardError}
-                      environment={process.env.NODE_ENV === 'production' ? 'production' : 'development'}
                     />
                   </>
                 )}

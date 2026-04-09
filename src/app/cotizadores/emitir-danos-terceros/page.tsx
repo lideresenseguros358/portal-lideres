@@ -1668,7 +1668,6 @@ export default function EmitirDanosTercerosPage() {
                   onTokenReceived={handlePaymentTokenReceived}
                   onCardDataReady={handleCardDataReady}
                   onError={handlePaymentError}
-                  environment="development"
                 />
 
                 {cardData && (
