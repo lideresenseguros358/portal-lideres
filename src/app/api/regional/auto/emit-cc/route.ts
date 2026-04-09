@@ -170,16 +170,19 @@ export async function POST(request: NextRequest) {
     if (!emitResult.success) {
       const errMsg = emitResult.message || 'Error emitiendo póliza CC';
       const isServerDown = isTransientError(errMsg);
+      const isDuplicateClient = /ORA-01422/i.test(errMsg);
       return NextResponse.json(
         {
           success: false,
-          error: isServerDown
+          error: isDuplicateClient
+            ? 'El servidor de La Regional encontró un conflicto con los datos del cliente. Por favor contacte a soporte de La Regional de Seguros.'
+            : isServerDown
             ? 'El servidor de La Regional no responde en este momento. Por favor intente nuevamente en unos minutos.'
             : errMsg,
           _rawError: errMsg,
           _retryable: isServerDown,
         },
-        { status: isServerDown ? 503 : 500 }
+        { status: isDuplicateClient ? 409 : isServerDown ? 503 : 500 }
       );
     }
 

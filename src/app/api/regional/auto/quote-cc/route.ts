@@ -105,9 +105,17 @@ export async function POST(request: NextRequest) {
     console.log(`[REGIONAL CC Quote] Completado en ${elapsed}ms. Success: ${result.success}`);
 
     if (!result.success) {
+      // ORA-01422 = duplicate client record in Regional's DB (their side issue)
+      const isDuplicateClient = /ORA-01422/i.test(result.message || '');
       return NextResponse.json(
-        { success: false, error: result.message || 'Error al cotizar CC' },
-        { status: 500 }
+        {
+          success: false,
+          error: isDuplicateClient
+            ? 'El servidor de La Regional encontró un conflicto con los datos del cliente. Por favor contacte a soporte de La Regional de Seguros.'
+            : result.message || 'Error al cotizar CC',
+          _rawError: result.message,
+        },
+        { status: isDuplicateClient ? 409 : 500 }
       );
     }
 
