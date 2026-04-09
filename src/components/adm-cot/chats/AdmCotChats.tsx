@@ -667,11 +667,11 @@ function ConfigPanel({
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <h3 className="text-sm font-bold text-[#010139]">Configuración</h3>
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-          <FaTimes />
+          <FaArrowLeft className="text-sm" />
         </button>
+        <h3 className="text-sm font-bold text-[#010139] flex-1">Configuración</h3>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
