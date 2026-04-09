@@ -231,46 +231,29 @@ export async function guardarDocumentosExpediente(params: {
 
 // ─────────────────────────────────────────────────────────────
 // ANCON Carátula helpers
+// The expediente bucket only accepts PDF/image MIME types, so HTML
+// is stored in the ancon_caratulas DB table instead of Storage.
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Look up an existing ANCON carátula for a given ANCON policy number.
- * Returns the storage file_path (within the 'expediente' bucket) or null.
+ * Return cached raw HTML for an ANCON policy carátula, or null on miss.
+ * Reads from the ancon_caratulas DB table (not Supabase Storage).
  */
 export async function findAnconCaratula(polizaNumber: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
-
-  const { data: policy } = await supabase
-    .from('policies')
-    .select('id')
-    .eq('policy_number', polizaNumber)
-    .order('created_at', { ascending: false })
+  const { data } = await supabase
+    .from('ancon_caratulas')
+    .select('html_content')
+    .eq('poliza_number', polizaNumber)
     .limit(1)
     .maybeSingle();
-
-  if (!policy) return null;
-
-  const { data: doc } = await supabase
-    .from('expediente_documents')
-    .select('file_path')
-    .eq('policy_id', policy.id)
-    .eq('document_type', 'otros')
-    .ilike('document_name', 'Carátula de Póliza%')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return doc?.file_path ?? null;
+  return data?.html_content ?? null;
 }
 
 /**
- * Save an ANCON HTML carátula to Supabase Storage + expediente_documents table.
- *
- * Stored as application/octet-stream to avoid the expediente bucket's
- * text/html and text/plain MIME restrictions. We store the raw HTML (before
- * CSS injection) so future CSS updates are applied on every serve.
- *
- * No-ops silently if a carátula record already exists for this policy.
+ * Upsert raw HTML for an ANCON carátula into the ancon_caratulas DB table.
+ * Also creates an expediente_documents record (type=otros) so the carátula
+ * appears in the expediente viewer linked to the correct policy.
  */
 export async function saveAnconCaratula(
   polizaNumber: string,
@@ -291,7 +274,21 @@ export async function saveAnconCaratula(
     return { ok: false, error: `Policy not found for poliza: ${polizaNumber}` };
   }
 
-  // Skip if a carátula already exists for this policy
+  // Upsert HTML into ancon_caratulas
+  const { error: upsertErr } = await supabase
+    .from('ancon_caratulas')
+    .upsert(
+      { poliza_number: polizaNumber, policy_id: policy.id, html_content: rawHtml },
+      { onConflict: 'poliza_number' }
+    );
+
+  if (upsertErr) {
+    return { ok: false, error: `DB upsert: ${upsertErr.message}` };
+  }
+
+  console.log(`[Expediente ANCON] ✅ Carátula HTML guardada en ancon_caratulas para póliza ${polizaNumber}`);
+
+  // Create expediente_documents record so carátula appears in the expediente viewer
   const { data: existing } = await supabase
     .from('expediente_documents')
     .select('id')
@@ -301,24 +298,23 @@ export async function saveAnconCaratula(
     .limit(1)
     .maybeSingle();
 
-  if (existing) {
-    console.log(`[Expediente ANCON] Carátula ya existe para póliza ${polizaNumber} — omitiendo`);
-    return { ok: true };
+  if (!existing) {
+    const sanitizedPoliza = polizaNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
+    // file_path uses a sentinel prefix — not a real Storage path.
+    // The carátula route serves the content directly from ancon_caratulas.
+    await supabase.from('expediente_documents').insert({
+      client_id: policy.client_id,
+      policy_id: policy.id,
+      document_type: 'otros',
+      document_name: `Carátula de Póliza - ${polizaNumber}`,
+      file_path: `ancon-caratula-db:${sanitizedPoliza}`,
+      file_name: `caratula_ancon_${sanitizedPoliza}.html`,
+      file_size: rawHtml.length,
+      mime_type: 'text/html',
+      notes: 'Carátula HTML de póliza ANCON. Ver en /api/ancon/caratula?poliza=...',
+      uploaded_by: null,
+    });
   }
 
-  const htmlBuffer = Buffer.from(rawHtml, 'utf8');
-  const sanitizedPoliza = polizaNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
-
-  return saveDocument({
-    clientId: policy.client_id,
-    policyId: policy.id,
-    documentType: 'otros',
-    documentName: `Carátula de Póliza - ${polizaNumber}`,
-    fileName: `caratula_ancon_${sanitizedPoliza}.html`,
-    fileBuffer: htmlBuffer,
-    // Stored as generic binary — bucket blocks text/html and text/plain.
-    // Served back as text/html; charset=utf-8 by the carátula route.
-    mimeType: 'application/octet-stream',
-    notes: 'Carátula HTML de póliza ANCON (contenido servido como text/html por /api/ancon/caratula).',
-  });
+  return { ok: true };
 }

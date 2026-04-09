@@ -4,16 +4,15 @@
  * POST /api/ancon/caratula            — programmatic (returns JSON with URL)
  *
  * ANCON returns a URL to an HTML page (print_pol.php), not a PDF binary.
- * We proxy and enhance the HTML with print CSS, then save the raw HTML to
- * Supabase Storage (expediente bucket) as application/octet-stream on first
- * access. Subsequent requests are served from the expediente cache.
+ * We proxy and enhance the HTML with print CSS, then cache the raw HTML in
+ * the ancon_caratulas DB table on first access (the expediente storage bucket
+ * only accepts PDF/image MIME types). Subsequent requests are served from DB.
  *
  * Print CSS is injected to enforce letter-size paper and include all pages.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { imprimirPoliza } from '@/lib/ancon/emission.service';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { findAnconCaratula, saveAnconCaratula } from '@/lib/storage/expediente-server';
 
 export const maxDuration = 30;
@@ -98,31 +97,23 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
   try {
     console.log(`[API ANCON Carátula] ${requestId} Fetching for poliza: ${poliza}`);
 
-    // ── Check expediente storage cache first ──
+    // ── Check DB cache first (ancon_caratulas table) ──
     try {
-      const filePath = await findAnconCaratula(poliza);
-      if (filePath) {
-        console.log(`[API ANCON Carátula] ${requestId} ✅ Found in expediente: ${filePath}`);
-        const supabase = getSupabaseAdmin();
-        const { data: fileData, error: dlErr } = await supabase.storage
-          .from('expediente')
-          .download(filePath);
-        if (!dlErr && fileData) {
-          const rawHtml = await fileData.text();
-          const enhanced = enhanceHtml(rawHtml, poliza);
-          if (returnHtml) {
-            return new NextResponse(enhanced, {
-              status: 200,
-              headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-            });
-          }
-          const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
-          return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'cached', requestId });
+      const cachedHtml = await findAnconCaratula(poliza);
+      if (cachedHtml) {
+        console.log(`[API ANCON Carátula] ${requestId} ✅ Found in DB cache (${cachedHtml.length} bytes)`);
+        const enhanced = enhanceHtml(cachedHtml, poliza);
+        if (returnHtml) {
+          return new NextResponse(enhanced, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+          });
         }
-        console.warn(`[API ANCON Carátula] ${requestId} Download failed (${dlErr?.message}) — falling through to ANCON`);
+        const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
+        return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'cached', requestId });
       }
     } catch (cacheErr: unknown) {
-      console.warn(`[API ANCON Carátula] ${requestId} Cache lookup failed (non-fatal):`, (cacheErr as Error).message);
+      console.warn(`[API ANCON Carátula] ${requestId} DB cache lookup failed (non-fatal):`, (cacheErr as Error).message);
     }
 
     // ── Cache miss: fetch enlace_poliza from ANCON ──
@@ -160,45 +151,56 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
     console.log(`[API ANCON Carátula] ${requestId} HEAD probe: HTTP ${headRes?.status} content-type=${probeContentType}`);
 
     if (probeContentType.includes('text/html') || !probeContentType.includes('pdf')) {
-      // HTML carátula — fetch, enhance with print CSS, and serve directly
+      // HTML carátula — fetch with browser-like headers so the PHP server returns full content
       console.log(`[API ANCON Carátula] ${requestId} HTML carátula — fetching...`);
-      const htmlRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(20000) });
+      const htmlRes = await fetch(pdfEnlace, {
+        signal: AbortSignal.timeout(20000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'es-PA,es;q=0.9,en-US;q=0.8',
+          'Cache-Control': 'no-cache',
+        },
+      });
 
-      if (!htmlRes.ok) {
-        // Fallback: redirect to ANCON URL directly
-        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch returned ${htmlRes.status} — redirecting`);
-        if (returnHtml) return NextResponse.redirect(pdfEnlace, 302);
-        return NextResponse.json({ success: true, enlace_poliza: pdfEnlace, tipo: 'html', requestId });
-      }
+      if (htmlRes.ok) {
+        const html = await htmlRes.text();
+        console.log(`[API ANCON Carátula] ${requestId} Fetched HTML: ${html.length} bytes`);
 
-      const html = await htmlRes.text();
-      const enhanced = enhanceHtml(html, poliza);
-      console.log(`[API ANCON Carátula] ${requestId} ✅ Serving enhanced HTML (${enhanced.length} bytes)`);
+        // If response is too small it's a session/error page — redirect to ANCON URL directly
+        if (html.length >= 2000) {
+          const enhanced = enhanceHtml(html, poliza);
 
-      // Save raw HTML to expediente (async, non-fatal — runs before response but doesn't block on error)
-      try {
-        const saveResult = await saveAnconCaratula(poliza, html);
-        if (saveResult.ok) {
-          console.log(`[API ANCON Carátula] ${requestId} ✅ Saved to expediente`);
-        } else {
-          console.warn(`[API ANCON Carátula] ${requestId} Expediente save warning: ${saveResult.error}`);
+          // Save raw HTML to expediente (non-fatal)
+          try {
+            const saveResult = await saveAnconCaratula(poliza, html);
+            if (saveResult.ok) {
+              console.log(`[API ANCON Carátula] ${requestId} ✅ Saved to expediente`);
+            } else {
+              console.warn(`[API ANCON Carátula] ${requestId} Expediente save warning: ${saveResult.error}`);
+            }
+          } catch (saveErr: unknown) {
+            console.warn(`[API ANCON Carátula] ${requestId} Expediente save failed (non-fatal):`, (saveErr as Error).message);
+          }
+
+          if (returnHtml) {
+            return new NextResponse(enhanced, {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+            });
+          }
+          const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
+          return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'html', requestId });
         }
-      } catch (saveErr: unknown) {
-        console.warn(`[API ANCON Carátula] ${requestId} Expediente save failed (non-fatal):`, (saveErr as Error).message);
+
+        console.warn(`[API ANCON Carátula] ${requestId} Response too small (${html.length} bytes) — likely a session/error page. Redirecting to ANCON URL.`);
+      } else {
+        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch returned ${htmlRes.status} — redirecting`);
       }
 
-      if (returnHtml) {
-        return new NextResponse(enhanced, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-store',
-          },
-        });
-      }
-      // POST callers: return the proxy URL so the client can open it
-      const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
-      return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'html', requestId });
+      // Fallback: redirect browser directly to ANCON URL (rendered fully client-side)
+      if (returnHtml) return NextResponse.redirect(pdfEnlace, 302);
+      return NextResponse.json({ success: true, enlace_poliza: pdfEnlace, tipo: 'html-redirect', requestId });
     }
 
     // Case C: actual PDF binary
