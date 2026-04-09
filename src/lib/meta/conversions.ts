@@ -68,11 +68,28 @@ function normalizePhone(phone: string): string {
 }
 
 // ════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════
+
+/**
+ * Returns true for Axios/SDK network errors where the request was sent
+ * but no response was received (ECONNRESET, ETIMEDOUT, etc.).
+ */
+function isNetworkError(err: any): boolean {
+  return !!(err?.request && !err?.response);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ════════════════════════════════════════════
 // Core sender
 // ════════════════════════════════════════════
 
 /**
  * Send a server-side conversion event to Meta via the official SDK.
+ * Retries up to 2 times on transient network errors (no response received).
  * Fire-and-forget — never throws to the caller.
  */
 export async function sendCapiEvent(params: CAPIEventParams): Promise<{
@@ -136,7 +153,22 @@ export async function sendCapiEvent(params: CAPIEventParams): Promise<{
       eventRequest.setTestEventCode(TEST_EVENT_CODE);
     }
 
-    const response = await eventRequest.execute();
+    const MAX_RETRIES = 2;
+    let response: any;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        response = await eventRequest.execute();
+        break; // success
+      } catch (retryErr: any) {
+        if (isNetworkError(retryErr) && attempt < MAX_RETRIES) {
+          console.warn(`[META CAPI] Network error on attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying in 2s... | quote=${params.quoteId}`);
+          await delay(2000);
+          continue;
+        }
+        throw retryErr; // non-retryable or exhausted retries
+      }
+    }
+
     const received = response?.events_received ?? 0;
 
     console.log(
