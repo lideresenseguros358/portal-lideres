@@ -304,7 +304,7 @@ export function normalizarModeloFedpa(nombreModelo: string): string {
     .replace(/[*#()[\]{}/\\]/g, '') // Remove any remaining special chars
     .replace(/\s+/g, ' ')
     .trim()
-    .substring(0, 30); // FEDPA character limit
+    .substring(0, 15); // FEDPA EMIEXT_COTIZACIONES.MODELO column is VARCHAR2(15) — confirmed via ORA-12899 on 16-char names
 }
 
 /**
