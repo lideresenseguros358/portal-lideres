@@ -38,8 +38,12 @@ export function CaseActionsRow({
 }: CaseActionsRowProps) {
   const hasBlockAction = !!onBlock;
   const REVEAL_WIDTH_RIGHT = 3 * BUTTON_WIDTH; // PIN, Master, Delete
-  const REVEAL_WIDTH_LEFT = 1 * BUTTON_WIDTH; // Block (isolated on left)
-  const DIRECTION_THRESHOLD = 10; // pixels to determine direction
+  const REVEAL_WIDTH_LEFT = 1 * BUTTON_WIDTH;  // Block (isolated on left)
+  // Minimum horizontal displacement before the card starts following the finger.
+  // Prevents accidental opens during normal list scrolling.
+  const INITIATION_THRESHOLD = 22;
+  // Snap open only if the user swiped at least 40% of the reveal panel width.
+  const SNAP_RATIO = 0.4;
 
   // Mobile swipe state
   const [swipeX, setSwipeX] = useState(0);
@@ -56,68 +60,54 @@ export function CaseActionsRow({
   const handleTouchMove = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
-    const fingerDx = t.clientX - touchStartX.current; // positive = right swipe, negative = left swipe
+    const fingerDx = t.clientX - touchStartX.current;
     const dy = Math.abs(touchStartY.current - t.clientY);
     const absDx = Math.abs(fingerDx);
 
-    // Determine gesture type: vertical scroll or horizontal swipe
-    if (isScrollRef.current === null && (absDx > DIRECTION_THRESHOLD || dy > DIRECTION_THRESHOLD)) {
-      isScrollRef.current = dy > absDx * 1.4; // true = scroll, false = swipe
+    // Lock gesture type once enough movement is detected.
+    // Prefer scroll: if the gesture has any notable vertical component, treat as scroll.
+    if (isScrollRef.current === null && (absDx > 10 || dy > 10)) {
+      isScrollRef.current = dy > absDx * 0.8; // true = scroll, false = swipe
     }
 
-    // Ignore if it's a vertical scroll
     if (isScrollRef.current) return;
 
+    // Dead zone: card doesn't start moving until the finger has moved INITIATION_THRESHOLD px.
+    // This prevents micro-swipes from triggering the panel during normal scrolling.
+    if (swipeX === 0 && absDx < INITIATION_THRESHOLD) return;
+
+    // Prevent page scroll while the user is clearly swiping horizontally
+    e.preventDefault();
+
     // Swipe direction mapping:
-    // - fingerDx > 0 (swipe RIGHT) → swipeX becomes positive → reveals LEFT side (Bloquear)
-    // - fingerDx < 0 (swipe LEFT) → swipeX becomes negative → reveals RIGHT side (PIN, Asignar, Eliminar)
+    // fingerDx > 0 (RIGHT) → reveals LEFT side (Bloquear)
+    // fingerDx < 0 (LEFT)  → reveals RIGHT side (PIN, Asignar, Eliminar)
 
     if (swipeX === 0) {
-      // Not open yet - allow opening in either direction
       if (fingerDx > 0) {
-        // RIGHT swipe - open left side (Bloquear)
-        setSwipeX(Math.min(REVEAL_WIDTH_LEFT, fingerDx));
+        setSwipeX(Math.min(REVEAL_WIDTH_LEFT, fingerDx - INITIATION_THRESHOLD));
       } else if (fingerDx < 0) {
-        // LEFT swipe - open right side (PIN, Asignar, Eliminar)
-        setSwipeX(Math.max(-REVEAL_WIDTH_RIGHT, fingerDx));
+        setSwipeX(Math.max(-REVEAL_WIDTH_RIGHT, fingerDx + INITIATION_THRESHOLD));
       }
     } else if (swipeX > 0) {
-      // Left side is open (Bloquear) - only allow closing or going further right
-      if (fingerDx > swipeX) {
-        // Further right
-        setSwipeX(Math.min(REVEAL_WIDTH_LEFT, fingerDx));
-      } else if (fingerDx <= swipeX) {
-        // Closing back toward 0
-        setSwipeX(Math.max(0, fingerDx));
-      }
+      // Left panel open — allow closing or going further right
+      setSwipeX(Math.max(0, Math.min(REVEAL_WIDTH_LEFT, fingerDx)));
     } else if (swipeX < 0) {
-      // Right side is open (PIN, Asignar, Eliminar) - only allow closing or going further left
-      if (fingerDx < swipeX) {
-        // Further left
-        setSwipeX(Math.max(-REVEAL_WIDTH_RIGHT, fingerDx));
-      } else if (fingerDx >= swipeX) {
-        // Closing back toward 0
-        setSwipeX(Math.min(0, fingerDx));
-      }
+      // Right panel open — allow closing or going further left
+      setSwipeX(Math.min(0, Math.max(-REVEAL_WIDTH_RIGHT, fingerDx)));
     }
   };
 
   const handleTouchEnd = () => {
     if (isScrollRef.current) return;
 
-    const snappingThreshold = 25;
-
-    // If more than threshold in positive direction (RIGHT swipe), snap to left panel (Bloquear)
-    if (swipeX > snappingThreshold) {
+    // Snap open only if the user swiped far enough (WhatsApp-style threshold)
+    if (swipeX > REVEAL_WIDTH_LEFT * SNAP_RATIO) {
       setSwipeX(REVEAL_WIDTH_LEFT);
-    }
-    // If more than threshold in negative direction (LEFT swipe), snap to right panel (PIN, Asignar, Eliminar)
-    else if (swipeX < -snappingThreshold) {
+    } else if (swipeX < -(REVEAL_WIDTH_RIGHT * SNAP_RATIO)) {
       setSwipeX(-REVEAL_WIDTH_RIGHT);
-    }
-    // Otherwise snap to closed
-    else {
-      setSwipeX(0);
+    } else {
+      setSwipeX(0); // not far enough — snap back closed
     }
   };
 
