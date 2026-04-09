@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { emitirPolizaRC, imprimirPoliza } from '@/lib/regional/emission.service';
+import { emitirPolizaRC } from '@/lib/regional/emission.service';
 import { colorToRegionalCode } from '@/lib/regional/color-map';
 import { getRegionalCredentials } from '@/lib/regional/config';
 import { resolveRegionalVehicleCodes } from '@/lib/cotizadores/regional-vehicle-mapper';
@@ -196,42 +196,18 @@ export async function POST(request: NextRequest) {
 
     // ── Capture policy document from Regional immediately after emission ──
     // REGIONAL sometimes embeds the carátula HTML directly in the emission response.
-    // If not, fall back to a separate imprimirPoliza call with a short delay.
+    // imprimirPoliza is NOT called here — it consistently returns null immediately
+    // after RC emission (the document isn't ready yet). The /api/regional/auto/print
+    // endpoint handles it lazily when the user clicks the download button.
     let documentStorageUrl: string | null = null;
-
-    let polizaVerificationWarning = false;
 
     if (result.poliza) {
       try {
-        console.log(`[REGIONAL RC Emit] Capturing policy document for ${result.poliza}...`);
-
-        let htmlToStore: string | null = (result as Record<string, unknown>).documentHtml as string | null || null;
+        const htmlToStore = (result as Record<string, unknown>).documentHtml as string | null || null;
         let pdfToStore: string | null = null;
 
         if (htmlToStore) {
-          console.log(`[REGIONAL RC Emit] Using HTML from emission response (${htmlToStore.length} bytes)`);
-        } else {
-          // Retry imprimirPoliza with backoff — REGIONAL's Oracle sequence runs before the INSERT,
-          // so the policy may not be persisted immediately. Retrying gives it time to commit.
-          const PRINT_DELAYS = [2000, 4000, 6000]; // 2s, then 4s, then 6s
-          for (let attempt = 0; attempt < PRINT_DELAYS.length; attempt++) {
-            const delay = PRINT_DELAYS[attempt];
-            console.log(`[REGIONAL RC Emit] imprimirPoliza attempt ${attempt + 1}/${PRINT_DELAYS.length} — waiting ${delay}ms...`);
-            await new Promise(r => setTimeout(r, delay));
-            const printResult = await imprimirPoliza(result.poliza, 'rc');
-            if (printResult.success && (printResult.html || printResult.pdf)) {
-              htmlToStore = printResult.html || null;
-              pdfToStore = printResult.pdf || null;
-              console.log(`[REGIONAL RC Emit] ✅ imprimirPoliza succeeded on attempt ${attempt + 1}`);
-              break;
-            }
-            console.warn(`[REGIONAL RC Emit] imprimirPoliza attempt ${attempt + 1} returned null (non-fatal):`, printResult.message);
-            if (attempt === PRINT_DELAYS.length - 1) {
-              // All retries exhausted — policy may not have persisted in REGIONAL's DB
-              polizaVerificationWarning = true;
-              console.error(`[REGIONAL RC Emit] ⚠️ Policy ${result.poliza} NOT FOUND in Regional after ${PRINT_DELAYS.length} attempts — possible Oracle transaction failure`);
-            }
-          }
+          console.log(`[REGIONAL RC Emit] Using HTML from emission response (${htmlToStore.length} bytes) — storing...`);
         }
 
         if (htmlToStore || pdfToStore) {
@@ -242,7 +218,6 @@ export async function POST(request: NextRequest) {
           const fileBuffer = pdfToStore
             ? Buffer.from(pdfToStore, 'base64')
             : Buffer.from(htmlToStore!, 'utf8');
-          // Fixed filename (no timestamp) so upsert replaces on retry
           const filePath = `regional-policies/${result.poliza.replace(/\//g, '-')}/caratula.${ext}`;
 
           const { error: uploadError } = await supabaseAdmin.storage
@@ -256,8 +231,6 @@ export async function POST(request: NextRequest) {
             documentStorageUrl = urlData?.publicUrl || null;
             console.log(`[REGIONAL RC Emit] ✅ Document stored: ${filePath} (${fileBuffer.length} bytes)`);
           }
-        } else {
-          console.warn('[REGIONAL RC Emit] No document obtained — download will fall back to live print');
         }
       } catch (printErr: any) {
         console.warn('[REGIONAL RC Emit] Document capture error (non-fatal):', printErr.message);
@@ -353,7 +326,6 @@ export async function POST(request: NextRequest) {
         color: colorCode,
       },
       plan: String(plan),
-      polizaVerificationWarning,
       _timing: { totalMs: elapsed },
     });
   } catch (error: any) {
