@@ -21,32 +21,27 @@ export default function ConfirmacionPage() {
   // Only one visual indicator: disabled state on button
   // The spinner inside the button is the only feedback during download
 
-  // Load data and mark as mounted
   useEffect(() => {
     const emittedPolicy = sessionStorage.getItem('emittedPolicy');
-    if (emittedPolicy) {
-      const data = JSON.parse(emittedPolicy);
-      setPolicyData(data);
-    }
+    if (emittedPolicy) setPolicyData(JSON.parse(emittedPolicy));
     setMounted(true);
+
+    // Confetti — rAF-based (same pattern as PayFortnightProgressModal)
+    const duration = 3500;
+    const end = Date.now() + duration;
+    let animId: number;
+
+    const fire = () => {
+      confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+      confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+      if (Date.now() < end) animId = requestAnimationFrame(fire);
+    };
+
+    // 200 ms grace period so the page finishes painting before confetti starts
+    const startTimer = setTimeout(() => { animId = requestAnimationFrame(fire); }, 200);
+
+    return () => { clearTimeout(startTimer); cancelAnimationFrame(animId); };
   }, []);
-
-  // Confetti — fires only after page content is visible (mounted=true)
-  useEffect(() => {
-    if (!mounted) return;
-
-    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
-    const duration = 3000;
-    const animationEnd = Date.now() + duration;
-
-    const interval = setInterval(() => {
-      if (Date.now() > animationEnd) { clearInterval(interval); return; }
-      confetti({ particleCount: 50, angle: randomInRange(55, 125), spread: randomInRange(50, 70), origin: { x: randomInRange(0.1, 0.3), y: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-      confetti({ particleCount: 50, angle: randomInRange(55, 125), spread: randomInRange(50, 70), origin: { x: randomInRange(0.7, 0.9), y: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-    }, 250);
-
-    return () => clearInterval(interval);
-  }, [mounted]);
 
   if (!mounted) return null;
 
