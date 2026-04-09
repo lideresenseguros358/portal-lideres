@@ -17,41 +17,122 @@ import { findAnconCaratula, saveAnconCaratula } from '@/lib/storage/expediente-s
 
 export const maxDuration = 30;
 
-/** Inject letter-size print CSS and auto-print trigger into ANCON HTML */
+/** Inject letter-size print CSS + download toolbar into cached ANCON HTML */
 function enhanceHtml(html: string, poliza: string): string {
+  const toolbar = `<div id="portal-toolbar" style="position:fixed;top:0;left:0;right:0;background:#010139;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,.4);font-family:Arial,sans-serif;font-size:14px;">
+  <div><strong>Car\u00e1tula de P\u00f3liza</strong><span style="margin-left:12px;opacity:.75;font-size:13px;">N\u00b0 ${poliza}</span></div>
+  <button onclick="window.print()" style="background:#8AAA19;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.3px;">&#128196; Guardar como PDF</button>
+</div>`;
+
   const css = `
 <style id="portal-print-override">
 /* Portal: force letter-size paper, full-color printing */
-@page {
-  size: letter;
-  margin: 0.4in;
-}
+@page { size: letter; margin: 0.4in; }
 @media print {
+  #portal-toolbar { display: none !important; }
   html, body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     width: 100%;
+    padding-top: 0 !important;
   }
-  /* Prevent blank pages from empty elements */
   .pagebreak, .page-break { page-break-after: always; break-after: page; }
 }
-/* Screen: constrain to readable width */
 @media screen {
-  body { max-width: 850px; margin: 0 auto; padding: 12px; }
+  body { max-width: 900px; margin: 0 auto; padding: 12px; padding-top: 56px !important; }
 }
 </style>`;
 
-  // Inject before </head>; fall back to prepending if no <head>
+  // Inject toolbar + CSS before </head>; fall back to prepending
+  const inject = css + '\n</head>\n<body>\n' + toolbar;
+  const headBodyIdx = html.search(/<\/head>\s*<body[^>]*>/i);
+  if (headBodyIdx !== -1) {
+    // Replace </head><body...> boundary to insert toolbar right after <body>
+    return html.slice(0, headBodyIdx) + css + html.slice(headBodyIdx).replace(/<body([^>]*)>/i, `<body$1>${toolbar}`);
+  }
   const headClose = html.indexOf('</head>');
   if (headClose !== -1) {
-    return html.slice(0, headClose) + css + html.slice(headClose);
+    const afterHead = html.slice(headClose);
+    return html.slice(0, headClose) + css + afterHead.replace(/<body([^>]*)>/i, `<body$1>${toolbar}`);
   }
-  const htmlOpen = html.search(/<html[^>]*>/i);
-  if (htmlOpen !== -1) {
-    const afterHtml = html.indexOf('>', htmlOpen) + 1;
-    return html.slice(0, afterHtml) + `<head>${css}</head>` + html.slice(afterHtml);
-  }
-  return css + html;
+  return toolbar + css + html;
+}
+
+/**
+ * Build a full viewer page that embeds the ANCON URL in an iframe.
+ * Used when our server can't fetch the HTML directly (JS-rendered page).
+ * The browser renders the iframe; we add a print/download toolbar.
+ */
+function buildViewerPage(anconUrl: string, poliza: string): string {
+  const escaped = anconUrl.replace(/"/g, '&quot;');
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Car\u00e1tula de P\u00f3liza \u2013 ${poliza}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;background:#f0f0f0}
+    #toolbar{position:fixed;top:0;left:0;right:0;height:48px;background:#010139;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+    #toolbar h1{font-size:14px;font-weight:700}
+    #toolbar span{font-size:12px;opacity:.75;margin-left:10px}
+    #btn-save{background:#8AAA19;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+    #btn-save:hover{background:#7a9a0f}
+    #frame-wrap{position:fixed;top:48px;left:0;right:0;bottom:0}
+    iframe{width:100%;height:100%;border:none;background:#fff}
+    #fallback{display:none;position:absolute;inset:0;background:#fff;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:40px}
+    #fallback p{color:#444;font-size:15px}
+    #fallback a{background:#010139;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px}
+    @media print{#toolbar{display:none}#frame-wrap{top:0}}
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div><h1 style="display:inline">Car\u00e1tula de P\u00f3liza</h1><span>N\u00b0 ${poliza}</span></div>
+    <button id="btn-save" onclick="printFrame()">&#128196; Guardar como PDF</button>
+  </div>
+  <div id="frame-wrap">
+    <iframe id="pf" src="${escaped}" title="Car\u00e1tula ANCON"></iframe>
+    <div id="fallback">
+      <p>No se pudo mostrar la car\u00e1tula en el visor integrado.</p>
+      <a href="${escaped}" target="_blank">Abrir car\u00e1tula en ANCON &#8599;</a>
+    </div>
+  </div>
+  <script>
+    var iframe = document.getElementById('pf');
+    var timer = setTimeout(function(){
+      try{
+        var d=iframe.contentDocument||iframe.contentWindow.document;
+        if(!d||d.body.innerHTML.trim().length<100) showFallback();
+      }catch(e){/* cross-origin: assume loaded */}
+    }, 8000);
+
+    iframe.onload = function(){
+      clearTimeout(timer);
+      try{
+        var d=iframe.contentDocument||iframe.contentWindow.document;
+        if(!d||d.body.innerHTML.trim().length<100) showFallback();
+      }catch(e){/* cross-origin iframe loaded OK */}
+    };
+    iframe.onerror = showFallback;
+
+    function showFallback(){
+      iframe.style.display='none';
+      var f=document.getElementById('fallback');
+      f.style.display='flex';
+    }
+    function printFrame(){
+      try{
+        iframe.contentWindow.print();
+      }catch(e){
+        // Cross-origin: can't print iframe — open in new tab for printing
+        window.open('${escaped}','_blank');
+      }
+    }
+  </script>
+</body>
+</html>`;
 }
 
 export async function GET(request: NextRequest) {
@@ -193,14 +274,22 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
           return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'html', requestId });
         }
 
-        console.warn(`[API ANCON Carátula] ${requestId} Response too small (${html.length} bytes) — likely a session/error page. Redirecting to ANCON URL.`);
+        console.warn(`[API ANCON Carátula] ${requestId} Response too small (${html.length} bytes) — serving iframe viewer.`);
       } else {
-        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch returned ${htmlRes.status} — redirecting`);
+        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch returned ${htmlRes.status} — serving iframe viewer`);
       }
 
-      // Fallback: redirect browser directly to ANCON URL (rendered fully client-side)
-      if (returnHtml) return NextResponse.redirect(pdfEnlace, 302);
-      return NextResponse.json({ success: true, enlace_poliza: pdfEnlace, tipo: 'html-redirect', requestId });
+      // Fallback: ANCON page requires browser session/JS to render.
+      // Serve our own viewer page that embeds the ANCON URL in a full-screen iframe
+      // with a "Guardar como PDF" toolbar. The browser renders the iframe natively.
+      if (returnHtml) {
+        const viewerHtml = buildViewerPage(pdfEnlace, poliza);
+        return new NextResponse(viewerHtml, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+        });
+      }
+      return NextResponse.json({ success: true, enlace_poliza: pdfEnlace, tipo: 'iframe-viewer', requestId });
     }
 
     // Case C: actual PDF binary
