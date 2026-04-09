@@ -47,6 +47,11 @@ export interface AutoThirdPartyPlan {
   vcodgrupotarifa?: number;
   vcodmarca?: number;
   vcodmodelo?: number;
+  // ANCON-specific fields (SOBAT plans)
+  _codProducto?: string;
+  _nombreProducto?: string;
+  _sumaAsegurada?: string;
+  optionName?: string;
 }
 
 export interface AutoInsurer {

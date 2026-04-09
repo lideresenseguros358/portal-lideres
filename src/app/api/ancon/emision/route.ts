@@ -206,12 +206,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validations
-    if (!no_cotizacion) {
-      return NextResponse.json(
-        { success: false, error: 'Falta número de cotización' },
-        { status: 400 }
-      );
-    }
+    // Note: no_cotizacion can be empty for SOBAT plans — backend will re-quote with real vehicle data
     if (!primer_nombre || !primer_apellido) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos del cliente' },

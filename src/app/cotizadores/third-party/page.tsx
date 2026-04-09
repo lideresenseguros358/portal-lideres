@@ -118,7 +118,11 @@ export default function ThirdPartyPage() {
         annualPremium: plan.annualPremium,
         _isReal: true,
         isANCON: true,
-        _idCotizacion: tpQuote.idCotizacion,
+        _idCotizacion: plan.idCotizacion || tpQuote.idCotizacion || '',
+        _codProducto: plan._codProducto,
+        _nombreProducto: plan._nombreProducto,
+        _sumaAsegurada: plan._sumaAsegurada,
+        optionName: plan.optionName || 'opcion1',
         _includedCoverages: plan.includedCoverages,
         installments: plan.installments,
         quoteData: {

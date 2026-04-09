@@ -167,10 +167,12 @@ async function fetchAllPlans() {
   const basic = basicPlan || basicFallback;
   const premium = premiumPlan || premiumFallback;
 
-  const isOnline = !!(basic || premium);
-  if (!isOnline) {
-    console.warn('[API REGIONAL Third Party] ⚠️ OFFLINE — no se encontraron planes');
+  const apiWorking = !!(basic || premium);
+  if (!apiWorking) {
+    console.warn('[API REGIONAL Third Party] ⚠️ planesRc returned no plans — using hardcoded fallback');
   }
+  // Always online: fallback plans are accurate hardcoded prices, emission still works
+  const isOnline = true;
 
   const buildPlanResponse = (plan: any | null, planType: string, fallbackPrice: number, fallbackName: string) => {
     const fallbackCoverages = planType === 'basic' ? REGIONAL_BASIC_COVERAGES : REGIONAL_PREMIUM_COVERAGES;
@@ -252,7 +254,7 @@ export async function GET() {
     console.error('[API REGIONAL Third Party] Error:', error);
     return NextResponse.json({
       success: true,
-      online: false,
+      online: true, // always online — fallback plans are accurate, emission still works
       source: 'fallback (error)',
       timestamp: new Date().toISOString(),
       plans: [
@@ -261,8 +263,9 @@ export async function GET() {
           name: 'Plan Básico',
           annualPremium: FALLBACK_BASIC_PRICE,
           fromApi: false,
-          coverageList: [],
-          endosoBenefits: [],
+          coverageList: REGIONAL_BASIC_COVERAGES,
+          endosoBenefits: REGIONAL_BASIC_BENEFITS,
+          codplan: PLAN_BASICO_CODE,
           installments: { available: false, description: 'Solo al contado' },
         },
         {
@@ -270,8 +273,9 @@ export async function GET() {
           name: 'Plan Premium',
           annualPremium: FALLBACK_PREMIUM_PRICE,
           fromApi: false,
-          coverageList: [],
-          endosoBenefits: [],
+          coverageList: REGIONAL_PREMIUM_COVERAGES,
+          endosoBenefits: REGIONAL_PREMIUM_BENEFITS,
+          codplan: PLAN_PLUS_CODE,
           installments: { available: false, description: 'Solo al contado' },
         },
       ],
