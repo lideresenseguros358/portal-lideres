@@ -234,32 +234,62 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
     }
   }
 
-  // OPTIMIZACIÓN: Insertar cliente y póliza en secuencia rápida
+  // Insertar cliente — con recuperación automática si ya existe (mismo broker + misma cédula)
   const { data: newClient, error: clientError } = await supabase
     .from('clients')
     .insert(clientPayload)
     .select()
     .single<ClientRow>();
 
-  if (clientError) throw new Error(`Error creando cliente: ${clientError.message}`);
-  if (!newClient) throw new Error('Fallo al crear el cliente');
+  let targetClient: ClientRow;
+
+  if (clientError) {
+    // Código 23505 = unique_violation en PostgreSQL.
+    // Si es el constraint de (national_id, broker_id), el broker ya tiene este cliente
+    // registrado. En lugar de fallar, recuperamos el cliente existente y le agregamos
+    // la póliza — que era la intención del usuario.
+    if (
+      clientError.code === '23505' &&
+      clientError.message.includes('clients_national_id_broker_unique_idx') &&
+      clientParsed.national_id
+    ) {
+      const { data: existing } = await supabase
+        .from('clients')
+        .select()
+        .eq('broker_id', brokerId)
+        .eq('national_id', clientParsed.national_id)
+        .single<ClientRow>();
+
+      if (!existing) throw new Error(`Error creando cliente: ${clientError.message}`);
+
+      console.log(`[createClientWithPolicy] Cliente existente recuperado (${existing.id}) para national_id=${clientParsed.national_id}`);
+      targetClient = existing;
+    } else {
+      throw new Error(`Error creando cliente: ${clientError.message}`);
+    }
+  } else {
+    if (!newClient) throw new Error('Fallo al crear el cliente');
+    targetClient = newClient;
+  }
 
   const policyPayload = {
     ...policyParsed,
     policy_number: policyNumber,
-    client_id: newClient.id,
+    client_id: targetClient.id,
     broker_id: brokerId,
   };
 
   const { error: policyError } = await supabase.from('policies').insert(policyPayload);
 
   if (policyError) {
-    // Rollback: eliminar cliente si falla la póliza
-    await supabase.from('clients').delete().eq('id', newClient.id);
+    // Rollback solo si creamos un cliente nuevo (no si recuperamos uno existente)
+    if (!clientError) {
+      await supabase.from('clients').delete().eq('id', targetClient.id);
+    }
     throw new Error(`Error creando póliza: ${policyError.message}`);
   }
 
-  return newClient;
+  return targetClient;
 }
 
 export async function deleteClient(clientId: string) {
