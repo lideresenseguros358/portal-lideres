@@ -248,7 +248,17 @@ export async function POST(request: NextRequest) {
     // If AI generated a reply, send it via Meta Graph API
     if (result.aiReply && result.aiReplySent) {
       // PROTOCOLO 2B (guardia final) — nunca enviar body vacío a Meta Graph API.
-      const safeReply = result.aiReply.trim();
+      const rawReply = result.aiReply.trim();
+
+      // Limpieza de citas de knowledge-base inyectadas por Vertex AI
+      // Elimina patrones como [base_de_conocimientos_lissa] y corchetes residuales
+      console.log('[WHATSAPP] -> TEXTO SUCIO:', rawReply);
+      const safeReply = rawReply
+        .replace(/\s*\]+\]/gi, '')
+        .replace(/\s*\[base_de_conocimientos[^\]]*\]/gi, '')
+        .trim();
+      console.log('[WHATSAPP] -> TEXTO LIMPIO:', safeReply);
+
       if (!safeReply) {
         console.error('[WHATSAPP] AI reply is empty after trim — sending fallback to avoid Meta 400');
         await sendWhatsAppMessage(
