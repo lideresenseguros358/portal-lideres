@@ -228,3 +228,97 @@ export async function guardarDocumentosExpediente(params: {
   console.log(`[Expediente Server] Resultado: ${saved.length} guardados, ${skipped.length} omitidos (ya existen), ${errors.length} errores`, { saved, skipped, errors });
   return { ok: errors.length === 0, saved, errors, skipped };
 }
+
+// ─────────────────────────────────────────────────────────────
+// ANCON Carátula helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Look up an existing ANCON carátula for a given ANCON policy number.
+ * Returns the storage file_path (within the 'expediente' bucket) or null.
+ */
+export async function findAnconCaratula(polizaNumber: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: policy } = await supabase
+    .from('policies')
+    .select('id')
+    .eq('policy_number', polizaNumber)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!policy) return null;
+
+  const { data: doc } = await supabase
+    .from('expediente_documents')
+    .select('file_path')
+    .eq('policy_id', policy.id)
+    .eq('document_type', 'otros')
+    .ilike('document_name', 'Carátula de Póliza%')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return doc?.file_path ?? null;
+}
+
+/**
+ * Save an ANCON HTML carátula to Supabase Storage + expediente_documents table.
+ *
+ * Stored as application/octet-stream to avoid the expediente bucket's
+ * text/html and text/plain MIME restrictions. We store the raw HTML (before
+ * CSS injection) so future CSS updates are applied on every serve.
+ *
+ * No-ops silently if a carátula record already exists for this policy.
+ */
+export async function saveAnconCaratula(
+  polizaNumber: string,
+  rawHtml: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = getSupabaseAdmin();
+
+  // Resolve policy + client
+  const { data: policy } = await supabase
+    .from('policies')
+    .select('id, client_id')
+    .eq('policy_number', polizaNumber)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!policy) {
+    return { ok: false, error: `Policy not found for poliza: ${polizaNumber}` };
+  }
+
+  // Skip if a carátula already exists for this policy
+  const { data: existing } = await supabase
+    .from('expediente_documents')
+    .select('id')
+    .eq('policy_id', policy.id)
+    .eq('document_type', 'otros')
+    .ilike('document_name', 'Carátula de Póliza%')
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(`[Expediente ANCON] Carátula ya existe para póliza ${polizaNumber} — omitiendo`);
+    return { ok: true };
+  }
+
+  const htmlBuffer = Buffer.from(rawHtml, 'utf8');
+  const sanitizedPoliza = polizaNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+  return saveDocument({
+    clientId: policy.client_id,
+    policyId: policy.id,
+    documentType: 'otros',
+    documentName: `Carátula de Póliza - ${polizaNumber}`,
+    fileName: `caratula_ancon_${sanitizedPoliza}.html`,
+    fileBuffer: htmlBuffer,
+    // Stored as generic binary — bucket blocks text/html and text/plain.
+    // Served back as text/html; charset=utf-8 by the carátula route.
+    mimeType: 'application/octet-stream',
+    notes: 'Carátula HTML de póliza ANCON (contenido servido como text/html por /api/ancon/caratula).',
+  });
+}

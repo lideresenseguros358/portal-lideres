@@ -4,14 +4,17 @@
  * POST /api/ancon/caratula            — programmatic (returns JSON with URL)
  *
  * ANCON returns a URL to an HTML page (print_pol.php), not a PDF binary.
- * We proxy and enhance the HTML directly — no Supabase storage needed since
- * the expediente bucket rejects text/* MIME types.
+ * We proxy and enhance the HTML with print CSS, then save the raw HTML to
+ * Supabase Storage (expediente bucket) as application/octet-stream on first
+ * access. Subsequent requests are served from the expediente cache.
  *
  * Print CSS is injected to enforce letter-size paper and include all pages.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { imprimirPoliza } from '@/lib/ancon/emission.service';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { findAnconCaratula, saveAnconCaratula } from '@/lib/storage/expediente-server';
 
 export const maxDuration = 30;
 
@@ -95,7 +98,34 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
   try {
     console.log(`[API ANCON Carátula] ${requestId} Fetching for poliza: ${poliza}`);
 
-    // Fetch enlace_poliza from ANCON
+    // ── Check expediente storage cache first ──
+    try {
+      const filePath = await findAnconCaratula(poliza);
+      if (filePath) {
+        console.log(`[API ANCON Carátula] ${requestId} ✅ Found in expediente: ${filePath}`);
+        const supabase = getSupabaseAdmin();
+        const { data: fileData, error: dlErr } = await supabase.storage
+          .from('expediente')
+          .download(filePath);
+        if (!dlErr && fileData) {
+          const rawHtml = await fileData.text();
+          const enhanced = enhanceHtml(rawHtml, poliza);
+          if (returnHtml) {
+            return new NextResponse(enhanced, {
+              status: 200,
+              headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+            });
+          }
+          const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
+          return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'cached', requestId });
+        }
+        console.warn(`[API ANCON Carátula] ${requestId} Download failed (${dlErr?.message}) — falling through to ANCON`);
+      }
+    } catch (cacheErr: unknown) {
+      console.warn(`[API ANCON Carátula] ${requestId} Cache lookup failed (non-fatal):`, (cacheErr as Error).message);
+    }
+
+    // ── Cache miss: fetch enlace_poliza from ANCON ──
     const result = await imprimirPoliza(poliza);
 
     if (!result.success || !result.data?.enlace_poliza) {
@@ -144,6 +174,18 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
       const html = await htmlRes.text();
       const enhanced = enhanceHtml(html, poliza);
       console.log(`[API ANCON Carátula] ${requestId} ✅ Serving enhanced HTML (${enhanced.length} bytes)`);
+
+      // Save raw HTML to expediente (async, non-fatal — runs before response but doesn't block on error)
+      try {
+        const saveResult = await saveAnconCaratula(poliza, html);
+        if (saveResult.ok) {
+          console.log(`[API ANCON Carátula] ${requestId} ✅ Saved to expediente`);
+        } else {
+          console.warn(`[API ANCON Carátula] ${requestId} Expediente save warning: ${saveResult.error}`);
+        }
+      } catch (saveErr: unknown) {
+        console.warn(`[API ANCON Carátula] ${requestId} Expediente save failed (non-fatal):`, (saveErr as Error).message);
+      }
 
       if (returnHtml) {
         return new NextResponse(enhanced, {
