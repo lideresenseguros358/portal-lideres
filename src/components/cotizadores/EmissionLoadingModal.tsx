@@ -45,6 +45,14 @@ export default function EmissionLoadingModal({
     }
   }, [progress, error, onComplete]);
 
+  // Lock body scroll while modal is open (prevents page scroll on mobile)
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isOpen]);
+
   // Reset report state when modal opens/closes or error changes
   useEffect(() => {
     if (!isOpen || !error) {
@@ -107,8 +115,15 @@ export default function EmissionLoadingModal({
         }
       `}</style>
 
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden relative">
+      {/* Overlay: fixed full-screen, touch-action:none blocks iOS Safari scroll */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] overflow-hidden p-4"
+        style={{ touchAction: 'none' }}
+        onTouchMove={(e) => e.preventDefault()}
+      >
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-auto overflow-y-auto max-h-[90dvh] relative"
+          onTouchMove={(e) => e.stopPropagation()}
+        >
 
           {blocked ? (
             /* ─── BLOCKED STATE — Case in review ─── */
