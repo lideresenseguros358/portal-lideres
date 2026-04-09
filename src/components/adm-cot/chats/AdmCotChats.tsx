@@ -1079,7 +1079,7 @@ export default function AdmCotChats() {
 
           {/* Right: Config Panel — overlay on mobile, side panel on desktop */}
           {showConfig && selectedThread && (
-            <div className="fixed inset-0 z-50 flex flex-col md:relative md:inset-auto md:z-auto md:w-72 xl:md:w-80 md:flex-shrink-0">
+            <div className="fixed inset-0 z-[1000] h-dvh flex flex-col md:relative md:inset-auto md:z-auto md:h-auto md:w-72 xl:md:w-80 md:flex-shrink-0">
               <ConfigPanel
                 thread={selectedThread}
                 onClose={() => setShowConfig(false)}
