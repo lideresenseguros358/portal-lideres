@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     // ── Get credentials ──
     const cclw = process.env.PAGUELOFACIL_CCLW;
     const token = process.env.PAGUELOFACIL_API_TOKEN;
-    const env = process.env.PAGUELOFACIL_ENVIRONMENT || 'sandbox';
+    const env = process.env.PAGUELOFACIL_ENVIRONMENT || (process.env.NODE_ENV === 'production' ? 'production' : 'sandbox');
 
     if (!cclw || !token) {
       console.error('[PAGUELOFACIL] CCLW or API_TOKEN not configured');

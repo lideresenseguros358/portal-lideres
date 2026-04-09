@@ -34,7 +34,7 @@ export interface PagueloFacilConfig {
  * Uses PAGUELOFACIL_ENVIRONMENT to determine sandbox vs production.
  */
 export function getPagueloFacilConfig(): PagueloFacilConfig {
-  const env = (process.env.PAGUELOFACIL_ENVIRONMENT || 'sandbox') as PagueloFacilEnvironment;
+  const env = (process.env.PAGUELOFACIL_ENVIRONMENT || (process.env.NODE_ENV === 'production' ? 'production' : 'sandbox')) as PagueloFacilEnvironment;
   const isProduction = env === 'production';
 
   return {
