@@ -282,8 +282,12 @@ export async function POST(request: NextRequest) {
     // Convert FechaNacimiento from dd/mm/yyyy or yyyy-MM-dd to yyyy-MM-dd
     const fechaNacimiento = convertDDMMYYYY(body.FechaNacimiento || '');
 
-    // Monto = prima total with tax, as string with 2 decimals
-    const monto = (primaReal || body.PrimaTotal || 0).toFixed(2);
+    // Monto = prima con descuento si es contado (5%), o prima completa si es cuotas
+    const esContado = body.esContado === true || body.cantidadPago === 1;
+    const primaParaMonto = esContado
+      ? Math.round(primaReal * 0.95 * 100) / 100
+      : primaReal;
+    const monto = (primaParaMonto || body.PrimaTotal || 0).toFixed(2);
 
     // Build the "data" JSON per manual page 9
     const emisionData: any = {

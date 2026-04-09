@@ -415,8 +415,8 @@ export default function EmitirPage() {
           Color: vehicleData!.color,
           Pasajero: vehicleData!.pasajeros,
           Puerta: vehicleData!.puertas,
-          PrimaTotal: selectedPlan.annualPremium, // Always contado price — FedPa calculates cuotas surcharge internally
-          cantidadPago: 1, // Always emit as contado to FEDPA CC — PF recurrence handles client's installments
+          PrimaTotal: selectedPlan.annualPremium,
+          cantidadPago: installments,
         };
 
         // ── Emisor Externo (2021): get_cotizacion → get_nropoliza → crear_poliza_auto_cc_externos ──
@@ -442,7 +442,8 @@ export default function EmitirPage() {
           CodLimiteGastosMedico: quoteData.codLimiteGastosMedico || mapGastosMedicosACodigo(
             quoteData.gastosMedicosPersona || 2000, quoteData.gastosMedicosAccidente || 10000
           ),
-          EndosoIncluido: 'S',
+          EndosoIncluido: selectedPlan._endosos?.[0]?.codigo || 'S',
+          esContado: installments === 1,
         }));
 
         // File1 = cédula/documento identidad
