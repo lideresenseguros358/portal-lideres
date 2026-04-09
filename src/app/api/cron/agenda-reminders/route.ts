@@ -15,9 +15,13 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function GET(request: NextRequest) {
   // Verificar autenticación del cron
-  const cronSecret = request.headers.get('x-cron-secret');
+  // Vercel Cron envía: Authorization: Bearer <CRON_SECRET>
+  // Llamadas manuales/internas pueden usar: x-cron-secret: <CRON_SECRET>
+  const authHeader = request.headers.get('authorization');
+  const xCronSecret = request.headers.get('x-cron-secret');
+  const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret !== process.env.CRON_SECRET) {
+  if (!cronSecret || (authHeader !== `Bearer ${cronSecret}` && xCronSecret !== cronSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
