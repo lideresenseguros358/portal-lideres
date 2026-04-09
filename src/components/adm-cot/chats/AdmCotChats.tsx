@@ -1060,10 +1060,12 @@ export default function AdmCotChats() {
             />
           </div>
 
-          {/* Center: Chat View */}
-          <div className={`flex-1 ${
-            selectedThreadId ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
-          }`}>
+          {/* Center: Chat View — fullscreen overlay on mobile, side panel on desktop */}
+          <div className={
+            selectedThreadId
+              ? 'fixed inset-0 z-[1000] h-dvh flex flex-col lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:flex-1'
+              : 'hidden lg:flex lg:flex-1 lg:flex-col'
+          }>
             <ChatView
               thread={selectedThread}
               messages={messages}
