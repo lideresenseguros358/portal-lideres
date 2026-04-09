@@ -102,14 +102,23 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   const [licenciaFileName, setLicenciaFileName] = useState('');
   const [acreedoresList, setAcreedoresList] = useState<Acreedor[]>(ACREEDORES_PANAMA);
 
+  // Insurer detection — must be before any useEffect that depends on these
+  const isInternacional = quoteData?.insurerName?.includes('INTERNACIONAL') || false;
+  const isANCON = !!(quoteData?.isANCON || quoteData?.insurerName?.toUpperCase().includes('ANCON') || quoteData?.insurerName?.toUpperCase().includes('ANCÓN'));
+
   // ANCON catalog dropdowns — ocupacion & profesion
   const [ocupacionList, setOcupacionList] = useState<{ code: string; nombre: string }[]>([]);
   const [profesionList, setProfesionList] = useState<{ code: string; nombre: string }[]>([]);
+  const [anconCatalogsLoading, setAnconCatalogsLoading] = useState(false);
   const anconCatalogsFetched = useRef(false);
 
+  // Depends on isANCON so quoteData must be loaded before this fires.
+  // quoteData arrives via prop after sessionStorage is read in the parent (async),
+  // so isANCON may be false on first mount and true on next render.
   useEffect(() => {
     if (!isANCON || anconCatalogsFetched.current) return;
     anconCatalogsFetched.current = true;
+    setAnconCatalogsLoading(true);
     Promise.all([
       fetch('/api/ancon/catalogs?type=ocupacion').then(r => r.json()),
       fetch('/api/ancon/catalogs?type=profesion').then(r => r.json()),
@@ -117,19 +126,28 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
       if (ocup.success && Array.isArray(ocup.data)) {
         setOcupacionList(
           ocup.data
-            .map((e: Record<string, string>) => ({ code: e.cod_ocupacion || e.codigo || '', nombre: e.nombre || '' }))
-            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
+            .map((e: Record<string, string>) => ({
+              code: e.cod_ocupacion || e.COD_OCUPACION || e.codigo || e.CODIGO || '',
+              nombre: e.nombre || e.NOMBRE || e.descripcion || e.DESCRIPCION || '',
+            }))
+            .filter(o => o.code && o.nombre)
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
         );
       }
       if (prof.success && Array.isArray(prof.data)) {
         setProfesionList(
           prof.data
-            .map((e: Record<string, string>) => ({ code: e.cod_profesion || e.codigo || '', nombre: e.nombre || '' }))
-            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
+            .map((e: Record<string, string>) => ({
+              code: e.cod_profesion || e.COD_PROFESION || e.codigo || e.CODIGO || '',
+              nombre: e.nombre || e.NOMBRE || e.descripcion || e.DESCRIPCION || '',
+            }))
+            .filter(p => p.code && p.nombre)
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
         );
       }
-    }).catch(() => { /* catalogs optional — defaults used if unavailable */ });
-  }, []);
+    }).catch(() => { /* catalogs optional — defaults used if unavailable */ })
+      .finally(() => setAnconCatalogsLoading(false));
+  }, [isANCON]);
 
   const acreedoresOptions = useMemo<AutocompleteOption[]>(
     () => acreedoresList.map(a => ({ value: a.codigoFEDPA, label: a.label })),
@@ -137,8 +155,6 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   );
 
   // IS Address catalogs — cascading dropdowns
-  const isInternacional = quoteData?.insurerName?.includes('INTERNACIONAL') || false;
-  const isANCON = !!(quoteData?.isANCON || quoteData?.insurerName?.toUpperCase().includes('ANCON') || quoteData?.insurerName?.toUpperCase().includes('ANCÓN'));
   const [provincias, setProvincias] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [distritos, setDistritos] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [corregimientos, setCorregimientos] = useState<{ DATO: number; TEXTO: string }[]>([]);
@@ -936,38 +952,38 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
             )}
 
             {/* ANCON catalog dropdowns — ocupacion & profesion */}
-            {(ocupacionList.length > 0 || profesionList.length > 0) && (
+            {(isANCON && (anconCatalogsLoading || ocupacionList.length > 0 || profesionList.length > 0)) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ocupacionList.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Ocupación <span className="text-red-500">*</span>
-                    </label>
-                    <Autocomplete
-                      options={ocupacionList.map(o => ({ value: o.code, label: o.nombre }))}
-                      value={formData.anconOcupacion}
-                      onChange={(val) => setFormData({ ...formData, anconOcupacion: String(val) })}
-                      placeholder="Buscar ocupación..."
-                      error={!!errors.anconOcupacion}
-                    />
-                    {errors.anconOcupacion && <p className="text-xs text-red-500 mt-1">{errors.anconOcupacion}</p>}
-                  </div>
-                )}
-                {profesionList.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Profesión <span className="text-red-500">*</span>
-                    </label>
-                    <Autocomplete
-                      options={profesionList.map(p => ({ value: p.code, label: p.nombre }))}
-                      value={formData.anconProfesion}
-                      onChange={(val) => setFormData({ ...formData, anconProfesion: String(val) })}
-                      placeholder="Buscar profesión..."
-                      error={!!errors.anconProfesion}
-                    />
-                    {errors.anconProfesion && <p className="text-xs text-red-500 mt-1">{errors.anconProfesion}</p>}
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Ocupación <span className="text-red-500">*</span>
+                  </label>
+                  <Autocomplete
+                    options={ocupacionList.map(o => ({ value: o.code, label: o.nombre }))}
+                    value={formData.anconOcupacion}
+                    onChange={(val) => setFormData({ ...formData, anconOcupacion: String(val) })}
+                    placeholder="Buscar ocupación..."
+                    error={!!errors.anconOcupacion}
+                    loading={anconCatalogsLoading}
+                    emptyMessage="No se encontraron ocupaciones"
+                  />
+                  {errors.anconOcupacion && <p className="text-xs text-red-500 mt-1">{errors.anconOcupacion}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Profesión <span className="text-red-500">*</span>
+                  </label>
+                  <Autocomplete
+                    options={profesionList.map(p => ({ value: p.code, label: p.nombre }))}
+                    value={formData.anconProfesion}
+                    onChange={(val) => setFormData({ ...formData, anconProfesion: String(val) })}
+                    placeholder="Buscar profesión..."
+                    error={!!errors.anconProfesion}
+                    loading={anconCatalogsLoading}
+                    emptyMessage="No se encontraron profesiones"
+                  />
+                  {errors.anconProfesion && <p className="text-xs text-red-500 mt-1">{errors.anconProfesion}</p>}
+                </div>
               </div>
             )}
 
