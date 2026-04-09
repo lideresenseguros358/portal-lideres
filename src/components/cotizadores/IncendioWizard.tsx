@@ -743,17 +743,24 @@ export default function IncendioWizard() {
             const v = parseCurrency(data.valorBien);
             if (!v) return null;
             const prima = v * 0.001; // 0.1%
+            const itbms = prima * 0.05;
+            const total = prima + itbms;
             return (
-              <div className="mt-3 flex items-center gap-2 bg-[#010139]/5 border border-[#010139]/15 rounded-lg px-3 py-2">
-                <span className="text-lg">🏠</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-[#010139]/60 uppercase tracking-wide leading-none mb-0.5">Costo aproximado</p>
-                  <p className="text-sm font-bold text-[#010139]">
-                    ${prima.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    <span className="text-xs font-normal text-gray-500 ml-1">/ año</span>
-                  </p>
+              <div className="mt-3 bg-[#010139]/5 border border-[#010139]/15 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🏠</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-[#010139]/60 uppercase tracking-wide leading-none mb-0.5">Costo aproximado</p>
+                    <p className="text-sm font-bold text-[#010139]">
+                      ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="text-xs font-normal text-gray-500 ml-1">/ año</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-gray-400 flex-shrink-0">0.10% + ITBMS</span>
                 </div>
-                <span className="text-[10px] text-gray-400 flex-shrink-0">0.10% de la suma</span>
+                <p className="text-[10px] text-gray-400 mt-1 pl-7">
+                  Prima: ${prima.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + ITBMS 5%: ${itbms.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
               </div>
             );
           })()}
