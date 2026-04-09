@@ -261,7 +261,7 @@ export async function saveAnconCaratula(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = getSupabaseAdmin();
 
-  // Resolve policy + client
+  // Resolve policy + client (best-effort — policy_id is nullable in ancon_caratulas)
   const { data: policy } = await supabase
     .from('policies')
     .select('id, client_id')
@@ -271,14 +271,14 @@ export async function saveAnconCaratula(
     .maybeSingle();
 
   if (!policy) {
-    return { ok: false, error: `Policy not found for poliza: ${polizaNumber}` };
+    console.warn(`[Expediente ANCON] Policy not found for poliza ${polizaNumber} — saving HTML without policy_id`);
   }
 
-  // Upsert HTML into ancon_caratulas
+  // Upsert HTML into ancon_caratulas (policy_id may be null if policy record not found yet)
   const { error: upsertErr } = await supabase
     .from('ancon_caratulas')
     .upsert(
-      { poliza_number: polizaNumber, policy_id: policy.id, html_content: rawHtml },
+      { poliza_number: polizaNumber, policy_id: policy?.id ?? null, html_content: rawHtml },
       { onConflict: 'poliza_number' }
     );
 
@@ -289,31 +289,34 @@ export async function saveAnconCaratula(
   console.log(`[Expediente ANCON] ✅ Carátula HTML guardada en ancon_caratulas para póliza ${polizaNumber}`);
 
   // Create expediente_documents record so carátula appears in the expediente viewer
-  const { data: existing } = await supabase
-    .from('expediente_documents')
-    .select('id')
-    .eq('policy_id', policy.id)
-    .eq('document_type', 'otros')
-    .ilike('document_name', 'Carátula de Póliza%')
-    .limit(1)
-    .maybeSingle();
+  // Only possible when the policy record exists; skipped otherwise (HTML still saved above)
+  if (policy) {
+    const { data: existing } = await supabase
+      .from('expediente_documents')
+      .select('id')
+      .eq('policy_id', policy.id)
+      .eq('document_type', 'otros')
+      .ilike('document_name', 'Carátula de Póliza%')
+      .limit(1)
+      .maybeSingle();
 
-  if (!existing) {
-    const sanitizedPoliza = polizaNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
-    // file_path uses a sentinel prefix — not a real Storage path.
-    // The carátula route serves the content directly from ancon_caratulas.
-    await supabase.from('expediente_documents').insert({
-      client_id: policy.client_id,
-      policy_id: policy.id,
-      document_type: 'otros',
-      document_name: `Carátula de Póliza - ${polizaNumber}`,
-      file_path: `ancon-caratula-db:${sanitizedPoliza}`,
-      file_name: `caratula_ancon_${sanitizedPoliza}.html`,
-      file_size: rawHtml.length,
-      mime_type: 'text/html',
-      notes: 'Carátula HTML de póliza ANCON. Ver en /api/ancon/caratula?poliza=...',
-      uploaded_by: null,
-    });
+    if (!existing) {
+      const sanitizedPoliza = polizaNumber.replace(/[^a-zA-Z0-9.-]/g, '_');
+      // file_path uses a sentinel prefix — not a real Storage path.
+      // The carátula route serves the content directly from ancon_caratulas.
+      await supabase.from('expediente_documents').insert({
+        client_id: policy.client_id,
+        policy_id: policy.id,
+        document_type: 'otros',
+        document_name: `Carátula de Póliza - ${polizaNumber}`,
+        file_path: `ancon-caratula-db:${sanitizedPoliza}`,
+        file_name: `caratula_ancon_${sanitizedPoliza}.html`,
+        file_size: rawHtml.length,
+        mime_type: 'text/html',
+        notes: 'Carátula HTML de póliza ANCON. Ver en /api/ancon/caratula?poliza=...',
+        uploaded_by: null,
+      });
+    }
   }
 
   return { ok: true };
