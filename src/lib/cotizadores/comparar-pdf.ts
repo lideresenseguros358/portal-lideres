@@ -14,6 +14,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 // ── Brand Colors ─────────────────────────────────────────────────────────────
 const NAVY        = rgb(1/255,   1/255,  57/255);   // #010139
@@ -202,13 +203,67 @@ async function tryLoadPng(pdfDoc: PDFDocument, rootDir: string, relPath: string)
   } catch { return null; }
 }
 
+/**
+ * Trim a PNG buffer to the bounding box of its non-transparent pixels.
+ * For logos with large transparent padding (e.g. FEDPA 1800×1800 with
+ * the actual content only in the center), this ensures the image embeds
+ * at the real content dimensions so the aspect ratio is correct.
+ */
+async function trimTransparentPng(pngPath: string): Promise<Buffer> {
+  const { data, info } = await sharp(pngPath)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const { width, height, channels } = info;
+  let minX = width, maxX = 0, minY = height, maxY = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = channels === 4 ? data[(y * width + x) * channels + 3] : 255;
+      if (alpha > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (minX > maxX || minY > maxY) return fs.readFileSync(pngPath); // fully transparent — fallback
+
+  // Add a small margin so the content isn't clipped at the very edge
+  const pad = 4;
+  const left   = Math.max(0, minX - pad);
+  const top    = Math.max(0, minY - pad);
+  const right  = Math.min(width,  maxX + pad + 1);
+  const bottom = Math.min(height, maxY + pad + 1);
+
+  return sharp(pngPath)
+    .extract({ left, top, width: right - left, height: bottom - top })
+    .png()
+    .toBuffer();
+}
+
 async function loadInsurerLogos(pdfDoc: PDFDocument, rootDir: string): Promise<Record<string, any>> {
   const logos: Record<string, any> = {};
   for (const name of ['fedpa', 'internacional', 'regional', 'ancon']) {
     try {
-      const img = await tryLoadPng(pdfDoc, rootDir, `aseguradoras/${name}.png`);
-      if (img) logos[name.toUpperCase()] = img;
-      if (name === 'internacional') logos['INTERNACIONAL'] = img;
+      const filePath = path.join(rootDir, 'public', 'aseguradoras', `${name}.png`);
+      let pngBuffer: Buffer;
+
+      // FEDPA's PNG canvas has large transparent padding — trim to real content bounds
+      // so the embedded image has the correct aspect ratio for proportional scaling.
+      if (name === 'fedpa' && fs.existsSync(filePath)) {
+        pngBuffer = await trimTransparentPng(filePath);
+      } else {
+        pngBuffer = fs.existsSync(filePath) ? fs.readFileSync(filePath) : Buffer.alloc(0);
+      }
+
+      if (pngBuffer.length > 0) {
+        const img = await pdfDoc.embedPng(pngBuffer);
+        logos[name.toUpperCase()] = img;
+        if (name === 'internacional') logos['INTERNACIONAL'] = img;
+      }
     } catch { /* skip */ }
   }
   return logos;
@@ -582,8 +637,7 @@ async function drawCoveragePage(
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
-      // FEDPA has a square (1:1) logo — allow more height so it visually matches wide logos
-      const maxH = key === 'FEDPA' ? INS_H - 4 : INS_H - 10;
+      const maxH = INS_H - 10;
       const maxW = cardW - 14;
       const ratio = logo.width / logo.height;
 
@@ -961,8 +1015,7 @@ async function drawBenefitsPage(
     const key  = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
-      // FEDPA has a square (1:1) logo — allow more height so it visually matches wide logos
-      const maxH = key === 'FEDPA' ? INS_H - 4 : INS_H - 10;
+      const maxH = INS_H - 10;
       const maxW = cardW - 14;
       const minW = maxW * 0.45;
       const ratio = logo.width / logo.height;
