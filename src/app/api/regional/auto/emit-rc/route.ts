@@ -199,6 +199,8 @@ export async function POST(request: NextRequest) {
     // If not, fall back to a separate imprimirPoliza call with a short delay.
     let documentStorageUrl: string | null = null;
 
+    let polizaVerificationWarning = false;
+
     if (result.poliza) {
       try {
         console.log(`[REGIONAL RC Emit] Capturing policy document for ${result.poliza}...`);
@@ -209,14 +211,26 @@ export async function POST(request: NextRequest) {
         if (htmlToStore) {
           console.log(`[REGIONAL RC Emit] Using HTML from emission response (${htmlToStore.length} bytes)`);
         } else {
-          // Small delay to let Regional finalize the policy before printing
-          await new Promise(r => setTimeout(r, 300));
-          const printResult = await imprimirPoliza(result.poliza, 'rc');
-          if (printResult.success) {
-            htmlToStore = printResult.html || null;
-            pdfToStore = printResult.pdf || null;
-          } else {
-            console.warn('[REGIONAL RC Emit] imprimirPoliza failed (non-fatal):', printResult.message);
+          // Retry imprimirPoliza with backoff — REGIONAL's Oracle sequence runs before the INSERT,
+          // so the policy may not be persisted immediately. Retrying gives it time to commit.
+          const PRINT_DELAYS = [2000, 4000, 6000]; // 2s, then 4s, then 6s
+          for (let attempt = 0; attempt < PRINT_DELAYS.length; attempt++) {
+            const delay = PRINT_DELAYS[attempt];
+            console.log(`[REGIONAL RC Emit] imprimirPoliza attempt ${attempt + 1}/${PRINT_DELAYS.length} — waiting ${delay}ms...`);
+            await new Promise(r => setTimeout(r, delay));
+            const printResult = await imprimirPoliza(result.poliza, 'rc');
+            if (printResult.success && (printResult.html || printResult.pdf)) {
+              htmlToStore = printResult.html || null;
+              pdfToStore = printResult.pdf || null;
+              console.log(`[REGIONAL RC Emit] ✅ imprimirPoliza succeeded on attempt ${attempt + 1}`);
+              break;
+            }
+            console.warn(`[REGIONAL RC Emit] imprimirPoliza attempt ${attempt + 1} returned null (non-fatal):`, printResult.message);
+            if (attempt === PRINT_DELAYS.length - 1) {
+              // All retries exhausted — policy may not have persisted in REGIONAL's DB
+              polizaVerificationWarning = true;
+              console.error(`[REGIONAL RC Emit] ⚠️ Policy ${result.poliza} NOT FOUND in Regional after ${PRINT_DELAYS.length} attempts — possible Oracle transaction failure`);
+            }
           }
         }
 
@@ -339,6 +353,7 @@ export async function POST(request: NextRequest) {
         color: colorCode,
       },
       plan: String(plan),
+      polizaVerificationWarning,
       _timing: { totalMs: elapsed },
     });
   } catch (error: any) {

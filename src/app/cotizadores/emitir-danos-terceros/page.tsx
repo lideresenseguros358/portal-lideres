@@ -1147,6 +1147,7 @@ export default function EmitirDanosTercerosPage() {
           vigenciaDesde: new Date().toLocaleDateString('es-PA'),
           vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
           tipoCobertura: 'Daños a Terceros',
+          polizaVerificationWarning: emisionResult.polizaVerificationWarning || false,
         }));
 
         sessionStorage.removeItem('selectedQuote');

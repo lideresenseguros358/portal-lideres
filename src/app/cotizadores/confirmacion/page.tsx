@@ -345,6 +345,24 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
+          {/* Verification warning — shown when Regional returned a poliza number but
+              imprimirPoliza returned null after multiple retries (Oracle transaction bug) */}
+          {policyData?.polizaVerificationWarning && (
+            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-400 rounded-xl text-left">
+              <div className="flex items-start gap-3">
+                <span className="text-amber-500 text-xl mt-0.5">⚠️</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-800 mb-1">
+                    Verificar póliza en la plataforma de Regional
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    La emisión fue aceptada con número <strong>{policyData.nroPoliza}</strong>, pero no pudo confirmarse que la póliza quedó registrada en el sistema de Regional de Seguros. Por favor verifique manualmente antes de entregar documentos al cliente.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Botón: Descargar Póliza */}
           {policyData?.insurer?.toUpperCase().includes('FEDPA') ? (
             <div className="mb-6">
