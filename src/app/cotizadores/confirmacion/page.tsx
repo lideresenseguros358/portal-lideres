@@ -17,35 +17,49 @@ export default function ConfirmacionPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const caratulaRef = useRef<HTMLDivElement>(null);
-
-  // Only one visual indicator: disabled state on button
-  // The spinner inside the button is the only feedback during download
+  const confettifired = useRef(false);
 
   // Load policy data and mark page as mounted
   useEffect(() => {
     const emittedPolicy = sessionStorage.getItem('emittedPolicy');
-    if (emittedPolicy) setPolicyData(JSON.parse(emittedPolicy));
+    if (emittedPolicy) {
+      setPolicyData(JSON.parse(emittedPolicy));
+    }
     setMounted(true);
   }, []);
 
-  // Confetti — runs only once page content is visible (mounted = true)
-  // Uses requestAnimationFrame, same pattern as PayFortnightProgressModal
+  // Confetti — fires once when DOM is ready, guarded by useRef to prevent re-fire on re-renders
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || confettifired.current) return;
+    confettifired.current = true;
 
-    const duration = 4000;
-    const end = Date.now() + duration;
-    let rafId: number;
+    // Wait for canvas to be fully rendered — use rAF + minimal setTimeout
+    let raf1: number | undefined;
+    let timeout: NodeJS.Timeout | undefined;
+    let rafId: number | undefined;
 
-    const fire = () => {
-      confetti({ particleCount: 3, angle: 60,  spread: 55, origin: { x: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-      if (Date.now() < end) rafId = requestAnimationFrame(fire);
+    const startConfetti = () => {
+      timeout = setTimeout(() => {
+        const duration = 4000;
+        const end = Date.now() + duration;
+
+        const fire = () => {
+          confetti({ particleCount: 3, angle: 60,  spread: 55, origin: { x: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+          confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+          if (Date.now() < end) rafId = requestAnimationFrame(fire);
+        };
+
+        fire();
+      }, 100);
     };
 
-    fire();
+    raf1 = requestAnimationFrame(startConfetti);
 
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      if (raf1 !== undefined) cancelAnimationFrame(raf1);
+      if (timeout !== undefined) clearTimeout(timeout);
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
   }, [mounted]);
 
   if (!mounted) return null;
