@@ -21,19 +21,23 @@ export default function ConfirmacionPage() {
   // Only one visual indicator: disabled state on button
   // The spinner inside the button is the only feedback during download
 
+  // Load data and mark as mounted
   useEffect(() => {
-    setMounted(true);
-
     const emittedPolicy = sessionStorage.getItem('emittedPolicy');
     if (emittedPolicy) {
       const data = JSON.parse(emittedPolicy);
       setPolicyData(data);
     }
+    setMounted(true);
+  }, []);
 
-    // Confetti
+  // Confetti — fires only after page content is visible (mounted=true)
+  useEffect(() => {
+    if (!mounted) return;
+
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
     const duration = 3000;
     const animationEnd = Date.now() + duration;
-    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
     const interval = setInterval(() => {
       if (Date.now() > animationEnd) { clearInterval(interval); return; }
@@ -42,7 +46,7 @@ export default function ConfirmacionPage() {
     }, 250);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [mounted]);
 
   if (!mounted) return null;
 
