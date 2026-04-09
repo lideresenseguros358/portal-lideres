@@ -451,7 +451,8 @@ export default function QuoteComparison({
   const ignoreInsurerSettings = process.env.NEXT_PUBLIC_IGNORE_INSURER_SETTINGS === 'true';
 
   const filteredQuotes = ignoreInsurerSettings ? quotes : quotes.filter((quote) => {
-    if (!insurerSettings || insurerSettings.length === 0) return true;
+    if (loadingSettings) return true; // While loading, keep all visible to avoid blank flash
+    if (!insurerSettings || insurerSettings.length === 0) return true; // Fetch failed — fail open
     const slug = insurerNameToSlug[quote.insurerName];
     if (!slug) return true; // Unknown insurer, show it anyway
     const setting = insurerSettings.find(s => s.slug === slug);
@@ -460,6 +461,7 @@ export default function QuoteComparison({
 
   // Filter insurerGroups to exclude inactive insurers
   const filteredInsurerGroups = ignoreInsurerSettings ? insurerGroups : insurerGroups.filter(([insurerName]) => {
+    if (loadingSettings) return true;
     if (!insurerSettings || insurerSettings.length === 0) return true;
     const slug = insurerNameToSlug[insurerName];
     if (!slug) return true;

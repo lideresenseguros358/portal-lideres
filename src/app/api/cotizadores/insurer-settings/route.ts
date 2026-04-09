@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { Database } from '@/lib/database.types';
 
+// Never cache this route — settings must always reflect the latest master toggle
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/cotizadores/insurer-settings
  * Returns all cotizador insurer settings (public)
@@ -31,10 +34,10 @@ async function handleGET() {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      settings: data || [],
-    });
+    return NextResponse.json(
+      { success: true, settings: data || [] },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (err: any) {
     console.error('Failed to fetch insurer settings:', err);
     return NextResponse.json(

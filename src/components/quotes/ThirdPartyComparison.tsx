@@ -850,6 +850,9 @@ export default function ThirdPartyComparison({
   // Filter insurers based on tp_activo setting if available
   const ignoreInsurerSettings = process.env.NEXT_PUBLIC_IGNORE_INSURER_SETTINGS === 'true';
   const filteredInsurersData = ignoreInsurerSettings ? insurersData : insurersData.filter((insurer) => {
+    // While settings are loading, keep showing cached data to avoid blank flash
+    if (loadingSettings) return true;
+    // Settings loaded but empty (fetch failed) — fail open
     if (!insurerSettings || insurerSettings.length === 0) return true;
     const setting = insurerSettings.find(s => s.slug === insurer.id);
     return setting?.tp_activo !== false;

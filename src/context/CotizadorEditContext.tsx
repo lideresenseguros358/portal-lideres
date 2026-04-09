@@ -49,12 +49,14 @@ interface CotizadorEditProviderProps {
 export function CotizadorEditProvider({ children, isMaster }: CotizadorEditProviderProps) {
   const [editMode, setEditMode] = useState(false);
   const [insurerSettings, setInsurerSettings] = useState<CotizadorInsurerSetting[]>([]);
-  const [loadingSettings, setLoadingSettings] = useState(false);
+  // Start as true so consumers treat initial state as "loading" — prevents race condition
+  // where child effects run before parent effects and see empty insurerSettings as "no filter"
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   const loadSettings = useCallback(async () => {
     try {
       setLoadingSettings(true);
-      const res = await fetch('/api/cotizadores/insurer-settings');
+      const res = await fetch('/api/cotizadores/insurer-settings', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setInsurerSettings(data.settings || []);
@@ -90,12 +92,10 @@ export function CotizadorEditProvider({ children, isMaster }: CotizadorEditProvi
     [isMaster]
   );
 
-  // Load settings on mount (always needed for filtering active insurers, even for public users)
-  useEffect(() => {
-    if (insurerSettings.length === 0 && !loadingSettings) {
-      loadSettings();
-    }
-  }, [loadSettings, insurerSettings.length, loadingSettings]);
+  // Load settings once on mount — always needed for filtering active insurers.
+  // loadSettings is stable (useCallback with [] deps), so this runs exactly once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadSettings(); }, []);
 
   return (
     <CotizadorEditContext.Provider
