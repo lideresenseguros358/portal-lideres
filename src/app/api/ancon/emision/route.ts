@@ -593,9 +593,24 @@ export async function POST(request: NextRequest) {
     log('3/4', `EmitirDatos response: ${emitStr.substring(0, 300)}`);
 
     const emitObj = typeof emitRaw === 'object' && emitRaw !== null ? emitRaw as Record<string, unknown> : null;
-    const emitError = emitObj?.Respuesta
-      ? (typeof emitObj.Respuesta === 'string' ? emitObj.Respuesta : (emitObj.Respuesta as Array<Record<string, string>>)?.[0]?.Respuesta)
-      : (emitStr.includes('Token Inactivo') ? 'Token Inactivo' : null);
+
+    // Extract the actual error message from all known ANCON response formats:
+    //   { Respuesta: "msg" } | { Respuesta: [{ Respuesta: "msg" }] }  — explicit error key
+    //   { p1: "1", p2: "msg" }                                         — failure code + human description
+    //   plain string containing "Token Inactivo"
+    let emitError: string | null = null;
+    if (emitObj) {
+      if (emitObj.Respuesta) {
+        emitError = typeof emitObj.Respuesta === 'string'
+          ? emitObj.Respuesta
+          : (emitObj.Respuesta as Array<Record<string, string>>)?.[0]?.Respuesta || null;
+      }
+      if (!emitError) {
+        const flat = emitObj as Record<string, string>;
+        if (flat.p1 && flat.p1 !== '0') emitError = flat.p2 || null;
+      }
+    }
+    if (!emitError && emitStr.includes('Token Inactivo')) emitError = 'Token Inactivo';
 
     // Check for success — two known formats:
     // Format 1 (flat): { "p1": "0", "p2": "Actualización Exitosa", "no_cotizacion": "..." }

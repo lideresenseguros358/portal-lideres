@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { FaExclamationTriangle, FaCheckCircle, FaHeadset, FaCreditCard } from 'react-icons/fa';
 import PixelMascotLoader from './PixelMascotLoader';
+import { formatEmissionError } from '@/lib/utils/emission-errors';
 
 interface EmissionLoadingModalProps {
   isOpen: boolean;
@@ -213,16 +214,16 @@ export default function EmissionLoadingModal({
               </div>
 
               <h3 className="text-xl font-bold text-gray-900 mb-1">
-                Error en la emisión
+                No se pudo emitir la póliza
               </h3>
               <p className="text-sm text-gray-500 mb-3">
-                No se pudo completar la emisión de la póliza.
+                La aseguradora rechazó la solicitud.
               </p>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-left">
-                  <p className="text-xs text-red-700 font-mono break-words leading-relaxed">
-                    {error}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-left">
+                  <p className="text-sm text-red-800 leading-relaxed">
+                    {formatEmissionError(error)}
                   </p>
                 </div>
               )}
