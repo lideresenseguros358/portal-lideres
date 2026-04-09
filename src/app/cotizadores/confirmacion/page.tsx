@@ -220,48 +220,12 @@ export default function ConfirmacionPage() {
     }
   };
 
-  const handleDownloadAnconPdf = async () => {
+  const handleDownloadAnconPdf = () => {
     const poliza = policyData?.anconPoliza || policyData?.nroPoliza;
-    if (!poliza || downloadingPdf) return;
-    setDownloadingPdf(true);
-    setPdfError(null);
-
-    try {
-      // Always proxy through our API — direct ANCON URLs (enlace_poliza) would fail CORS from the browser
-      const response = await fetch('/api/ancon/caratula', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ poliza }),
-      });
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('application/pdf')) {
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `poliza-ancon-${poliza}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-      } else {
-        const data = await response.json();
-        // ANCON returns HTML carátula page — open in new tab so user can view/print
-        if (data.enlace_poliza) {
-          window.open(data.enlace_poliza, '_blank');
-        } else {
-          throw new Error(data.error || 'No se pudo obtener la póliza ANCON');
-        }
-      }
-    } catch (err: any) {
-      console.error('[Confirmación] Error descargando PDF ANCON:', err);
-      setPdfError(err.message || 'Error descargando póliza ANCON');
-      handleDownloadCaratula();
-    } finally {
-      setDownloadingPdf(false);
-    }
+    if (!poliza) return;
+    // Use GET endpoint — it proxies the PDF or redirects to ANCON's HTML carátula page.
+    // window.open must be called synchronously (from user gesture) to avoid popup blockers.
+    window.open(`/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`, '_blank');
   };
 
   const handleGoHome = () => {

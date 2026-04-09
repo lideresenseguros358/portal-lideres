@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return handleCaratula(poliza);
+  // GET callers (window.open, email links) get a redirect when HTML
+  return handleCaratula(poliza, true);
 }
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return handleCaratula(String(poliza));
+    // POST callers get JSON with the URL (for programmatic use)
+    return handleCaratula(String(poliza), false);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[API ANCON Carátula] Parse error:', msg);
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleCaratula(poliza: string) {
+async function handleCaratula(poliza: string, redirectIfHtml = false) {
   const requestId = `ancon-car-${Date.now().toString(36)}`;
 
   try {
@@ -87,9 +89,12 @@ async function handleCaratula(poliza: string) {
     const probeContentType = headRes?.headers.get('content-type') || '';
     console.log(`[API ANCON Carátula] ${requestId} HEAD probe: HTTP ${headRes?.status} content-type=${probeContentType}`);
 
-    // ANCON returns HTML for print_pol.php — return URL so frontend can open in new tab
+    // ANCON returns HTML for print_pol.php
     if (probeContentType.includes('text/html') || !probeContentType.includes('pdf')) {
-      console.log(`[API ANCON Carátula] ${requestId} HTML carátula detected — returning URL for client-side open`);
+      console.log(`[API ANCON Carátula] ${requestId} HTML carátula detected — ${redirectIfHtml ? 'redirecting' : 'returning URL'}`);
+      if (redirectIfHtml) {
+        return NextResponse.redirect(pdfEnlace, 302);
+      }
       return NextResponse.json({
         success: true,
         enlace_poliza: pdfEnlace,
