@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
         // Fetch existing record (id for CAPI dedup, premium for event value)
         const { data: existingRow } = await supabase
           .from('adm_cot_quotes')
-          .select('id, quote_payload, region, annual_premium, email, phone, client_name')
+          .select('id, quote_payload, region, annual_premium, email, phone, client_name, ramo, coverage_type')
           .eq('quote_ref', data.quote_ref)
           .eq('insurer', data.insurer)
           .order('quoted_at', { ascending: false })
@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
             firstName: emitNameParts[0] || undefined,
             lastName: emitNameParts.slice(1).join(' ') || undefined,
             insurer: data.insurer,
-            ramo: 'AUTO',
+            ramo: data.ramo || existingRow.ramo || 'AUTO',
             policyNumber: data.policy_number || undefined,
             premium: existingRow.annual_premium || undefined,
             clientIp: clientIp !== 'unknown' ? clientIp : undefined,
@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
         // Fetch existing row to preserve quote_payload and get id for CAPI
         const { data: existingFail } = await supabase
           .from('adm_cot_quotes')
-          .select('id, quote_payload, email, phone, client_name, annual_premium, coverage_type, region')
+          .select('id, quote_payload, email, phone, client_name, annual_premium, coverage_type, ramo, region')
           .eq('quote_ref', data.quote_ref)
           .eq('insurer', data.insurer)
           .order('quoted_at', { ascending: false })
@@ -415,7 +415,7 @@ export async function POST(request: NextRequest) {
             firstName: abandonNameParts[0] || undefined,
             lastName: abandonNameParts.slice(1).join(' ') || undefined,
             insurer: data.insurer,
-            ramo: 'AUTO',
+            ramo: data.ramo || existingFail.ramo || 'AUTO',
             coverageType: existingFail.coverage_type || undefined,
             premium: existingFail.annual_premium || undefined,
             lastStep: sanitizeString(data.last_step, 50) || undefined,
