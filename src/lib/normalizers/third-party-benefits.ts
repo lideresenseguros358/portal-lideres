@@ -154,7 +154,7 @@ function normalizeIS(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium'): N
       status: isBasic
         ? conexion('Por accidente o avería')
         : included(undefined, gruaBenefit ? (extractDetail(gruaBenefit) || 'Por accidente o avería — Hasta B/.150, máx. 3 eventos/año') : 'Por accidente o avería — Hasta B/.150, máx. 3 eventos/año') },
-    { key: 'legalAssistance', label: 'Asistencia Legal', icon: '⚖️', status: included() },
+    { key: 'legalAssistance', label: 'Asistencia Legal', icon: '⚖️', status: isBasic ? excluded() : included() },
   ];
 
   return { coverages, benefits };
