@@ -568,7 +568,13 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     }
 
     // Clean up any markdown formatting for WhatsApp
-    reply = reply.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2');
+    // If link text == URL (Gemini often does [https://url](https://url)), show only the URL once.
+    // If link text is descriptive, show "texto: url".
+    reply = reply.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
+      const t = text.trim();
+      const u = url.trim();
+      return t === u || u.includes(t) ? u : `${t}: ${u}`;
+    });
 
     // Eliminar etiquetas de citación de Vertex AI Grounding (ej. [1], [2], [1, 2])
     // Defensivo: solo aplica si reply es un string válido y no vacío
