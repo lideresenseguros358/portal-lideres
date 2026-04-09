@@ -755,11 +755,13 @@ export default function ContenidoWizard() {
                       ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       <span className="text-xs font-normal text-gray-500 ml-1">/ año</span>
                     </p>
+                    <p className="text-[10px] text-gray-400 leading-tight mt-0.5">
+                      Prima ${prima.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + ITBMS ${itbms.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                   </div>
-                  <span className="text-[10px] text-gray-400 flex-shrink-0">0.50% + ITBMS</span>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1 pl-7">
-                  Prima: ${prima.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + ITBMS 5%: ${itbms.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-[10px] text-gray-400 mt-1.5 leading-snug">
+                  Este es solo un precálculo aproximado. Se le enviará al correo la cotización exacta.
                 </p>
               </div>
             );
