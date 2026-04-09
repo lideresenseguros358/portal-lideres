@@ -1706,9 +1706,9 @@ export default function ComparePage() {
     }
   };
 
-  // Register PDF download handler in global context (only when on comparar page with quotes)
+  // Register PDF download handler in global context (available to all users with quotes)
   useEffect(() => {
-    if (isMaster && quotes.length > 0 && !editMode) {
+    if (quotes.length > 0 && !editMode) {
       setDownloadHandler(() => handleDownloadPDF);
     } else {
       setDownloadHandler(null);
@@ -1716,7 +1716,7 @@ export default function ComparePage() {
     return () => {
       setDownloadHandler(null);
     };
-  }, [isMaster, quotes.length, editMode, setDownloadHandler]);
+  }, [quotes.length, editMode, setDownloadHandler]);
 
   // ── Edit mode: skip normal flow and show insurer cards ──
   if (editMode) {
