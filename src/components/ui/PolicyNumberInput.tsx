@@ -43,6 +43,15 @@ export default function PolicyNumberInput({
   // Estados para múltiples inputs
   const [inputs, setInputs] = useState<string[]>([]);
 
+  // Construye el array de inputs vacíos respetando defaults por aseguradora.
+  // ASSA: dropdown (índice 1) arranca en 'B' para que el usuario no lo olvide.
+  const buildEmptyInputs = (cfg: typeof config): string[] => {
+    if (!cfg) return [];
+    const arr = Array(cfg.inputCount).fill('');
+    if (cfg.slug === 'assa') arr[1] = 'B';
+    return arr;
+  };
+
   // Resetear estado cuando cambia la aseguradora
   useEffect(() => {
     if (insurerName !== lastInsurerRef.current) {
@@ -51,7 +60,7 @@ export default function PolicyNumberInput({
       lastValueRef.current = '';
       hasInitialized.current = false;
       if (config) {
-        setInputs(Array(config.inputCount).fill(''));
+        setInputs(buildEmptyInputs(config));
       } else {
         setInputs([]);
       }
@@ -68,11 +77,11 @@ export default function PolicyNumberInput({
     if (!config || !insurerName) return;
     
     try {
-      // Si no hay value, limpiar todo
+      // Si no hay value, restaurar defaults (ASSA dropdown → 'B', resto vacío)
       if (!value || value.trim() === '') {
         if (lastValueRef.current !== '') {
           lastValueRef.current = '';
-          setInputs(Array(config.inputCount).fill(''));
+          setInputs(buildEmptyInputs(config));
         }
         return;
       }
@@ -311,7 +320,7 @@ export default function PolicyNumberInput({
                     className={`w-full px-2 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
                       hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                     }`}
-                    placeholder={isAssa && index === 0 ? '02' : isAssa && index === 2 ? '123456' : `Parte ${index + 1}`}
+                    placeholder={isAssa && index === 2 ? '123456' : isAssa && index === 0 ? '' : `Parte ${index + 1}`}
                     maxLength={isAssa && index === 0 ? 2 : isAssa && index === 2 ? 10 : undefined}
                   />
                 </div>
