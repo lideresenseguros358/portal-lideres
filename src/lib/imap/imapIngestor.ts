@@ -30,7 +30,113 @@ export interface IngestionResult {
   messagesProcessed: number;
   casesCreated: number;
   casesLinked: number;
+  messagesIgnored: number;
   errors: Array<{ messageId: string; error: string }>;
+}
+
+// ════════════════════════════════════════════
+// PRE-FILTRO DETERMINÍSTICO DE RUIDO
+// ════════════════════════════════════════════
+
+interface IgnoreCheckInput {
+  subject: string;
+  bodyText: string | null;
+  fromEmail: string;
+}
+
+interface IgnoreCheckResult {
+  ignore: boolean;
+  reason: string;
+}
+
+/**
+ * Detecta correos de ruido operacional sin llamar a Vertex AI.
+ * Categorías: cortesías, respuestas a notificaciones del portal,
+ * acuses automáticos, delivery notifications, out-of-office.
+ *
+ * Devuelve ignore=true + reason si el correo debe descartarse.
+ * El ingestor lo guarda en DB con processed_status='ignored' para deduplicar.
+ */
+function shouldIgnoreEmail(input: IgnoreCheckInput): IgnoreCheckResult {
+  const subject = (input.subject || '').trim();
+  const subjectLower = subject.toLowerCase();
+  const from = (input.fromEmail || '').toLowerCase();
+
+  // 1. Remitentes de sistema (no-reply, mailer-daemon, postmaster)
+  if (/no-?reply|noreply|mailer-daemon|postmaster|bounce\+|do-?not-?reply/i.test(from)) {
+    return { ignore: true, reason: 'NO_REPLY_SENDER' };
+  }
+
+  // 2. Notificaciones de entrega fallida / bounce
+  if (/delivery status notification|mail delivery subsystem|undeliverable|delivery failure|returned mail|bounced message/i.test(subjectLower)) {
+    return { ignore: true, reason: 'DELIVERY_BOUNCE' };
+  }
+
+  // 3. Fuera de oficina / auto-reply
+  if (/out of office|fuera de oficina|auto-?reply|respuesta autom[aá]tica|autorespuesta|automatic reply/i.test(subjectLower)) {
+    return { ignore: true, reason: 'AUTO_REPLY' };
+  }
+
+  // 4. Respuestas a notificaciones automáticas del portal
+  //    Condición: subject empieza con "Re:" Y contiene palabra clave de notificación portal
+  const isReply = /^re\s*:/i.test(subject);
+  if (isReply) {
+    const PORTAL_NOTIFICATION_PATTERNS = [
+      /comisi[oó]n(es)?\s+recibidas?/i,
+      /nueva\s+quincena/i,
+      /liquidaci[oó]n\s+(de\s+)?quincena/i,
+      /pago\s+de\s+comisiones?/i,
+      /resumen\s+de\s+comisiones?/i,
+      /recordatorio\s+(de\s+)?agenda/i,
+      /invitaci[oó]n\s+.*evento/i,
+      /confirmaci[oó]n\s+de\s+asistencia/i,
+      /rsvp/i,
+      /evento\s+.*portal/i,
+      /notificaci[oó]n\s+.*portal/i,
+    ];
+    if (PORTAL_NOTIFICATION_PATTERNS.some(p => p.test(subjectLower))) {
+      return { ignore: true, reason: 'PORTAL_NOTIFICATION_REPLY' };
+    }
+  }
+
+  // 5. Respuestas de cortesía muy cortas (cuerpo sin citas < 80 chars)
+  const rawBody = (input.bodyText || '').trim();
+  if (rawBody) {
+    // Quitar líneas de cita (>, >>) y encabezados de respuesta
+    const bodyWithoutQuotes = rawBody
+      .split('\n')
+      .filter(line => !/^\s*>/.test(line))         // quitar líneas de cita
+      .filter(line => !/^-{3,}/.test(line))         // quitar separadores
+      .filter(line => !/^(de|from|date|fecha|asunto|subject):/i.test(line.trim()))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (bodyWithoutQuotes.length > 0 && bodyWithoutQuotes.length < 80) {
+      const COURTESY_PHRASES = [
+        /^(muchas\s+)?gracias[.!]?$/i,
+        /^ok[.!]?$/i,
+        /^recibido[.!]?$/i,
+        /^entendido[.!]?$/i,
+        /^perfecto[.!]?$/i,
+        /^listo[.!]?$/i,
+        /^de\s+nada[.!]?$/i,
+        /^con\s+gusto[.!]?$/i,
+        /^claro[.!]?$/i,
+        /^muy\s+bien[.!]?$/i,
+        /^excelente[.!]?$/i,
+        /^gracias[,.]?\s+(saludos|buen\s+d[ií]a|hasta\s+luego|que\s+est[eé]s?\s+bien)[.!]?$/i,
+        /^(muchas\s+)?gracias[,.]?\s+[^.]{0,40}[.!]?$/i,
+        /^ok[,.]?\s*(gracias|recibido)[.!]?$/i,
+        /^recibido[,.]?\s*(gracias|ok)[.!]?$/i,
+      ];
+      if (COURTESY_PHRASES.some(p => p.test(bodyWithoutQuotes))) {
+        return { ignore: true, reason: 'COURTESY_REPLY' };
+      }
+    }
+  }
+
+  return { ignore: false, reason: '' };
 }
 
 /**
@@ -42,6 +148,7 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
     messagesProcessed: 0,
     casesCreated: 0,
     casesLinked: 0,
+    messagesIgnored: 0,
     errors: [],
   };
 
@@ -110,6 +217,8 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
           result.casesCreated++;
         } else if (processed.action === 'linked') {
           result.casesLinked++;
+        } else if (processed.action === 'ignored') {
+          result.messagesIgnored++;
         }
       } catch (err: any) {
         console.error(`[INGESTOR] Error processing message ${msg.messageId}:`, err);
@@ -121,7 +230,7 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
     }
 
     console.log('[INGESTOR] Ingestion cycle completed');
-    console.log(`[INGESTOR] Processed: ${result.messagesProcessed}, Created: ${result.casesCreated}, Linked: ${result.casesLinked}, Errors: ${result.errors.length}`);
+    console.log(`[INGESTOR] Processed: ${result.messagesProcessed}, Created: ${result.casesCreated}, Linked: ${result.casesLinked}, Ignored: ${result.messagesIgnored}, Errors: ${result.errors.length}`);
   } catch (err: any) {
     console.error('[INGESTOR] Fatal error in ingestion cycle:', err);
     result.success = false;
@@ -163,6 +272,44 @@ async function processMessage(msg: EmailMessage): Promise<any> {
       message: 'Mensaje ya existe - deduplicado',
     });
     return { action: 'skipped' };
+  }
+
+  // 1b. Pre-filtro determinístico — evalúa ANTES de llamar a Vertex AI (ahorra tokens)
+  //     Si el correo es ruido operacional, se guarda con processed_status='ignored'
+  //     para garantizar deduplicación en el próximo ciclo.
+  const ignoreCheck = shouldIgnoreEmail({
+    subject: msg.subject,
+    bodyText: msg.bodyTextNormalized,
+    fromEmail: msg.from?.email || '',
+  });
+
+  if (ignoreCheck.ignore) {
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
+    await supabase.from('inbound_emails').insert({
+      message_id: msg.messageId,
+      from_email: msg.from?.email || null,
+      from_name: msg.from?.name || null,
+      to_emails: msg.to.map(t => t.email),
+      cc_emails: msg.cc.map(c => c.email),
+      subject: msg.subject,
+      subject_normalized: msg.subjectNormalized,
+      date_sent: msg.dateSent.toISOString(),
+      in_reply_to: msg.inReplyTo,
+      thread_references: msg.threadReferences,
+      body_text: msg.bodyText,
+      body_html: null,
+      body_text_normalized: msg.bodyTextNormalized,
+      attachments_count: msg.attachments.length,
+      attachments_total_bytes: msg.attachments.reduce((sum, a) => sum + a.sizeBytes, 0),
+      imap_uid: msg.imapUid,
+      folder: msg.folder,
+      processed_status: 'ignored',
+      processed_at: new Date().toISOString(),
+      error_code: ignoreCheck.reason,
+      error_detail: `Pre-filtro determinístico: ${ignoreCheck.reason}`,
+    });
+    console.log(`[INGESTOR] Pre-filtro: ignorado (${ignoreCheck.reason}) — ${msg.messageId}`);
+    return { action: 'ignored' };
   }
 
   // 2. Guardar en inbound_emails
@@ -224,7 +371,23 @@ async function processMessage(msg: EmailMessage): Promise<any> {
     attachments_summary: msg.attachments.map(a => `${a.filename} (${a.sizeBytes} bytes)`).join(', '),
   });
 
-  console.log(`[INGESTOR] Pend AI: type=${pendAi.case_type} ramo=${pendAi.ramo} aseg=${pendAi.aseguradora} ticket_req=${pendAi.ticket_required} conf=${pendAi.confidence}`);
+  console.log(`[INGESTOR] Pend AI: type=${pendAi.case_type} ramo=${pendAi.ramo} aseg=${pendAi.aseguradora} ticket_req=${pendAi.ticket_required} conf=${pendAi.confidence} ignore=${pendAi.should_ignore}`);
+
+  // 4b. Chequeo post-AI: si Vertex detectó ruido semántico, ignorar sin crear caso
+  if (pendAi.should_ignore) {
+    // @ts-ignore - tabla nueva
+    await supabase
+      .from('inbound_emails')
+      .update({
+        processed_status: 'ignored',
+        processed_at: new Date().toISOString(),
+        error_code: pendAi.ignore_reason || 'AI_IGNORED',
+        error_detail: `AI-filtro: ${pendAi.rationale || pendAi.ignore_reason}`,
+      })
+      .eq('id', inboundEmail.id);
+    console.log(`[INGESTOR] AI-filtro: ignorado (${pendAi.ignore_reason}) — ${msg.messageId}`);
+    return { action: 'ignored' };
+  }
 
   // Build base classifier result for backward compatibility with caseEngine
   const aiResult = await classifyInboundEmail({

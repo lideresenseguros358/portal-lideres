@@ -35,6 +35,8 @@ export interface PendientesClassificationInput {
 }
 
 export interface PendientesClassificationResult {
+  should_ignore: boolean;         // true = correo de ruido operacional, no crear caso
+  ignore_reason: string | null;   // categoría del ruido cuando should_ignore=true
   should_create_case: boolean;
   ticket_required: boolean;
   ticket_exception_reason: 'ASSA_VIDA_REGULAR' | 'ASSA_SALUD' | null;
@@ -227,9 +229,26 @@ RAMO_BUCKET (para compatibilidad):
 - ramos_generales: Auto, Hogar, Incendio, Empresarial
 - desconocido: No se puede determinar
 
+CORREOS A IGNORAR — should_ignore: true (NO crean caso, son ruido operacional):
+Evalúa PRIMERO si el correo pertenece a alguna de estas categorías. Si es así, pon should_ignore=true y pon el caso en ignore_reason.
+
+1. CORTESIA_REPLY: Respuesta muy corta (cuerpo < 80 caracteres sin citas) que solo contiene agradecimiento o reconocimiento sin nueva información: "Gracias", "Ok", "Recibido", "Entendido", "Perfecto", "Listo", "De nada", "Muchas gracias", "Con gusto", "Excelente", "Muy bien" o combinaciones similares.
+
+2. PORTAL_NOTIFICATION_REPLY: Respuesta de broker a un correo automático enviado por el portal. Señales: subject comienza con "Re:" Y el subject original contiene palabras como "comisión", "comisiones recibidas", "nueva quincena", "liquidación", "pago de comisiones", "recordatorio", "agenda", "RSVP", "confirmación de asistencia", "invitación", "evento portal", "notificación portal".
+
+3. EXPEDIENTE_ACK: Acuse de recibo automático de aseguradora confirmando que recibieron una solicitud de expediente o emisión. Señales: remitente es dominio de aseguradora, cuerpo dice "hemos recibido su solicitud", "acuse de recibo", "su expediente fue recibido", "confirmamos recepción", "expediente número X ha sido registrado", sin solicitar acción del corredor.
+
+4. DELIVERY_BOUNCE: Notificación de entrega fallida, bounce, delivery status notification, mail delivery subsystem, undeliverable.
+
+5. AUTO_REPLY: Respuesta automática, fuera de oficina, out of office, respuesta automática, autorespuesta.
+
+Si el correo NO pertenece a ninguna de estas categorías → should_ignore: false, ignore_reason: null.
+
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin backticks, sin texto adicional):
 
 {
+  "should_ignore": false,
+  "ignore_reason": null,
   "should_create_case": true,
   "ticket_required": true,
   "ticket_exception_reason": null,
@@ -275,6 +294,8 @@ function parseResponse(text: string): PendientesClassificationResult {
 
     // Validate and coerce required fields
     return {
+      should_ignore: parsed.should_ignore === true,
+      ignore_reason: typeof parsed.ignore_reason === 'string' ? parsed.ignore_reason : null,
       should_create_case: parsed.should_create_case ?? true,
       ticket_required: parsed.ticket_required ?? true,
       ticket_exception_reason: parsed.ticket_exception_reason ?? null,
@@ -318,6 +339,8 @@ function parseResponse(text: string): PendientesClassificationResult {
 
 function buildFallback(reason: string): PendientesClassificationResult {
   return {
+    should_ignore: false,
+    ignore_reason: null,
     should_create_case: true,
     ticket_required: true,
     ticket_exception_reason: null,
