@@ -38,7 +38,8 @@ const CW   = PW - 2*M; // content width ≈ 802
 const HDR_H  = 62;   // header height
 const VEH_H  = 42;   // vehicle/client info bar height (pages 1 & 3 only)
 const FTR_H  = 52;   // footer height (with observations + SSRP)
-const ROW_H  = 15;   // standard data row height
+const ROW_H      = 15;   // (legacy — kept for reference)
+const DATA_ROW_H = 23;   // uniform data row height (matches subtext rows)
 const SEC_H  = 19;   // section header row height
 const INS_H  = 40;   // insurer column header height
 const LPAD   = 6;    // left padding inside cells
@@ -651,14 +652,14 @@ async function drawCoveragePage(
     ? `${money(lesP)} / ${money(lesA)}`
     : resolveLimit(quotes[0]!, ['lesiones', 'corporales'], ['lesion', 'corporal'], true);
   drawLabelRow('Lesiones Corporales', 'por persona / por accidente', quotes.map(() => lesText), {
-    bg: STRIPE, rh: ROW_H + 8, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
+    bg: STRIPE, rh: DATA_ROW_H, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
   });
 
   const dpa = Number(clientInfo?.danoPropiedad) || 0;
   const dpaText = dpa > 0
     ? money(dpa)
     : resolveLimit(quotes[0]!, ['propiedad'], ['propiedad', 'dano'], false);
-  drawLabelRow('Danos a la Propiedad Ajena', null, quotes.map(() => dpaText), { rh: ROW_H });
+  drawLabelRow('Danos a la Propiedad Ajena', null, quotes.map(() => dpaText), { rh: DATA_ROW_H });
 
   const gmP = Number(clientInfo?.gastosMedicosPersona) || 0;
   const gmA = Number(clientInfo?.gastosMedicosAccidente) || 0;
@@ -666,7 +667,7 @@ async function drawCoveragePage(
     ? `${money(gmP)} / ${money(gmA)}`
     : resolveLimit(quotes[0]!, ['medic', 'gastos'], ['medic', 'gasto'], true);
   drawLabelRow('Gastos Medicos', 'por persona / por accidente', quotes.map(() => gmText), {
-    bg: STRIPE, rh: ROW_H + 8, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
+    bg: STRIPE, rh: DATA_ROW_H, labelColor: DARK, valColor: GREEN, subLabelColor: DARK,
   });
 
   // Comprensivo (valor asegurado)
@@ -674,14 +675,14 @@ async function drawCoveragePage(
     const sa = q._sumaAsegurada;
     return sa ? money(sa) : 'Valor del Auto';
   });
-  drawLabelRow('Comprensivo', null, compValues, { rh: ROW_H });
+  drawLabelRow('Comprensivo', null, compValues, { rh: DATA_ROW_H });
 
   // Colision/Vuelco
   const colValues = quotes.map(q => {
     const sa = q._sumaAsegurada;
     return sa ? money(sa) : 'Valor del Auto';
   });
-  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: ROW_H, labelColor: DARK, valColor: GREEN });
+  drawLabelRow('Colision o Vuelco', null, colValues, { bg: STRIPE, rh: DATA_ROW_H, labelColor: DARK, valColor: GREEN });
 
   // ── Section B: Deducibles ────────────────────────────────────────────────
   drawLabelRow('DEDUCIBLES', null, Array(n).fill(''),
@@ -696,7 +697,7 @@ async function drawCoveragePage(
     if (di?.valor && di.valor > 0) return money(di.valor);
     return 'Ver poliza';
   });
-  drawLabelRow('Comprensivo', null, dedCompValues, { rh: ROW_H });
+  drawLabelRow('Comprensivo', null, dedCompValues, { rh: DATA_ROW_H });
 
   const dedColValues = quotes.map(q => {
     // Priority 1: colisionVuelco from _deduciblesReales
@@ -707,7 +708,7 @@ async function drawCoveragePage(
     if (comp?.amount && comp.amount > 0) return money(comp.amount);
     return 'Ver poliza';
   });
-  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: ROW_H, labelColor: DARK, valColor: GREEN });
+  drawLabelRow('Colision o Vuelco', null, dedColValues, { bg: STRIPE, rh: DATA_ROW_H, labelColor: DARK, valColor: GREEN });
 
   // ── Section C: Precios ───────────────────────────────────────────────────
   drawLabelRow('PRIMA', null, Array(n).fill(''),
@@ -720,7 +721,7 @@ async function drawCoveragePage(
     return money(p, 'B/.');
   });
   drawLabelRow('Prima al Contado', '(5% descuento pago anual)', contadoValues, {
-    labelBold: false, valueBold: true, rh: ROW_H + 8,
+    labelBold: false, valueBold: true, rh: DATA_ROW_H,
     valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
   });
 
@@ -729,7 +730,7 @@ async function drawCoveragePage(
     return money(p, 'B/.');
   });
   drawLabelRow('Prima en Cuotas', '(max. 10 cuotas mensuales)', tarjetaValues, {
-    bg: STRIPE, rh: ROW_H + 8, valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
+    bg: STRIPE, rh: DATA_ROW_H, valColor: NAVY, labelColor: DARK, subLabelColor: DARK,
   });
 
   // ── Section D: Endosos Incluidos ─────────────────────────────────────────
@@ -747,7 +748,7 @@ async function drawCoveragePage(
     return names || q._endosoIncluido || '—';
   });
   drawLabelRow('', null, endosoValues, {
-    rh: ROW_H, valColor: GREEN,
+    rh: DATA_ROW_H, valColor: GREEN,
   });
 
 }
