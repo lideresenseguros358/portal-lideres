@@ -21,27 +21,32 @@ export default function ConfirmacionPage() {
   // Only one visual indicator: disabled state on button
   // The spinner inside the button is the only feedback during download
 
+  // Load policy data and mark page as mounted
   useEffect(() => {
     const emittedPolicy = sessionStorage.getItem('emittedPolicy');
     if (emittedPolicy) setPolicyData(JSON.parse(emittedPolicy));
     setMounted(true);
+  }, []);
 
-    // Confetti — rAF-based (same pattern as PayFortnightProgressModal)
-    const duration = 3500;
+  // Confetti — runs only once page content is visible (mounted = true)
+  // Uses requestAnimationFrame, same pattern as PayFortnightProgressModal
+  useEffect(() => {
+    if (!mounted) return;
+
+    const duration = 4000;
     const end = Date.now() + duration;
-    let animId: number;
+    let rafId: number;
 
     const fire = () => {
-      confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-      confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
-      if (Date.now() < end) animId = requestAnimationFrame(fire);
+      confetti({ particleCount: 3, angle: 60,  spread: 55, origin: { x: 0 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#8AAA19', '#010139', '#FFD700', '#FF6B6B', '#4ECDC4'] });
+      if (Date.now() < end) rafId = requestAnimationFrame(fire);
     };
 
-    // 200 ms grace period so the page finishes painting before confetti starts
-    const startTimer = setTimeout(() => { animId = requestAnimationFrame(fire); }, 200);
+    fire();
 
-    return () => { clearTimeout(startTimer); cancelAnimationFrame(animId); };
-  }, []);
+    return () => cancelAnimationFrame(rafId);
+  }, [mounted]);
 
   if (!mounted) return null;
 
