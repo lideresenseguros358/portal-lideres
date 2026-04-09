@@ -570,6 +570,12 @@ CANAL: WhatsApp — Mensajes cortos y legibles. Mantén respuestas ideales para 
     // Clean up any markdown formatting for WhatsApp
     reply = reply.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1: $2');
 
+    // Eliminar etiquetas de citación de Vertex AI Grounding (ej. [1], [2], [1, 2])
+    // Defensivo: solo aplica si reply es un string válido y no vacío
+    if (reply && typeof reply === 'string') {
+      reply = reply.replace(/\s*\[\d+(?:,\s*\d+)*\]/gi, '');
+    }
+
     const latencyMs = Date.now() - start;
     console.log(`[VERTEX-REPLY] Generated reply (${tokens} tokens, ${latencyMs}ms, history: ${contents.length - 1} turns, sentiment: ${sentimentResult.sentiment}, is_closing: ${sentimentResult.is_closing})`);
 
