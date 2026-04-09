@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, getFedpaDefaultEnv } from '@/lib/fedpa/config';
-import { crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
+import { crearClienteYPolizaFEDPA, registrarModeloFedpa } from '@/lib/fedpa/emision.service';
 import { normalizeText } from '@/lib/fedpa/utils';
 import { resolveFedpaMarca, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 import { getSupabaseServer } from '@/lib/supabase/server';
@@ -133,6 +133,9 @@ export async function POST(request: NextRequest) {
     const { code: resolvedCodMarca, matchMethod: marcaMethod } = await resolveFedpaMarca(isMarcaCodigo, marcaNombreStr);
     const resolvedCodModelo = normalizarModeloFedpa(modeloNombreStr);
     console.log(`[EMISOR EXTERNO] ${requestId} Vehicle resolved: IS marca ${isMarcaCodigo}/${marcaNombreStr} → "${resolvedCodMarca}" (${marcaMethod}), modelo "${resolvedCodModelo}"`);
+
+    // Auto-register brand/model in FEDPA's AUT_MODELO catalog to prevent FK violations
+    await registrarModeloFedpa(resolvedCodMarca, resolvedCodModelo);
 
     // ═══════════════════════════════════════════════════
     // STEP 1: get_cotizacion

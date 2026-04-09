@@ -93,9 +93,16 @@ export const EMISOR_EXTERNO_ENDPOINTS = {
   CONSULTAR_PLANES_CC: '/api/Polizas/consultar_planes_cc_externos',
   CONSULTAR_BENEFICIOS: '/api/Polizas/consultar_beneficios_planes_externos',
   CONSULTAR_USOS: '/api/Polizas/consultar_uso_externos',
-  // Catálogo de vehículos (brand/model resolution — may not exist yet; fetched with try/catch)
-  CONSULTAR_MARCAS: '/api/Polizas/consultar_marcas_externos',
-  CONSULTAR_MODELOS: '/api/Polizas/consultar_modelos_externos',
+  // Catálogo de vehículos — CONSULTAR_MARCAS/MODELOS do NOT exist (confirmed via Swagger).
+  // Use CREAR_MODELOS instead to register brand/model before emission.
+  CONSULTAR_MARCAS: '/api/Polizas/consultar_marcas_externos',  // 404 — does not exist
+  CONSULTAR_MODELOS: '/api/Polizas/consultar_modelos_externos', // 404 — does not exist
+
+  // Creates/registers a Marca+Modelo pair in SEGUROS.AUT_MODELO (shared by EmisorPlan and EmisorExterno).
+  // POST body: application/x-www-form-urlencoded, fields: Usuario, Clave, marca, modelo, nombre
+  // Response: [{":B2":1,":B1":"REGISTRO CREADO"}] | [{":B2":2}] | [{":B2":3,":B1":"REGISTO EXISTENTE"}]
+  // Idempotent — safe to call before every emission.
+  CREAR_MODELOS: '/api/Polizas/crear_modelos',
 
   // Cotización
   GET_COTIZACION: '/api/Polizas/get_cotizacion',

@@ -4,10 +4,61 @@
  */
 
 import { obtenerClienteAutenticado } from './auth.service';
-import { FEDPA_CONFIG, FedpaEnvironment, EMISOR_PLAN_ENDPOINTS } from './config';
+import { FEDPA_CONFIG, FedpaEnvironment, EMISOR_PLAN_ENDPOINTS, EMISOR_EXTERNO_ENDPOINTS } from './config';
 import type { EmitirPolizaRequest, EmitirPolizaResponse } from './types';
 import { normalizeText, formatFechaToFEDPA, booleanToNumber } from './utils';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+
+// ============================================
+// CATALOG REGISTRATION (EmisorExterno → shared Oracle DB)
+// ============================================
+
+/**
+ * Register a brand/model pair in FEDPA's AUT_MODELO catalog via EmisorExterno.
+ * Both EmisorPlan (DT) and EmisorExterno (CC) validate Marca/Modelo against the
+ * same SEGUROS.AUT_MODELO table. This endpoint creates the entry if missing.
+ *
+ * Response codes: 1=CREATED, 2=FAILED, 3=ALREADY_EXISTS
+ * Idempotent — safe to call before every emission.
+ */
+export async function registrarModeloFedpa(marca: string, modelo: string): Promise<void> {
+  const config = FEDPA_CONFIG['PROD'];
+  const baseUrl = config.emisorExternoUrl.replace(/\/+$/, '');
+  const url = `${baseUrl}${EMISOR_EXTERNO_ENDPOINTS.CREAR_MODELOS}`;
+
+  const params = new URLSearchParams({
+    Usuario: config.usuario,
+    Clave: config.clave,
+    marca,
+    modelo,
+    nombre: modelo,
+  });
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    const data = await res.json();
+    const entry = Array.isArray(data) ? data[0] : data;
+    const status = entry?.[':B2'];
+    const msg = entry?.[':B1'] || 'unknown';
+
+    if (status === 1) {
+      console.log(`[FEDPA Catalog] ✅ Registered ${marca}/${modelo} in AUT_MODELO`);
+    } else if (status === 3) {
+      console.log(`[FEDPA Catalog] ${marca}/${modelo} already in AUT_MODELO`);
+    } else {
+      console.warn(`[FEDPA Catalog] ⚠️ Could not register ${marca}/${modelo}: ${msg} (status=${status})`);
+    }
+  } catch (err: any) {
+    // Non-blocking — log and continue. Emission may still succeed.
+    console.warn(`[FEDPA Catalog] Could not register ${marca}/${modelo}:`, err.message);
+  }
+}
 
 // ============================================
 // EMITIR PÓLIZA (PRINCIPAL - EmisorPlan)
@@ -26,7 +77,7 @@ export async function emitirPoliza(
     cliente: `${request.PrimerNombre} ${request.PrimerApellido}`,
     vehiculo: `${request.Marca} ${request.Modelo} ${request.Ano}`,
   });
-  
+
   const clientResult = await obtenerClienteAutenticado(env);
   if (!clientResult.success || !clientResult.client) {
     return {
@@ -34,10 +85,14 @@ export async function emitirPoliza(
       error: clientResult.error || 'No se pudo autenticar',
     };
   }
-  
+
   // Normalizar datos antes de enviar
   const normalizedRequest = normalizarDatosEmision(request);
-  
+
+  // Auto-register brand/model in FEDPA's shared AUT_MODELO catalog before emitting.
+  // Prevents ORA-02291 AUT_MODELO_FK violations for any brand/model pair.
+  await registrarModeloFedpa(normalizedRequest.Marca, normalizedRequest.Modelo);
+
   const response = await clientResult.client.post(
     EMISOR_PLAN_ENDPOINTS.EMITIR_POLIZA,
     normalizedRequest
