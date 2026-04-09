@@ -4,17 +4,14 @@
  * POST /api/ancon/caratula            — programmatic (returns JSON with URL)
  *
  * ANCON returns a URL to an HTML page (print_pol.php), not a PDF binary.
+ * We proxy and enhance the HTML directly — no Supabase storage needed since
+ * the expediente bucket rejects text/* MIME types.
  *
- * Storage strategy:
- *   - HTML is stored in Supabase as text/plain (Supabase rejects text/html)
- *   - GET requests return the HTML directly with Content-Type: text/html
- *     so the browser renders it (no cross-domain redirect needed)
- *   - Print CSS is injected to enforce letter-size paper and include all pages
+ * Print CSS is injected to enforce letter-size paper and include all pages.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { imprimirPoliza } from '@/lib/ancon/emission.service';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const maxDuration = 30;
 
@@ -94,54 +91,11 @@ export async function POST(request: NextRequest) {
 
 async function handleCaratula(poliza: string, returnHtml: boolean) {
   const requestId = `ancon-car-${Date.now().toString(36)}`;
-  const BUCKET = 'expediente';
-  const folderPath = `ancon-policies/${poliza.replace(/\//g, '-')}`;
-  const storagePath = `${folderPath}/caratula.txt`; // stored as text/plain
 
   try {
     console.log(`[API ANCON Carátula] ${requestId} Fetching for poliza: ${poliza}`);
 
-    // ── Check Supabase storage cache first ──
-    try {
-      const supabaseAdmin = getSupabaseAdmin();
-      const { data: files } = await supabaseAdmin.storage.from(BUCKET).list(folderPath);
-      const stored = files?.find(f => f.name.startsWith('caratula'));
-      if (stored) {
-        const filePath = `${folderPath}/${stored.name}`;
-        console.log(`[API ANCON Carátula] ${requestId} ✅ Found in Supabase cache: ${filePath}`);
-
-        if (returnHtml) {
-          // Download and serve directly so we can inject CSS + set correct Content-Type
-          const { data: fileData, error: dlErr } = await supabaseAdmin.storage
-            .from(BUCKET)
-            .download(filePath);
-          if (!dlErr && fileData) {
-            const html = await fileData.text();
-            const enhanced = enhanceHtml(html, poliza);
-            return new NextResponse(enhanced, {
-              status: 200,
-              headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'public, max-age=86400',
-              },
-            });
-          }
-        } else {
-          // POST callers: return the public URL
-          const { data: urlData } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(filePath);
-          return NextResponse.json({
-            success: true,
-            enlace_poliza: urlData?.publicUrl,
-            tipo: 'cached',
-            requestId,
-          });
-        }
-      }
-    } catch (storageErr: unknown) {
-      console.warn(`[API ANCON Carátula] ${requestId} Storage lookup failed (non-fatal):`, (storageErr as Error).message);
-    }
-
-    // ── Cache miss: fetch enlace_poliza from ANCON ──
+    // Fetch enlace_poliza from ANCON
     const result = await imprimirPoliza(poliza);
 
     if (!result.success || !result.data?.enlace_poliza) {
@@ -170,73 +124,44 @@ async function handleCaratula(poliza: string, returnHtml: boolean) {
       });
     }
 
-    // Case B: HTTP URL — fetch HTML from ANCON, enhance, store, serve
+    // Case B: HTTP URL — detect content type, then fetch and proxy
     const headRes = await fetch(pdfEnlace, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).catch(() => null);
     const probeContentType = headRes?.headers.get('content-type') || '';
     console.log(`[API ANCON Carátula] ${requestId} HEAD probe: HTTP ${headRes?.status} content-type=${probeContentType}`);
 
     if (probeContentType.includes('text/html') || !probeContentType.includes('pdf')) {
+      // HTML carátula — fetch, enhance with print CSS, and serve directly
       console.log(`[API ANCON Carátula] ${requestId} HTML carátula — fetching...`);
-      try {
-        const htmlRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(20000) });
-        if (htmlRes.ok) {
-          const html = await htmlRes.text();
-          const enhanced = enhanceHtml(html, poliza);
+      const htmlRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(20000) });
 
-          // Store in Supabase as text/plain (bucket restricts text/html)
-          try {
-            const supabaseAdmin = getSupabaseAdmin();
-            const { error: uploadErr } = await supabaseAdmin.storage
-              .from(BUCKET)
-              .upload(storagePath, Buffer.from(enhanced, 'utf8'), {
-                contentType: 'text/plain; charset=utf-8',
-                cacheControl: '86400',
-                upsert: true,
-              });
-            if (uploadErr) {
-              console.warn(`[API ANCON Carátula] ${requestId} Supabase upload warning: ${uploadErr.message}`);
-            } else {
-              console.log(`[API ANCON Carátula] ${requestId} ✅ Stored in Supabase (${enhanced.length} bytes)`);
-            }
-          } catch (storeErr: unknown) {
-            console.warn(`[API ANCON Carátula] ${requestId} Storage failed (non-fatal):`, (storeErr as Error).message);
-          }
-
-          if (returnHtml) {
-            return new NextResponse(enhanced, {
-              status: 200,
-              headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'public, max-age=86400',
-              },
-            });
-          }
-          return NextResponse.json({
-            success: true,
-            enlace_poliza: pdfEnlace,
-            tipo: 'html',
-            requestId,
-          });
-        }
-      } catch (fetchErr: unknown) {
-        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch failed (non-fatal):`, (fetchErr as Error).message);
+      if (!htmlRes.ok) {
+        // Fallback: redirect to ANCON URL directly
+        console.warn(`[API ANCON Carátula] ${requestId} HTML fetch returned ${htmlRes.status} — redirecting`);
+        if (returnHtml) return NextResponse.redirect(pdfEnlace, 302);
+        return NextResponse.json({ success: true, enlace_poliza: pdfEnlace, tipo: 'html', requestId });
       }
 
-      // Fallback: redirect directly to ANCON URL
+      const html = await htmlRes.text();
+      const enhanced = enhanceHtml(html, poliza);
+      console.log(`[API ANCON Carátula] ${requestId} ✅ Serving enhanced HTML (${enhanced.length} bytes)`);
+
       if (returnHtml) {
-        return NextResponse.redirect(pdfEnlace, 302);
+        return new NextResponse(enhanced, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
+        });
       }
-      return NextResponse.json({
-        success: true,
-        enlace_poliza: pdfEnlace,
-        tipo: 'html',
-        requestId,
-      });
+      // POST callers: return the proxy URL so the client can open it
+      const proxyUrl = `/api/ancon/caratula?poliza=${encodeURIComponent(poliza)}`;
+      return NextResponse.json({ success: true, enlace_poliza: proxyUrl, tipo: 'html', requestId });
     }
 
     // Case C: actual PDF binary
     const pdfRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(15000) });
-    console.log(`[API ANCON Carátula] ${requestId} Fetch from ANCON: HTTP ${pdfRes.status} content-type=${pdfRes.headers.get('content-type')}`);
+    console.log(`[API ANCON Carátula] ${requestId} PDF fetch: HTTP ${pdfRes.status} content-type=${pdfRes.headers.get('content-type')}`);
 
     if (!pdfRes.ok) {
       return NextResponse.json(
