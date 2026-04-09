@@ -581,7 +581,8 @@ async function drawCoveragePage(
     const key = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
-      const maxH = INS_H - 10;
+      // FEDPA has a square (1:1) logo — allow more height so it visually matches wide logos
+      const maxH = key === 'FEDPA' ? INS_H - 4 : INS_H - 10;
       const maxW = cardW - 14;
       const ratio = logo.width / logo.height;
 
@@ -959,7 +960,8 @@ async function drawBenefitsPage(
     const key  = insurerKey(q.insurerName);
     const logo = insurerLogos[key] || insurerLogos[key.split(' ')[0]!];
     if (logo) {
-      const maxH = INS_H - 10;
+      // FEDPA has a square (1:1) logo — allow more height so it visually matches wide logos
+      const maxH = key === 'FEDPA' ? INS_H - 4 : INS_H - 10;
       const maxW = cardW - 14;
       const minW = maxW * 0.45;
       const ratio = logo.width / logo.height;
