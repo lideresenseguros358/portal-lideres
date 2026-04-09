@@ -49,6 +49,19 @@ export async function emitirPoliza(
       || (typeof response.error === 'string' ? response.error : 'Error emitiendo póliza');
     console.error('[FEDPA Emisión] Error:', errMsg);
     console.error('[FEDPA Emisión] Response data completa:', JSON.stringify(response.data || {}).substring(0, 500));
+
+    // Detect FK violation on AUT_MODELO — marca/modelo pair not in FEDPA catalog
+    const isModeloFk = typeof errMsg === 'string' && errMsg.includes('AUT_MODELO_FK');
+    if (isModeloFk) {
+      const marca = request.Marca || '';
+      const modelo = request.Modelo || '';
+      console.error(`[FEDPA Emisión] ⚠️ Marca/Modelo no encontrado en catálogo FEDPA: Marca="${marca}" Modelo="${modelo}"`);
+      return {
+        success: false,
+        error: `La marca "${marca}" / modelo "${modelo}" no está disponible en el catálogo de FEDPA para pólizas de Daños a Terceros. Seleccione otra aseguradora o contacte a FEDPA para registrar el vehículo.`,
+      };
+    }
+
     return {
       success: false,
       error: errMsg,

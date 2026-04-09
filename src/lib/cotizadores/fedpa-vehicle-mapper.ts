@@ -289,13 +289,20 @@ export function normalizarModeloFedpa(nombreModelo: string): string {
     return 'AUTO';
   }
 
-  return nombreModelo
+  // Strip IS variant suffixes before any other processing.
+  // IS model names include variant indicators after a '*': "COOLRAY *Cam", "RAV4 *SE", etc.
+  // FEDPA's AUT_MODELO catalog only stores the base model name, not variants.
+  const stripped = nombreModelo.includes('*')
+    ? nombreModelo.substring(0, nombreModelo.indexOf('*')).trim()
+    : nombreModelo;
+
+  return stripped
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Remove accents
     .trim()
     .toUpperCase()
-    .replace(/[*#()[\]{}/\\]/g, '') // Remove special chars (e.g. IS "*Cam" suffix)
-    .replace(/\s+/g, ' ') // Normalizar espacios múltiples
+    .replace(/[*#()[\]{}/\\]/g, '') // Remove any remaining special chars
+    .replace(/\s+/g, ' ')
     .trim()
     .substring(0, 30); // FEDPA character limit
 }
