@@ -33,6 +33,15 @@ export async function GET(request: NextRequest) {
     const pdfLink = result.data.enlace_poliza;
 
     if (pdfLink.startsWith('http')) {
+      // Probe content-type — ANCON returns HTML for print_pol.php pages
+      const headRes = await fetch(pdfLink, { method: 'HEAD' }).catch(() => null);
+      const ct = headRes?.headers.get('content-type') || '';
+
+      if (ct.includes('text/html') || !ct.includes('pdf')) {
+        // Redirect the browser to the ANCON page (user can view/print from there)
+        return NextResponse.redirect(pdfLink, 302);
+      }
+
       const pdfRes = await fetch(pdfLink);
       if (!pdfRes.ok) {
         return NextResponse.json(

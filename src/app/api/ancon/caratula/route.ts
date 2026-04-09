@@ -82,7 +82,22 @@ async function handleCaratula(poliza: string) {
       });
     }
 
-    // Case B: HTTP URL — fetch from ANCON and proxy
+    // Case B: HTTP URL — probe content-type first, then proxy or redirect
+    const headRes = await fetch(pdfEnlace, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).catch(() => null);
+    const probeContentType = headRes?.headers.get('content-type') || '';
+    console.log(`[API ANCON Carátula] ${requestId} HEAD probe: HTTP ${headRes?.status} content-type=${probeContentType}`);
+
+    // ANCON returns HTML for print_pol.php — return URL so frontend can open in new tab
+    if (probeContentType.includes('text/html') || !probeContentType.includes('pdf')) {
+      console.log(`[API ANCON Carátula] ${requestId} HTML carátula detected — returning URL for client-side open`);
+      return NextResponse.json({
+        success: true,
+        enlace_poliza: pdfEnlace,
+        tipo: 'html',
+        requestId,
+      });
+    }
+
     const pdfRes = await fetch(pdfEnlace, { signal: AbortSignal.timeout(15000) });
     console.log(`[API ANCON Carátula] ${requestId} Fetch from ANCON: HTTP ${pdfRes.status} content-type=${pdfRes.headers.get('content-type')}`);
 
@@ -94,12 +109,11 @@ async function handleCaratula(poliza: string) {
     }
 
     const pdfBuffer = await pdfRes.arrayBuffer();
-    const contentType = pdfRes.headers.get('content-type') || 'application/pdf';
 
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="poliza-ancon-${poliza}.pdf"`,
         'Content-Length': String(pdfBuffer.byteLength),
       },

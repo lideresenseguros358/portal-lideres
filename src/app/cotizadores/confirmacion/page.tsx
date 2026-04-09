@@ -248,7 +248,12 @@ export default function ConfirmacionPage() {
         URL.revokeObjectURL(blobUrl);
       } else {
         const data = await response.json();
-        throw new Error(data.error || 'No se pudo obtener la póliza ANCON');
+        // ANCON returns HTML carátula page — open in new tab so user can view/print
+        if (data.enlace_poliza) {
+          window.open(data.enlace_poliza, '_blank');
+        } else {
+          throw new Error(data.error || 'No se pudo obtener la póliza ANCON');
+        }
       }
     } catch (err: any) {
       console.error('[Confirmación] Error descargando PDF ANCON:', err);
