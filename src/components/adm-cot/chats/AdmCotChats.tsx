@@ -473,9 +473,9 @@ function ChatView({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-hidden">
             <span className="text-sm font-semibold truncate">{thread.client_name || thread.phone_e164}</span>
-            <CategoryBadge category={thread.category} />
+            <span className="flex-shrink-0"><CategoryBadge category={thread.category} /></span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-blue-300">
             <FaPhone className="text-[8px]" /> {thread.phone_e164}
@@ -672,6 +672,16 @@ function ConfigPanel({
           <FaArrowLeft className="text-sm" />
         </button>
         <h3 className="text-sm font-bold text-[#010139] flex-1">Configuración</h3>
+      </div>
+
+      {/* Client info card */}
+      <div className="mx-4 mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <p className="text-xs font-bold text-[#010139] break-words">
+          {thread.client_name || thread.phone_e164}
+        </p>
+        {thread.client_name && (
+          <p className="text-[10px] text-gray-500 mt-0.5">{thread.phone_e164}</p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
