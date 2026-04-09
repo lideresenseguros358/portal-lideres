@@ -8,10 +8,10 @@ import { emitirPoliza, crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.serv
 import { getSupabaseServer } from '@/lib/supabase/server';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
-// NOTE: EmisorPlan (DT) sends IS numeric codes for Marca/Modelo directly from the frontend.
-// DO NOT import or use resolveFedpaMarca / normalizarModeloFedpa here — those belong to
-// EmisorExterno (CC) which uses a completely different catalog of 3-char string codes.
-// Mixing the two systems causes ORA-02291 AUT_MODELO_FK violations in EmisorPlan.
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
+// NOTE: EmisorPlan uses the SAME AUT_MODELO catalog as EmisorExterno (shared Oracle DB, SEGUROS schema).
+// Both systems expect 3-char brand codes ("TOY", "HYU") + normalized model name strings ("HILUX").
+// IS numeric codes (156, 2603) are NOT FEDPA catalog codes — always convert before sending.
 
 export async function POST(request: NextRequest) {
   const requestId = `emi-${Date.now().toString(36)}`;
@@ -60,14 +60,19 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // ── Marca/Modelo: EmisorPlan (DT) — pass IS numeric codes as-is from the frontend ──
-    // EmisorPlan uses IS numeric codes (e.g. 156=Toyota, 217=Geely) as Marca/Modelo values.
-    // EmisorExterno (CC) uses 3-char string codes — that is a completely separate catalog.
+    // ── Marca/Modelo: IS numeric codes → FEDPA 3-char + model name ──
+    // EmisorPlan's AUT_MODELO FK validates against 3-char brand codes ("TOY", "HYU") and
+    // model name strings ("HILUX", "TUCSON"). Same catalog as EmisorExterno — shared Oracle DB.
     const rawMarca = String(emisionData.Marca || '');
     const rawModelo = String(emisionData.Modelo || '');
     const marcaNombre = String(emisionData.MarcaNombre || '');
     const modeloNombre = String(emisionData.ModeloNombre || '');
-    console.log(`[API FEDPA Emisión] ${requestId} Vehicle: IS marca ${rawMarca}/${marcaNombre}, modelo ${rawModelo}/${modeloNombre}`);
+    const isNumericMarca = /^\d+$/.test(rawMarca);
+    const fedpaMarca = isNumericMarca
+      ? getFedpaMarcaFromIS(parseInt(rawMarca), marcaNombre)
+      : rawMarca;
+    const fedpaModelo = normalizarModeloFedpa(modeloNombre || rawModelo);
+    console.log(`[API FEDPA Emisión] ${requestId} Vehicle: IS marca ${rawMarca}/${marcaNombre} → "${fedpaMarca}", modelo "${fedpaModelo}"`);
 
     const env = environment as FedpaEnvironment;
     const emisionRequest: EmitirPolizaRequest = {
@@ -90,11 +95,11 @@ export async function POST(request: NextRequest) {
       esPEP: emisionData.esPEP,
       Acreedor: emisionData.Acreedor,
 
-      // Vehículo — IS numeric codes passed directly (EmisorPlan catalog)
+      // Vehículo — 3-char brand code + normalized model name (AUT_MODELO FK format)
       sumaAsegurada: emisionData.sumaAsegurada || 0,
       Uso: emisionData.Uso,
-      Marca: rawMarca,
-      Modelo: rawModelo,
+      Marca: fedpaMarca,
+      Modelo: fedpaModelo,
       Ano: emisionData.Ano,
       Motor: emisionData.Motor,
       Placa: emisionData.Placa,
@@ -112,7 +117,7 @@ export async function POST(request: NextRequest) {
     // ═══ LOG: JSON completo que se envía a FEDPA ═══
     console.log(`\n[FEDPA EMISIÓN] ${requestId} ═══ PAYLOAD JSON ═══`);
     console.log(JSON.stringify(emisionRequest, null, 2));
-    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${rawMarca} | Modelo: ${rawModelo} | MarcaNombre: ${marcaNombre} | ModeloNombre: ${modeloNombre}`);
+    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${fedpaMarca} | Modelo: ${fedpaModelo} | IS: ${rawMarca}/${rawModelo} | Nombres: ${marcaNombre}/${modeloNombre}`);
     console.log(`[FEDPA EMISIÓN] ${requestId} ═════════════════════════\n`);
     
     // Emitir con FEDPA — NO reintentar automáticamente (operación crítica)
@@ -188,8 +193,8 @@ export async function POST(request: NextRequest) {
         fechaNacimiento: emisionRequest.FechaNacimiento,
       },
       vehiculo: {
-        marca: emisionRequest.Marca,
-        modelo: emisionRequest.Modelo,
+        marca: marcaNombre || emisionRequest.Marca,
+        modelo: modeloNombre || emisionRequest.Modelo,
         ano: emisionRequest.Ano,
         placa: emisionRequest.Placa,
         motor: emisionRequest.Motor,
