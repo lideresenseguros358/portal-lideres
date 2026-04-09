@@ -237,9 +237,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build print URL: prefer permanent storage URL, fall back to live print endpoint
-    const pdfUrl = documentStorageUrl
-      || (result.poliza ? `/api/regional/auto/print?poliza=${encodeURIComponent(result.poliza)}&type=rc` : null);
+    // Regional's imprimirPoliza endpoint is CC-only — returns {} for RC policies.
+    // RC emission response also never contains HTML. No document available via API.
+    const pdfUrl = documentStorageUrl || null;
 
     // ── Auto-save client + policy to Supabase ──
     const cedula = prov && tomo && asiento ? `${prov}-${tomo}-${asiento}` : (pasaporte || '');

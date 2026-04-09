@@ -1071,7 +1071,7 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('nroPoliza', regionalPoliza);
           expedienteForm.append('insurerName', 'La Regional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureRef.current || '');
-          if (regionalPoliza) expedienteForm.append('pdfUrl', `/api/regional/auto/print?poliza=${encodeURIComponent(regionalPoliza)}`);
+          // Regional RC: imprimirPoliza is CC-only — no document URL available for DT policies
           if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
 

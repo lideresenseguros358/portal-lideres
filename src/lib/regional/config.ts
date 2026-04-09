@@ -80,7 +80,7 @@ export const REGIONAL_RC_ENDPOINTS = {
 export const REGIONAL_CC_ENDPOINTS = {
   COTIZACION: '/regional/auto/cotizacion',     // POST
   EMITIR: '/regional/auto/emitirPoliza',       // POST
-  IMPRIMIR: '/regional/auto/imprimirPoliza',   // POST — docs: /regional/auto/imprimirPoliza
+  IMPRIMIR: '/regional/util/imprimirPoliza',   // POST — docs page 6 curl example uses /util/
   PLAN_PAGO: '/regional/auto/planPago',        // PUT
 } as const;
 
