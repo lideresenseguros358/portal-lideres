@@ -432,7 +432,7 @@ export default function EmitirDanosTercerosPage() {
           Color: vehicleData?.color || '',
           Pasajero: vehicleData?.pasajeros || 5,
           Puerta: vehicleData?.puertas || 4,
-          PrimaTotal: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : selectedPlan.annualPremium,
+          PrimaTotal: selectedPlan.annualPremium, // Must be base plan price — FEDPA validates against stored plan value; applies cuotas surcharge internally via cantidadPago
           cantidadPago: selectedPaymentMode === 'cuotas' ? 2 : 1,
         };
 
