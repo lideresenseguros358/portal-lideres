@@ -463,7 +463,9 @@ export async function POST(request: NextRequest) {
     
     try {
       // Build download URLs for email links
-      const siteUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com');
+      // NEXT_PUBLIC_SITE_URL is the canonical custom domain — never use VERCEL_URL
+      // which is the deployment-specific URL and causes email links to redirect to Vercel
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://portal.lideresenseguros.com';
       const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
       const caratulaUrl = isFedpa && nroPoliza
         ? `${siteUrl}/api/fedpa/caratula?poliza=${encodeURIComponent(nroPoliza)}&env=PROD`
@@ -682,7 +684,7 @@ export async function POST(request: NextRequest) {
       try {
         // Download policy PDF from pdfUrl if available
         let polizaPdfBuffer: Buffer | null = null;
-        const _siteUrlBase = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://portal.lideresenseguros.com');
+        const _siteUrlBase = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://portal.lideresenseguros.com';
         let pdfUrl = (formData.get('pdfUrl') as string) || '';
         if (pdfUrl && pdfUrl.startsWith('/')) {
           pdfUrl = `${_siteUrlBase}${pdfUrl}`;
