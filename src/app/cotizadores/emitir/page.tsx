@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaLock } from 'react-icons/fa';
+import { FaLock, FaCheckCircle, FaTimes, FaCar, FaUser, FaShieldAlt, FaClipboardCheck } from 'react-icons/fa';
 import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
@@ -67,6 +67,8 @@ export default function EmitirPage() {
   const [paymentCharged, setPaymentCharged] = useState(false);
   const [emissionBlocked, setEmissionBlocked] = useState(false);
   const [emissionBlockedMessage, setEmissionBlockedMessage] = useState('');
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
     const loadData = () => {
@@ -1826,6 +1828,10 @@ export default function EmitirPage() {
         toast.error('Por favor, asigna un corredor antes de emitir');
         return;
       }
+      if (!isMaster && !declarationAccepted) {
+        toast.error('Debes aceptar los Términos y Condiciones para continuar');
+        return;
+      }
       if (!isMaster && !signatureDataUrl) {
         setShowSignaturePad(true);
         return;
@@ -1857,55 +1863,315 @@ export default function EmitirPage() {
         
         {/* Contenido */}
         <div className="py-8 px-4">
-          {/* Broker selector for master users */}
-          {isMaster && availableBrokers.length > 0 && (
-            <div className="max-w-2xl mx-auto mt-6 bg-white rounded-lg p-5 mb-6 shadow-sm border border-gray-200">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🏢</span>
-                <label className="text-sm font-bold text-[#010139]">Asignar a Corredor</label>
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">Resumen y Confirmación</h2>
+              <p className="text-gray-600">Revisa todos los datos antes de emitir tu póliza</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200 space-y-4">
+
+              {/* Plan Info */}
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+                  <FaShieldAlt className="text-[#8AAA19]" /> Póliza
+                </h6>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Aseguradora</p>
+                    <p className="font-bold">{selectedPlan.insurerName}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Cobertura</p>
+                    <p className="font-bold text-blue-600">Cobertura Completa</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Prima Anual</p>
+                    <p className="font-bold text-lg text-[#8AAA19]">B/.{selectedPlan.annualPremium?.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Forma de Pago</p>
+                    <p className="font-bold">
+                      {installments > 1
+                        ? `${installments} cuotas de B/.${monthlyPayment.toFixed(2)}`
+                        : `Contado B/.${selectedPlan.annualPremium?.toFixed(2)}`}
+                      {cardData && ` • ${cardData.brand} ****${cardData.last4}`}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <select
-                value={masterBrokerId}
-                onChange={e => setMasterBrokerId(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 transition-colors outline-none appearance-none cursor-pointer"
-                style={{backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem'}}
-              >
-                {availableBrokers.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              {!masterBrokerId && (
-                <p className="text-xs text-red-600 mt-2 font-semibold">⚠️ Debes asignar un corredor antes de emitir</p>
+
+              {/* Client Data */}
+              {emissionData && (
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+                    <FaUser className="text-[#8AAA19]" /> Datos del Asegurado
+                  </h6>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="col-span-2 sm:col-span-1">
+                      <p className="text-gray-500">Nombre</p>
+                      <p className="font-bold">{[emissionData.primerNombre, emissionData.segundoNombre, emissionData.primerApellido, emissionData.segundoApellido].filter(Boolean).join(' ')}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Cédula / Pasaporte</p>
+                      <p className="font-bold">{emissionData.cedula || 'N/A'}</p>
+                    </div>
+                    {emissionData.email && (
+                      <div>
+                        <p className="text-gray-500">Email</p>
+                        <p className="font-bold">{emissionData.email}</p>
+                      </div>
+                    )}
+                    {(emissionData.celular || emissionData.telefono) && (
+                      <div>
+                        <p className="text-gray-500">Celular</p>
+                        <p className="font-bold">{emissionData.celular || emissionData.telefono}</p>
+                      </div>
+                    )}
+                    {emissionData.fechaNacimiento && (
+                      <div>
+                        <p className="text-gray-500">Fecha de Nacimiento</p>
+                        <p className="font-bold">{emissionData.fechaNacimiento}</p>
+                      </div>
+                    )}
+                    {emissionData.sexo && (
+                      <div>
+                        <p className="text-gray-500">Sexo</p>
+                        <p className="font-bold">{emissionData.sexo === 'M' ? 'Masculino' : 'Femenino'}</p>
+                      </div>
+                    )}
+                    {emissionData.direccion && (
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Dirección</p>
+                        <p className="font-bold">{emissionData.direccion}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
-            </div>
-          )}
 
-          <FinalQuoteSummary
-            quoteData={quoteData}
-            selectedPlan={selectedPlan}
-            installments={installments}
-            monthlyPayment={monthlyPayment}
-            emissionData={emissionData}
-            vehicleData={vehicleData}
-            inspectionPhotos={inspectionPhotos}
-            onConfirm={handleEmitClick}
-          />
+              {/* Vehicle Data */}
+              {quoteData?.marca && (
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
+                    <FaCar className="text-[#8AAA19]" /> Datos del Vehículo
+                  </h6>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Marca / Modelo</p>
+                      <p className="font-bold">{quoteData.marca} {quoteData.modelo} {quoteData.anno || quoteData.anio}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Placa</p>
+                      <p className="font-bold">{vehicleData?.placa || 'N/A'}</p>
+                    </div>
+                    {vehicleData?.vinChasis && (
+                      <div>
+                        <p className="text-gray-500">VIN / Chasis</p>
+                        <p className="font-bold font-mono text-xs">{vehicleData.vinChasis}</p>
+                      </div>
+                    )}
+                    {vehicleData?.motor && (
+                      <div>
+                        <p className="text-gray-500">Motor</p>
+                        <p className="font-bold font-mono text-xs">{vehicleData.motor}</p>
+                      </div>
+                    )}
+                    {quoteData?.valorVehiculo > 0 && (
+                      <div>
+                        <p className="text-gray-500">Valor Asegurado</p>
+                        <p className="font-bold text-[#8AAA19]">${quoteData.valorVehiculo?.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {vehicleData?.color && (
+                      <div>
+                        <p className="text-gray-500">Color</p>
+                        <p className="font-bold">{vehicleData.color}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
-          {/* Signature indicator for IS */}
-          {signatureDataUrl && (
-            <div className="max-w-2xl mx-auto mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-              <span className="text-green-600 text-lg">✅</span>
-              <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>
-              <button
-                onClick={() => setShowSignaturePad(true)}
-                className="ml-auto text-xs text-blue-600 underline"
-                type="button"
-              >
-                Cambiar firma
-              </button>
+              {/* Signature indicator for IS */}
+              {signatureDataUrl && (
+                <div className="bg-white rounded-lg p-4 shadow-sm flex items-center gap-3">
+                  <FaCheckCircle className="text-green-500 text-lg flex-shrink-0" />
+                  <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>
+                  <button
+                    onClick={() => setShowSignaturePad(true)}
+                    className="ml-auto text-xs text-blue-600 underline"
+                    type="button"
+                  >
+                    Cambiar
+                  </button>
+                </div>
+              )}
+
+              {/* Términos y Condiciones */}
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-5">
+                <h5 className="font-bold text-[#010139] mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
+                  <FaClipboardCheck className="text-yellow-600" /> Términos y Condiciones
+                </h5>
+                <label className="flex items-start gap-3 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={declarationAccepted}
+                    onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                    className="mt-1 w-5 h-5 rounded border-2 border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19] cursor-pointer accent-[#8AAA19]"
+                  />
+                  <span className="text-sm text-gray-700">
+                    He leído y acepto los{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }}
+                      className="text-[#8AAA19] font-semibold underline hover:text-[#6d8814]"
+                    >
+                      Términos y Condiciones completos
+                    </button>
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 italic">La aceptación es requisito obligatorio para la emisión de la póliza.</p>
+              </div>
+
+              {/* Broker selector — master only, bottom */}
+              {isMaster && availableBrokers.length > 0 && (
+                <div className="bg-white rounded-lg p-5 shadow-sm border border-gray-200">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-xl">🏢</span>
+                    <label className="text-sm font-bold text-[#010139]">Asignar a Corredor</label>
+                  </div>
+                  <select
+                    value={masterBrokerId}
+                    onChange={e => setMasterBrokerId(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 transition-colors outline-none appearance-none cursor-pointer"
+                    style={{backgroundImage: 'url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem'}}
+                  >
+                    {availableBrokers.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                  {!masterBrokerId && (
+                    <p className="text-xs text-red-600 mt-2 font-semibold">⚠️ Debes asignar un corredor antes de emitir</p>
+                  )}
+                </div>
+              )}
+
+              {/* Emit Button */}
+              <div className="mt-4">
+                <button
+                  onClick={handleEmitClick}
+                  disabled={isConfirming || (!isMaster && !declarationAccepted) || (isMaster && !masterBrokerId)}
+                  className={`w-full py-5 px-6 rounded-xl font-bold text-xl flex items-center justify-center gap-3 transition-all duration-200
+                    ${isConfirming || (!isMaster && !declarationAccepted) || (isMaster && !masterBrokerId)
+                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'}`}
+                  type="button"
+                >
+                  {isConfirming ? (
+                    <>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                      Emitiendo póliza...
+                    </>
+                  ) : (
+                    <>
+                      <FaCheckCircle className="text-2xl" />
+                      Confirmar y Emitir Póliza
+                    </>
+                  )}
+                </button>
+                {!isMaster && !declarationAccepted && (
+                  <p className="text-xs text-gray-500 text-center mt-2">Debes aceptar los Términos y Condiciones para continuar</p>
+                )}
+                {!isMaster && declarationAccepted && !signatureDataUrl && (
+                  <p className="text-xs text-blue-600 text-center mt-2">Al emitir se solicitará tu firma digital para la carta de autorización</p>
+                )}
+                {isMaster && (
+                  <p className="text-xs text-blue-600 text-center mt-2">Emisión master: la firma será saltada</p>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Términos y Condiciones Modal */}
+        {showTermsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-4 sm:my-8">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                <h3 className="text-xl font-bold text-[#010139] flex items-center gap-2">
+                  <span>📋</span> Términos y Condiciones
+                </h3>
+                <button onClick={() => setShowTermsModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <FaTimes className="text-gray-500" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed space-y-5">
+                <p className="text-xs font-bold text-[#010139] text-center uppercase tracking-wide">
+                  Autorización, Declaración de Veracidad, Tratamiento de Datos Personales y Relevo de Responsabilidad
+                </p>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">PRIMERA: AUTORIZACIÓN PARA TRATAMIENTO DE DATOS PERSONALES</p>
+                  <p>De conformidad con la Ley 81 de 26 de marzo de 2019, autorizo a <strong>LÍDERES EN SEGUROS, S.A.</strong> para recopilar, almacenar, utilizar y transferir mis datos personales a aseguradoras, reaseguradoras, ajustadores y terceros necesarios para la gestión del contrato de seguro.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SEGUNDA: NATURALEZA DE LA INTERMEDIACIÓN</p>
+                  <p>Reconozco que LÍDERES EN SEGUROS, S.A. actúa exclusivamente como corredor e intermediario de seguros conforme al Decreto Ley 12 de 2012. El contrato de seguro se celebra entre el cliente y la aseguradora; el corredor no es parte aseguradora del contrato.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">TERCERA: COMUNICACIONES OFICIALES</p>
+                  <p>El correo electrónico suministrado será el medio oficial de comunicación. Es mi responsabilidad suministrar un correo correcto y revisarlo periódicamente.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">CUARTA: RESPONSABILIDAD SOBRE PAGOS Y MOROSIDAD</p>
+                  <p>La prima del seguro es una obligación contractual directa con la aseguradora. La falta de pago oportuno puede generar cancelación automática de la póliza y rechazo de reclamos.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">QUINTA: DEVOLUCIONES Y CARGOS ADMINISTRATIVOS</p>
+                  <p>Toda solicitud de reverso o devolución podrá generar cargos administrativos, bancarios y operativos descontados del monto a devolver.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SEXTA: RELEVO DE RESPONSABILIDAD</p>
+                  <p>Libero y exonero a LÍDERES EN SEGUROS, S.A., sus directores, agentes y colaboradores de cualquier reclamación derivada de decisiones de suscripción, rechazos de cobertura, exclusiones contractuales o errores en información suministrada por el cliente.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SÉPTIMA: DECLARACIÓN DE VERACIDAD</p>
+                  <p>Declaro y certifico, bajo la gravedad de juramento, que toda la información suministrada es <strong>real, exacta, completa y veraz</strong>. La presentación de información falsa constituye riesgo moral y puede dar lugar a la nulidad del contrato.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">OCTAVA: DECLARACIÓN DE ORIGEN LÍCITO DE FONDOS</p>
+                  <p>Declaro que los fondos utilizados para el pago de primas tienen origen lícito, provienen de actividades legales y no guardan relación con actividades ilícitas. No me encuentro incluido en listas restrictivas nacionales o internacionales (ONU, OFAC, UE, SSRP).</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">NOVENA: FACULTAD DE VERIFICACIÓN Y DEBIDA DILIGENCIA</p>
+                  <p>Acepto que LÍDERES EN SEGUROS, S.A. podrá solicitar documentación adicional, verificar identidad y suspender procesos si se detectan inconsistencias, en cumplimiento de la Ley 23 de 2015.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">DÉCIMA: ACEPTACIÓN DIGITAL</p>
+                  <p>Acepto que la firma digital incorporada mediante validación electrónica constituye aceptación plena y vinculante, conforme a la legislación vigente sobre comercio electrónico en Panamá.</p>
+                </div>
+                <div className="bg-[#010139] rounded-lg py-4 px-4 text-center mt-6">
+                  <p className="text-[10px] text-gray-400 leading-relaxed mb-2">Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá | Licencia PJ750</p>
+                  <img src="/aseguradoras/logo-SSRP.png" alt="SSRP" className="inline-block w-[70px] opacity-85" />
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3 flex-shrink-0">
+                <button
+                  onClick={() => { setDeclarationAccepted(true); setShowTermsModal(false); }}
+                  className="flex-1 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all"
+                >
+                  Acepto los Términos y Condiciones
+                </button>
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Signature Pad Modal */}
         {showSignaturePad && (
