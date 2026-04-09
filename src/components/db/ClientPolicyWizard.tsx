@@ -60,6 +60,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
+  const [brokerConfigError, setBrokerConfigError] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
@@ -118,21 +119,33 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       if (role === 'broker') {
         const brokerPromise = (async () => {
           const { data: { user } } = await supabaseClient().auth.getUser();
-          if (user) {
-            const { data: broker } = await supabaseClient()
-              .from('brokers')
-              .select('id, percent_default')
-              .eq('p_id', user.id)
-              .single();
-            
-            if (broker) {
-              setUserBrokerId(broker.id);
-              // Establecer el porcentaje default del broker
-              setFormData(prev => ({
-                ...prev,
-                percent_override: broker.percent_default?.toString() || ''
-              }));
-            }
+          if (!user) {
+            setBrokerConfigError('No se pudo verificar tu sesión. Recarga la página e intenta de nuevo.');
+            return;
+          }
+
+          const { data: broker, error: brokerErr } = await supabaseClient()
+            .from('brokers')
+            .select('id, percent_default')
+            .eq('p_id', user.id)
+            .single();
+
+          if (broker) {
+            setUserBrokerId(broker.id);
+            setFormData(prev => ({
+              ...prev,
+              percent_override: broker.percent_default != null
+                ? broker.percent_default.toString()
+                : '',
+            }));
+          } else {
+            // Broker no tiene registro en tabla brokers — bloquear wizard con error claro
+            const isNotFound = !brokerErr || brokerErr.code === 'PGRST116';
+            const msg = isNotFound
+              ? 'Tu cuenta de corredor no está completamente configurada. Contacta al administrador para que complete tu perfil en el portal.'
+              : `Error cargando tu perfil de corredor: ${brokerErr?.message}. Recarga e intenta de nuevo.`;
+            setBrokerConfigError(msg);
+            console.error('[ClientPolicyWizard] broker lookup failed for user', user.id, brokerErr);
           }
         })();
         promises.push(brokerPromise);
@@ -1016,6 +1029,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
         {/* Content */}
         <div ref={contentRef} className="p-6 overflow-y-auto flex-1">
+
+          {/* Banner de error de configuración de broker — bloquea todo el wizard */}
+          {brokerConfigError && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-300 rounded-xl text-red-800 text-sm flex flex-col gap-2">
+              <p className="font-bold text-base">⚠️ No puedes registrar clientes en este momento</p>
+              <p>{brokerConfigError}</p>
+              <p className="text-xs text-red-600">Si el problema persiste, envía un correo a <strong>portal@lideresenseguros.com</strong> con tu nombre de usuario.</p>
+            </div>
+          )}
+
           {/* Step 1: Cliente */}
           {step === 1 && (
             <div className="space-y-3 sm:space-y-4 animate-fadeIn">
@@ -1825,7 +1848,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             <button
               type="button"
               onClick={handleNext}
-              disabled={loading}
+              disabled={loading || !!brokerConfigError}
               className="flex-1 sm:flex-none px-3 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
             >
               Siguiente
@@ -1834,7 +1857,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !!brokerConfigError}
               className="flex-1 sm:flex-none px-3 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (

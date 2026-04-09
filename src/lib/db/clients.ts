@@ -106,7 +106,19 @@ export async function createClient(rawData: unknown) {
   const { data: { user } } = await supabase.auth.getUser();
   const parsed = ClientInsertSchema.parse(rawData)
 
-  const brokerId = parsed.broker_id ?? user?.id
+  // broker_id viene explícito en rawData (enviado por el wizard).
+  // Si por alguna razón no viene, lo resolvemos igual que createClientWithPolicy:
+  // buscando el registro del usuario en la tabla brokers por p_id.
+  // NUNCA usar user?.id directamente — ese es el auth ID, no el brokers.id.
+  let brokerId = parsed.broker_id;
+  if (!brokerId && user) {
+    const { data: broker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('p_id', user.id)
+      .single();
+    if (broker) brokerId = broker.id;
+  }
   if (!brokerId) throw new Error('No se encontró broker asociado para el cliente')
 
   const payload = toInsertPayload(brokerId, parsed)
