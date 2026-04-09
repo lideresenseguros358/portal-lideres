@@ -25,7 +25,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
-import { getAnconToken } from '@/lib/ancon/http-client';
+import { getAnconToken, invalidateAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
@@ -370,15 +370,23 @@ export async function POST(request: NextRequest) {
       // ── Track 2: GenerarNodocumento (independent of re-cotización) ──
       (async (): Promise<string> => {
         log('1/4', 'Generando número de póliza...');
-        const genToken = await getAnconToken();
-        const genDocRaw = await rawSoap('GenerarNodocumento', {
+        let genToken = await getAnconToken();
+        const genParams = {
           cod_compania: creds.codCompania,
           cod_sucursal: creds.codSucursal,
           ano: currentYear,
           cod_ramo: codRamo,
           cod_subramo: '001',
           token: genToken,
-        });
+        };
+        let genDocRaw = await rawSoap('GenerarNodocumento', genParams);
+        // Retry on Token Inactivo — clear cache and get a fresh token
+        if (JSON.stringify(genDocRaw).includes('Token Inactivo')) {
+          log('1/4', 'Token Inactivo en GenerarNodocumento — reintentando con token fresco...');
+          invalidateAnconToken();
+          genToken = await getAnconToken();
+          genDocRaw = await rawSoap('GenerarNodocumento', { ...genParams, token: genToken });
+        }
         const poliza = Array.isArray(genDocRaw)
           ? (genDocRaw[0] as Record<string, string>)?.no_documento
           : typeof genDocRaw === 'object' && genDocRaw !== null
@@ -479,7 +487,7 @@ export async function POST(request: NextRequest) {
     // EmitirDatos/EmisionServer handles client creation internally.
     // Inspection is CC-only — not called for DT.
     log('3/4', 'Emitiendo póliza (EmisionServer)...');
-    const emitToken = await getAnconToken();
+    let emitToken = await getAnconToken();
 
     const today = new Date();
     const nextYear = new Date(today);
@@ -487,7 +495,7 @@ export async function POST(request: NextRequest) {
     const fmtDate = (d: Date) =>
       `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
-    const emitRaw = await rawSoap('EmitirDatos', {
+    const emitParams: Record<string, string> = {
       poliza: polizaNumber,
       ramo_agt: isSobat ? 'SODA' : 'AUTOMOVIL',
       vigencia_inicial: fmtDate(today),
@@ -567,7 +575,18 @@ export async function POST(request: NextRequest) {
       representante_legal: representante_legal || '',
       nombre_comercial: nombre_comercial || '',
       aviso_operacion: aviso_operacion || '',
-    });
+    };
+
+    let emitRaw = await rawSoap('EmitirDatos', emitParams);
+
+    // Token Inactivo retry — tokens can expire during document uploads; clear cache and retry once
+    if (JSON.stringify(emitRaw).includes('Token Inactivo')) {
+      log('3/4', 'Token Inactivo en EmitirDatos — invalidando caché y reintentando...');
+      invalidateAnconToken();
+      emitToken = await getAnconToken();
+      emitRaw = await rawSoap('EmitirDatos', { ...emitParams, token: emitToken });
+      log('3/4', `Reintento EmitirDatos: ${JSON.stringify(emitRaw).substring(0, 200)}`);
+    }
 
     // Parse EmitirDatos response
     const emitStr = typeof emitRaw === 'string' ? emitRaw : JSON.stringify(emitRaw);
