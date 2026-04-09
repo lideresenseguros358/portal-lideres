@@ -47,7 +47,7 @@ interface CreditCardInputProps {
   environment?: 'development' | 'production';
 }
 
-export default function CreditCardInput({ onTokenReceived, onCardDataReady, onError, environment = 'development' }: CreditCardInputProps) {
+export default function CreditCardInput({ onTokenReceived, onCardDataReady, onError, environment = (process.env.NODE_ENV === 'production' ? 'production' : 'development') }: CreditCardInputProps) {
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [bankName, setBankName] = useState('');
