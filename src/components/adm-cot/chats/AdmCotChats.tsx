@@ -607,31 +607,38 @@ function ChatView({
         )}
       </div>
 
-      {/* Input bar */}
-      {thread.status !== 'closed' && (
-        <div className="border-t border-gray-200 px-3 py-2 bg-white">
-          <div className="flex items-end gap-2">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder={thread.assigned_type === 'ai' ? '🤖 AI activa · Escribe para enviar' : 'Escribe un mensaje...'}
-              rows={1}
-              data-no-uppercase
-              className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30 max-h-24 normal-case"
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || sending}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-[#010139] text-white disabled:opacity-40 cursor-pointer flex-shrink-0">
-              <FaPaperPlane className="text-xs text-white" />
-            </button>
-          </div>
-          {thread.assigned_type === 'ai' && thread.ai_enabled && (
-            <p className="text-[10px] text-purple-500 mt-1">🤖 LISSA AI está respondiendo automáticamente</p>
-          )}
+      {/* Input bar — always visible; sends reopen closed cases automatically */}
+      <div className="border-t border-gray-200 px-3 py-2 bg-white">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder={
+              thread.status === 'closed'
+                ? 'Caso cerrado · Escribe para reabrir y enviar'
+                : thread.assigned_type === 'ai'
+                ? '🤖 AI activa · Escribe para enviar'
+                : 'Escribe un mensaje...'
+            }
+            rows={1}
+            data-no-uppercase
+            className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30 max-h-24 normal-case"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-[#010139] text-white disabled:opacity-40 cursor-pointer flex-shrink-0">
+            <FaPaperPlane className="text-xs text-white" />
+          </button>
         </div>
-      )}
+        {thread.status === 'closed' && (
+          <p className="text-[10px] text-gray-400 mt-1">El caso se reabrirá automáticamente al enviar.</p>
+        )}
+        {thread.status !== 'closed' && thread.assigned_type === 'ai' && thread.ai_enabled && (
+          <p className="text-[10px] text-purple-500 mt-1">🤖 LISSA AI está respondiendo automáticamente</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -951,11 +958,19 @@ export default function AdmCotChats() {
     }
   }, [selectedThreadId, fetchThreadDetail, isScrolledToBottom]);
 
-  // Send manual message
+  // Send manual message — reopens closed threads automatically
   const handleSend = async (body: string) => {
     if (!selectedThreadId) return;
     setSending(true);
     try {
+      // Reopen closed case before sending
+      if (selectedThread?.status === 'closed') {
+        await fetch(`/api/chats/thread/${selectedThreadId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'open' }),
+        });
+      }
       await fetch('/api/chats/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
