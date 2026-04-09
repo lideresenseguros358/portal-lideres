@@ -115,16 +115,18 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
       fetch('/api/ancon/catalogs?type=profesion').then(r => r.json()),
     ]).then(([ocup, prof]) => {
       if (ocup.success && Array.isArray(ocup.data)) {
-        setOcupacionList(ocup.data.map((e: Record<string, string>) => ({
-          code: e.cod_ocupacion || e.codigo || '',
-          nombre: e.nombre || '',
-        })));
+        setOcupacionList(
+          ocup.data
+            .map((e: Record<string, string>) => ({ code: e.cod_ocupacion || e.codigo || '', nombre: e.nombre || '' }))
+            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
+        );
       }
       if (prof.success && Array.isArray(prof.data)) {
-        setProfesionList(prof.data.map((e: Record<string, string>) => ({
-          code: e.cod_profesion || e.codigo || '',
-          nombre: e.nombre || '',
-        })));
+        setProfesionList(
+          prof.data
+            .map((e: Record<string, string>) => ({ code: e.cod_profesion || e.codigo || '', nombre: e.nombre || '' }))
+            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
+        );
       }
     }).catch(() => { /* catalogs optional — defaults used if unavailable */ });
   }, []);
@@ -938,19 +940,13 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Ocupación <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <Autocomplete
+                      options={ocupacionList.map(o => ({ value: o.code, label: o.nombre }))}
                       value={formData.anconOcupacion}
-                      onChange={(e) => setFormData({ ...formData, anconOcupacion: e.target.value })}
-                      className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none bg-white ${
-                        errors.anconOcupacion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                      }`}
-                      style={{ minHeight: '50px' }}
-                    >
-                      <option value="">Seleccionar ocupación</option>
-                      {ocupacionList.map(o => (
-                        <option key={o.code} value={o.code}>{o.nombre}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setFormData({ ...formData, anconOcupacion: String(val) })}
+                      placeholder="Buscar ocupación..."
+                      error={!!errors.anconOcupacion}
+                    />
                     {errors.anconOcupacion && <p className="text-xs text-red-500 mt-1">{errors.anconOcupacion}</p>}
                   </div>
                 )}
@@ -959,19 +955,13 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Profesión <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <Autocomplete
+                      options={profesionList.map(p => ({ value: p.code, label: p.nombre }))}
                       value={formData.anconProfesion}
-                      onChange={(e) => setFormData({ ...formData, anconProfesion: e.target.value })}
-                      className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none bg-white ${
-                        errors.anconProfesion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                      }`}
-                      style={{ minHeight: '50px' }}
-                    >
-                      <option value="">Seleccionar profesión</option>
-                      {profesionList.map(p => (
-                        <option key={p.code} value={p.code}>{p.nombre}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setFormData({ ...formData, anconProfesion: String(val) })}
+                      placeholder="Buscar profesión..."
+                      error={!!errors.anconProfesion}
+                    />
                     {errors.anconProfesion && <p className="text-xs text-red-500 mt-1">{errors.anconProfesion}</p>}
                   </div>
                 )}
