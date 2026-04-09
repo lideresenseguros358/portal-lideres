@@ -24,7 +24,7 @@ import {
 import { generateAnconSolicitudPdf } from '@/lib/ancon/solicitud-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { getAnconCredentials, ANCON_SOAP_URL } from '@/lib/ancon/config';
-import { getAnconToken } from '@/lib/ancon/http-client';
+import { getAnconToken, invalidateAnconToken } from '@/lib/ancon/http-client';
 import { crearClienteYPoliza, parseDdMmYyyy } from '@/lib/supabase/create-client-policy';
 import { resolveAnconVehicleCodes, getAcreedores } from '@/lib/ancon/catalogs.service';
 import { cotizarEstandar } from '@/lib/ancon/quotes.service';
@@ -608,10 +608,26 @@ export async function POST(request: NextRequest) {
     log('3/4', `Póliza emitida: ${polizaNumber}`);
 
     // ═══ STEP 4: Get carátula PDF link ═══
+    // ANCON invalidates the token after EmitirDatos, so we must get a fresh token here.
     log('4/4', 'Obteniendo carátula PDF...');
     let pdfUrl: string | null = null;
     try {
-      const printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: emitToken });
+      // Force-invalidate so getAnconToken() generates a brand-new token for this step
+      invalidateAnconToken();
+      const printToken = await getAnconToken();
+      log('4/4', `Fresh token for ImpresionPoliza: ${printToken.substring(0, 16)}...`);
+
+      let printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: printToken });
+
+      // If still "Token Inactivo", try once more with another fresh token
+      const printStr = JSON.stringify(printRaw);
+      if (printStr.includes('Token Inactivo')) {
+        log('4/4', 'ImpresionPoliza → Token Inactivo, reintentando con token nuevo...');
+        invalidateAnconToken();
+        const retryToken = await getAnconToken();
+        printRaw = await rawSoap('ImpresionPoliza', { no_poliza: polizaNumber, token: retryToken });
+      }
+
       if (Array.isArray(printRaw)) {
         pdfUrl = (printRaw[0] as Record<string, string>)?.enlace_poliza || null;
       } else if (typeof printRaw === 'object' && printRaw !== null) {
