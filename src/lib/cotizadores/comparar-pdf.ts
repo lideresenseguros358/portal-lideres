@@ -156,10 +156,10 @@ function safe(text: string | undefined | null): string {
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); // strip control chars
 }
 
-/** Format money: 909.00 → "B/. 909.00" */
+/** Format money: 909.50 → "B/. 909.50" — always 2 decimal places */
 function money(n: number | undefined | null, prefix = 'B/.'): string {
   if (n == null || isNaN(n)) return '—';
-  return `${prefix} ${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return `${prefix} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Truncate a string to maxLen chars with ellipsis */
