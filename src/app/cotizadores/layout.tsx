@@ -208,12 +208,14 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
 
 export default function CotizadoresLayout({ children }: { children: ReactNode }) {
   const [isMaster, setIsMaster] = useState(false);
+  const [isBroker, setIsBroker] = useState(false);
+  const [brokerSelfId, setBrokerSelfId] = useState<string | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const pathname = usePathname();
 
-  // Detect master session on mount
+  // Detect master/broker session on mount
   useEffect(() => {
-    const detectMaster = async () => {
+    const detectRole = async () => {
       try {
         const { data: { user } } = await supabaseClient().auth.getUser();
         if (user?.id) {
@@ -223,16 +225,28 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
             .eq('id', user.id)
             .single();
 
-          setIsMaster(profile?.role?.toLowerCase() === 'master');
+          const role = profile?.role?.toLowerCase();
+          if (role === 'master') {
+            setIsMaster(true);
+          } else if (role === 'broker') {
+            setIsBroker(true);
+            // Auto-fetch this broker's own ID from the brokers table
+            const { data: brokerRecord } = await supabaseClient()
+              .from('brokers')
+              .select('id')
+              .eq('p_id', user.id)
+              .single();
+            setBrokerSelfId(brokerRecord?.id ?? null);
+          }
         }
       } catch (err) {
-        console.error('Failed to detect master:', err);
+        console.error('Failed to detect role:', err);
       } finally {
         setLoadingAuth(false);
       }
     };
 
-    detectMaster();
+    detectRole();
   }, []);
 
   // ── Page-enter animation: re-trigger on every navigation ─────────────────
@@ -274,7 +288,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
 
   return (
     <PDFDownloadProvider>
-      <CotizadorEditProvider isMaster={isMaster}>
+      <CotizadorEditProvider isMaster={isMaster} isBroker={isBroker} brokerSelfId={brokerSelfId}>
         <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         {/* Mobile animation engine — injected once for the entire cotizadores module */}
         <style dangerouslySetInnerHTML={{ __html: MOBILE_ANIMATION_CSS }} />
