@@ -16,6 +16,7 @@ import { getActiveMemory, buildMemoryPromptBlock } from './lissa-memory';
 import { INSURANCE_KNOWLEDGE_PROMPT } from '@/config/insuranceKnowledge';
 import { LEGAL_KNOWLEDGE_PROMPT } from '@/config/legalKnowledge';
 import { MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT } from '@/config/marketAndProductsKnowledge';
+import { FISCAL_AND_LEGAL_KNOWLEDGE_PROMPT } from '@/config/fiscalAndLegalKnowledge';
 
 // ── Auth ──
 
@@ -377,6 +378,7 @@ Actúa como en una conversación fluida de WhatsApp. NUNCA repitas el saludo (ej
     INSURANCE_KNOWLEDGE_PROMPT,
     LEGAL_KNOWLEDGE_PROMPT,
     MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT,
+    FISCAL_AND_LEGAL_KNOWLEDGE_PROMPT,
   ];
 
   if (memoryBlock) {
