@@ -229,14 +229,17 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
           if (role === 'master') {
             setIsMaster(true);
           } else if (role === 'broker') {
-            setIsBroker(true);
-            // Auto-fetch this broker's own ID from the brokers table
+            // Auto-fetch broker record — only grant bypass if cotizador_enabled = true
             const { data: brokerRecord } = await supabaseClient()
               .from('brokers')
-              .select('id')
+              .select('id, cotizador_enabled')
               .eq('p_id', user.id)
               .single();
-            setBrokerSelfId(brokerRecord?.id ?? null);
+            if (brokerRecord?.cotizador_enabled) {
+              setIsBroker(true);
+              setBrokerSelfId(brokerRecord.id ?? null);
+            }
+            // If cotizador_enabled is false, broker accesses as public user (no bypass)
           }
         }
       } catch (err) {

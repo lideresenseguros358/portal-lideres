@@ -42,6 +42,17 @@ export default async function AppLayout({
   const role = profile.role === "master" ? "MASTER" : "BROKER";
   const displayName = profile.full_name || user.email || "Usuario";
 
+  // For broker users: check if cotizador_enabled is set on their broker record
+  let cotizadorEnabled = false;
+  if (role === "BROKER" && profile.broker_id) {
+    const { data: brokerRow } = await supabase
+      .from("brokers")
+      .select("cotizador_enabled")
+      .eq("id", profile.broker_id)
+      .single();
+    cotizadorEnabled = !!(brokerRow as any)?.cotizador_enabled;
+  }
+
   return (
     <>
       {/* Mobile menu toggle (hidden checkbox) */}
@@ -82,7 +93,7 @@ export default async function AppLayout({
         </header>
 
         {/* Side Menu - slides over everything */}
-        <SideMenu role={role} />
+        <SideMenu role={role} cotizadorEnabled={cotizadorEnabled} />
         
         {/* Main Content with proper margins */}
         <main className="app-main">

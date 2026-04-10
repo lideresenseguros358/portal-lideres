@@ -376,6 +376,51 @@ export async function actionToggleBrokerActive(brokerId: string, active: boolean
 }
 
 // =====================================================
+// TOGGLE COTIZADOR ACCESS (Broker can use cotizadores with payment bypass)
+// =====================================================
+
+export async function actionToggleBrokerCotizador(brokerId: string, enabled: boolean) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+
+    if (!user) return { ok: false as const, error: 'No autenticado' };
+
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede modificar acceso a cotizadores' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    const { data, error } = await supabase
+      .from('brokers')
+      .update({ cotizador_enabled: enabled })
+      .eq('id', brokerId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error toggling cotizador_enabled:', error);
+      return { ok: false as const, error: error.message };
+    }
+
+    revalidatePath('/brokers');
+    revalidatePath(`/brokers/${brokerId}`);
+
+    return { ok: true as const, data };
+  } catch (error: any) {
+    console.error('Error in actionToggleBrokerCotizador:', error);
+    return { ok: false as const, error: error.message };
+  }
+}
+
+// =====================================================
 // TOGGLE RENEWAL NOTIFICATIONS (Master receives broker notifications)
 // =====================================================
 

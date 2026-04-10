@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaArrowLeft, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaTimesCircle, FaUser, FaPhone, FaIdCard, FaBirthdayCake, FaUniversity, FaPercentage, FaChartLine, FaCalendar, FaDatabase } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaTimesCircle, FaUser, FaPhone, FaIdCard, FaBirthdayCake, FaUniversity, FaPercentage, FaChartLine, FaCalendar, FaDatabase, FaCalculator } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { actionGetBroker, actionUpdateBroker, actionToggleBrokerActive, actionDeleteBroker, actionApplyDefaultPercentToAll } from '@/app/(app)/brokers/actions';
+import { actionGetBroker, actionUpdateBroker, actionToggleBrokerActive, actionToggleBrokerCotizador, actionDeleteBroker, actionApplyDefaultPercentToAll } from '@/app/(app)/brokers/actions';
 import { PERCENT_OPTIONS, OFICINA_EMAIL } from '@/lib/constants/brokers';
 import { createUppercaseHandler, uppercaseInputClass, toUppercasePayload } from '@/lib/utils/uppercase';
 import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
@@ -26,6 +26,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   const [useBrokerData, setUseBrokerData] = useState(false);
   const [showPercentModal, setShowPercentModal] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState<any>(null);
+  const [cotizadorEnabled, setCotizadorEnabled] = useState(false);
+  const [togglingCotizador, setTogglingCotizador] = useState(false);
 
   useEffect(() => {
     loadBroker();
@@ -38,6 +40,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
 
     if (result.ok) {
       setBroker(result.data);
+      setCotizadorEnabled(!!(result.data as any).cotizador_enabled);
       setFormData({
         name: result.data.name || '',
         phone: result.data.phone || '',
@@ -165,6 +168,22 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
     } else {
       toast.error(result.error);
     }
+  };
+
+  const handleToggleCotizador = async () => {
+    setTogglingCotizador(true);
+    const newValue = !cotizadorEnabled;
+    const result = await actionToggleBrokerCotizador(brokerId, newValue);
+    if (result.ok) {
+      setCotizadorEnabled(newValue);
+      toast.success(newValue
+        ? '✅ Acceso a Cotizadores habilitado'
+        : 'Acceso a Cotizadores deshabilitado'
+      );
+    } else {
+      toast.error(result.error);
+    }
+    setTogglingCotizador(false);
   };
 
   const handleDelete = async () => {
@@ -764,6 +783,56 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
 
         {/* Right Column - KPIs & Shortcuts */}
         <div className="space-y-6">
+
+          {/* ── Cotizadores Access Toggle ─────────────────────────────── */}
+          {!isOficina && (
+            <div className={`rounded-xl shadow-lg border-2 p-5 transition-all ${
+              cotizadorEnabled
+                ? 'bg-gradient-to-br from-[#8AAA19]/10 to-[#8AAA19]/5 border-[#8AAA19]'
+                : 'bg-white border-gray-200'
+            }`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-lg ${cotizadorEnabled ? 'bg-[#8AAA19] text-white' : 'bg-gray-100 text-gray-500'}`}>
+                    <FaCalculator size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[#010139] text-sm">Acceso a Cotizadores</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">Bypass de pago + auto-asignación</p>
+                  </div>
+                </div>
+
+                {/* Toggle switch */}
+                <button
+                  onClick={handleToggleCotizador}
+                  disabled={togglingCotizador}
+                  aria-label={cotizadorEnabled ? 'Deshabilitar cotizadores' : 'Habilitar cotizadores'}
+                  className={`relative inline-flex h-7 w-14 flex-shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#8AAA19] focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed ${
+                    cotizadorEnabled ? 'bg-[#8AAA19]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                    cotizadorEnabled ? 'translate-x-8' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+
+              <p className="text-xs leading-relaxed text-gray-600">
+                {cotizadorEnabled
+                  ? '✅ El corredor puede emitir pólizas desde su portal sin pago de tarjeta. Su ID de corredor se asigna automáticamente.'
+                  : 'Deshabilitado. El corredor accede al cotizador como cliente público y debe pagar con tarjeta.'
+                }
+              </p>
+
+              {cotizadorEnabled && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-[#8AAA19]/10 rounded-lg border border-[#8AAA19]/30">
+                  <span className="text-[10px] font-bold text-[#8AAA19] uppercase tracking-wide">Activo</span>
+                  <span className="text-[10px] text-gray-600">— visible en sidemenu del corredor</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* KPIs */}
           <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-6">
             <h2 className="text-xl font-bold text-[#010139] mb-4 flex items-center gap-2">

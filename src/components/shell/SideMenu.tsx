@@ -75,10 +75,19 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
 
 interface SideMenuProps {
   role: MenuRole;
+  cotizadorEnabled?: boolean;
 }
-export default function SideMenu({ role }: SideMenuProps) {
+export default function SideMenu({ role, cotizadorEnabled = false }: SideMenuProps) {
   const pathname = usePathname();
-  const items = menuItems[role] || menuItems.BROKER;
+  const baseItems = menuItems[role] || menuItems.BROKER;
+  // Inject Cotizadores hub for brokers who have cotizador access enabled
+  const items = (role === 'BROKER' && cotizadorEnabled)
+    ? [
+        ...baseItems.slice(0, 3), // Dashboard, Base de datos, Comisiones
+        { label: 'Cotizadores', href: '/cotizadores', icon: <FaCalculator />, isHub: true },
+        ...baseItems.slice(3),
+      ]
+    : baseItems;
   const [hubOpen, setHubOpen] = useState(false);
 
   // For the hub item, highlight if we're on any of the 3 hub pages
