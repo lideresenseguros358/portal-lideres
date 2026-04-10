@@ -134,32 +134,18 @@ export default function EmissionLoadingModal({
         touch-action:none + preventDefault bloquea scroll iOS Safari.
       */}
       <div
-        className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
+        className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
         style={{
           touchAction: 'none',
-          paddingTop: 'env(safe-area-inset-top)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          paddingLeft: 'env(safe-area-inset-left)',
-          paddingRight: 'env(safe-area-inset-right)',
+          paddingTop: 'max(env(safe-area-inset-top), 16px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom), 16px)',
+          paddingLeft: 'max(env(safe-area-inset-left), 16px)',
+          paddingRight: 'max(env(safe-area-inset-right), 16px)',
         }}
         onTouchMove={(e) => e.preventDefault()}
       >
-        {/*
-          Card:
-          - Mobile (< sm): hoja desde abajo, ocupa hasta 96dvh, esquinas redondeadas arriba
-          - Desktop (≥ sm): card centrado, max-w-md, rounded-2xl completo
-          - overflow-y-auto + max-h asegura scroll interno si el contenido es largo
-            (ej: estados de error con mucho texto)
-        */}
         <div
-          className="
-            bg-white w-full relative
-            rounded-t-2xl sm:rounded-2xl
-            shadow-2xl
-            overflow-y-auto
-            max-h-[96dvh] sm:max-h-[90dvh]
-            sm:max-w-md sm:mx-4
-          "
+          className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-y-auto max-h-full relative"
           onTouchMove={(e) => e.stopPropagation()}
         >
 
