@@ -6,7 +6,7 @@
  *
  * REGLAS DE NEGOCIO INAMOVIBLES:
  * 1. AUTO: Solo 4 aseguradoras oficiales → Ancón, Internacional, La Regional, FEDPA
- * 2. VIDA: EXCLUSIVAMENTE ASSA. Solo 4 planes: Término Nivelado, Universal I, Universal II, Patrimonial II.
+ * 2. VIDA: EXCLUSIVAMENTE ASSA. 5 planes: Término Nivelado, Universal I, Universal II, Patrimonial II, Vida Segura.
  *    PROHIBIDO dar respuestas genéricas de vida o inventar planes.
  * 3. INCENDIO/MULTIRRIESGO: Condiciones de Ancón como base representativa.
  *    "Incendio" (estructura) ≠ "Multirriesgo/Contenido/Hogar" (bienes muebles).
@@ -134,10 +134,10 @@ Documento base: 2013-LRDS-AUTO.
 - Amplia variedad de endosos/paquetes (ver sección Endosos).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECCIÓN VIDA — EXCLUSIVAMENTE ASSA (4 PLANES)
+SECCIÓN VIDA — EXCLUSIVAMENTE ASSA (5 PLANES)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REGLA CRÍTICA: Somos EXCLUSIVOS de ASSA en Vida. SOLO existen estos 4 planes. PROHIBIDO inventar planes, mencionar otras aseguradoras de vida, ni dar respuestas genéricas. Toda consulta de vida = uno de estos 4 planes.
+REGLA CRÍTICA: Somos EXCLUSIVOS de ASSA en Vida. SOLO existen estos 5 planes: Término Nivelado, Universal I, Universal II, Patrimonial II y Vida Segura. PROHIBIDO inventar planes, mencionar otras aseguradoras de vida, ni dar respuestas genéricas. Toda consulta de vida = uno de estos 5 planes.
 
 ## CONCEPTO FUNDAMENTAL — OPCIONES DE BENEFICIO POR FALLECIMIENTO (aplica a Universal I, Universal II y Patrimonial II):
 Los tres planes universales pueden configurarse bajo DOS opciones de beneficio por fallecimiento. Son opciones de configuración, NO son planes distintos:
@@ -194,6 +194,43 @@ Registro: APII 15.05.07.
 - Préstamos: NO disponibles (a diferencia de Universal I y II).
 - Primas flexibles: Prima mínima + depósitos adicionales.
 Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
+
+## Plan 5: VIDA SEGURA (Plan de Vida Universal — EXCLUSIVO ASSA)
+Código: PVU-VS002-07-REV.04.2021 | Autorización: Resolución N° DRLA-045 de 13 de julio de 2022.
+- Naturaleza: Vida universal individual con componente de ahorro. El más moderno del portafolio ASSA.
+- OPCIONES DE BENEFICIO POR FALLECIMIENTO (Plan A y Plan B — mismo concepto que los otros universales):
+  Plan A: mayor entre el Monto Final Especificado O el 110% del Valor Acumulado Corriente.
+  Plan B: mayor entre (Monto Final Especificado + Valor Acumulado Corriente) O el 110% del Valor Acumulado Corriente.
+- BENEFICIO DE SUPERVIVENCIA/MADUREZ: Al vencimiento, la compañía paga el Valor Efectivo Corriente menos deudas pendientes.
+- Ideal para: Clientes que buscan un plan de vida universal moderno con cobertura ampliada de enfermedades graves (8 condiciones críticas), más completo que el rider EG estándar.
+- Disputabilidad: 2 años desde la fecha de emisión (igual que todos los planes ASSA).
+- Suicidio: Excluido los primeros 2 años; cubierto a partir del tercero.
+Contratos suplementarios propios del Vida Segura (nomenclatura diferente a los riders estándar):
+  A. BENEFICIO PARA EL CUIDADO DEL ASEGURADO (GRATUITO — basado en aplicación):
+     Anticipa el menor de B/.100,000 o 50% de la suma asegurada si el asegurado desarrolla una
+     ENFERMEDAD TERMINAL (irreversible, diagnosticada ≥90 días después de la vigencia, con expectativa
+     de muerte <12 meses). Equivalente al BSCA, pero gratuito.
+  B. SEGURO DE VIDA A TÉRMINO PARA OTRO ASEGURADO:
+     Cubre la vida de una persona adicional (cónyuge, pareja) bajo la misma póliza. Renovable
+     mensualmente hasta los 120 años. Incluye Privilegio de Conversión del Sobreviviente: si el
+     asegurado principal muere mientras el contrato está vigente y el otro asegurado tiene menos de
+     65 años, éste puede convertir a póliza individual permanente sin examen médico. Equivalente al OA.
+  C. EXONERACIÓN DE DEDUCCIONES MENSUALES POR INCAPACIDAD TOTAL Y PERMANENTE:
+     Mantiene la póliza vigente sin cobro de deducciones mientras dure la invalidez total y permanente
+     (debe comenzar antes de los 60 años). También aplica a: parálisis por lesión espinal, pérdida
+     total de visión en ambos ojos, pérdida funcional/amputación de ambas manos o pies. Equivalente al ECM.
+  D. MUERTE ACCIDENTAL Y DESMEMBRAMIENTO:
+     Suma adicional al fallecimiento accidental (muerte dentro de los 90 días del accidente).
+     Aplica si la muerte ocurre antes del aniversario de los 65 años. Equivalente a AP/BCMA.
+  I. ENFERMEDADES GRAVES — 8 condiciones (más amplio que el rider EG estándar de 4 enfermedades):
+     1. Cáncer  2. Cirugía de Aorta  3. Cirugía de Válvula Cardíaca  4. Bypass Aortocoronario
+     5. ACV / Hemorragia Cerebral  6. Infarto de Miocardio  7. Insuficiencia Renal Terminal
+     8. Trasplante Mayor de Órgano (corazón, hígado, riñón, páncreas, intestino, pulmón, médula)
+     Período de espera: 90 días desde vigencia. Cobertura expira al 65° cumpleaños del asegurado.
+     Revisión de primas: cada 5 años (la compañía notifica con 60 días de anticipación).
+NOTA PARA LISSA: Los 5 contratos suplementarios del Vida Segura tienen nombres propios distintos a los
+riders BIPA/ECM/EG/AP del catálogo estándar, pero son conceptualmente equivalentes. Al explicar a un
+cliente, usa los nombres propios del Vida Segura, no los códigos de otros planes.
 
 ## Características comunes a los 3 Planes Universales (I, II, Patrimonial II):
 - Disputabilidad: Primeros 2 años desde la fecha de emisión.
@@ -346,13 +383,14 @@ DISPONIBILIDAD DE CONTRATOS COMPLEMENTARIOS POR PLAN
 | BACI (Anticip. Cap. Inval.)| ✓                | ✗           | ✗            | ✗              |
 | Exoneración de Primas      | ✓                | ✗           | ✗            | ✗              |
 
-## Tabla comparativa de los 4 planes ASSA:
-| Plan             | Ahorro | Tasa garantizada | Al llegar a 95 años            | Rescate desde | Préstamos | Ideal para                          |
-|------------------|:------:|:----------------:|:------------------------------:|:-------------:|:---------:|-------------------------------------|
-| Término Nivelado | No     | N/A              | No aplica (plazo fijo)         | N/A           | No        | Protección pura, menor costo        |
-| Universal I      | Sí     | 3.5%             | Paga Beneficio de Muerte (vivo)| Año 2         | Sí        | Protección + pago garantizado a 95  |
-| Universal II     | Sí     | 3.5%             | Entrega Valor Acumulado        | Año 2         | Sí        | Mayor ahorro acumulado a igual prima |
-| Patrimonial II   | Sí     | 4.5%             | Entrega Valor Acumulado        | Año 6         | No        | Máximo ahorro / patrimonio           |
+## Tabla comparativa de los 5 planes ASSA:
+| Plan             | Ahorro | Tasa garantizada | Al vencimiento                 | Rescate desde | Préstamos | Ideal para                              |
+|------------------|:------:|:----------------:|:------------------------------:|:-------------:|:---------:|-----------------------------------------|
+| Término Nivelado | No     | N/A              | No aplica (plazo fijo)         | N/A           | No        | Protección pura, menor costo            |
+| Universal I      | Sí     | 3.5%             | Paga Beneficio de Muerte (vivo)| Año 2         | Sí        | Protección + pago garantizado a 95      |
+| Universal II     | Sí     | 3.5%             | Entrega Valor Acumulado        | Año 2         | Sí        | Mayor ahorro acumulado a igual prima     |
+| Patrimonial II   | Sí     | 4.5%             | Entrega Valor Acumulado        | Año 6         | No        | Máximo ahorro / patrimonio              |
+| Vida Segura      | Sí     | Consultar        | Entrega Valor Efectivo Corriente| Consultar    | Consultar | Universal moderno + 8 enf. graves (EG+) |
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SECCIÓN INCENDIO / MULTIRRIESGO (BASE: ANCÓN)
