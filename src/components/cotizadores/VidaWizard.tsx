@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaUser, FaBriefcase, FaHome, FaHeartbeat, FaShieldAlt, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
-import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
+import { trackQuoteCreated, trackQuoteFailed } from '@/lib/adm-cot/track-quote';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
@@ -297,6 +297,34 @@ export default function VidaWizard() {
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const formRef = useRef<HTMLDivElement>(null);
 
+  // ═══ ADM COT: Lead tracking refs (survive re-renders, avoid stale closures) ═══
+  const quoteLeadRef = useRef('');    // quoteRef generado al capturar email+phone
+  const submittedRef = useRef(false); // true cuando el wizard se envió exitosamente
+  const stepRef = useRef(1);          // step actual (para abandonment tracking)
+  const emailRef = useRef('');
+  const phoneRef = useRef('');
+
+  // Mantener refs sincronizados con el estado
+  useEffect(() => { stepRef.current = step; }, [step]);
+  useEffect(() => { emailRef.current = data.correo; }, [data.correo]);
+  useEffect(() => { phoneRef.current = data.celular; }, [data.celular]);
+
+  // Abandonment detection: si el usuario sale del wizard luego de pasar step 1
+  useEffect(() => {
+    return () => {
+      if (quoteLeadRef.current && !submittedRef.current) {
+        trackQuoteFailed({
+          quoteRef: quoteLeadRef.current,
+          insurer: 'ASSA',
+          errorMessage: 'Wizard abandonado antes de completar el envío',
+          lastStep: `vida-paso-${stepRef.current}`,
+          email: emailRef.current || undefined,
+          phone: phoneRef.current || undefined,
+        });
+      }
+    };
+  }, []);
+
   // Address catalogs
   const [provincias, setProvincias] = useState<AddressCatalogItem[]>([]);
   const [distritos, setDistritos] = useState<AddressCatalogItem[]>([]);
@@ -445,6 +473,21 @@ export default function VidaWizard() {
 
   function goNext() {
     if (!validateStep(step)) return;
+    // ═══ ADM COT: Early lead capture — fires en paso 1→2 (email+phone validados) ═══
+    if (step === 1 && !quoteLeadRef.current) {
+      const ref = `VIDA-LEAD-${Date.now()}`;
+      quoteLeadRef.current = ref;
+      trackQuoteCreated({
+        quoteRef: ref,
+        insurer: 'ASSA',
+        clientName: `${data.nombre} ${data.apellido}`.trim() || 'Anónimo',
+        email: data.correo.trim(),
+        phone: data.celular.trim(),
+        ramo: 'VIDA',
+        coverageType: 'Seguro de Vida Individual',
+        planName: 'Petición de cotización',
+      });
+    }
     // Clean conditional fields
     if (step === 4) {
       if (!data.tieneEnfermedad) update({ descripcionEnfermedad: '' });
@@ -630,10 +673,11 @@ export default function VidaWizard() {
         },
       });
 
-      // Track in ADM COT cotizaciones log
+      // Track in ADM COT cotizaciones log (full data at submission)
+      submittedRef.current = true; // prevent abandonment event on unmount
       trackQuoteCreated({
         quoteRef: `VIDA-${result.ticket || Date.now()}`,
-        insurer: 'INTERNACIONAL',
+        insurer: 'ASSA',
         clientName: `${data.nombre} ${data.apellido}`.trim(),
         cedula: undefined,
         email: data.correo.trim(),

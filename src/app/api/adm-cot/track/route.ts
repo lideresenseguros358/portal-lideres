@@ -1,13 +1,19 @@
 /**
- * ADM COT — Quote Tracking API (SECURED)
- * 
+ * ADM COT — Quote Tracking API (PUBLIC)
+ *
  * POST /api/adm-cot/track
- * 
+ *
+ * Intentionally public — tracks ALL visitors (logged-in, broker, master, or
+ * completely anonymous public users) to ensure zero tracking gaps for Meta ADS.
+ *
  * Security layers:
- *  A. Session validation — user must be authenticated
- *  B. Origin validation — only portal.lideresenseguros.com + localhost
- *  C. Rate limiting — per IP, 60 req/min
- *  D. Payload validation — whitelist fields, sanitize, reject bad values
+ *  A. Origin validation — only portal.lideresenseguros.com + localhost
+ *  B. Rate limiting — per IP, 60 req/min
+ *  C. Payload validation — whitelist fields, sanitize, reject bad values
+ *
+ * NOTE: Session validation was intentionally removed. This endpoint only
+ * writes analytics data using the service role key — no user-sensitive
+ * action is performed. Rate limiting + origin validation are sufficient.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -124,7 +130,7 @@ async function resolveRegionFromIp(ip: string): Promise<string | null> {
 
 const VALID_ACTIONS = ['quote_created', 'quote_emitted', 'quote_failed', 'step_update'] as const;
 const VALID_STATUSES = ['COTIZADA', 'EMITIDA', 'FALLIDA', 'ABANDONADA'] as const;
-const VALID_INSURERS = ['INTERNACIONAL', 'FEDPA', 'REGIONAL', 'ANCON'] as const;
+const VALID_INSURERS = ['INTERNACIONAL', 'FEDPA', 'REGIONAL', 'ANCON', 'ASSA'] as const;
 const VALID_RAMOS = ['AUTO', 'SALUD', 'VIDA', 'INCENDIO', 'CONTENIDO', 'RC', 'FIANZA'] as const;
 const MAX_STRING_LEN = 500;
 
@@ -203,12 +209,6 @@ export async function POST(request: NextRequest) {
       || 'unknown';
     if (!checkRateLimit(clientIp)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-    }
-
-    // — A. Session validation —
-    const session = await validateSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // — Parse body —
