@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FaExclamationTriangle, FaCheckCircle, FaHeadset, FaCreditCard } from 'react-icons/fa';
 import PixelMascotLoader from './PixelMascotLoader';
 import { formatEmissionError } from '@/lib/utils/emission-errors';
@@ -34,6 +35,9 @@ export default function EmissionLoadingModal({
   const [reportSending, setReportSending] = useState(false);
   const [reportSent, setReportSent] = useState(false);
   const [autoReportCountdown, setAutoReportCountdown] = useState(15);
+  // Portal: wait for DOM to be available (SSR safety — same pattern as CameraCapture)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // On 100%: auto-close after a short pause so confirmation page is revealed
   useEffect(() => {
@@ -45,12 +49,18 @@ export default function EmissionLoadingModal({
     }
   }, [progress, error, onComplete]);
 
-  // Lock body scroll while modal is open (prevents page scroll on mobile)
+  // Lock scroll on both <html> and <body> while modal is open.
+  // Must lock html too — iOS Safari scrolls the html element, not just body.
   useEffect(() => {
     if (!isOpen) return;
-    const prev = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
   }, [isOpen]);
 
   // Reset report state when modal opens/closes or error changes
@@ -74,7 +84,7 @@ export default function EmissionLoadingModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, error, paymentCharged, reportSent, reportSending, blocked, autoReportCountdown]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const hasError = !!error;
 
@@ -92,7 +102,7 @@ export default function EmissionLoadingModal({
     }
   };
 
-  return (
+  const modal = (
     <>
       <style>{`
         @keyframes subtlePulseText {
@@ -115,13 +125,41 @@ export default function EmissionLoadingModal({
         }
       `}</style>
 
-      {/* Overlay: fixed full-screen, touch-action:none blocks iOS Safari scroll */}
+      {/*
+        Overlay montado via Portal en document.body — igual que CameraCapture.
+        Al estar fuera del árbol DOM de la página, ningún transform/filter/opacity
+        de un ancestro puede romper position:fixed ni crear un stacking context que
+        atrape el modal.
+        env(safe-area-inset-*) respeta notch y barra de inicio en iPhone.
+        touch-action:none + preventDefault bloquea scroll iOS Safari.
+      */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] overflow-hidden p-4"
-        style={{ touchAction: 'none' }}
+        className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
+        style={{
+          touchAction: 'none',
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
+        }}
         onTouchMove={(e) => e.preventDefault()}
       >
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-auto overflow-y-auto max-h-[90dvh] relative"
+        {/*
+          Card:
+          - Mobile (< sm): hoja desde abajo, ocupa hasta 96dvh, esquinas redondeadas arriba
+          - Desktop (≥ sm): card centrado, max-w-md, rounded-2xl completo
+          - overflow-y-auto + max-h asegura scroll interno si el contenido es largo
+            (ej: estados de error con mucho texto)
+        */}
+        <div
+          className="
+            bg-white w-full relative
+            rounded-t-2xl sm:rounded-2xl
+            shadow-2xl
+            overflow-y-auto
+            max-h-[96dvh] sm:max-h-[90dvh]
+            sm:max-w-md sm:mx-4
+          "
           onTouchMove={(e) => e.stopPropagation()}
         >
 
@@ -304,10 +342,10 @@ export default function EmissionLoadingModal({
             </div>
           ) : (
             /* ─── PROCESSING STATE ─── */
-            <div className="px-6 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8">
-              {/* Pixel mascot animation */}
+            <div className="px-5 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8">
+              {/* Pixel mascot animation — smaller on mobile to fit viewport */}
               <div className="flex justify-center mb-2">
-                <PixelMascotLoader size={160} onStatusChange={setMascotStatus} />
+                <PixelMascotLoader size={120} onStatusChange={setMascotStatus} />
               </div>
 
               {/* Mascot status label */}
@@ -349,4 +387,6 @@ export default function EmissionLoadingModal({
       </div>
     </>
   );
+
+  return createPortal(modal, document.body);
 }
