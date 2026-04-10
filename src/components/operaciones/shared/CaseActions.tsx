@@ -207,19 +207,33 @@ interface CaseDotsMenuProps {
 
 export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete, onBlock, isBlocked }: CaseDotsMenuProps) {
   const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useRef(`case-dots-menu-${Math.random().toString(36).slice(2)}`);
   const btnRef = useRef<HTMLButtonElement>(null);
 
+  // Close on scroll so the fixed menu doesn't drift from its button
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
   }, [open]);
+
+  const positionMenu = () => {
+    const btn = btnRef.current;
+    const menu = document.getElementById(menuId.current);
+    if (!btn || !menu) return;
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+  };
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(v => {
+      if (!v) requestAnimationFrame(positionMenu);
+      return !v;
+    });
+  };
 
   const items = [
     {
@@ -240,10 +254,10 @@ export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete, onBloc
 
   return (
     // hidden on mobile — swipe handles it
-    <div className="hidden md:block relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+    <div className="hidden md:block flex-shrink-0" onClick={(e) => e.stopPropagation()}>
       <button
         ref={btnRef}
-        onClick={() => setOpen(v => !v)}
+        onClick={handleOpen}
         className="p-1.5 rounded-md text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
         title="Opciones"
       >
@@ -251,26 +265,34 @@ export function CaseDotsMenu({ isPinned, onPin, onAssignMaster, onDelete, onBloc
       </button>
 
       {open && (
-        <div
-          ref={menuRef}
-          className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[100] min-w-[176px]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => { item.action(); setOpen(false); }}
-              className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium transition-colors text-left ${
-                item.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <span className={`text-[11px] ${item.danger ? 'text-red-500' : 'text-gray-400'}`}>
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Invisible overlay to close on outside click */}
+          <div
+            className="fixed inset-0 z-[999]"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+          />
+          {/* Menu rendered as fixed so it escapes any overflow:hidden/auto parent */}
+          <div
+            id={menuId.current}
+            className="fixed bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-[1000] min-w-[176px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {items.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => { item.action(); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-[12px] font-medium transition-colors text-left ${
+                  item.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`text-[11px] ${item.danger ? 'text-red-500' : 'text-gray-400'}`}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
