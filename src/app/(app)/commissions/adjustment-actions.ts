@@ -524,6 +524,111 @@ export async function actionApproveAdjustmentReport(
 }
 
 /**
+ * Aprobar múltiples reportes de ajuste en una sola operación (Master)
+ * Reemplaza el loop secuencial — todas las escrituras en BD ocurren juntas,
+ * sin recargas intermedias de página.
+ */
+export async function actionBulkApproveAdjustmentReports(reportIds: string[]) {
+  if (!reportIds.length) return { ok: false, error: 'Sin reportes seleccionados' };
+
+  try {
+    const { role, userId } = await getAuthContext();
+    if (role !== 'master') return { ok: false, error: 'No autorizado' };
+
+    const supabase = getSupabaseAdmin();
+    const now = new Date().toISOString();
+
+    // 1. Obtener todos los reportes + sus items en una sola query
+    const { data: reports, error: fetchError } = await supabase
+      .from('adjustment_reports')
+      .select('id, status, broker_id, total_amount, adjustment_report_items(pending_item_id)')
+      .in('id', reportIds);
+
+    if (fetchError || !reports?.length) {
+      return { ok: false, error: 'Error al obtener reportes' };
+    }
+
+    const pendingReports = reports.filter(r => r.status === 'pending');
+    if (!pendingReports.length) {
+      return { ok: false, error: 'Ningún reporte está en estado pendiente' };
+    }
+    const pendingIds = pendingReports.map(r => r.id);
+
+    // 2. Aprobar todos los reportes pendientes en una sola query
+    const { error: updateError } = await supabase
+      .from('adjustment_reports')
+      .update({ status: 'approved', reviewed_at: now, reviewed_by: userId })
+      .in('id', pendingIds);
+
+    if (updateError) {
+      console.error('[actionBulkApproveAdjustmentReports] Error updating reports:', updateError);
+      return { ok: false, error: 'Error al aprobar reportes' };
+    }
+
+    // 3. Actualizar todos los pending_items a 'assigned' en una sola query por broker
+    //    (agrupamos por broker_id para preservar el assigned_broker_id correcto)
+    const byBroker = new Map<string, string[]>();
+    for (const r of pendingReports) {
+      const ids = (r.adjustment_report_items as { pending_item_id: string }[])
+        .map(i => i.pending_item_id)
+        .filter(Boolean);
+      if (!byBroker.has(r.broker_id)) byBroker.set(r.broker_id, []);
+      byBroker.get(r.broker_id)!.push(...ids);
+    }
+
+    await Promise.all(
+      Array.from(byBroker.entries()).map(([brokerId, itemIds]) =>
+        supabase
+          .from('pending_items')
+          .update({ status: 'assigned', assigned_broker_id: brokerId, assigned_at: now })
+          .in('id', itemIds)
+      )
+    );
+
+    // 4. Notificaciones en paralelo (non-blocking — no fallan la operación)
+    const uniqueBrokerIds = [...new Set(pendingReports.map(r => r.broker_id))];
+    const { data: brokers } = await supabase
+      .from('brokers')
+      .select('id, p_id, name')
+      .in('id', uniqueBrokerIds);
+
+    if (brokers?.length) {
+      const brokerMap = new Map(brokers.map(b => [b.id, b]));
+      const notifications = pendingReports
+        .map(r => {
+          const broker = brokerMap.get(r.broker_id);
+          if (!broker?.p_id) return null;
+          return {
+            target: broker.p_id,
+            broker_id: r.broker_id,
+            notification_type: 'commission',
+            title: 'Reporte de Ajustes Aprobado',
+            body: `Tu reporte de ajustes por $${r.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ha sido aprobado`,
+            meta: { report_id: r.id, amount: r.total_amount },
+          };
+        })
+        .filter(Boolean);
+
+      if (notifications.length) {
+        supabase.from('notifications').insert(notifications).then(() => {});
+      }
+    }
+
+    revalidatePath('/commissions');
+
+    return {
+      ok: true,
+      approved: pendingIds.length,
+      skipped: reportIds.length - pendingIds.length,
+      message: `${pendingIds.length} reporte(s) aprobado(s) exitosamente`,
+    };
+  } catch (error) {
+    console.error('[actionBulkApproveAdjustmentReports] Error:', error);
+    return { ok: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+/**
  * Rechazar un reporte de ajuste (Master)
  */
 export async function actionRejectAdjustmentReport(

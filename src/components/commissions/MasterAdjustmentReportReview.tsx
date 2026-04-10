@@ -24,7 +24,7 @@ import {
 import { toast } from 'sonner';
 import AdjustmentItemEditor from './AdjustmentItemEditor';
 import ManualAdjustmentModal from './ManualAdjustmentModal';
-import { actionUnifyAdjustmentReports, actionUpdateItemsOverridePercent } from '@/app/(app)/commissions/adjustment-actions';
+import { actionUnifyAdjustmentReports, actionUpdateItemsOverridePercent, actionBulkApproveAdjustmentReports } from '@/app/(app)/commissions/adjustment-actions';
 
 interface AdjustmentReport {
   id: string;
@@ -212,12 +212,16 @@ export default function MasterAdjustmentReportReview({
 
     setBatchApproving(true);
     try {
-      for (const reportId of selectedReports) {
-        await onApprove(reportId, ''); // Solo aprobar, sin decidir método de pago aún
+      // Aprobar todos en una sola operación de BD — sin loop, sin refrescos intermedios
+      const result = await actionBulkApproveAdjustmentReports(Array.from(selectedReports));
+      if (result.ok) {
+        const skippedMsg = result.skipped ? ` (${result.skipped} ya estaban aprobados)` : '';
+        toast.success(`${result.approved} reporte(s) aprobado(s)${skippedMsg} — Selecciona método de pago en la pestaña "Aprobados"`);
+        setSelectedReports(new Set());
+        onReload();
+      } else {
+        toast.error('Error al aprobar reportes', { description: result.error });
       }
-      toast.success(`${selectedReports.size} reporte(s) aprobado(s) - Ahora selecciona reportes aprobados para decidir método de pago`);
-      setSelectedReports(new Set());
-      onReload();
     } catch (error) {
       console.error('Error in batch approve:', error);
       toast.error('Error al aprobar reportes');
