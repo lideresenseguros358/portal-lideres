@@ -113,6 +113,24 @@ export default function SideMenu({ role, cotizadorEnabled = false }: SideMenuPro
           <ul>
             {items.map((item) => {
               if (item.isHub) {
+                // Brokers go directly to /cotizadores — hub modal is master-only
+                if (role === 'BROKER') {
+                  const isActive = pathname.startsWith('/cotizadores');
+                  return (
+                    <li key={item.href} className={isActive ? "active" : ""}>
+                      <Link
+                        href="/cotizadores"
+                        onClick={() => {
+                          const toggle = document.getElementById("app-sidemenu-toggle") as HTMLInputElement;
+                          if (toggle) toggle.checked = false;
+                        }}
+                      >
+                        <span className="icon">{item.icon}</span>
+                        <span className="label">{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                }
                 return (
                   <li key={item.href} className={isHubActive ? "active" : ""}>
                     <button
