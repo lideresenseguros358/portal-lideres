@@ -252,6 +252,11 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
     detectRole();
   }, []);
 
+  // ── Scroll to top on every page navigation ───────────────────────────────
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+
   // ── Page-enter animation: re-trigger on every navigation ─────────────────
   useEffect(() => {
     if (typeof window === 'undefined' || window.innerWidth >= 768) return;

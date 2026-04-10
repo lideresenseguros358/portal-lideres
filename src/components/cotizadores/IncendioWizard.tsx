@@ -176,6 +176,7 @@ export default function IncendioWizard() {
 
   // Mantener refs sincronizados con el estado
   useEffect(() => { stepRef.current = step; }, [step]);
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [step]);
   useEffect(() => { emailRef.current = data.correo; }, [data.correo]);
   useEffect(() => { phoneRef.current = data.celular; }, [data.celular]);
 

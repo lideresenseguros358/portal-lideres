@@ -37,6 +37,9 @@ export default function EmitirPage() {
   const router = useRouter();
   const step = searchParams.get('step') || 'payment'; // payment, emission-data, inspection, payment-info, review
 
+  // Scroll to top on every step change
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [step]);
+
   // ═══ Master / Broker privileges ═══
   const { isMaster, isBroker, brokerSelfId } = useCotizadorEdit();
   const [availableBrokers, setAvailableBrokers] = useState<{id: string, name: string}[]>([]);

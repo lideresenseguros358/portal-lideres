@@ -50,6 +50,9 @@ export default function EmitirDanosTercerosPage() {
   const router = useRouter();
   const step = (searchParams.get('step') || 'emission-data') as EmissionStep;
 
+  // Scroll to top on every step change
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [step]);
+
   // ═══ Master / Broker privileges ═══
   const { isMaster, isBroker, brokerSelfId } = useCotizadorEdit();
   const [availableBrokers, setAvailableBrokers] = useState<{id: string, name: string}[]>([]);
