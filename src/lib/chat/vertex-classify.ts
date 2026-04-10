@@ -17,6 +17,7 @@ import { INSURANCE_KNOWLEDGE_PROMPT } from '@/config/insuranceKnowledge';
 import { LEGAL_KNOWLEDGE_PROMPT } from '@/config/legalKnowledge';
 import { MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT } from '@/config/marketAndProductsKnowledge';
 import { FISCAL_AND_LEGAL_KNOWLEDGE_PROMPT } from '@/config/fiscalAndLegalKnowledge';
+import { HEALTH_AND_COLLECTIVE_KNOWLEDGE_PROMPT } from '@/config/healthAndCollectiveKnowledge';
 
 // ── Auth ──
 
@@ -379,6 +380,7 @@ Actúa como en una conversación fluida de WhatsApp. NUNCA repitas el saludo (ej
     LEGAL_KNOWLEDGE_PROMPT,
     MARKET_AND_PRODUCTS_KNOWLEDGE_PROMPT,
     FISCAL_AND_LEGAL_KNOWLEDGE_PROMPT,
+    HEALTH_AND_COLLECTIVE_KNOWLEDGE_PROMPT,
   ];
 
   if (memoryBlock) {
