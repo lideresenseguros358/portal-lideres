@@ -269,7 +269,10 @@ export async function getDashboardMetrics(
       'quoted_at'
     );
 
+    const ALL_INSURERS = ['INTERNACIONAL', 'FEDPA', 'REGIONAL', 'ANCON', 'ASSA'];
     const insurerMap: Record<string, { quotes: number; emissions: number; revenue: number }> = {};
+    // Seed all known insurers so they always appear even with 0 activity
+    ALL_INSURERS.forEach(name => { insurerMap[name] = { quotes: 0, emissions: 0, revenue: 0 }; });
     (byInsurerRaw ?? []).forEach((row: any) => {
       if (!insurerMap[row.insurer]) insurerMap[row.insurer] = { quotes: 0, emissions: 0, revenue: 0 };
       const entry = insurerMap[row.insurer]!;
