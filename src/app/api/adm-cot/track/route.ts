@@ -51,6 +51,32 @@ async function validateSession(): Promise<{ userId: string } | null> {
   }
 }
 
+/**
+ * Returns the authenticated user's role, or null for anonymous users.
+ * Used to skip tracking for master/broker sessions.
+ */
+async function getSessionRole(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll() { },
+      },
+    } as any);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    return profile?.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════
 // B. ORIGIN VALIDATION
 // ═══════════════════════════════════════
@@ -209,6 +235,13 @@ export async function POST(request: NextRequest) {
       || 'unknown';
     if (!checkRateLimit(clientIp)) {
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    // — D. Skip tracking for master/broker users —
+    // ADM COT cotizaciones metrics are for public users only.
+    const sessionRole = await getSessionRole();
+    if (sessionRole === 'master' || sessionRole === 'broker') {
+      return NextResponse.json({ success: true, skipped: true });
     }
 
     // — Parse body —

@@ -67,10 +67,11 @@ export async function GET(request: NextRequest) {
 
     const sb = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Build query
+    // Build query — restrict to public-user quotes only
     let query = sb
       .from('adm_cot_quotes')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact' })
+      .eq('source_role', 'publico');
 
     // Apply filters using indexed columns
     if (dateFrom) query = query.gte('quoted_at', dateFrom);

@@ -135,8 +135,10 @@ export async function getDashboardMetrics(
     const prevWeekStart = new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10);
     const prevMonthStart = new Date(now.getTime() - 60 * 86400000).toISOString().slice(0, 10);
 
-    // Helper: apply common filters to a query builder
+    // Helper: apply common filters to a query builder.
+    // Always restricts to public-user quotes (source_role = 'publico').
     function applyFilters(q: any, dateCol: string) {
+      q = q.eq('source_role', 'publico');
       if (filters.dateFrom) q = q.gte(dateCol, filters.dateFrom);
       if (filters.dateTo) q = q.lte(dateCol, filters.dateTo + 'T23:59:59');
       if (filters.insurer) q = q.eq('insurer', filters.insurer);
@@ -150,26 +152,27 @@ export async function getDashboardMetrics(
     // PARALLEL QUERIES
     // ═══════════════════════════════════════
 
-    // 1. OVERVIEW COUNTS
+    // 1. OVERVIEW COUNTS — all restricted to public-user quotes
+    const pub = () => sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('source_role', 'publico');
     const countQueries = await Promise.all([
       // Quotes: today / week / month / total
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).gte('quoted_at', todayStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).gte('quoted_at', weekAgoStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).gte('quoted_at', monthAgoStr),
+      pub().gte('quoted_at', todayStr),
+      pub().gte('quoted_at', weekAgoStr),
+      pub().gte('quoted_at', monthAgoStr),
       applyFilters(sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }), 'quoted_at'),
       // Emissions: today / week / month / total
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA').gte('emitted_at', todayStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA').gte('emitted_at', weekAgoStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA').gte('emitted_at', monthAgoStr),
+      pub().eq('status', 'EMITIDA').gte('emitted_at', todayStr),
+      pub().eq('status', 'EMITIDA').gte('emitted_at', weekAgoStr),
+      pub().eq('status', 'EMITIDA').gte('emitted_at', monthAgoStr),
       applyFilters(sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA'), 'emitted_at'),
       // Failed / abandoned
       applyFilters(sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'FALLIDA'), 'quoted_at'),
       applyFilters(sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'ABANDONADA'), 'quoted_at'),
       // Previous period for delta
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).gte('quoted_at', prevWeekStart).lt('quoted_at', weekAgoStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).gte('quoted_at', prevMonthStart).lt('quoted_at', monthAgoStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA').gte('emitted_at', prevWeekStart).lt('emitted_at', weekAgoStr),
-      sb.from('adm_cot_quotes').select('id', { count: 'exact', head: true }).eq('status', 'EMITIDA').gte('emitted_at', prevMonthStart).lt('emitted_at', monthAgoStr),
+      pub().gte('quoted_at', prevWeekStart).lt('quoted_at', weekAgoStr),
+      pub().gte('quoted_at', prevMonthStart).lt('quoted_at', monthAgoStr),
+      pub().eq('status', 'EMITIDA').gte('emitted_at', prevWeekStart).lt('emitted_at', weekAgoStr),
+      pub().eq('status', 'EMITIDA').gte('emitted_at', prevMonthStart).lt('emitted_at', monthAgoStr),
     ]);
 
     const [
