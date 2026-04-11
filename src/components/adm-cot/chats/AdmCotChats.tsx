@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   FaSearch,
@@ -417,6 +417,7 @@ function ThreadList({
 function ChatView({
   thread, messages, loading, onBack, onRefresh,
   onSend, sending, onToggleConfig, scrollRef,
+  onLoadMore, loadingMore, hasMore,
 }: {
   thread: ChatThread | null;
   messages: ChatMessage[];
@@ -427,16 +428,47 @@ function ChatView({
   sending: boolean;
   onToggleConfig: () => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  onLoadMore: () => void;
+  loadingMore: boolean;
+  hasMore: boolean;
 }) {
   const [input, setInput] = useState('');
 
-  // Auto-scroll only if user was at bottom before the update
-  // The parent component controls autoRefresh based on isScrolledToBottom
-  useEffect(() => {
+  // ── Scroll anchor: saves position before prepend so it can be restored ──
+  const scrollAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+
+  const handleLoadMore = useCallback(() => {
     if (scrollRef.current) {
+      scrollAnchorRef.current = {
+        scrollHeight: scrollRef.current.scrollHeight,
+        scrollTop: scrollRef.current.scrollTop,
+      };
+    }
+    onLoadMore();
+  }, [onLoadMore, scrollRef]);
+
+  // Scroll to bottom on new messages, or restore position after prepend (load-more)
+  useLayoutEffect(() => {
+    if (!scrollRef.current) return;
+    if (scrollAnchorRef.current !== null) {
+      const { scrollHeight: oldH, scrollTop: oldT } = scrollAnchorRef.current;
+      scrollRef.current.scrollTop = oldT + (scrollRef.current.scrollHeight - oldH);
+      scrollAnchorRef.current = null;
+    } else {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Detect when user scrolls near the top → trigger load of older messages
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollTop < 60 && hasMore && !loadingMore) handleLoadMore();
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [hasMore, loadingMore, handleLoadMore, scrollRef]);
 
   const handleSend = () => {
     if (!input.trim() || sending) return;
@@ -542,6 +574,18 @@ function ChatView({
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
+        {/* Spinner while loading older messages */}
+        {loadingMore && (
+          <div className="flex justify-center py-3">
+            <FaSync className="animate-spin text-gray-300 text-sm" />
+          </div>
+        )}
+        {/* Start-of-conversation marker */}
+        {!hasMore && !loadingMore && messages.length > 0 && (
+          <div className="text-center py-1">
+            <span className="text-[10px] text-gray-400">— Inicio de la conversación —</span>
+          </div>
+        )}
         {messages.length === 0 && !loading ? (
           <div className="text-center py-12 text-gray-400">
             <FaComments className="text-3xl mx-auto mb-2" />
@@ -877,6 +921,12 @@ export default function AdmCotChats() {
   const [sending, setSending] = useState(false);
   const [assigning, setAssigning] = useState(false);
 
+  // Paginated message loading
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [oldestCreatedAt, setOldestCreatedAt] = useState<string | null>(null);
+  const loadingMoreRef = useRef(false); // immediate guard against double-trigger
+
   // Ref to scroll container in ChatView — used to pause autorefresh while reading
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -924,15 +974,18 @@ export default function AdmCotChats() {
     return scrollHeight - scrollTop - clientHeight < threshold;
   }, []);
 
-  // Fetch thread detail + messages
+  // Fetch initial messages (newest 20) for a thread
   const fetchThreadDetail = useCallback(async (id: string) => {
     setLoadingMessages(true);
     try {
-      const res = await fetch(`/api/chats/thread/${id}`);
+      const res = await fetch(`/api/chats/thread/${id}?limit=20`);
       const json = await res.json();
       if (json.success) {
+        const msgs: ChatMessage[] = json.data.messages;
         setSelectedThread(json.data.thread);
-        setMessages(json.data.messages);
+        setMessages(msgs);
+        setHasMore(json.data.hasMore ?? false);
+        setOldestCreatedAt(msgs[0]?.created_at ?? null);
       }
     } catch (err) {
       console.error('Failed to fetch thread:', err);
@@ -940,23 +993,58 @@ export default function AdmCotChats() {
     setLoadingMessages(false);
   }, []);
 
+  // Auto-refresh: fetch newest 20 and merge — keeps any older messages already loaded
+  const autoRefreshMessages = useCallback(async (id: string) => {
+    if (!isScrolledToBottom()) return;
+    try {
+      const res = await fetch(`/api/chats/thread/${id}?limit=20`);
+      const json = await res.json();
+      if (json.success) {
+        setSelectedThread(json.data.thread);
+        const freshTail: ChatMessage[] = json.data.messages;
+        if (freshTail.length === 0) return;
+        setMessages(prev => {
+          const freshIdSet = new Set(freshTail.map(m => m.id));
+          const older = prev.filter(m => !freshIdSet.has(m.id));
+          return [...older, ...freshTail];
+        });
+      }
+    } catch {}
+  }, [isScrolledToBottom]);
+
+  // Load older messages before the current oldest (cursor-based, prepends)
+  const loadMoreMessages = useCallback(async () => {
+    if (!selectedThreadId || !hasMore || loadingMoreRef.current || !oldestCreatedAt) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(
+        `/api/chats/thread/${selectedThreadId}?limit=20&before=${encodeURIComponent(oldestCreatedAt)}`
+      );
+      const json = await res.json();
+      if (json.success) {
+        const older: ChatMessage[] = json.data.messages;
+        setMessages(prev => [...older, ...prev]);
+        setHasMore(json.data.hasMore ?? false);
+        if (older.length > 0) setOldestCreatedAt(older[0]?.created_at ?? null);
+      }
+    } catch {}
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+  }, [selectedThreadId, hasMore, oldestCreatedAt]);
+
   useEffect(() => {
     if (selectedThreadId) {
       fetchThreadDetail(selectedThreadId);
-
-      // Auto-refresh messages every 10s when viewing, but only if user is at bottom
-      // This prevents auto-scroll from interrupting while reading history
-      const interval = setInterval(() => {
-        if (isScrolledToBottom()) {
-          fetchThreadDetail(selectedThreadId);
-        }
-      }, 10000);
+      const interval = setInterval(() => autoRefreshMessages(selectedThreadId), 10000);
       return () => clearInterval(interval);
     } else {
       setSelectedThread(null);
       setMessages([]);
+      setHasMore(false);
+      setOldestCreatedAt(null);
     }
-  }, [selectedThreadId, fetchThreadDetail, isScrolledToBottom]);
+  }, [selectedThreadId, fetchThreadDetail, autoRefreshMessages]);
 
   // Send manual message — reopens closed threads automatically
   const handleSend = async (body: string) => {
@@ -1101,6 +1189,9 @@ export default function AdmCotChats() {
               sending={sending}
               onToggleConfig={() => setShowConfig(!showConfig)}
               scrollRef={chatScrollRef}
+              onLoadMore={loadMoreMessages}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
             />
           </div>
 

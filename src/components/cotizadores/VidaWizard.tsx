@@ -7,6 +7,8 @@ import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuo
 import { trackQuoteCreated, trackQuoteFailed } from '@/lib/adm-cot/track-quote';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
+import BrokerExtraStep, { type BrokerStepData, BROKER_INITIAL, validateBrokerStep } from '@/components/cotizadores/broker/BrokerExtraStep';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -290,12 +292,16 @@ function WizardInputField({ name, data, errors, onUpdate, ...props }: any) {
 
 export default function VidaWizard() {
   const router = useRouter();
+  const { isBroker, brokerName } = useCotizadorEdit();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<VidaFormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [brokerData, setBrokerData] = useState<BrokerStepData>(BROKER_INITIAL);
+  const [brokerErrors, setBrokerErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const formRef = useRef<HTMLDivElement>(null);
+  const EFFECTIVE_TOTAL = isBroker ? TOTAL_STEPS + 1 : TOTAL_STEPS;
 
   // ═══ ADM COT: Lead tracking refs (survive re-renders, avoid stale closures) ═══
   const quoteLeadRef = useRef('');    // quoteRef generado al capturar email+phone
@@ -500,7 +506,7 @@ export default function VidaWizard() {
       if (!data.esCubrirHipoteca) update({ aniosHipoteca: '' });
     }
     setDirection('forward');
-    setStep(prev => Math.min(prev + 1, TOTAL_STEPS));
+    setStep(prev => Math.min(prev + 1, EFFECTIVE_TOTAL));
   }
 
   function goBack() {
@@ -520,6 +526,102 @@ export default function VidaWizard() {
   // ═══════════════════════════════════════════════════════════════
 
   async function handleSubmit() {
+    // ── Broker path: validate broker step and send email ──────────────────────
+    if (isBroker) {
+      const errs = validateBrokerStep(brokerData, 'vida');
+      setBrokerErrors(errs);
+      if (Object.keys(errs).length > 0) return;
+
+      setSubmitting(true);
+      try {
+        const beEdad = calcularEdad(data.fechaNacimiento);
+        const beSalario = parseCurrency(data.salarioMensual);
+        const beSuma = parseCurrency(data.sumaAseguradaSolicitada);
+        const tiposPropuesta: string[] = [];
+        if (data.propuestaConAhorros) tiposPropuesta.push('Con Ahorros');
+        if (data.propuestaATermino) tiposPropuesta.push('A Término');
+        const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
+        const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
+        const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
+        const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+
+        // Collect all file attachments
+        const attachments = [
+          brokerData.archivoCedula     && { ...brokerData.archivoCedula,     label: 'Cédula' },
+          brokerData.archivoCotizacion && { ...brokerData.archivoCotizacion, label: 'Cotización' },
+          brokerData.archivoPago       && { ...brokerData.archivoPago,       label: 'Pago' },
+          brokerData.formaPago === 'ach' && brokerData.archivoACH && { ...brokerData.archivoACH, label: 'ACH' },
+          brokerData.formaPago === 'descuento_salario' && brokerData.archivoDescuento && { ...brokerData.archivoDescuento, label: 'Descuento salario' },
+        ].filter(Boolean);
+
+        const res = await fetch('/api/cotizadores/broker-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: 'vida',
+            brokerName,
+            wizardData: {
+              clientName: `${data.nombre} ${data.apellido}`,
+              nombre: data.nombre, apellido: data.apellido,
+              sexo: data.sexo, fechaNacimiento: data.fechaNacimiento, edad: beEdad,
+              celular: data.celular, correo: data.correo, nacionalidad: data.nacionalidad,
+              ocupacion: data.ocupacion, lugarTrabajo: data.lugarTrabajo,
+              funcionesTrabajo: data.funcionesTrabajo,
+              salarioMensual: `${formatUSD(beSalario)}`,
+              provincia: provName, distrito: distName, corregimiento: corrName,
+              barriada: urbName, referencias: data.direccionReferencias,
+              altura: data.altura, peso: data.peso,
+              tieneEnfermedad: data.tieneEnfermedad,
+              descripcionEnfermedad: data.descripcionEnfermedad,
+              haFumadoAlgunaVez: data.haFumadoAlgunaVez,
+              fumaActualmente: data.fumaActualmente,
+              ultimaVezFumo: data.ultimaVezFumo,
+              tieneSeguroVida: data.tieneSeguroVida,
+              companiaSeguroActual: data.companiaSeguroActual,
+              sumaAseguradaActual: data.sumaAseguradaActual,
+              esCubrirHipoteca: data.esCubrirHipoteca,
+              aniosHipoteca: data.aniosHipoteca,
+              sumaAseguradaSolicitada: `${formatUSD(beSuma)}`,
+              tiposPropuesta,
+            },
+            brokerData: {
+              ...brokerData,
+              // strip base64 from nested objects (sent separately in attachments)
+              archivoACH: brokerData.archivoACH ? { name: brokerData.archivoACH.name } : null,
+              archivoDescuento: brokerData.archivoDescuento ? { name: brokerData.archivoDescuento.name } : null,
+              archivoCedula: brokerData.archivoCedula ? { name: brokerData.archivoCedula.name } : null,
+              archivoCotizacion: brokerData.archivoCotizacion ? { name: brokerData.archivoCotizacion.name } : null,
+              archivoPago: brokerData.archivoPago ? { name: brokerData.archivoPago.name } : null,
+            },
+            attachments,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Error al enviar');
+        }
+
+        submittedRef.current = true;
+        sessionStorage.setItem('vidaQuoteSubmission', JSON.stringify({
+          nombre: `${data.nombre} ${data.apellido}`,
+          correo: data.correo,
+          sumaAsegurada: beSuma,
+          tiposPropuesta,
+          ticket: null,
+          broker: true,
+        }));
+        router.push('/cotizadores/vida/confirmacion');
+      } catch (err: any) {
+        console.error('[VidaWizard] Broker submit error:', err);
+        setBrokerErrors({ submit: `Error al enviar: ${err.message || 'Intenta nuevamente'}` });
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ── Public path (original flow) ───────────────────────────────────────────
     if (!validateStep(6)) return;
 
     // Backend recalc for anti-manipulation
@@ -1536,6 +1638,7 @@ export default function VidaWizard() {
     { key: 'inspection' as any,    label: 'Datos físicos y salud',   shortLabel: 'Salud',      icon: FaHeartbeat },
     { key: 'payment-info' as any,  label: 'Cobertura y objetivo',    shortLabel: 'Cobertura',  icon: FaShieldAlt },
     { key: 'review' as any,        label: 'Propuesta y resumen',     shortLabel: 'Resumen',    icon: FaClipboardCheck },
+    ...(isBroker ? [{ key: 'broker' as any, label: 'Información Broker', shortLabel: 'Broker', icon: FaShieldAlt }] : []),
   ];
 
   const stepKeyByNumber = (n: number) => VIDA_STEPS[n - 1]?.key ?? 'payment';
@@ -1547,7 +1650,7 @@ export default function VidaWizard() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100" ref={formRef}>
       {/* Progress Bar */}
       <div className="pt-6">
-        <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
+        <EmissionProgressBar currentStep={step} totalSteps={EFFECTIVE_TOTAL} />
       </div>
 
       {/* Breadcrumb — identical to emisor auto */}
@@ -1595,6 +1698,15 @@ export default function VidaWizard() {
               {step === 4 && renderStep4()}
               {step === 5 && renderStep5()}
               {step === 6 && renderStep6()}
+              {isBroker && step === 7 && (
+                <BrokerExtraStep
+                  producto="vida"
+                  clientName={`${data.nombre} ${data.apellido}`.trim()}
+                  data={brokerData}
+                  onChange={partial => setBrokerData(prev => ({ ...prev, ...partial }))}
+                  errors={brokerErrors}
+                />
+              )}
             </div>
           </div>
 
@@ -1654,7 +1766,7 @@ export default function VidaWizard() {
               </button>
             ) : <div className="w-full" />}
 
-            {step < TOTAL_STEPS ? (
+            {step < EFFECTIVE_TOTAL ? (
               <button
                 type="button"
                 onClick={goNext}
@@ -1672,11 +1784,16 @@ export default function VidaWizard() {
                 {submitting ? (
                   <><FaSpinner className="animate-spin" size={18} /> Enviando...</>
                 ) : (
-                  <><FaCheck size={16} /> Enviar solicitud</>
+                  <><FaCheck size={16} /> {isBroker ? 'Enviar al especialista' : 'Enviar solicitud'}</>
                 )}
               </button>
             )}
           </div>
+
+          {/* Broker submit error */}
+          {isBroker && brokerErrors.submit && (
+            <p className="text-red-500 text-sm font-medium text-center mt-2">{brokerErrors.submit}</p>
+          )}
 
         </div>
       </div>

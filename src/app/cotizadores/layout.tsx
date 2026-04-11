@@ -210,6 +210,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
   const [isMaster, setIsMaster] = useState(false);
   const [isBroker, setIsBroker] = useState(false);
   const [brokerSelfId, setBrokerSelfId] = useState<string | null>(null);
+  const [brokerName, setBrokerName] = useState('');
   const [loadingAuth, setLoadingAuth] = useState(true);
   const pathname = usePathname();
 
@@ -221,7 +222,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
         if (user?.id) {
           const { data: profile } = await supabaseClient()
             .from('profiles')
-            .select('role')
+            .select('role, full_name')
             .eq('id', user.id)
             .single();
 
@@ -230,14 +231,16 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
             setIsMaster(true);
           } else if (role === 'broker') {
             // Auto-fetch broker record — only grant bypass if cotizador_enabled = true
-            const { data: brokerRecord } = await supabaseClient()
+            const { data: brokerRecordRaw } = await supabaseClient()
               .from('brokers')
-              .select('id, cotizador_enabled')
+              .select('id, cotizador_enabled, name')
               .eq('p_id', user.id)
               .single();
+            const brokerRecord = brokerRecordRaw as any;
             if (brokerRecord?.cotizador_enabled) {
               setIsBroker(true);
               setBrokerSelfId(brokerRecord.id ?? null);
+              setBrokerName(brokerRecord.name || (profile as any)?.full_name || '');
             }
             // If cotizador_enabled is false, broker accesses as public user (no bypass)
           }
@@ -296,7 +299,7 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
 
   return (
     <PDFDownloadProvider>
-      <CotizadorEditProvider isMaster={isMaster} isBroker={isBroker} brokerSelfId={brokerSelfId}>
+      <CotizadorEditProvider isMaster={isMaster} isBroker={isBroker} brokerSelfId={brokerSelfId} brokerName={brokerName}>
         <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         {/* Mobile animation engine — injected once for the entire cotizadores module */}
         <style dangerouslySetInnerHTML={{ __html: MOBILE_ANIMATION_CSS }} />

@@ -17,6 +17,7 @@ interface CotizadorEditContextType {
   isMaster: boolean;
   isBroker: boolean;
   brokerSelfId: string | null;
+  brokerName: string;
   editMode: boolean;
   setEditMode: (mode: boolean) => void;
   insurerSettings: CotizadorInsurerSetting[];
@@ -29,6 +30,7 @@ export const CotizadorEditContext = createContext<CotizadorEditContextType>({
   isMaster: false,
   isBroker: false,
   brokerSelfId: null,
+  brokerName: '',
   editMode: false,
   setEditMode: () => {},
   insurerSettings: [],
@@ -50,9 +52,10 @@ interface CotizadorEditProviderProps {
   isMaster: boolean;
   isBroker?: boolean;
   brokerSelfId?: string | null;
+  brokerName?: string;
 }
 
-export function CotizadorEditProvider({ children, isMaster, isBroker = false, brokerSelfId = null }: CotizadorEditProviderProps) {
+export function CotizadorEditProvider({ children, isMaster, isBroker = false, brokerSelfId = null, brokerName = '' }: CotizadorEditProviderProps) {
   const [editMode, setEditMode] = useState(false);
   const [insurerSettings, setInsurerSettings] = useState<CotizadorInsurerSetting[]>([]);
   // Start as true so consumers treat initial state as "loading" — prevents race condition
@@ -109,6 +112,7 @@ export function CotizadorEditProvider({ children, isMaster, isBroker = false, br
         isMaster,
         isBroker,
         brokerSelfId,
+        brokerName,
         editMode,
         setEditMode,
         insurerSettings,

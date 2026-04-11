@@ -8,6 +8,8 @@ import { trackQuoteCreated, trackQuoteFailed } from '@/lib/adm-cot/track-quote';
 import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
+import { useCotizadorEdit } from '@/context/CotizadorEditContext';
+import BrokerExtraStep, { type BrokerStepData, BROKER_INITIAL, validateBrokerStep } from '@/components/cotizadores/broker/BrokerExtraStep';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -167,12 +169,16 @@ function WizardInputField({ name, data, errors, onUpdate, ...props }: any) {
 
 export default function ContenidoWizard() {
   const router = useRouter();
+  const { isBroker, brokerName } = useCotizadorEdit();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<ContenidoFormData>(INITIAL_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [brokerData, setBrokerData] = useState<BrokerStepData>(BROKER_INITIAL);
+  const [brokerErrors, setBrokerErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const formRef = useRef<HTMLDivElement>(null);
+  const EFFECTIVE_TOTAL = isBroker ? TOTAL_STEPS + 1 : TOTAL_STEPS;
 
   // ═══ ADM COT: Lead tracking refs (survive re-renders, avoid stale closures) ═══
   const quoteLeadRef = useRef('');    // quoteRef generado al capturar email+phone
@@ -393,7 +399,7 @@ export default function ContenidoWizard() {
       if (!data.tieneArticulosAltoValor) update({ articulosAltoValor: [] });
     }
     setDirection('forward');
-    setStep(prev => Math.min(prev + 1, TOTAL_STEPS));
+    setStep(prev => Math.min(prev + 1, EFFECTIVE_TOTAL));
   }
 
   function goBack() {
@@ -413,6 +419,86 @@ export default function ContenidoWizard() {
   // ═══════════════════════════════════════════════════════════════
 
   async function handleSubmit() {
+    // ── Broker path ───────────────────────────────────────────────────────────
+    if (isBroker) {
+      const errs = validateBrokerStep(brokerData, 'contenido');
+      setBrokerErrors(errs);
+      if (Object.keys(errs).length > 0) return;
+
+      setSubmitting(true);
+      try {
+        const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
+        const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
+        const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
+        const urbName = data.barriada === 'OTRO' ? data.barriadaOtro : (urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada);
+        const valorNum = parseCurrency(data.valorContenido);
+        const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
+
+        const attachments = [
+          brokerData.archivoCedula     && { ...brokerData.archivoCedula,     label: 'Cédula' },
+          brokerData.archivoCotizacion && { ...brokerData.archivoCotizacion, label: 'Cotización' },
+          brokerData.archivoPago       && { ...brokerData.archivoPago,       label: 'Pago' },
+          brokerData.formaPago === 'ach' && brokerData.archivoACH && { ...brokerData.archivoACH, label: 'ACH' },
+          brokerData.formaPago === 'descuento_salario' && brokerData.archivoDescuento && { ...brokerData.archivoDescuento, label: 'Descuento salario' },
+        ].filter(Boolean);
+
+        const res = await fetch('/api/cotizadores/broker-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: 'contenido',
+            brokerName,
+            wizardData: {
+              clientName: `${data.nombre} ${data.apellido}`,
+              nombre: data.nombre, apellido: data.apellido,
+              fechaNacimiento: data.fechaNacimiento, edad,
+              celular: data.celular, correo: data.correo,
+              provincia: provName, distrito: distName, corregimiento: corrName, barriada: urbName,
+              tipoVivienda: data.tipoVivienda,
+              calle: data.calle, numeroCasa: data.numeroCasa,
+              piso: data.piso, numeroApto: data.numeroApto, nombreEdificio: data.nombreEdificio,
+              seguridad: seguridadLabels,
+              valorContenido: formatUSD(valorNum),
+              articulosAltoValor: data.tieneArticulosAltoValor
+                ? data.articulosAltoValor.map(a => ({ descripcion: a.descripcion, valor: formatUSD(parseCurrency(a.valor)) }))
+                : [],
+            },
+            brokerData: {
+              ...brokerData,
+              archivoACH: brokerData.archivoACH ? { name: brokerData.archivoACH.name } : null,
+              archivoDescuento: brokerData.archivoDescuento ? { name: brokerData.archivoDescuento.name } : null,
+              archivoCedula: brokerData.archivoCedula ? { name: brokerData.archivoCedula.name } : null,
+              archivoCotizacion: brokerData.archivoCotizacion ? { name: brokerData.archivoCotizacion.name } : null,
+              archivoPago: brokerData.archivoPago ? { name: brokerData.archivoPago.name } : null,
+            },
+            attachments,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Error al enviar');
+        }
+
+        submittedRef.current = true;
+        sessionStorage.setItem('contenidoQuoteSubmission', JSON.stringify({
+          nombre: `${data.nombre} ${data.apellido}`,
+          correo: data.correo,
+          valorContenido: valorNum,
+          ticket: null,
+          broker: true,
+        }));
+        router.push('/cotizadores/contenido/confirmacion');
+      } catch (err: any) {
+        console.error('[ContenidoWizard] Broker submit error:', err);
+        setBrokerErrors({ submit: `Error al enviar: ${err.message || 'Intenta nuevamente'}` });
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ── Public path ───────────────────────────────────────────────────────────
     if (!validateStep(5)) return;
 
     setSubmitting(true);
@@ -996,6 +1082,7 @@ export default function ContenidoWizard() {
     { key: 'vehicle' as any,       label: 'Medidas de seguridad',    shortLabel: 'Seguridad',  icon: FaLock },
     { key: 'inspection' as any,    label: 'Valor del contenido',     shortLabel: 'Valor',      icon: FaDollarSign },
     { key: 'payment-info' as any,  label: 'Resumen y enviar',        shortLabel: 'Resumen',    icon: FaClipboardCheck },
+    ...(isBroker ? [{ key: 'broker' as any, label: 'Información Broker', shortLabel: 'Broker', icon: FaClipboardCheck }] : []),
   ];
 
   const stepKeyByNumber = (n: number) => CONTENIDO_STEPS[n - 1]?.key ?? 'payment';
@@ -1006,7 +1093,7 @@ export default function ContenidoWizard() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100" ref={formRef}>
       {/* Progress Bar */}
       <div className="pt-6">
-        <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
+        <EmissionProgressBar currentStep={step} totalSteps={EFFECTIVE_TOTAL} />
       </div>
 
       {/* Breadcrumb */}
@@ -1053,6 +1140,15 @@ export default function ContenidoWizard() {
               {step === 3 && renderStep3()}
               {step === 4 && renderStep4()}
               {step === 5 && renderStep5()}
+              {isBroker && step === 6 && (
+                <BrokerExtraStep
+                  producto="contenido"
+                  clientName={`${data.nombre} ${data.apellido}`.trim()}
+                  data={brokerData}
+                  onChange={partial => setBrokerData(prev => ({ ...prev, ...partial }))}
+                  errors={brokerErrors}
+                />
+              )}
             </div>
           </div>
 
@@ -1067,7 +1163,7 @@ export default function ContenidoWizard() {
                 <FaArrowLeft size={16} /> Atrás
               </button>
             ) : <div className="w-full" />}
-            {step < TOTAL_STEPS ? (
+            {step < EFFECTIVE_TOTAL ? (
               <button
                 type="button"
                 onClick={goNext}
@@ -1082,10 +1178,13 @@ export default function ContenidoWizard() {
                 disabled={submitting}
                 className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
               >
-                {submitting ? (<><FaSpinner className="animate-spin" size={18} /> Enviando...</>) : (<><FaCheck size={16} /> Enviar solicitud</>)}
+                {submitting ? (<><FaSpinner className="animate-spin" size={18} /> Enviando...</>) : (<><FaCheck size={16} /> {isBroker ? 'Enviar al especialista' : 'Enviar solicitud'}</>)}
               </button>
             )}
           </div>
+          {isBroker && brokerErrors.submit && (
+            <p className="text-red-500 text-sm font-medium text-center mt-2">{brokerErrors.submit}</p>
+          )}
 
         </div>
       </div>

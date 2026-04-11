@@ -896,16 +896,16 @@ export default function ThirdPartyComparison({
         .tp-plan-toggle {
           display: flex;
           background: #f3f4f6;
-          border-radius: 10px;
-          padding: 3px;
+          border-radius: 14px;
+          padding: 4px;
           margin: 0 12px;
         }
         .tp-plan-toggle button {
           flex: 1;
-          padding: 7px 6px;
-          font-size: 11px;
+          padding: 12px 8px;
+          font-size: 12px;
           font-weight: 700;
-          border-radius: 8px;
+          border-radius: 11px;
           border: none;
           cursor: pointer;
           background: transparent;

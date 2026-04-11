@@ -38,8 +38,6 @@ export async function GET(
   const { id } = await params;
   const sb = createClient(supabaseUrl, supabaseServiceKey);
   const { searchParams } = new URL(request.url);
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = parseInt(searchParams.get('pageSize') || '100');
 
   try {
     // Thread
@@ -47,15 +45,25 @@ export async function GET(
       .from('chat_threads').select('*').eq('id', id).single();
     if (threadErr) return NextResponse.json({ error: threadErr.message }, { status: 404 });
 
-    // Messages (paginated, newest first but we reverse for display)
-    const { data: messages, error: msgErr, count } = await sb
-      .from('chat_messages')
-      .select('*', { count: 'exact' })
-      .eq('thread_id', id)
-      .order('created_at', { ascending: true })
-      .range((page - 1) * pageSize, page * pageSize - 1);
+    // Messages — cursor-based pagination: newest `limit` first, optionally before a timestamp
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const before = searchParams.get('before') || undefined;
 
+    let msgQuery = sb
+      .from('chat_messages')
+      .select('*')
+      .eq('thread_id', id)
+      .order('created_at', { ascending: false })
+      .limit(limit + 1); // fetch one extra to detect if there are more
+
+    if (before) msgQuery = msgQuery.lt('created_at', before);
+
+    const { data: messagesRaw, error: msgErr } = await msgQuery;
     if (msgErr) return NextResponse.json({ error: msgErr.message }, { status: 500 });
+
+    const hasMore = (messagesRaw?.length ?? 0) > limit;
+    const messages = (hasMore ? messagesRaw!.slice(0, limit) : (messagesRaw ?? [])).reverse();
+
 
     // Events (last 20)
     const { data: events } = await sb
@@ -70,14 +78,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        thread,
-        messages: messages ?? [],
-        events: events ?? [],
-        totalMessages: count ?? 0,
-        page,
-        pageSize,
-      },
+      data: { thread, messages, events: events ?? [], hasMore },
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

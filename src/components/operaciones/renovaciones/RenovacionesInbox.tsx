@@ -586,8 +586,12 @@ export default function RenovacionesInbox() {
           />
         </div>
 
-        {/* Right panel */}
-        <div className={`${selectedId ? 'flex' : 'hidden lg:flex'} flex-col flex-1 min-h-0`}>
+        {/* Right panel — fullscreen overlay on mobile, side panel on desktop */}
+        <div className={
+          selectedId
+            ? 'fixed inset-0 z-[1000] h-dvh flex flex-col lg:relative lg:inset-auto lg:z-auto lg:h-auto lg:flex-1'
+            : 'hidden lg:flex lg:flex-1 lg:flex-col'
+        }>
           <RenCaseDetail
             caseData={selectedCase}
             loading={detailLoading}
