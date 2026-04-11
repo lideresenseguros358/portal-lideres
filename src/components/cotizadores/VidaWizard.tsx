@@ -1763,6 +1763,7 @@ export default function VidaWizard() {
                     { label: 'Método', value: formaPagoLabel },
                     ...(brokerData.formaPago === 'tcr' ? [
                       { label: 'Tarjeta', value: `${brokerData.tcrTipo === 'visa' ? 'Visa' : 'Mastercard'} •••• ${brokerData.tcrNumero.slice(-4)}` },
+                      { label: 'Vencimiento', value: brokerData.tcrVencimiento },
                       { label: 'Banco', value: brokerData.tcrBanco },
                     ] : []),
                   ]} />

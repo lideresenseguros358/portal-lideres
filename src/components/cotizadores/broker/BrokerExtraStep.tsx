@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef } from 'react';
-import { FaPlus, FaTrash, FaCreditCard, FaFileUpload, FaCheckCircle } from 'react-icons/fa';
+import { useState, useRef } from 'react';
+import { FaPlus, FaTrash, FaCreditCard, FaFileUpload, FaCheckCircle, FaTimes, FaPencilAlt } from 'react-icons/fa';
 
 // ═══════════════════════════════════════════════════════════════
-// TYPES — exported so each wizard can import them
+// TYPES
 // ═══════════════════════════════════════════════════════════════
 
 export interface BeneficiarioData {
@@ -32,21 +32,18 @@ export interface FileAttachment {
 }
 
 export interface BrokerStepData {
-  // Forma de pago
   formaPago: 'ach' | 'tcr' | 'descuento_salario' | '';
   archivoACH: FileAttachment | null;
   tcrNumero: string;
   tcrBanco: string;
   tcrTipo: 'visa' | 'mastercard' | '';
+  tcrVencimiento: string;
   tcrCodigo: string;
   archivoDescuento: FileAttachment | null;
-  // Beneficiarios principales (vida only)
   beneficiarios: BeneficiarioData[];
   adminBeneficiario: AdminData | null;
-  // Contingentes (vida only)
   contingentes: BeneficiarioData[];
   adminContingente: AdminData | null;
-  // Documentos adjuntos
   archivoCedula: FileAttachment | null;
   archivoCotizacion: FileAttachment | null;
   archivoPago: FileAttachment | null;
@@ -62,6 +59,7 @@ export const BROKER_INITIAL: BrokerStepData = {
   tcrNumero: '',
   tcrBanco: '',
   tcrTipo: '',
+  tcrVencimiento: '',
   tcrCodigo: '',
   archivoDescuento: null,
   beneficiarios: [{ ...EMPTY_BENEFICIARIO }],
@@ -74,7 +72,7 @@ export const BROKER_INITIAL: BrokerStepData = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// VALIDATION — exported so each wizard can run it on submit
+// VALIDATION
 // ═══════════════════════════════════════════════════════════════
 
 function calcEdad(fecha: string): number {
@@ -93,7 +91,6 @@ export function validateBrokerStep(
 ): Record<string, string> {
   const e: Record<string, string> = {};
 
-  // Forma de pago
   if (!data.formaPago) e.formaPago = 'Selecciona una forma de pago';
   if (data.formaPago === 'ach' && !data.archivoACH) e.archivoACH = 'Adjunta el archivo ACH';
   if (data.formaPago === 'descuento_salario' && !data.archivoDescuento) e.archivoDescuento = 'Adjunta el archivo de descuento de salario';
@@ -101,10 +98,10 @@ export function validateBrokerStep(
     if (!data.tcrNumero.trim()) e.tcrNumero = 'Número de tarjeta es obligatorio';
     if (!data.tcrBanco.trim()) e.tcrBanco = 'Nombre del banco es obligatorio';
     if (!data.tcrTipo) e.tcrTipo = 'Selecciona el tipo de tarjeta';
+    if (!data.tcrVencimiento.trim() || !/^\d{2}\/\d{2}$/.test(data.tcrVencimiento)) e.tcrVencimiento = 'Fecha de vencimiento inválida (MM/YY)';
     if (!data.tcrCodigo.trim()) e.tcrCodigo = 'Código de seguridad es obligatorio';
   }
 
-  // Beneficiarios (vida only)
   if (producto === 'vida') {
     if (data.beneficiarios.length === 0) {
       e.beneficiarios = 'Agrega al menos un beneficiario principal';
@@ -122,7 +119,6 @@ export function validateBrokerStep(
       });
       if (totalPct > 100) e.benTotal = `La suma de porcentajes (${totalPct.toFixed(1)}%) supera el 100%`;
 
-      // Admin for minors
       const hayMenoresBen = data.beneficiarios.some(b => { const a = calcEdad(b.fechaNacimiento); return a >= 0 && a < 18; });
       if (hayMenoresBen) {
         if (!data.adminBeneficiario) {
@@ -137,7 +133,6 @@ export function validateBrokerStep(
       }
     }
 
-    // Contingentes (optional but if any, validate them)
     if (data.contingentes.length > 0) {
       let totalCont = 0;
       data.contingentes.forEach((c, i) => {
@@ -167,7 +162,6 @@ export function validateBrokerStep(
     }
   }
 
-  // Documentos adjuntos (todos requieren cédula y cotización)
   if (!data.archivoCedula) e.archivoCedula = 'Debes adjuntar la cédula del asegurado';
   if (!data.archivoCotizacion) e.archivoCotizacion = 'Debes adjuntar la cotización';
 
@@ -175,7 +169,7 @@ export function validateBrokerStep(
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SUB-COMPONENTS
+// HELPERS
 // ═══════════════════════════════════════════════════════════════
 
 function fileToAttachment(file: File): Promise<FileAttachment> {
@@ -190,6 +184,17 @@ function fileToAttachment(file: File): Promise<FileAttachment> {
     reader.readAsDataURL(file);
   });
 }
+
+function formatDateDisplay(d: string): string {
+  if (!d) return '--';
+  const parts = d.split('-');
+  if (parts.length !== 3) return d;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILE UPLOAD FIELD
+// ═══════════════════════════════════════════════════════════════
 
 function FileUploadField({
   label, hint, value, onChange, error, required = false,
@@ -231,32 +236,98 @@ function FileUploadField({
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BENEFICIARIOS TABLE
+// ═══════════════════════════════════════════════════════════════
+
 function BeneficiariosTable({
   list, prefix, adultosExistentes, admin, hayMenores,
   onAdd, onRemove, onUpdate, onAdminChange, errors,
-  label, emptyLabel,
+  label, emptyLabel, isOptional, onClose,
 }: {
-  list: BeneficiarioData[]; prefix: string; adultosExistentes: { idx: number; nombre: string }[];
-  admin: AdminData | null; hayMenores: boolean;
-  onAdd: () => void; onRemove: (i: number) => void;
+  list: BeneficiarioData[];
+  prefix: string;
+  adultosExistentes: { idx: number; nombre: string }[];
+  admin: AdminData | null;
+  hayMenores: boolean;
+  onAdd: () => void;
+  onRemove: (i: number) => void;
   onUpdate: (i: number, partial: Partial<BeneficiarioData>) => void;
   onAdminChange: (a: AdminData | null) => void;
-  errors: Record<string, string>; label: string; emptyLabel: string;
+  errors: Record<string, string>;
+  label: string;
+  emptyLabel: string;
+  isOptional?: boolean;
+  onClose?: () => void;
 }) {
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [editingAdmin, setEditingAdmin] = useState(false);
+
   const total = list.reduce((s, b) => s + (parseFloat(b.porcentaje) || 0), 0);
   const totalClamped = Math.min(total, 100);
 
+  function handleRemove(i: number) {
+    setCollapsed(prev => {
+      const next = new Set<number>();
+      prev.forEach(idx => {
+        if (idx < i) next.add(idx);
+        else if (idx > i) next.add(idx - 1);
+      });
+      return next;
+    });
+    onRemove(i);
+  }
+
+  function handleAccept(i: number) {
+    const b = list[i];
+    if (!b) return;
+    if (!b.nombre.trim() || !b.apellido.trim() || !b.cedula.trim() || !b.fechaNacimiento || !b.parentesco.trim() || !b.porcentaje.trim()) return;
+    setCollapsed(prev => new Set([...prev, i]));
+  }
+
+  function handleEdit(i: number) {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      next.delete(i);
+      return next;
+    });
+  }
+
+  function getAdminInfo() {
+    if (!admin) return null;
+    if (admin.esExistente && admin.beneficiarioIdx !== null) {
+      const b = list[admin.beneficiarioIdx];
+      if (b) return { nombre: `${b.nombre} ${b.apellido}`.trim(), fecha: b.fechaNacimiento };
+    }
+    return { nombre: `${admin.nombre} ${admin.apellido}`.trim(), fecha: admin.fechaNacimiento };
+  }
+
+  const adminInfo = getAdminInfo();
+  const hasItemErrors = (i: number) => Object.keys(errors).some(k => k.startsWith(`${prefix}_${i}_`));
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-[#010139]">{label}</h3>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
-        >
-          <FaPlus size={10} /> Agregar
-        </button>
+        <h3 className="text-sm font-bold text-[#010139]">
+          {label}
+          {isOptional && <span className="ml-2 text-xs font-normal text-gray-400">(opcional)</span>}
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
+          >
+            <FaPlus size={10} /> Agregar
+          </button>
+          {onClose && (
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+              <FaTimes size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -280,28 +351,74 @@ function BeneficiariosTable({
         </div>
       )}
 
+      {/* Empty state */}
       {list.length === 0 && (
-        <p className="text-sm text-gray-400 text-center py-4">{emptyLabel}</p>
+        <p className="text-sm text-gray-400 text-center py-3">{emptyLabel}</p>
       )}
-      {errors[prefix === 'ben' ? 'beneficiarios' : 'contingentes_none'] && (
-        <p className="text-red-500 text-xs font-medium">{errors[prefix === 'ben' ? 'beneficiarios' : 'contingentes_none']}</p>
+      {errors['beneficiarios'] && prefix === 'ben' && (
+        <p className="text-red-500 text-xs font-medium">{errors.beneficiarios}</p>
       )}
 
+      {/* Beneficiario rows */}
       {list.map((b, i) => {
+        const isCollapsed = collapsed.has(i);
         const edad = calcEdad(b.fechaNacimiento);
         const esMenor = edad >= 0 && edad < 18;
+        const rowHasErr = hasItemErrors(i);
+
+        if (isCollapsed) {
+          return (
+            <div
+              key={i}
+              className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 bg-white ${rowHasErr ? 'border-red-300' : 'border-gray-200'}`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {esMenor && <span className="flex-shrink-0 text-base" title="Menor de edad">⚠️</span>}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">
+                    {`${b.nombre} ${b.apellido}`.trim() || `${prefix === 'ben' ? 'Beneficiario' : 'Contingente'} #${i + 1}`}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatDateDisplay(b.fechaNacimiento)} · {b.parentesco} · {b.porcentaje}%
+                  </p>
+                  {rowHasErr && (
+                    <p className="text-xs text-red-500">Campos incompletos — toca el lápiz para corregir</p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleEdit(i)}
+                className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-3 transition-colors"
+                title="Editar"
+              >
+                <FaPencilAlt size={13} />
+              </button>
+            </div>
+          );
+        }
+
+        // Expanded form
         return (
-          <div key={i} className={`rounded-xl border-2 p-4 space-y-3 ${esMenor ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
+          <div
+            key={i}
+            className={`rounded-xl border-2 p-4 space-y-3 ${esMenor ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
-                Beneficiario #{i + 1} {esMenor ? '⚠️ Menor de edad' : ''}
+                {prefix === 'ben' ? 'Beneficiario' : 'Contingente'} #{i + 1} {esMenor ? '⚠️ Menor' : ''}
               </span>
-              {list.length > 1 && (
-                <button type="button" onClick={() => onRemove(i)} className="text-red-400 hover:text-red-600 transition-colors">
+              {(list.length > 1 || prefix === 'cont') && (
+                <button
+                  type="button"
+                  onClick={() => handleRemove(i)}
+                  className="text-red-400 hover:text-red-600 transition-colors"
+                >
                   <FaTrash size={12} />
                 </button>
               )}
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre <span className="text-red-500">*</span></label>
@@ -328,21 +445,25 @@ function BeneficiariosTable({
                 {errors[`${prefix}_${i}_cedula`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_cedula`]}</p>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha de nacimiento <span className="text-red-500">*</span></label>
-                <input
-                  type="date" max={new Date().toISOString().split('T')[0]}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors[`${prefix}_${i}_fechaNacimiento`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                  value={b.fechaNacimiento} onChange={e => onUpdate(i, { fechaNacimiento: e.target.value })}
-                />
-                {errors[`${prefix}_${i}_fechaNacimiento`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_fechaNacimiento`]}</p>}
-              </div>
-              <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Parentesco <span className="text-red-500">*</span></label>
                 <input
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${errors[`${prefix}_${i}_parentesco`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
                   value={b.parentesco} onChange={e => onUpdate(i, { parentesco: e.target.value })} placeholder="Ej: Cónyuge, Hijo/a"
                 />
                 {errors[`${prefix}_${i}_parentesco`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_parentesco`]}</p>}
+              </div>
+              {/* Fecha nacimiento — col-span-2 to avoid overflow on small screens */}
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha de nacimiento <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  max={new Date().toISOString().split('T')[0]}
+                  style={{ minWidth: 0, fontSize: '0.8125rem' }}
+                  className={`w-full px-3 py-2 rounded-lg border ${errors[`${prefix}_${i}_fechaNacimiento`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                  value={b.fechaNacimiento}
+                  onChange={e => onUpdate(i, { fechaNacimiento: e.target.value })}
+                />
+                {errors[`${prefix}_${i}_fechaNacimiento`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_fechaNacimiento`]}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Porcentaje (%) <span className="text-red-500">*</span></label>
@@ -354,21 +475,48 @@ function BeneficiariosTable({
                 {errors[`${prefix}_${i}_porcentaje`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_porcentaje`]}</p>}
               </div>
             </div>
+
+            {/* Aceptar */}
+            <button
+              type="button"
+              onClick={() => handleAccept(i)}
+              className="w-full py-2 text-sm font-semibold text-white bg-[#8AAA19] rounded-lg hover:bg-[#6d8814] transition-colors"
+            >
+              Aceptar
+            </button>
           </div>
         );
       })}
 
-      {/* Admin section — only shown if there are minors */}
-      {hayMenores && (
-        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-amber-800">⚠️ Administrador de menores de edad</span>
+      {/* Admin extra row — shows below beneficiarios when admin is confirmed */}
+      {hayMenores && admin && !editingAdmin && adminInfo && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-xl border-2 border-amber-200 bg-amber-50">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs bg-amber-600 text-white px-2 py-0.5 rounded-full font-bold flex-shrink-0">Admin</span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">{adminInfo.nombre || 'Administrador'}</p>
+              <p className="text-xs text-gray-500">{formatDateDisplay(adminInfo.fecha)}</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setEditingAdmin(true)}
+            className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-3 transition-colors"
+            title="Editar administrador"
+          >
+            <FaPencilAlt size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Admin form — shown when there are minors and (no admin set OR editing) */}
+      {hayMenores && (!admin || editingAdmin) && (
+        <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
+          <span className="text-sm font-bold text-amber-800">⚠️ Administrador de menores de edad</span>
           <p className="text-xs text-amber-700">
             Uno o más beneficiarios son menores de edad. Designa un administrador mayor de edad.
           </p>
 
-          {/* Toggle: existing beneficiary or new person */}
           <div className="flex gap-2">
             <button
               type="button"
@@ -390,7 +538,7 @@ function BeneficiariosTable({
             <div>
               <label className="block text-xs font-semibold text-amber-800 mb-1">Selecciona el beneficiario adulto <span className="text-red-500">*</span></label>
               {adultosExistentes.length === 0 ? (
-                <p className="text-xs text-red-600">No hay beneficiarios mayores de edad que puedan ser administradores. Ingresa una nueva persona.</p>
+                <p className="text-xs text-red-600">No hay beneficiarios mayores de edad. Ingresa una nueva persona.</p>
               ) : (
                 <select
                   value={admin.beneficiarioIdx ?? ''}
@@ -409,9 +557,9 @@ function BeneficiariosTable({
           {admin?.esExistente === false && (
             <div className="grid grid-cols-2 gap-3">
               {[
-                { key: 'nombre', label: 'Nombre', errKey: prefix === 'ben' ? 'adminBen_nombre' : 'adminCont_nombre' },
+                { key: 'nombre',   label: 'Nombre',   errKey: prefix === 'ben' ? 'adminBen_nombre'   : 'adminCont_nombre' },
                 { key: 'apellido', label: 'Apellido', errKey: prefix === 'ben' ? 'adminBen_apellido' : 'adminCont_apellido' },
-                { key: 'cedula', label: 'Cédula', errKey: prefix === 'ben' ? 'adminBen_cedula' : 'adminCont_cedula' },
+                { key: 'cedula',   label: 'Cédula',   errKey: prefix === 'ben' ? 'adminBen_cedula'   : 'adminCont_cedula' },
               ].map(({ key, label: lbl, errKey }) => (
                 <div key={key} className={key === 'cedula' ? 'col-span-2' : ''}>
                   <label className="block text-xs font-semibold text-amber-800 mb-1">{lbl} <span className="text-red-500">*</span></label>
@@ -426,8 +574,10 @@ function BeneficiariosTable({
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-amber-800 mb-1">Fecha de nacimiento <span className="text-red-500">*</span></label>
                 <input
-                  type="date" max={new Date(Date.now() - 18 * 365.25 * 24 * 3600000).toISOString().split('T')[0]}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha'] ? 'border-red-400' : 'border-amber-300'} focus:outline-none focus:border-amber-600 bg-white`}
+                  type="date"
+                  max={new Date(Date.now() - 18 * 365.25 * 24 * 3600000).toISOString().split('T')[0]}
+                  style={{ minWidth: 0, fontSize: '0.8125rem' }}
+                  className={`w-full px-3 py-2 rounded-lg border ${errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha'] ? 'border-red-400' : 'border-amber-300'} focus:outline-none focus:border-amber-600 bg-white`}
                   value={admin.fechaNacimiento || ''}
                   onChange={e => onAdminChange({ ...admin!, fechaNacimiento: e.target.value })}
                 />
@@ -440,6 +590,17 @@ function BeneficiariosTable({
 
           {errors[prefix === 'ben' ? 'adminBeneficiario' : 'adminContingente'] && !admin && (
             <p className="text-red-500 text-xs font-medium">{errors[prefix === 'ben' ? 'adminBeneficiario' : 'adminContingente']}</p>
+          )}
+
+          {/* Aceptar admin */}
+          {admin && (
+            <button
+              type="button"
+              onClick={() => setEditingAdmin(false)}
+              className="w-full py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+            >
+              Aceptar
+            </button>
           )}
         </div>
       )}
@@ -460,31 +621,26 @@ interface BrokerExtraStepProps {
 }
 
 const PAYMENT_OPTIONS = [
-  { value: 'ach',               label: 'ACH',                    desc: 'Transferencia bancaria automática' },
+  { value: 'ach',               label: 'ACH',                     desc: 'Transferencia bancaria automática' },
   { value: 'tcr',               label: 'Tarjeta de crédito (TCR)', desc: 'Visa o Mastercard' },
-  { value: 'descuento_salario', label: 'Descuento de salario',    desc: 'Descuento directo de nómina' },
+  { value: 'descuento_salario', label: 'Descuento de salario',     desc: 'Descuento directo de nómina' },
 ] as const;
 
 export default function BrokerExtraStep({ producto, clientName, data, onChange, errors }: BrokerExtraStepProps) {
+  const [showContingentes, setShowContingentes] = useState(data.contingentes.length > 0);
 
-  // ── helpers para beneficiarios ───────────────────────────────────────────────
+  // ── beneficiarios helpers ────────────────────────────────────────────────────
 
   function updBen(i: number, partial: Partial<BeneficiarioData>) {
     const next = [...data.beneficiarios];
     next[i] = { ...next[i], ...partial } as BeneficiarioData;
-    // Recalculate admin minors
     const hayMenores = next.some(b => { const a = calcEdad(b.fechaNacimiento); return a >= 0 && a < 18; });
     onChange({ beneficiarios: next, adminBeneficiario: hayMenores ? (data.adminBeneficiario ?? null) : null });
   }
+  function addBen() { onChange({ beneficiarios: [...data.beneficiarios, { ...EMPTY_BENEFICIARIO }] }); }
+  function removeBen(i: number) { onChange({ beneficiarios: data.beneficiarios.filter((_, idx) => idx !== i) }); }
 
-  function addBen() {
-    onChange({ beneficiarios: [...data.beneficiarios, { ...EMPTY_BENEFICIARIO }] });
-  }
-
-  function removeBen(i: number) {
-    const next = data.beneficiarios.filter((_, idx) => idx !== i);
-    onChange({ beneficiarios: next });
-  }
+  // ── contingentes helpers ─────────────────────────────────────────────────────
 
   function updCont(i: number, partial: Partial<BeneficiarioData>) {
     const next = [...data.contingentes];
@@ -492,17 +648,9 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
     const hayMenores = next.some(c => { const a = calcEdad(c.fechaNacimiento); return a >= 0 && a < 18; });
     onChange({ contingentes: next, adminContingente: hayMenores ? (data.adminContingente ?? null) : null });
   }
+  function addCont() { onChange({ contingentes: [...data.contingentes, { ...EMPTY_BENEFICIARIO }] }); }
+  function removeCont(i: number) { onChange({ contingentes: data.contingentes.filter((_, idx) => idx !== i) }); }
 
-  function addCont() {
-    onChange({ contingentes: [...data.contingentes, { ...EMPTY_BENEFICIARIO }] });
-  }
-
-  function removeCont(i: number) {
-    const next = data.contingentes.filter((_, idx) => idx !== i);
-    onChange({ contingentes: next });
-  }
-
-  // Beneficiarios adultos disponibles como admin
   const adultosEnBen = data.beneficiarios
     .map((b, idx) => ({ idx, nombre: `${b.nombre} ${b.apellido}`.trim(), edad: calcEdad(b.fechaNacimiento) }))
     .filter(x => x.edad >= 18 && x.nombre.trim());
@@ -511,13 +659,21 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
     .map((c, idx) => ({ idx, nombre: `${c.nombre} ${c.apellido}`.trim(), edad: calcEdad(c.fechaNacimiento) }))
     .filter(x => x.edad >= 18 && x.nombre.trim());
 
-  const hayMenoresBen = data.beneficiarios.some(b => { const a = calcEdad(b.fechaNacimiento); return a >= 0 && a < 18; });
+  const hayMenoresBen  = data.beneficiarios.some(b => { const a = calcEdad(b.fechaNacimiento); return a >= 0 && a < 18; });
   const hayMenoresCont = data.contingentes.some(c => { const a = calcEdad(c.fechaNacimiento); return a >= 0 && a < 18; });
+
+  // ── TCR vencimiento auto-format ──────────────────────────────────────────────
+
+  function handleVencimiento(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 4);
+    const formatted = digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+    onChange({ tcrVencimiento: formatted });
+  }
 
   return (
     <div className="space-y-8">
 
-      {/* ── FORMA DE PAGO ────────────────────────────────────────────────── */}
+      {/* ── FORMA DE PAGO ─────────────────────────────────────────────────────── */}
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-3">
           Forma de pago <span className="text-red-500">*</span>
@@ -549,7 +705,7 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
         </div>
         {errors.formaPago && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.formaPago}</p>}
 
-        {/* ACH upload */}
+        {/* ACH */}
         {data.formaPago === 'ach' && (
           <div className="mt-4 pl-4 border-l-2 border-[#010139]/20">
             <FileUploadField
@@ -561,13 +717,15 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
           </div>
         )}
 
-        {/* TCR inputs */}
+        {/* TCR */}
         {data.formaPago === 'tcr' && (
           <div className="mt-4 pl-4 border-l-2 border-[#010139]/20 space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <FaCreditCard className="text-[#010139]" size={14} />
               <span className="text-xs font-bold text-[#010139] uppercase tracking-wide">Datos de la tarjeta</span>
             </div>
+
+            {/* Número */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Número de tarjeta <span className="text-red-500">*</span></label>
               <input
@@ -578,6 +736,8 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               />
               {errors.tcrNumero && <p className="text-red-500 text-xs mt-0.5">{errors.tcrNumero}</p>}
             </div>
+
+            {/* Titular (read-only) */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del titular</label>
               <input
@@ -586,6 +746,8 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               />
               <p className="text-xs text-gray-400 mt-0.5">El titular debe coincidir con el asegurado</p>
             </div>
+
+            {/* Banco */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del banco <span className="text-red-500">*</span></label>
               <input
@@ -594,6 +756,8 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               />
               {errors.tcrBanco && <p className="text-red-500 text-xs mt-0.5">{errors.tcrBanco}</p>}
             </div>
+
+            {/* Tipo */}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo de tarjeta <span className="text-red-500">*</span></label>
               <div className="grid grid-cols-2 gap-2">
@@ -611,20 +775,36 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               </div>
               {errors.tcrTipo && <p className="text-red-500 text-xs mt-0.5">{errors.tcrTipo}</p>}
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Código de seguridad <span className="text-red-500">*</span></label>
-              <input
-                className={`w-32 px-3 py-2 text-sm rounded-lg border ${errors.tcrCodigo ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                value={data.tcrCodigo}
-                onChange={e => onChange({ tcrCodigo: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                placeholder="CVV" maxLength={4} type="password"
-              />
-              {errors.tcrCodigo && <p className="text-red-500 text-xs mt-0.5">{errors.tcrCodigo}</p>}
+
+            {/* Vencimiento + CVV en misma fila */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Vencimiento <span className="text-red-500">*</span></label>
+                <input
+                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors.tcrVencimiento ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                  value={data.tcrVencimiento}
+                  onChange={e => handleVencimiento(e.target.value)}
+                  placeholder="MM/YY" maxLength={5}
+                  inputMode="numeric"
+                />
+                {errors.tcrVencimiento && <p className="text-red-500 text-xs mt-0.5">{errors.tcrVencimiento}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Código de seguridad <span className="text-red-500">*</span></label>
+                <input
+                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors.tcrCodigo ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                  value={data.tcrCodigo}
+                  onChange={e => onChange({ tcrCodigo: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                  placeholder="CVV" maxLength={4} type="password"
+                  inputMode="numeric"
+                />
+                {errors.tcrCodigo && <p className="text-red-500 text-xs mt-0.5">{errors.tcrCodigo}</p>}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Descuento de salario upload */}
+        {/* Descuento salario */}
         {data.formaPago === 'descuento_salario' && (
           <div className="mt-4 pl-4 border-l-2 border-[#010139]/20">
             <FileUploadField
@@ -637,7 +817,7 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
         )}
       </div>
 
-      {/* ── BENEFICIARIOS PRINCIPALES (vida only) ────────────────────────── */}
+      {/* ── BENEFICIARIOS PRINCIPALES ─────────────────────────────────────────── */}
       {producto === 'vida' && (
         <div className="pt-2 border-t border-gray-200">
           <BeneficiariosTable
@@ -657,27 +837,42 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
         </div>
       )}
 
-      {/* ── BENEFICIARIOS CONTINGENTES (vida only) ───────────────────────── */}
+      {/* ── BENEFICIARIOS CONTINGENTES ────────────────────────────────────────── */}
       {producto === 'vida' && (
         <div className="pt-2 border-t border-gray-200">
-          <BeneficiariosTable
-            list={data.contingentes}
-            prefix="cont"
-            adultosExistentes={adultosEnCont}
-            admin={data.adminContingente}
-            hayMenores={hayMenoresCont}
-            onAdd={addCont}
-            onRemove={removeCont}
-            onUpdate={updCont}
-            onAdminChange={a => onChange({ adminContingente: a })}
-            errors={errors}
-            label="Beneficiarios contingentes"
-            emptyLabel="Sin beneficiarios contingentes (opcional)"
-          />
+          {showContingentes ? (
+            <BeneficiariosTable
+              list={data.contingentes}
+              prefix="cont"
+              adultosExistentes={adultosEnCont}
+              admin={data.adminContingente}
+              hayMenores={hayMenoresCont}
+              onAdd={addCont}
+              onRemove={removeCont}
+              onUpdate={updCont}
+              onAdminChange={a => onChange({ adminContingente: a })}
+              errors={errors}
+              label="Beneficiarios contingentes"
+              emptyLabel="Sin beneficiarios contingentes"
+              isOptional
+              onClose={() => {
+                onChange({ contingentes: [], adminContingente: null });
+                setShowContingentes(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => { addCont(); setShowContingentes(true); }}
+              className="flex items-center gap-2 text-sm text-[#010139] font-semibold hover:underline transition-colors"
+            >
+              <FaPlus size={11} /> Agregar beneficiarios contingentes <span className="font-normal text-gray-400">(opcional)</span>
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── DOCUMENTOS ADJUNTOS ──────────────────────────────────────────── */}
+      {/* ── DOCUMENTOS ADJUNTOS ──────────────────────────────────────────────── */}
       <div className="pt-2 border-t border-gray-200 space-y-4">
         <h3 className="text-sm font-bold text-[#010139]">Documentos adjuntos</h3>
         <FileUploadField
@@ -687,7 +882,7 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
           error={errors.archivoCedula}
         />
         <FileUploadField
-          label="Cotización"  required
+          label="Cotización" required
           value={data.archivoCotizacion}
           onChange={f => onChange({ archivoCotizacion: f })}
           error={errors.archivoCotizacion}
