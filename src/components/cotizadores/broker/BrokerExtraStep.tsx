@@ -564,14 +564,16 @@ function BeneficiariosTable({
               {/* Fecha nacimiento — col-span-2 to avoid overflow on small screens */}
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Fecha de nacimiento <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  max={new Date().toISOString().split('T')[0]}
-                  style={{ minWidth: 0, fontSize: '0.8125rem' }}
-                  className={`w-full px-3 py-2 rounded-lg border ${errors[`${prefix}_${i}_fechaNacimiento`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                  value={b.fechaNacimiento}
-                  onChange={e => onUpdate(i, { fechaNacimiento: e.target.value })}
-                />
+                <div className="w-full overflow-hidden">
+                  <input
+                    type="date"
+                    max={new Date().toISOString().split('T')[0]}
+                    style={{ WebkitAppearance: 'none', appearance: 'none', fontSize: '0.8125rem' }}
+                    className={`w-full max-w-full px-3 py-2 rounded-lg border ${errors[`${prefix}_${i}_fechaNacimiento`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                    value={b.fechaNacimiento}
+                    onChange={e => onUpdate(i, { fechaNacimiento: e.target.value })}
+                  />
+                </div>
                 {errors[`${prefix}_${i}_fechaNacimiento`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_fechaNacimiento`]}</p>}
               </div>
               <div>
@@ -682,14 +684,16 @@ function BeneficiariosTable({
               ))}
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-amber-800 mb-1">Fecha de nacimiento <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  max={new Date(Date.now() - 18 * 365.25 * 24 * 3600000).toISOString().split('T')[0]}
-                  style={{ minWidth: 0, fontSize: '0.8125rem' }}
-                  className={`w-full px-3 py-2 rounded-lg border ${errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha'] ? 'border-red-400' : 'border-amber-300'} focus:outline-none focus:border-amber-600 bg-white`}
-                  value={admin.fechaNacimiento || ''}
-                  onChange={e => onAdminChange({ ...admin!, fechaNacimiento: e.target.value })}
-                />
+                <div className="w-full overflow-hidden">
+                  <input
+                    type="date"
+                    max={new Date(Date.now() - 18 * 365.25 * 24 * 3600000).toISOString().split('T')[0]}
+                    style={{ WebkitAppearance: 'none', appearance: 'none', fontSize: '0.8125rem' }}
+                    className={`w-full max-w-full px-3 py-2 rounded-lg border ${errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha'] ? 'border-red-400' : 'border-amber-300'} focus:outline-none focus:border-amber-600 bg-white`}
+                    value={admin.fechaNacimiento || ''}
+                    onChange={e => onAdminChange({ ...admin!, fechaNacimiento: e.target.value })}
+                  />
+                </div>
                 {errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha'] && (
                   <p className="text-red-500 text-xs mt-0.5">{errors[prefix === 'ben' ? 'adminBen_fecha' : 'adminCont_fecha']}</p>
                 )}
@@ -1064,19 +1068,26 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
                     Monto cedido al banco <span className="text-red-500">*</span>
                     {sumaMax > 0 && <span className="ml-1 font-normal text-gray-400">(máx. ${sumaMax.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>}
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">$</span>
+                  <div className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors ${errors.oneroso_monto ? 'border-red-400 bg-red-50' : 'border-gray-300 focus-within:border-[#010139]'}`}>
+                    <span className="flex-shrink-0 text-sm text-gray-500 select-none">$</span>
                     <input
-                      type="number" min="0.01" step="0.01"
-                      max={sumaMax > 0 ? sumaMax : undefined}
-                      className={`w-full pl-7 pr-3 py-2 text-sm rounded-lg border ${errors.oneroso_monto ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                      type="text"
+                      inputMode="decimal"
+                      className="flex-1 min-w-0 p-0 border-0 bg-transparent text-sm focus:outline-none focus:ring-0 appearance-none"
                       value={data.oneroso_monto}
                       onChange={e => {
-                        const val = e.target.value;
-                        const num = parseFloat(val);
-                        if (sumaMax > 0 && !isNaN(num) && num > sumaMax) return;
-                        onChange({ oneroso_monto: val });
+                        const raw = e.target.value.replace(/[^0-9.]/g, '');
+                        const parts = raw.split('.');
+                        const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : raw;
+                        const decimals = cleaned.split('.')[1];
+                        if (decimals && decimals.length > 2) return;
+                        if (sumaMax > 0) {
+                          const num = parseFloat(cleaned);
+                          if (!isNaN(num) && num > sumaMax) return;
+                        }
+                        onChange({ oneroso_monto: cleaned });
                       }}
+                      onWheel={e => (e.target as HTMLInputElement).blur()}
                       placeholder="0.00"
                     />
                   </div>

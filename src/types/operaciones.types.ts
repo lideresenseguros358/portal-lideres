@@ -129,6 +129,9 @@ export interface OpsCase {
   cedula: string | null;
   source: string | null;
   details: Record<string, any> | null;
+
+  // Computed by list API: latest inbound message timestamp (for unread indicator)
+  last_inbound_msg_at?: string | null;
 }
 
 // ── Case History (ops_case_history) ──

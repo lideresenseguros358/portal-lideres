@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { generateTicketNumber } from '@/types/operaciones.types';
+import { createNotification } from '@/lib/notifications/create';
 
 export async function POST(req: NextRequest) {
   try {
@@ -104,15 +105,22 @@ export async function POST(req: NextRequest) {
       await supabase.rpc('assign_case_equilibrado', { p_case_id: caseData.id });
     } catch { /* non-fatal if RPC doesn't exist */ }
 
-    // Create notification for all masters — URGENT
+    // Notify all masters — URGENT emission failure
     try {
-      await supabase.from('portal_notifications').insert({
-        type: 'chat_urgent',
-        title: `🚨 EMISIÓN FALLIDA — ${clientName}`,
-        body: `Pago cobrado ($${paymentData?.amount || '?'}) pero emisión falló en ${insurerName || 'aseguradora'}. Requiere emisión manual URGENTE.`,
-        link: '/operaciones/urgencias',
-        target_role: 'master',
-        target_user_id: null,
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com';
+      await createNotification({
+        type: 'other',
+        target: 'MASTER',
+        title: `Emisión Fallida — ${ticket}`,
+        body: `Pago cobrado ($${paymentData?.amount || '?'}) pero emisión falló en ${insurerName || 'aseguradora'}. Cliente: ${clientName}`,
+        meta: {
+          ops_type: 'urgencia',
+          cta_url: `${baseUrl}/operaciones/urgencias?case=${caseData.id}`,
+          ticket,
+          case_id: caseData.id,
+        },
+        entityId: caseData.id,
+        condition: 'created',
       });
     } catch { /* non-fatal */ }
 

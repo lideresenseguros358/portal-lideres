@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { URGENCY_STATUSES, generateTicketNumber } from '@/types/operaciones.types';
 import { evaluateUrgencyEffectiveness } from '@/lib/ai/evaluateEffectiveness';
 import { learnFromHumanIntervention } from '@/lib/ai/learnFromHuman';
+import { createNotification } from '@/lib/notifications/create';
 
 // ═══════════════════════════════════════════════════════
 // OPERACIONES — Urgencies Inbox API (full rewrite)
@@ -159,7 +160,29 @@ export async function GET(req: NextRequest) {
       if (!r.first_response_at && !closedStatuses.includes(st)) counts['no_first_response'] = (counts['no_first_response'] || 0) + 1;
     }
 
-    return NextResponse.json({ data: data || [], total: count || 0, counts });
+    // ── Attach last inbound message timestamp (for unread indicator) ──
+    const caseIds = (data || []).map((c: any) => c.id);
+    let lastInboundMap: Record<string, string> = {};
+    if (caseIds.length > 0) {
+      const { data: msgRows } = await supabase
+        .from('ops_case_messages')
+        .select('case_id, received_at')
+        .in('case_id', caseIds)
+        .eq('direction', 'inbound')
+        .not('case_id', 'is', null);
+      for (const m of (msgRows || [])) {
+        const existing = lastInboundMap[m.case_id];
+        if (!existing || m.received_at > existing) {
+          lastInboundMap[m.case_id] = m.received_at;
+        }
+      }
+    }
+    const enrichedData = (data || []).map((c: any) => ({
+      ...c,
+      last_inbound_msg_at: lastInboundMap[c.id] ?? null,
+    }));
+
+    return NextResponse.json({ data: enrichedData, total: count || 0, counts });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -197,15 +220,26 @@ export async function POST(req: NextRequest) {
 
         try { await supabase.rpc('assign_case_equilibrado', { p_case_id: data.id }); } catch { /* non-fatal */ }
 
-        // Notification for all masters
+        // Notify all masters of new urgency
         try {
-          await supabase.from('portal_notifications').insert({
-            type: 'chat_urgent',
-            title: `🚨 Nueva urgencia: ${client_name || ticket}`,
-            body: `Categoría: ${category || 'N/A'} — Severidad: ${severity || 'N/A'}`,
-            link: `/operaciones/urgencias`,
-            target_role: 'master',
-            target_user_id: null,
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com';
+          const isChatUrgency = !!chat_thread_id;
+          await createNotification({
+            type: 'other',
+            target: 'MASTER',
+            title: isChatUrgency
+              ? `Chat Urgente — ${client_name || ticket}`
+              : `Nueva Urgencia — ${ticket}`,
+            body: `Cliente: ${client_name || 'N/A'} | Categoría: ${category || 'N/A'} | Severidad: ${severity || 'N/A'}`,
+            meta: {
+              ops_type: isChatUrgency ? 'chat_urgente' : 'urgencia',
+              cta_url: `${baseUrl}/operaciones/urgencias?case=${data.id}`,
+              ticket,
+              case_id: data.id,
+              chat_thread_id: chat_thread_id || null,
+            },
+            entityId: data.id,
+            condition: 'created',
           });
         } catch { /* non-fatal */ }
 

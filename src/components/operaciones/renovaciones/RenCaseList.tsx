@@ -23,6 +23,7 @@ import {
 } from '../shared/CaseActions';
 
 const STORAGE_KEY = 'pins:renovaciones';
+const READ_TS_KEY = 'read_ts:renovaciones';
 
 // ════════════════════════════════════════════
 // BADGE COMPONENTS
@@ -99,6 +100,31 @@ export default function RenCaseList({
     } catch { /* ignore */ }
   }, []);
 
+  // ── Read timestamps (unread indicator) ────
+  const [readTimestamps, setReadTimestamps] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(READ_TS_KEY);
+      if (stored) setReadTimestamps(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const isUnread = (c: OpsCase) => {
+    if (!c.last_inbound_msg_at) return false;
+    const readAt = readTimestamps[c.id];
+    return !readAt || c.last_inbound_msg_at > readAt;
+  };
+
+  const markRead = useCallback((id: string) => {
+    const now = new Date().toISOString();
+    setReadTimestamps(prev => {
+      const next = { ...prev, [id]: now };
+      try { localStorage.setItem(READ_TS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   const togglePin = useCallback((id: string) => {
     setPinnedIds(prev => {
       const next = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
@@ -158,13 +184,16 @@ export default function RenCaseList({
     }
   }, [deleteCaseId, onRefresh]);
 
-  // ── Sorted list: pinned first ──────────────
-  const sortedCases = [
-    ...pinnedIds.map(id => cases.find(c => c.id === id)).filter(Boolean) as OpsCase[],
-    ...cases.filter(c => !pinnedIds.includes(c.id)),
-  ];
+  // ── Sorted list: pinned → unread → read ───
+  const pinnedCases = pinnedIds.map(id => cases.find(c => c.id === id)).filter(Boolean) as OpsCase[];
+  const unpinnedCases = cases.filter(c => !pinnedIds.includes(c.id));
+  const unreadCases = unpinnedCases.filter(c => isUnread(c))
+    .sort((a, b) => (b.last_inbound_msg_at || '') > (a.last_inbound_msg_at || '') ? 1 : -1);
+  const readCases = unpinnedCases.filter(c => !isUnread(c));
+  const sortedCases = [...pinnedCases, ...unreadCases, ...readCases];
 
   const hasPinned = pinnedIds.some(id => cases.some(c => c.id === id));
+  const hasAnyUnread = unreadCases.length > 0;
   const activeCase = deleteCaseId ? cases.find(c => c.id === deleteCaseId) : null;
   const assignCase = assignCaseId ? cases.find(c => c.id === assignCaseId) : null;
 
@@ -241,13 +270,28 @@ export default function RenCaseList({
                 const isSelected = selectedId === c.id;
                 const isClosed = c.status === 'cerrado_renovado' || c.status === 'cerrado_cancelado';
                 const isPinned = pinnedIds.includes(c.id);
-                const prevWasPinned = idx > 0 && pinnedIds.includes(sortedCases[idx - 1]?.id ?? '');
-                const showDivider = hasPinned && !isPinned && prevWasPinned;
+                const hasUnread = isUnread(c);
+                const prevCase = idx > 0 ? sortedCases[idx - 1] : null;
+                const prevWasPinned = prevCase ? pinnedIds.includes(prevCase.id) : false;
+                const prevWasUnread = prevCase ? isUnread(prevCase) : false;
+                const showPinnedDivider = hasPinned && !isPinned && prevWasPinned && !hasUnread;
+                const showUnreadDivider = hasPinned && !isPinned && prevWasPinned && hasUnread;
+                const showReadDivider = hasAnyUnread && !hasUnread && !isPinned && prevWasUnread;
                 return (
                   <div key={c.id}>
-                    {showDivider && (
+                    {showPinnedDivider && (
                       <div className="flex items-center gap-2 px-4 py-1 bg-gray-50 border-b border-gray-100">
                         <span className="text-[9px] text-gray-400 font-semibold tracking-widest uppercase">Resto</span>
+                      </div>
+                    )}
+                    {showUnreadDivider && (
+                      <div className="flex items-center gap-2 px-4 py-1 bg-green-50/60 border-b border-green-100/50">
+                        <span className="text-[9px] text-green-600 font-semibold tracking-widest uppercase">Sin leer</span>
+                      </div>
+                    )}
+                    {showReadDivider && (
+                      <div className="flex items-center gap-2 px-4 py-1 bg-gray-50 border-b border-gray-100">
+                        <span className="text-[9px] text-gray-400 font-semibold tracking-widest uppercase">Leídos</span>
                       </div>
                     )}
                     <CaseActionsRow
@@ -255,11 +299,13 @@ export default function RenCaseList({
                       onPin={() => togglePin(c.id)}
                       onAssignMaster={() => openAssign(c.id)}
                       onDelete={() => setDeleteCaseId(c.id)}
-                      onCardClick={() => onSelect(c.id)}
+                      onCardClick={() => { markRead(c.id); onSelect(c.id); }}
                     >
                       <div className={`group px-4 py-3 transition-all duration-150 border-b border-gray-50 ${
                         isSelected
                           ? 'bg-[#010139]/[0.03] border-l-[3px] border-l-[#010139]'
+                          : hasUnread
+                          ? 'bg-green-50/40 hover:bg-green-50/70'
                           : 'hover:bg-gray-50/80'
                       } ${!isSelected && c.sla_breached ? 'border-l-[3px] border-l-red-400' : ''}
                       ${isPinned && !isSelected ? 'bg-blue-50/30' : ''}`}>
@@ -267,7 +313,7 @@ export default function RenCaseList({
                         <div className="flex items-center justify-between mb-0.5">
                           <div className="flex items-center gap-1 min-w-0">
                             {isPinned && <FaThumbtack className="text-blue-400 text-[9px] flex-shrink-0 -rotate-45" />}
-                            <span className={`text-[13px] font-semibold truncate ${isClosed ? 'text-gray-400' : 'text-[#010139]'}`}>
+                            <span className={`text-[13px] truncate ${hasUnread ? 'font-bold' : 'font-semibold'} ${isClosed ? 'text-gray-400' : 'text-[#010139]'}`}>
                               {c.client_name || 'Sin nombre'}
                             </span>
                           </div>

@@ -13,6 +13,7 @@
 import { ImapFlow } from 'imapflow';
 import { getZohoImapConfig } from './zohoImapConfig';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { createNotification } from '@/lib/notifications/create';
 
 // ── Types ──
 
@@ -179,6 +180,37 @@ export async function run(): Promise<SyncResult> {
             result.count_unclassified++;
           } else {
             result.count_classified++;
+
+            // Notify masters: new inbound message in an existing case
+            if (threading.caseId && threading.ticket) {
+              const prefix = threading.ticket.substring(0, 3).toUpperCase();
+              const sectionMap: Record<string, { label: string; path: string }> = {
+                REN: { label: 'Renovaciones', path: 'renovaciones' },
+                PET: { label: 'Peticiones', path: 'peticiones' },
+                URG: { label: 'Urgencias', path: 'urgencias' },
+              };
+              const section = sectionMap[prefix];
+              if (section) {
+                const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://portal.lideresenseguros.com';
+                try {
+                  await createNotification({
+                    type: 'other',
+                    target: 'MASTER',
+                    title: `Nuevo mensaje — ${threading.ticket}`,
+                    body: `Sección: ${section.label} | De: ${parsed.fromEmail}`,
+                    meta: {
+                      ops_type: `msg_${prefix.toLowerCase()}`,
+                      cta_url: `${baseUrl}/operaciones/${section.path}?case=${threading.caseId}`,
+                      ticket: threading.ticket,
+                      case_id: threading.caseId,
+                      from_email: parsed.fromEmail,
+                    },
+                    entityId: parsed.messageId,
+                    condition: 'new_msg',
+                  });
+                } catch { /* non-fatal */ }
+              }
+            }
           }
 
           // Log activity

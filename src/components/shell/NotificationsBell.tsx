@@ -90,6 +90,31 @@ const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps
     void loadNotifications();
   }, [loadNotifications]);
 
+  // Auto-refresh every 30 seconds (also triggers ops-check for renovation cases)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadNotifications();
+      // Masters: check for new ops cases (especially renovaciones with no JS hook)
+      if (role === 'master') {
+        void fetch('/api/notifications/ops-check').catch(() => {});
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [role, loadNotifications]);
+
+  // Realtime: reload immediately when a new notification is inserted
+  useEffect(() => {
+    const channel = supabase
+      .channel(`notif-bell-${profileId}`)
+      .on(
+        'postgres_changes' as any,
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        () => { void loadNotifications(); },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [supabase, profileId, loadNotifications]);
+
   useEffect(() => {
     if (!dropdownOpen) return;
     const handler = (event: MouseEvent) => {

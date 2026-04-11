@@ -67,7 +67,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
 const PAGE_SIZE = 20;
 
-export default function RenovacionesInbox() {
+export default function RenovacionesInbox({ initialCaseId }: { initialCaseId?: string }) {
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState<'inbox' | 'unclassified' | 'closed'>('inbox');
 
@@ -92,7 +92,7 @@ export default function RenovacionesInbox() {
   // ── UI state ──
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialCaseId || null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   // ── Modals ──
@@ -216,11 +216,14 @@ export default function RenovacionesInbox() {
   }, []);
 
   // ── Initial + filter/search change ──
+  // Track first load to preserve initialCaseId from URL deep-link
+  const isFirstLoad = useRef(true);
   useEffect(() => {
     setPage(1);
-    setSelectedId(null);
+    if (!isFirstLoad.current || !initialCaseId) setSelectedId(null);
+    isFirstLoad.current = false;
     fetchCases(1);
-  }, [fetchCases]);
+  }, [fetchCases]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchMasters(); }, [fetchMasters]);
 

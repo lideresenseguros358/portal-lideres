@@ -118,7 +118,29 @@ export async function GET(req: NextRequest) {
       if (st !== 'cerrado_renovado' && st !== 'cerrado_cancelado') counts['total_active'] = (counts['total_active'] ?? 0) + 1;
     }
 
-    return NextResponse.json({ data, total: count, counts });
+    // ── Attach last inbound message timestamp (for unread indicator) ──
+    const caseIds = (data || []).map((c: any) => c.id);
+    let lastInboundMap: Record<string, string> = {};
+    if (caseIds.length > 0) {
+      const { data: msgRows } = await supabase
+        .from('ops_case_messages')
+        .select('case_id, received_at')
+        .in('case_id', caseIds)
+        .eq('direction', 'inbound')
+        .not('case_id', 'is', null);
+      for (const m of (msgRows || [])) {
+        const existing = lastInboundMap[m.case_id];
+        if (!existing || m.received_at > existing) {
+          lastInboundMap[m.case_id] = m.received_at;
+        }
+      }
+    }
+    const enrichedData = (data || []).map((c: any) => ({
+      ...c,
+      last_inbound_msg_at: lastInboundMap[c.id] ?? null,
+    }));
+
+    return NextResponse.json({ data: enrichedData, total: count, counts });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

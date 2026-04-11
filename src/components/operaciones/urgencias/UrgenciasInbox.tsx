@@ -47,7 +47,7 @@ const emptyCounts: UrgCounts = {
   pendiente: 0, en_atencion: 0, resuelto: 0, cerrado: 0,
 };
 
-export default function UrgenciasInbox() {
+export default function UrgenciasInbox({ initialCaseId }: { initialCaseId?: string }) {
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState<'inbox' | 'closed'>('inbox');
 
@@ -71,7 +71,7 @@ export default function UrgenciasInbox() {
   const [activeFilter, setActiveFilter] = useState<UrgFilterKey>('all');
 
   // ── Detail state ──
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialCaseId || null);
   const [selectedCase, setSelectedCase] = useState<OpsCase | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 

@@ -11,6 +11,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { classifyMessageVertex, generateAiReply } from './vertex-classify';
 import { sendEscalationEmail } from '@/lib/email/zepto-api';
+import { createNotification } from '@/lib/notifications/create';
 import type {
   ChatThread,
   ChatMessage,
@@ -295,7 +296,7 @@ async function escalateThread(
     });
   }
 
-  // 4. Portal notification for ALL masters
+  // 4. Portal notification for ALL masters (legacy table — may not exist)
   await notifyMasters(sb, {
     type: 'chat_urgent',
     title: `🔴 CASO URGENTE: ${thread.client_name || thread.phone_e164}`,
@@ -304,6 +305,23 @@ async function escalateThread(
     target_role: 'master',
     target_user_id: null,
   });
+
+  // 4b. Notification bell — notifications table
+  try {
+    await createNotification({
+      type: 'other',
+      target: 'MASTER',
+      title: `Chat Urgente — ${thread.client_name || thread.phone_e164}`,
+      body: classification.executive_summary.join(' • ') || 'Chat urgente detectado',
+      meta: {
+        ops_type: 'chat_urgente',
+        cta_url: threadLink,
+        thread_id: thread.id,
+      },
+      entityId: thread.id,
+      condition: 'escalated',
+    });
+  } catch { /* non-fatal */ }
 
   // 5. Log escalation event
   await sb.from('chat_events').insert({
@@ -446,6 +464,26 @@ export async function processInboundMessage(input: ProcessInboundInput): Promise
   // 7. Handle urgent escalation
   if (classification.category === 'urgent') {
     await escalateThread(sb, { ...thread, ...threadUpdate } as ChatThread, classification, lastMessages);
+  }
+
+  // 7b. Notify masters: new inbound message in a master-assigned thread
+  //     Skip if urgent — escalateThread already fires a 'Chat Urgente' notification
+  if (thread.assigned_type === 'master' && classification.category !== 'urgent') {
+    try {
+      await createNotification({
+        type: 'other',
+        target: 'MASTER',
+        title: `Nuevo mensaje — ${thread.client_name || thread.phone_e164}`,
+        body: body.substring(0, 120),
+        meta: {
+          ops_type: 'chat_nuevo_mensaje',
+          cta_url: `${PORTAL_BASE_URL}/adm-cot/chats?thread=${thread.id}`,
+          thread_id: thread.id,
+        },
+        entityId: savedMsg.id,
+        condition: 'new_msg',
+      });
+    } catch { /* non-fatal */ }
   }
 
   // 8. Generate AI reply if ai_enabled=true and assigned_type=ai

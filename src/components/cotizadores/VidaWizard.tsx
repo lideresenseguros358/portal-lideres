@@ -866,15 +866,18 @@ export default function VidaWizard() {
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
             Fecha de nacimiento <span className="text-red-500">*</span>
           </label>
-          <input
-            type="date"
-            value={data.fechaNacimiento}
-            onChange={(e) => update({ fechaNacimiento: e.target.value })}
-            max={new Date().toISOString().split('T')[0]}
-            className={`w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none min-w-0 ${
-              errors.fechaNacimiento ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
-            }`}
-          />
+          <div className="w-full overflow-hidden">
+            <input
+              type="date"
+              value={data.fechaNacimiento}
+              onChange={(e) => update({ fechaNacimiento: e.target.value })}
+              max={new Date().toISOString().split('T')[0]}
+              style={{ WebkitAppearance: 'none' }}
+              className={`w-full max-w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none min-w-0 ${
+                errors.fechaNacimiento ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
+              }`}
+            />
+          </div>
           {edad > 0 && (
             <p className="text-sm text-[#8AAA19] font-semibold mt-1">Edad: {edad} años{esMenor ? ' — Menor de edad' : ''}</p>
           )}
