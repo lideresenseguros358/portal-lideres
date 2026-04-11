@@ -322,7 +322,7 @@ function FileUploadField({
 function BeneficiariosTable({
   list, prefix, adultosExistentes, admin, hayMenores,
   onAdd, onRemove, onUpdate, onAdminChange, errors,
-  label, emptyLabel, isOptional, onClose,
+  label, emptyLabel, isOptional, onClose, noHeader,
 }: {
   list: BeneficiarioData[];
   prefix: string;
@@ -338,6 +338,7 @@ function BeneficiariosTable({
   emptyLabel: string;
   isOptional?: boolean;
   onClose?: () => void;
+  noHeader?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [editingAdmin, setEditingAdmin] = useState(false);
@@ -387,27 +388,29 @@ function BeneficiariosTable({
   return (
     <div className="space-y-3">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-[#010139]">
-          {label}
-          {isOptional && <span className="ml-2 text-xs font-normal text-gray-400">(opcional)</span>}
-        </h3>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
-          >
-            <FaPlus size={10} /> Agregar
-          </button>
-          {onClose && (
-            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
-              <FaTimes size={14} />
+      {/* Header — hidden when card provides its own header */}
+      {!noHeader && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#010139]">
+            {label}
+            {isOptional && <span className="ml-2 text-xs font-normal text-gray-400">(opcional)</span>}
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onAdd}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
+            >
+              <FaPlus size={10} /> Agregar
             </button>
-          )}
+            {onClose && (
+              <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+                <FaTimes size={14} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Progress bar */}
       {list.length > 0 && (
@@ -481,7 +484,7 @@ function BeneficiariosTable({
         return (
           <div
             key={i}
-            className={`rounded-xl border-2 p-4 space-y-3 ${esMenor ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}
+            className={`rounded-xl border-2 p-4 space-y-3 overflow-hidden ${esMenor ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">
@@ -537,12 +540,12 @@ function BeneficiariosTable({
                           parentesco: parentescoOpts.includes(b.parentesco) ? b.parentesco : '',
                         });
                       }}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg border-2 transition-all
                         ${b.sexo === sx
                           ? 'bg-[#010139] text-white border-[#010139]'
                           : 'bg-white text-gray-500 border-gray-300 hover:border-[#010139]'}`}
                     >
-                      {sx === 'F' ? 'Femenino' : 'Masculino'}
+                      {sx}
                     </button>
                   ))}
                 </div>
@@ -779,13 +782,15 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
 
-      {/* ── FORMA DE PAGO ─────────────────────────────────────────────────────── */}
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-3">
-          Forma de pago <span className="text-red-500">*</span>
-        </label>
+      {/* ══ Card 1: FORMA DE PAGO ═══════════════════════════════════════════════ */}
+      <div className="rounded-2xl border-2 border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-[#010139]/[0.04] border-b border-gray-100">
+          <p className="font-bold text-sm text-[#010139]">Forma de pago <span className="text-red-500">*</span></p>
+          <p className="text-xs text-gray-500 mt-0.5">Selecciona el método de cobro de la póliza</p>
+        </div>
+        <div className="p-4 space-y-3">
         <div className="space-y-2">
           {PAYMENT_OPTIONS.map(opt => (
             <label
@@ -914,7 +919,7 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
 
         {/* Descuento salario */}
         {data.formaPago === 'descuento_salario' && (
-          <div className="mt-4 pl-4 border-l-2 border-[#010139]/20">
+          <div className="mt-3 pl-4 border-l-2 border-[#010139]/20">
             <FileUploadField
               label="Archivo de descuento de salario" hint="foto o PDF" required
               value={data.archivoDescuento}
@@ -923,70 +928,106 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
             />
           </div>
         )}
-      </div>
+        </div>{/* end card body */}
+      </div>{/* end card 1 */}
 
-      {/* ── BENEFICIARIOS PRINCIPALES ─────────────────────────────────────────── */}
+      {/* ══ Card 2: BENEFICIARIOS PRINCIPALES ═══════════════════════════════════ */}
       {producto === 'vida' && (
-        <div className="pt-2 border-t border-gray-200">
-          <BeneficiariosTable
-            list={data.beneficiarios}
-            prefix="ben"
-            adultosExistentes={adultosEnBen}
-            admin={data.adminBeneficiario}
-            hayMenores={hayMenoresBen}
-            onAdd={addBen}
-            onRemove={removeBen}
-            onUpdate={updBen}
-            onAdminChange={a => onChange({ adminBeneficiario: a })}
-            errors={errors}
-            label="Beneficiarios principales"
-            emptyLabel="Sin beneficiarios"
-          />
-        </div>
-      )}
-
-      {/* ── BENEFICIARIOS CONTINGENTES ────────────────────────────────────────── */}
-      {producto === 'vida' && (
-        <div className="pt-2 border-t border-gray-200">
-          {showContingentes ? (
-            <BeneficiariosTable
-              list={data.contingentes}
-              prefix="cont"
-              adultosExistentes={adultosEnCont}
-              admin={data.adminContingente}
-              hayMenores={hayMenoresCont}
-              onAdd={addCont}
-              onRemove={removeCont}
-              onUpdate={updCont}
-              onAdminChange={a => onChange({ adminContingente: a })}
-              errors={errors}
-              label="Beneficiarios contingentes"
-              emptyLabel="Sin beneficiarios contingentes"
-              isOptional
-              onClose={() => {
-                onChange({ contingentes: [], adminContingente: null });
-                setShowContingentes(false);
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => { addCont(); setShowContingentes(true); }}
-              className="flex items-center gap-2 text-sm text-[#010139] font-semibold hover:underline transition-colors"
-            >
-              <FaPlus size={11} /> Agregar beneficiarios contingentes <span className="font-normal text-gray-400">(opcional)</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── BENEFICIARIO ONEROSO ─────────────────────────────────────────────── */}
-      {producto === 'vida' && (
-        <div className="pt-2 border-t border-gray-200 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="rounded-2xl border-2 border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-[#010139]/[0.04] border-b border-gray-100 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-[#010139]">Beneficiario oneroso</h3>
-              <p className="text-xs text-gray-400">Banco acreedor con monto cedido (opcional)</p>
+              <p className="font-bold text-sm text-[#010139]">Beneficiarios principales <span className="text-red-500">*</span></p>
+              <p className="text-xs text-gray-500 mt-0.5">Personas que recibirán el beneficio en caso de siniestro</p>
+            </div>
+            <button type="button" onClick={addBen} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors flex-shrink-0">
+              <FaPlus size={10} /> Agregar
+            </button>
+          </div>
+          <div className="p-4">
+            {errors.beneficiarios && <p className="text-red-500 text-xs font-medium mb-3">{errors.beneficiarios}</p>}
+            <BeneficiariosTable
+              list={data.beneficiarios}
+              prefix="ben"
+              adultosExistentes={adultosEnBen}
+              admin={data.adminBeneficiario}
+              hayMenores={hayMenoresBen}
+              onAdd={addBen}
+              onRemove={removeBen}
+              onUpdate={updBen}
+              onAdminChange={a => onChange({ adminBeneficiario: a })}
+              errors={errors}
+              label="Beneficiarios principales"
+              emptyLabel="Sin beneficiarios — usa el botón Agregar"
+              noHeader
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── CARD 3: BENEFICIARIOS CONTINGENTES ───────────────────────────────── */}
+      {producto === 'vida' && (
+        <div className="rounded-2xl border-2 border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-[#010139]/[0.04] border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm text-[#010139]">Beneficiarios contingentes</p>
+              <p className="text-xs text-gray-500 mt-0.5">Beneficiarios secundarios en caso de fallecimiento del principal <span className="text-gray-400">(opcional)</span></p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {showContingentes ? (
+                <>
+                  <button type="button" onClick={addCont} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors">
+                    <FaPlus size={10} /> Agregar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { onChange({ contingentes: [], adminContingente: null }); setShowContingentes(false); }}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border-2 bg-red-50 border-red-300 text-red-600 hover:bg-red-100 transition-all"
+                  >
+                    Quitar
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { addCont(); setShowContingentes(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
+                >
+                  <FaPlus size={10} /> Agregar
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="p-4">
+            {showContingentes ? (
+              <BeneficiariosTable
+                list={data.contingentes}
+                prefix="cont"
+                adultosExistentes={adultosEnCont}
+                admin={data.adminContingente}
+                hayMenores={hayMenoresCont}
+                onAdd={addCont}
+                onRemove={removeCont}
+                onUpdate={updCont}
+                onAdminChange={a => onChange({ adminContingente: a })}
+                errors={errors}
+                label="Beneficiarios contingentes"
+                emptyLabel="Sin beneficiarios contingentes"
+                noHeader
+              />
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-2">No se han agregado beneficiarios contingentes</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CARD 4: BENEFICIARIO ONEROSO ─────────────────────────────────────── */}
+      {producto === 'vida' && (
+        <div className="rounded-2xl border-2 border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-[#010139]/[0.04] border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-sm text-[#010139]">Beneficiario oneroso</p>
+              <p className="text-xs text-gray-500 mt-0.5">Banco acreedor con monto cedido <span className="text-gray-400">(opcional)</span></p>
             </div>
             <button
               type="button"
@@ -994,13 +1035,10 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
                 if (data.oneroso_habilitado) {
                   onChange({ oneroso_habilitado: false, oneroso_banco: '', oneroso_monto: '' });
                 } else {
-                  onChange({
-                    oneroso_habilitado: true,
-                    oneroso_monto: sumaMax > 0 ? String(sumaMax) : '',
-                  });
+                  onChange({ oneroso_habilitado: true, oneroso_monto: sumaMax > 0 ? String(sumaMax) : '' });
                 }
               }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border-2 transition-all
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border-2 transition-all flex-shrink-0
                 ${data.oneroso_habilitado
                   ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100'
                   : 'bg-[#010139] border-[#010139] text-white hover:bg-[#020270]'}`}
@@ -1008,68 +1046,76 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               {data.oneroso_habilitado ? 'Quitar' : 'Agregar'}
             </button>
           </div>
-
-          {data.oneroso_habilitado && (
-            <div className="pl-4 border-l-2 border-[#010139]/20 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del banco acreedor <span className="text-red-500">*</span></label>
-                <input
-                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors.oneroso_banco ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                  value={data.oneroso_banco}
-                  onChange={e => onChange({ oneroso_banco: e.target.value })}
-                  placeholder="Ej: Banco General"
-                />
-                {errors.oneroso_banco && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_banco}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
-                  Monto cedido al banco <span className="text-red-500">*</span>
-                  {sumaMax > 0 && <span className="ml-1 font-normal text-gray-400">(máx. ${sumaMax.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">$</span>
+          <div className="p-4">
+            {data.oneroso_habilitado ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del banco acreedor <span className="text-red-500">*</span></label>
                   <input
-                    type="number" min="0.01" step="0.01"
-                    max={sumaMax > 0 ? sumaMax : undefined}
-                    className={`w-full pl-7 pr-3 py-2 text-sm rounded-lg border ${errors.oneroso_monto ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                    value={data.oneroso_monto}
-                    onChange={e => {
-                      const val = e.target.value;
-                      const num = parseFloat(val);
-                      if (sumaMax > 0 && !isNaN(num) && num > sumaMax) return;
-                      onChange({ oneroso_monto: val });
-                    }}
-                    placeholder="0.00"
+                    className={`w-full px-3 py-2 text-sm rounded-lg border ${errors.oneroso_banco ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                    value={data.oneroso_banco}
+                    onChange={e => onChange({ oneroso_banco: e.target.value })}
+                    placeholder="Ej: Banco General"
                   />
+                  {errors.oneroso_banco && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_banco}</p>}
                 </div>
-                {errors.oneroso_monto && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_monto}</p>}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Monto cedido al banco <span className="text-red-500">*</span>
+                    {sumaMax > 0 && <span className="ml-1 font-normal text-gray-400">(máx. ${sumaMax.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">$</span>
+                    <input
+                      type="number" min="0.01" step="0.01"
+                      max={sumaMax > 0 ? sumaMax : undefined}
+                      className={`w-full pl-7 pr-3 py-2 text-sm rounded-lg border ${errors.oneroso_monto ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                      value={data.oneroso_monto}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const num = parseFloat(val);
+                        if (sumaMax > 0 && !isNaN(num) && num > sumaMax) return;
+                        onChange({ oneroso_monto: val });
+                      }}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  {errors.oneroso_monto && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_monto}</p>}
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-2">No se ha agregado beneficiario oneroso</p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── DOCUMENTOS ADJUNTOS ──────────────────────────────────────────────── */}
-      <div className="pt-2 border-t border-gray-200 space-y-4">
-        <h3 className="text-sm font-bold text-[#010139]">Documentos adjuntos</h3>
-        <FileUploadField
-          label="Cédula del asegurado" required
-          value={data.archivoCedula}
-          onChange={f => onChange({ archivoCedula: f })}
-          error={errors.archivoCedula}
-        />
-        <FileUploadField
-          label="Cotización" required
-          value={data.archivoCotizacion}
-          onChange={f => onChange({ archivoCotizacion: f })}
-          error={errors.archivoCotizacion}
-        />
-        <FileUploadField
-          label="Comprobante de pago" hint="opcional"
-          value={data.archivoPago}
-          onChange={f => onChange({ archivoPago: f })}
-          error={errors.archivoPago}
-        />
+      {/* ── CARD 5: DOCUMENTOS ADJUNTOS ──────────────────────────────────────── */}
+      <div className="rounded-2xl border-2 border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 bg-[#010139]/[0.04] border-b border-gray-100">
+          <p className="font-bold text-sm text-[#010139]">Documentos adjuntos</p>
+          <p className="text-xs text-gray-500 mt-0.5">Archivos requeridos para procesar la emisión</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <FileUploadField
+            label="Cédula del asegurado" required
+            value={data.archivoCedula}
+            onChange={f => onChange({ archivoCedula: f })}
+            error={errors.archivoCedula}
+          />
+          <FileUploadField
+            label="Cotización" required
+            value={data.archivoCotizacion}
+            onChange={f => onChange({ archivoCotizacion: f })}
+            error={errors.archivoCotizacion}
+          />
+          <FileUploadField
+            label="Comprobante de pago" hint="opcional"
+            value={data.archivoPago}
+            onChange={f => onChange({ archivoPago: f })}
+            error={errors.archivoPago}
+          />
+        </div>
       </div>
 
     </div>
