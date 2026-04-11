@@ -482,7 +482,7 @@ export default function VidaWizard() {
     if (!validateStep(step)) return;
     // Broker step (step 6): validate broker data before advancing to propuesta
     if (isBroker && step === 6) {
-      const errs = validateBrokerStep(brokerData, 'vida');
+      const errs = validateBrokerStep(brokerData, 'vida', parseCurrency(data.sumaAseguradaSolicitada));
       setBrokerErrors(errs);
       if (Object.keys(errs).length > 0) return;
     }
@@ -535,7 +535,7 @@ export default function VidaWizard() {
     // ── Broker path: validate propuesta + broker data then send email ──────────
     if (isBroker) {
       if (!validateStep(EFFECTIVE_TOTAL)) return;
-      const errs = validateBrokerStep(brokerData, 'vida');
+      const errs = validateBrokerStep(brokerData, 'vida', parseCurrency(data.sumaAseguradaSolicitada));
       setBrokerErrors(errs);
       if (Object.keys(errs).length > 0) return;
 
@@ -1711,6 +1711,7 @@ export default function VidaWizard() {
                   data={brokerData}
                   onChange={partial => setBrokerData(prev => ({ ...prev, ...partial }))}
                   errors={brokerErrors}
+                  sumaAsegurada={data.sumaAseguradaSolicitada}
                 />
               )}
               {((!isBroker && step === 6) || (isBroker && step === 7)) && renderStep6()}
@@ -1782,6 +1783,12 @@ export default function VidaWizard() {
                         value: `${b.parentesco} — ${b.porcentaje}%`,
                       }))
                     } />
+                  )}
+                  {brokerData.oneroso_habilitado && (
+                    <SummarySection title="Beneficiario oneroso" onEdit={() => goToStep(6)} items={[
+                      { label: 'Banco acreedor', value: brokerData.oneroso_banco },
+                      { label: 'Monto cedido', value: `$${parseFloat(brokerData.oneroso_monto || '0').toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
+                    ]} />
                   )}
                 </>
               )}

@@ -12,6 +12,7 @@ export interface BeneficiarioData {
   apellido: string;
   cedula: string;
   fechaNacimiento: string;
+  sexo: 'M' | 'F' | '';
   parentesco: string;
   porcentaje: string;
 }
@@ -47,10 +48,13 @@ export interface BrokerStepData {
   archivoCedula: FileAttachment | null;
   archivoCotizacion: FileAttachment | null;
   archivoPago: FileAttachment | null;
+  oneroso_habilitado: boolean;
+  oneroso_banco: string;
+  oneroso_monto: string;
 }
 
 const EMPTY_BENEFICIARIO: BeneficiarioData = {
-  nombre: '', apellido: '', cedula: '', fechaNacimiento: '', parentesco: '', porcentaje: '',
+  nombre: '', apellido: '', cedula: '', fechaNacimiento: '', sexo: '', parentesco: '', porcentaje: '',
 };
 
 export const BROKER_INITIAL: BrokerStepData = {
@@ -69,6 +73,9 @@ export const BROKER_INITIAL: BrokerStepData = {
   archivoCedula: null,
   archivoCotizacion: null,
   archivoPago: null,
+  oneroso_habilitado: false,
+  oneroso_banco: '',
+  oneroso_monto: '',
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -88,6 +95,7 @@ function calcEdad(fecha: string): number {
 export function validateBrokerStep(
   data: BrokerStepData,
   producto: 'vida' | 'incendio' | 'contenido',
+  sumaAsegurada?: number,
 ): Record<string, string> {
   const e: Record<string, string> = {};
 
@@ -162,6 +170,15 @@ export function validateBrokerStep(
     }
   }
 
+  if (data.oneroso_habilitado) {
+    if (!data.oneroso_banco.trim()) e.oneroso_banco = 'Nombre del banco acreedor es obligatorio';
+    const montoOn = parseFloat(data.oneroso_monto.replace(/[^0-9.]/g, '')) || 0;
+    if (montoOn <= 0) e.oneroso_monto = 'El monto cedido debe ser mayor a 0';
+    else if (sumaAsegurada !== undefined && montoOn > sumaAsegurada) {
+      e.oneroso_monto = `No puede superar la suma asegurada ($${sumaAsegurada.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+    }
+  }
+
   if (!data.archivoCedula) e.archivoCedula = 'Debes adjuntar la cédula del asegurado';
   if (!data.archivoCotizacion) e.archivoCotizacion = 'Debes adjuntar la cotización';
 
@@ -190,6 +207,68 @@ function formatDateDisplay(d: string): string {
   const parts = d.split('-');
   if (parts.length !== 3) return d;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function parseAmount(v: string): number {
+  return parseFloat(v.replace(/[^0-9.]/g, '')) || 0;
+}
+
+// ── Parentescos por sexo ──────────────────────────────────────────────────────
+
+const PARENTESCOS: Record<'M' | 'F', string[]> = {
+  F: ['Esposa','Hija','Abuela','Tía','Hermana','Madre','Cuñada','Suegra','Ahijada','Sobrina','Nieta','Hijastra','Madrastra'],
+  M: ['Esposo','Hijo','Abuelo','Tío','Hermano','Padre','Cuñado','Suegro','Ahijado','Sobrino','Nieto','Hijastro','Padrastro'],
+};
+
+// ── Searchable select (combobox) ──────────────────────────────────────────────
+
+function SearchableSelect({
+  options, value, onChange, placeholder, error,
+}: {
+  options: string[]; value: string;
+  onChange: (v: string) => void; placeholder?: string; error?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen]   = useState(false);
+
+  const filtered = options.filter(o => o.toLowerCase().includes(query.toLowerCase()));
+
+  function select(opt: string) {
+    onChange(opt);
+    setQuery('');
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={open ? query : value}
+        onFocus={() => { setQuery(''); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={e => setQuery(e.target.value)}
+        placeholder={value || placeholder || 'Seleccionar…'}
+        className={`w-full px-3 py-2 text-sm rounded-lg border ${error ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139] bg-white`}
+      />
+      {open && (
+        <div className="absolute z-50 w-full mt-0.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          <div className="max-h-44 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
+            ) : filtered.map(opt => (
+              <button
+                key={opt} type="button"
+                onMouseDown={() => select(opt)}
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${value === opt ? 'font-semibold text-[#010139] bg-[#010139]/5' : 'text-gray-700 hover:bg-gray-50'}`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {error && <p className="text-red-500 text-xs mt-0.5">{error}</p>}
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -444,13 +523,40 @@ function BeneficiariosTable({
                 />
                 {errors[`${prefix}_${i}_cedula`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_cedula`]}</p>}
               </div>
+              {/* Sexo */}
               <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Sexo <span className="text-red-500">*</span></label>
+                <div className="flex gap-2">
+                  {(['F', 'M'] as const).map(sx => (
+                    <button
+                      key={sx} type="button"
+                      onClick={() => {
+                        const parentescoOpts = PARENTESCOS[sx];
+                        onUpdate(i, {
+                          sexo: sx,
+                          parentesco: parentescoOpts.includes(b.parentesco) ? b.parentesco : '',
+                        });
+                      }}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all
+                        ${b.sexo === sx
+                          ? 'bg-[#010139] text-white border-[#010139]'
+                          : 'bg-white text-gray-500 border-gray-300 hover:border-[#010139]'}`}
+                    >
+                      {sx === 'F' ? 'Femenino' : 'Masculino'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Parentesco — dropdown buscable, col-span-2 */}
+              <div className="col-span-2">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Parentesco <span className="text-red-500">*</span></label>
-                <input
-                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors[`${prefix}_${i}_parentesco`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                  value={b.parentesco} onChange={e => onUpdate(i, { parentesco: e.target.value })} placeholder="Ej: Cónyuge, Hijo/a"
+                <SearchableSelect
+                  options={b.sexo ? PARENTESCOS[b.sexo] : [...PARENTESCOS.F, ...PARENTESCOS.M]}
+                  value={b.parentesco}
+                  onChange={v => onUpdate(i, { parentesco: v })}
+                  placeholder={b.sexo ? 'Buscar parentesco…' : 'Selecciona sexo primero…'}
+                  error={errors[`${prefix}_${i}_parentesco`]}
                 />
-                {errors[`${prefix}_${i}_parentesco`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_parentesco`]}</p>}
               </div>
               {/* Fecha nacimiento — col-span-2 to avoid overflow on small screens */}
               <div className="col-span-2">
@@ -618,6 +724,7 @@ interface BrokerExtraStepProps {
   data: BrokerStepData;
   onChange: (partial: Partial<BrokerStepData>) => void;
   errors: Record<string, string>;
+  sumaAsegurada?: string;
 }
 
 const PAYMENT_OPTIONS = [
@@ -626,8 +733,9 @@ const PAYMENT_OPTIONS = [
   { value: 'descuento_salario', label: 'Descuento de salario',     desc: 'Descuento directo de nómina' },
 ] as const;
 
-export default function BrokerExtraStep({ producto, clientName, data, onChange, errors }: BrokerExtraStepProps) {
+export default function BrokerExtraStep({ producto, clientName, data, onChange, errors, sumaAsegurada }: BrokerExtraStepProps) {
   const [showContingentes, setShowContingentes] = useState(data.contingentes.length > 0);
+  const sumaMax = sumaAsegurada ? parseAmount(sumaAsegurada) : 0;
 
   // ── beneficiarios helpers ────────────────────────────────────────────────────
 
@@ -868,6 +976,75 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
             >
               <FaPlus size={11} /> Agregar beneficiarios contingentes <span className="font-normal text-gray-400">(opcional)</span>
             </button>
+          )}
+        </div>
+      )}
+
+      {/* ── BENEFICIARIO ONEROSO ─────────────────────────────────────────────── */}
+      {producto === 'vida' && (
+        <div className="pt-2 border-t border-gray-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-[#010139]">Beneficiario oneroso</h3>
+              <p className="text-xs text-gray-400">Banco acreedor con monto cedido (opcional)</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (data.oneroso_habilitado) {
+                  onChange({ oneroso_habilitado: false, oneroso_banco: '', oneroso_monto: '' });
+                } else {
+                  onChange({
+                    oneroso_habilitado: true,
+                    oneroso_monto: sumaMax > 0 ? String(sumaMax) : '',
+                  });
+                }
+              }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border-2 transition-all
+                ${data.oneroso_habilitado
+                  ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100'
+                  : 'bg-[#010139] border-[#010139] text-white hover:bg-[#020270]'}`}
+            >
+              {data.oneroso_habilitado ? 'Quitar' : 'Agregar'}
+            </button>
+          </div>
+
+          {data.oneroso_habilitado && (
+            <div className="pl-4 border-l-2 border-[#010139]/20 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del banco acreedor <span className="text-red-500">*</span></label>
+                <input
+                  className={`w-full px-3 py-2 text-sm rounded-lg border ${errors.oneroso_banco ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                  value={data.oneroso_banco}
+                  onChange={e => onChange({ oneroso_banco: e.target.value })}
+                  placeholder="Ej: Banco General"
+                />
+                {errors.oneroso_banco && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_banco}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Monto cedido al banco <span className="text-red-500">*</span>
+                  {sumaMax > 0 && <span className="ml-1 font-normal text-gray-400">(máx. ${sumaMax.toLocaleString('en-US', { minimumFractionDigits: 2 })})</span>}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">$</span>
+                  <input
+                    type="number" min="0.01" step="0.01"
+                    max={sumaMax > 0 ? sumaMax : undefined}
+                    className={`w-full pl-7 pr-3 py-2 text-sm rounded-lg border ${errors.oneroso_monto ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
+                    value={data.oneroso_monto}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const num = parseFloat(val);
+                      if (sumaMax > 0 && !isNaN(num) && num > sumaMax) return;
+                      onChange({ oneroso_monto: val });
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                {errors.oneroso_monto && <p className="text-red-500 text-xs mt-0.5">{errors.oneroso_monto}</p>}
+              </div>
+            </div>
           )}
         </div>
       )}
