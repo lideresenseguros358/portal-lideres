@@ -588,7 +588,7 @@ export default function QuoteComparison({
         }
         .cc-plan-toggle button {
           flex: 1;
-          padding: 7px 6px;
+          padding: 12px 8px;
           font-size: 11px;
           font-weight: 700;
           border-radius: 8px;
