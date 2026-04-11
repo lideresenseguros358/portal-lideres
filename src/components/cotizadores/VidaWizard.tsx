@@ -1647,7 +1647,7 @@ export default function VidaWizard() {
     { key: 'vehicle' as any,       label: 'Dirección residencial',   shortLabel: 'Dirección',  icon: FaHome },
     { key: 'inspection' as any,    label: 'Datos físicos y salud',   shortLabel: 'Salud',      icon: FaHeartbeat },
     { key: 'payment-info' as any,  label: 'Cobertura y objetivo',    shortLabel: 'Cobertura',  icon: FaShieldAlt },
-    ...(isBroker ? [{ key: 'broker' as any, label: 'Información Broker', shortLabel: 'Broker', icon: FaBriefcase }] : []),
+    ...(isBroker ? [{ key: 'broker' as any, label: 'Para emisión', shortLabel: 'Emisión', icon: FaBriefcase }] : []),
     { key: 'review' as any,        label: 'Propuesta y resumen',     shortLabel: 'Resumen',    icon: FaClipboardCheck },
   ];
 
