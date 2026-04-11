@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
     const fechaDesde = formatDateOracle(now);
     // Vigencia: 1 año — compute by incrementing the year in the Panama date string
     const fechaHasta = (() => {
-      const [y, m, d] = fechaDesde.split('-').map(Number);
+      const [y = 0, m = 0, d = 0] = fechaDesde.split('-').map(Number);
       return `${y + 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     })();
 

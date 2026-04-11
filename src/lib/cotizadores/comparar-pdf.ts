@@ -219,7 +219,7 @@ async function trimTransparentPng(pngPath: string): Promise<Buffer> {
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const alpha = channels === 4 ? data[(y * width + x) * channels + 3] : 255;
+      const alpha = channels === 4 ? (data[(y * width + x) * channels + 3] ?? 255) : 255;
       if (alpha > 10) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;

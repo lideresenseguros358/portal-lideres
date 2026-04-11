@@ -125,24 +125,24 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
     ]).then(([ocup, prof]) => {
       if (ocup.success && Array.isArray(ocup.data)) {
         setOcupacionList(
-          ocup.data
+          (ocup.data as any[])
             .map((e: Record<string, string>) => ({
               code: e.cod_ocupacion || e.COD_OCUPACION || e.codigo || e.CODIGO || '',
               nombre: e.nombre || e.NOMBRE || e.descripcion || e.DESCRIPCION || '',
             }))
-            .filter(o => o.code && o.nombre)
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+            .filter((o: { code: string; nombre: string }) => o.code && o.nombre)
+            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
         );
       }
       if (prof.success && Array.isArray(prof.data)) {
         setProfesionList(
-          prof.data
+          (prof.data as any[])
             .map((e: Record<string, string>) => ({
               code: e.cod_profesion || e.COD_PROFESION || e.codigo || e.CODIGO || '',
               nombre: e.nombre || e.NOMBRE || e.descripcion || e.DESCRIPCION || '',
             }))
-            .filter(p => p.code && p.nombre)
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+            .filter((p: { code: string; nombre: string }) => p.code && p.nombre)
+            .sort((a: { nombre: string }, b: { nombre: string }) => a.nombre.localeCompare(b.nombre, 'es'))
         );
       }
     }).catch(() => { /* catalogs optional — defaults used if unavailable */ })

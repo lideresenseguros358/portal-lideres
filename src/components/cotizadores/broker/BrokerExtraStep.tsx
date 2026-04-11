@@ -418,7 +418,7 @@ function BeneficiariosTable({
           <div className="flex justify-between text-xs text-gray-500 mb-1">
             <span>Porcentaje asignado</span>
             <span className={total > 100 ? 'text-red-600 font-bold' : 'font-semibold'}>
-              {total.toFixed(1)}% / 100%
+              {Math.round(total)}% / 100%
             </span>
           </div>
           <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
@@ -581,7 +581,10 @@ function BeneficiariosTable({
                 <input
                   type="number" min="1" max="100" step="1"
                   className={`w-full px-3 py-2 text-sm rounded-lg border ${errors[`${prefix}_${i}_porcentaje`] ? 'border-red-400' : 'border-gray-300'} focus:outline-none focus:border-[#010139]`}
-                  value={b.porcentaje} onChange={e => onUpdate(i, { porcentaje: e.target.value })} placeholder="0"
+                  value={b.porcentaje}
+                  onChange={e => onUpdate(i, { porcentaje: e.target.value.replace(/[^0-9]/g, '') })}
+                  onKeyDown={e => { if (e.key === '.' || e.key === ',') e.preventDefault(); }}
+                  placeholder="0"
                 />
                 {errors[`${prefix}_${i}_porcentaje`] && <p className="text-red-500 text-xs mt-0.5">{errors[`${prefix}_${i}_porcentaje`]}</p>}
               </div>
@@ -777,6 +780,11 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
   const hayMenoresBen  = data.beneficiarios.some(b => { const a = calcEdad(b.fechaNacimiento); return a >= 0 && a < 18; });
   const hayMenoresCont = data.contingentes.some(c => { const a = calcEdad(c.fechaNacimiento); return a >= 0 && a < 18; });
 
+  const benTotal  = data.beneficiarios.reduce((s, b) => s + (parseFloat(b.porcentaje) || 0), 0);
+  const contTotal = data.contingentes.reduce((s, c) => s + (parseFloat(c.porcentaje) || 0), 0);
+  const benAtMax  = benTotal >= 100;
+  const contAtMax = contTotal >= 100;
+
   // ── TCR vencimiento auto-format ──────────────────────────────────────────────
 
   function handleVencimiento(raw: string) {
@@ -943,9 +951,17 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               <p className="font-bold text-sm text-[#010139]">Beneficiarios principales <span className="text-red-500">*</span></p>
               <p className="text-xs text-gray-500 mt-0.5">Personas que recibirán el beneficio en caso de siniestro</p>
             </div>
-            <button type="button" onClick={addBen} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors flex-shrink-0">
-              <FaPlus size={10} /> Agregar
-            </button>
+            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={addBen}
+                disabled={benAtMax}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${benAtMax ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#010139] text-white hover:bg-[#020270]'}`}
+              >
+                <FaPlus size={10} /> Agregar
+              </button>
+              {benAtMax && <p className="text-xs text-amber-600 text-right leading-tight">Ajusta un % para agregar más</p>}
+            </div>
           </div>
           <div className="p-4">
             {errors.beneficiarios && <p className="text-red-500 text-xs font-medium mb-3">{errors.beneficiarios}</p>}
@@ -976,29 +992,37 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
               <p className="font-bold text-sm text-[#010139]">Beneficiarios contingentes</p>
               <p className="text-xs text-gray-500 mt-0.5">Beneficiarios secundarios en caso de fallecimiento del principal <span className="text-gray-400">(opcional)</span></p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {showContingentes ? (
-                <>
-                  <button type="button" onClick={addCont} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors">
-                    <FaPlus size={10} /> Agregar
-                  </button>
+            <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                {showContingentes ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={addCont}
+                      disabled={contAtMax}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${contAtMax ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#010139] text-white hover:bg-[#020270]'}`}
+                    >
+                      <FaPlus size={10} /> Agregar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onChange({ contingentes: [], adminContingente: null }); setShowContingentes(false); }}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg border-2 bg-red-50 border-red-300 text-red-600 hover:bg-red-100 transition-all"
+                    >
+                      Quitar
+                    </button>
+                  </>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => { onChange({ contingentes: [], adminContingente: null }); setShowContingentes(false); }}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border-2 bg-red-50 border-red-300 text-red-600 hover:bg-red-100 transition-all"
+                    onClick={() => { addCont(); setShowContingentes(true); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
                   >
-                    Quitar
+                    <FaPlus size={10} /> Agregar
                   </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { addCont(); setShowContingentes(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors"
-                >
-                  <FaPlus size={10} /> Agregar
-                </button>
-              )}
+                )}
+              </div>
+              {showContingentes && contAtMax && <p className="text-xs text-amber-600 text-right leading-tight">Ajusta un % para agregar más</p>}
             </div>
           </div>
           <div className="p-4">

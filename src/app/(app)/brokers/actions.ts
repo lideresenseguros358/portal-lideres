@@ -400,7 +400,7 @@ export async function actionToggleBrokerCotizador(brokerId: string, enabled: boo
 
     const { data, error } = await supabase
       .from('brokers')
-      .update({ cotizador_enabled: enabled })
+      .update({ cotizador_enabled: enabled } as any)
       .eq('id', brokerId)
       .select()
       .single();

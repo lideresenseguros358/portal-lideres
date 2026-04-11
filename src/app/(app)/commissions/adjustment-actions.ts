@@ -595,19 +595,18 @@ export async function actionBulkApproveAdjustmentReports(reportIds: string[]) {
     if (brokers?.length) {
       const brokerMap = new Map(brokers.map(b => [b.id, b]));
       const notifications = pendingReports
-        .map(r => {
+        .flatMap(r => {
           const broker = brokerMap.get(r.broker_id);
-          if (!broker?.p_id) return null;
-          return {
+          if (!broker?.p_id) return [];
+          return [{
             target: broker.p_id,
             broker_id: r.broker_id,
-            notification_type: 'commission',
+            notification_type: 'commission' as const,
             title: 'Reporte de Ajustes Aprobado',
             body: `Tu reporte de ajustes por $${r.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ha sido aprobado`,
             meta: { report_id: r.id, amount: r.total_amount },
-          };
-        })
-        .filter(Boolean);
+          }];
+        });
 
       if (notifications.length) {
         supabase.from('notifications').insert(notifications).then(() => {});

@@ -241,13 +241,13 @@ export async function guardarDocumentosExpediente(params: {
  */
 export async function findAnconCaratula(polizaNumber: string): Promise<string | null> {
   const supabase = getSupabaseAdmin();
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('ancon_caratulas')
     .select('html_content')
     .eq('poliza_number', polizaNumber)
     .limit(1)
     .maybeSingle();
-  return data?.html_content ?? null;
+  return (data as any)?.html_content ?? null;
 }
 
 /**
@@ -275,7 +275,7 @@ export async function saveAnconCaratula(
   }
 
   // Upsert HTML into ancon_caratulas (policy_id may be null if policy record not found yet)
-  const { error: upsertErr } = await supabase
+  const { error: upsertErr } = await (supabase as any)
     .from('ancon_caratulas')
     .upsert(
       { poliza_number: polizaNumber, policy_id: policy?.id ?? null, html_content: rawHtml },

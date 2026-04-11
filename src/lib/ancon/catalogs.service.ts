@@ -10,7 +10,7 @@
 
 import { anconCall } from './http-client';
 import { ANCON_CATALOG_METHODS, CACHE_TTL } from './config';
-import type { AnconMarcaModelo, AnconAcreedor, AnconSoapResponse } from './types';
+import type { AnconMarcaModelo, AnconAcreedor, AnconSoapResponse, AnconProducto } from './types';
 
 const CATALOG_TTL_MS = CACHE_TTL.CATALOGS; // 24h
 
