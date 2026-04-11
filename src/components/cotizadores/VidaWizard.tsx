@@ -465,7 +465,7 @@ export default function VidaWizard() {
       else if (maximoEfectivo > 0 && suma > maximoEfectivo) e.sumaAseguradaSolicitada = `Máximo permitido: $${formatUSD(maximoEfectivo)}`;
     }
 
-    if (s === 6) {
+    if (s === EFFECTIVE_TOTAL) {
       if (!data.propuestaConAhorros && !data.propuestaATermino) e.tiposPropuesta = 'Selecciona al menos un tipo de propuesta';
       if (!data.confirmaInformacion) e.confirmaInformacion = 'Debes confirmar que la información es correcta';
     }
@@ -480,6 +480,12 @@ export default function VidaWizard() {
 
   function goNext() {
     if (!validateStep(step)) return;
+    // Broker step (step 6): validate broker data before advancing to propuesta
+    if (isBroker && step === 6) {
+      const errs = validateBrokerStep(brokerData, 'vida');
+      setBrokerErrors(errs);
+      if (Object.keys(errs).length > 0) return;
+    }
     // ═══ ADM COT: Early lead capture — fires en paso 1→2 (email+phone validados) ═══
     if (step === 1 && !quoteLeadRef.current) {
       const ref = `VIDA-LEAD-${Date.now()}`;
@@ -526,8 +532,9 @@ export default function VidaWizard() {
   // ═══════════════════════════════════════════════════════════════
 
   async function handleSubmit() {
-    // ── Broker path: validate broker step and send email ──────────────────────
+    // ── Broker path: validate propuesta + broker data then send email ──────────
     if (isBroker) {
+      if (!validateStep(EFFECTIVE_TOTAL)) return;
       const errs = validateBrokerStep(brokerData, 'vida');
       setBrokerErrors(errs);
       if (Object.keys(errs).length > 0) return;
@@ -1637,8 +1644,8 @@ export default function VidaWizard() {
     { key: 'vehicle' as any,       label: 'Dirección residencial',   shortLabel: 'Dirección',  icon: FaHome },
     { key: 'inspection' as any,    label: 'Datos físicos y salud',   shortLabel: 'Salud',      icon: FaHeartbeat },
     { key: 'payment-info' as any,  label: 'Cobertura y objetivo',    shortLabel: 'Cobertura',  icon: FaShieldAlt },
+    ...(isBroker ? [{ key: 'broker' as any, label: 'Información Broker', shortLabel: 'Broker', icon: FaBriefcase }] : []),
     { key: 'review' as any,        label: 'Propuesta y resumen',     shortLabel: 'Resumen',    icon: FaClipboardCheck },
-    ...(isBroker ? [{ key: 'broker' as any, label: 'Información Broker', shortLabel: 'Broker', icon: FaShieldAlt }] : []),
   ];
 
   const stepKeyByNumber = (n: number) => VIDA_STEPS[n - 1]?.key ?? 'payment';
@@ -1697,8 +1704,7 @@ export default function VidaWizard() {
               {step === 3 && renderStep3()}
               {step === 4 && renderStep4()}
               {step === 5 && renderStep5()}
-              {step === 6 && renderStep6()}
-              {isBroker && step === 7 && (
+              {isBroker && step === 6 && (
                 <BrokerExtraStep
                   producto="vida"
                   clientName={`${data.nombre} ${data.apellido}`.trim()}
@@ -1707,15 +1713,17 @@ export default function VidaWizard() {
                   errors={brokerErrors}
                 />
               )}
+              {((!isBroker && step === 6) || (isBroker && step === 7)) && renderStep6()}
             </div>
           </div>
 
-      {/* Summary Card — shown below step card on step 6 */}
-      {step === 6 && (() => {
+      {/* Summary Card — shown below step card on last step */}
+      {step === EFFECTIVE_TOTAL && (() => {
         const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
         const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
         const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
         const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+        const formaPagoLabel = { ach: 'Débito ACH', tcr: 'Tarjeta de crédito', descuento_salario: 'Descuento en salario' }[brokerData.formaPago as string] || brokerData.formaPago;
         return (
           <div className="bg-gray-50 rounded-2xl border-2 border-gray-200 overflow-hidden mb-6">
             <div className="bg-[#010139] px-4 py-3">
@@ -1749,6 +1757,33 @@ export default function VidaWizard() {
                 { label: 'Hipoteca', value: data.esCubrirHipoteca ? `Sí — ${data.aniosHipoteca} años` : 'No' },
                 { label: 'Suma solicitada', value: `$${formatUSD(parseFloat(data.sumaAseguradaSolicitada) || 0)}` },
               ]} />
+              {isBroker && (
+                <>
+                  <SummarySection title="Forma de pago" onEdit={() => goToStep(6)} items={[
+                    { label: 'Método', value: formaPagoLabel },
+                    ...(brokerData.formaPago === 'tcr' ? [
+                      { label: 'Tarjeta', value: `${brokerData.tcrTipo === 'visa' ? 'Visa' : 'Mastercard'} •••• ${brokerData.tcrNumero.slice(-4)}` },
+                      { label: 'Banco', value: brokerData.tcrBanco },
+                    ] : []),
+                  ]} />
+                  {brokerData.beneficiarios.length > 0 && (
+                    <SummarySection title="Beneficiarios principales" onEdit={() => goToStep(6)} items={
+                      brokerData.beneficiarios.map(b => ({
+                        label: `${b.nombre} ${b.apellido}`,
+                        value: `${b.parentesco} — ${b.porcentaje}%`,
+                      }))
+                    } />
+                  )}
+                  {brokerData.contingentes.length > 0 && (
+                    <SummarySection title="Beneficiarios contingentes" onEdit={() => goToStep(6)} items={
+                      brokerData.contingentes.map(b => ({
+                        label: `${b.nombre} ${b.apellido}`,
+                        value: `${b.parentesco} — ${b.porcentaje}%`,
+                      }))
+                    } />
+                  )}
+                </>
+              )}
             </div>
           </div>
         );
