@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { FaPlus, FaTrash, FaCreditCard, FaFileUpload, FaCheckCircle, FaTimes, FaPencilAlt } from 'react-icons/fa';
+import CedulaDocScanner from '@/components/cotizadores/CedulaDocScanner';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -1135,12 +1136,17 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
           <p className="text-xs text-gray-500 mt-0.5">Archivos requeridos para procesar la emisión</p>
         </div>
         <div className="p-4 space-y-4">
-          <FileUploadField
-            label="Cédula del asegurado" required
-            value={data.archivoCedula}
-            onChange={f => onChange({ archivoCedula: f })}
-            error={errors.archivoCedula}
-          />
+          {/* Cédula: smart scanner (broker only — this component only renders in BrokerExtraStep) */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+              Cédula del asegurado <span className="text-red-500">*</span>
+            </label>
+            <CedulaDocScanner
+              value={data.archivoCedula}
+              onChange={f => onChange({ archivoCedula: f })}
+              error={errors.archivoCedula}
+            />
+          </div>
           <FileUploadField
             label="Cotización" required
             value={data.archivoCotizacion}
