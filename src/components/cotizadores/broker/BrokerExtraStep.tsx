@@ -47,6 +47,7 @@ export interface BrokerStepData {
   adminContingente: AdminData | null;
   archivoCedula: FileAttachment | null;
   archivoCotizacion: FileAttachment | null;
+  archivoAutorizacion: FileAttachment | null;
   archivoPago: FileAttachment | null;
   oneroso_habilitado: boolean;
   oneroso_banco: string;
@@ -72,6 +73,7 @@ export const BROKER_INITIAL: BrokerStepData = {
   adminContingente: null,
   archivoCedula: null,
   archivoCotizacion: null,
+  archivoAutorizacion: null,
   archivoPago: null,
   oneroso_habilitado: false,
   oneroso_banco: '',
@@ -181,6 +183,7 @@ export function validateBrokerStep(
 
   if (!data.archivoCedula) e.archivoCedula = 'Debes adjuntar la cédula del asegurado';
   if (!data.archivoCotizacion) e.archivoCotizacion = 'Debes adjuntar la cotización';
+  if (!data.archivoAutorizacion) e.archivoAutorizacion = 'Debes adjuntar la autorización de vida';
 
   return e;
 }
@@ -1144,6 +1147,47 @@ export default function BrokerExtraStep({ producto, clientName, data, onChange, 
             onChange={f => onChange({ archivoCotizacion: f })}
             error={errors.archivoCotizacion}
           />
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Autorización de Vida <span className="text-red-500">*</span>
+              </label>
+              <a
+                href="/AUTORIZACION VIDA.pdf"
+                download="AUTORIZACION VIDA.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-[#8AAA19] font-semibold hover:underline whitespace-nowrap flex-shrink-0"
+              >
+                ↓ Descargar
+              </a>
+            </div>
+            <div className={`flex items-center gap-3 px-4 py-3 border-2 rounded-xl cursor-pointer transition-all
+              ${data.archivoAutorizacion ? 'border-[#8AAA19] bg-green-50' : 'border-dashed border-gray-300 hover:border-[#8AAA19] bg-gray-50'}`}
+              onClick={() => {
+                const ref = document.createElement('input');
+                ref.type = 'file';
+                ref.accept = 'image/*,.pdf';
+                ref.onchange = async (e: any) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    try { onChange({ archivoAutorizacion: await fileToAttachment(file) }); } catch { /* ignore */ }
+                  }
+                };
+                ref.click();
+              }}
+            >
+              {data.archivoAutorizacion
+                ? <><FaCheckCircle className="text-[#8AAA19] flex-shrink-0" size={16} />
+                    <span className="text-sm text-gray-700 truncate flex-1">{data.archivoAutorizacion.name}</span>
+                    <button type="button" onClick={(ev) => { ev.stopPropagation(); onChange({ archivoAutorizacion: null }); }}
+                      className="text-xs text-red-500 hover:underline flex-shrink-0">Quitar</button></>
+                : <><FaFileUpload className="text-gray-400 flex-shrink-0" size={16} />
+                    <span className="text-sm text-gray-400">Subir archivo (foto o PDF)</span></>
+              }
+            </div>
+            {errors.archivoAutorizacion && <p className="text-red-500 text-xs mt-1 font-medium">{errors.archivoAutorizacion}</p>}
+          </div>
           <FileUploadField
             label="Comprobante de pago" hint="opcional"
             value={data.archivoPago}
