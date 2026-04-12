@@ -7,12 +7,13 @@
 
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { FaSignOutAlt, FaEdit, FaTimes, FaDownload } from 'react-icons/fa';
+import { FaSignOutAlt, FaEdit, FaTimes, FaDownload, FaTools } from 'react-icons/fa';
 import MobileBottomNav from '@/components/cotizadores/mobile/MobileBottomNav';
 import { usePathname } from 'next/navigation';
 import { supabaseClient } from '@/lib/supabase/client';
 import { CotizadorEditProvider, useCotizadorEdit } from '@/context/CotizadorEditContext';
 import { PDFDownloadProvider, usePDFDownload } from '@/context/PDFDownloadContext';
+import HerramientasModal from '@/components/cotizadores/HerramientasModal';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mobile animation CSS — injected once in the layout so every cotizador page
@@ -88,11 +89,19 @@ const MOBILE_ANIMATION_CSS = `
 `;
 
 // Header component that reads editMode from context
-function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAuth: boolean }) {
+function LayoutHeader({
+  isMaster, isBroker, loadingAuth, pathname,
+}: {
+  isMaster: boolean; isBroker: boolean; loadingAuth: boolean; pathname: string;
+}) {
   const { editMode, setEditMode } = useCotizadorEdit();
   const { onDownloadPDF, isDownloading } = usePDFDownload();
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDropdown, setShowDropdown]         = useState(false);
+  const [showHerramientas, setShowHerramientas] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isMainPage       = pathname === '/cotizadores';
+  const canSeeTools      = !loadingAuth && (isMaster || isBroker) && isMainPage;
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -119,7 +128,7 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
     <header className="bg-white shadow-md border-b-2 border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          {/* Left side buttons (Edit + Download PDF) */}
+          {/* Left side buttons (Edit + Download PDF + Herramientas) */}
           <div className="flex items-center gap-2">
             {/* Edit button (visible only if master) */}
             {!loadingAuth && isMaster && (
@@ -151,9 +160,21 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
                 )}
               </button>
             )}
+
+            {/* Herramientas button — master & broker, main cotizadores page only */}
+            {canSeeTools && (
+              <button
+                onClick={() => setShowHerramientas(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border-2 border-[#010139]/20 text-[#010139] hover:bg-[#010139]/5 hover:border-[#010139]/40 transition-all"
+                title="Herramientas"
+              >
+                <FaTools size={11} />
+                <span className="hidden sm:inline">Herramientas</span>
+              </button>
+            )}
           </div>
 
-          {!isMaster && <div />} {/* Spacer if not master */}
+          {!isMaster && !isBroker && <div />} {/* Spacer if not authenticated */}
 
           {/* Contenedor derecho con avatar y texto */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -202,6 +223,9 @@ function LayoutHeader({ isMaster, loadingAuth }: { isMaster: boolean; loadingAut
           </div>
         </div>
       </div>
+      {showHerramientas && (
+        <HerramientasModal onClose={() => setShowHerramientas(false)} />
+      )}
     </header>
   );
 }
@@ -304,8 +328,8 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
         {/* Mobile animation engine — injected once for the entire cotizadores module */}
         <style dangerouslySetInnerHTML={{ __html: MOBILE_ANIMATION_CSS }} />
 
-        {/* Header público + master edit button */}
-        <LayoutHeader isMaster={isMaster} loadingAuth={loadingAuth} />
+        {/* Header público + master/broker buttons */}
+        <LayoutHeader isMaster={isMaster} isBroker={isBroker} loadingAuth={loadingAuth} pathname={pathname} />
 
         {/* Content */}
         <main className="pb-4 md:pb-0">
