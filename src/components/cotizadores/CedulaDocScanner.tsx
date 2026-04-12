@@ -84,24 +84,27 @@ async function imgBase64ToPdfAttachment(imgBase64: string): Promise<FileAttachme
 
 // ── Helper: detect 4 corners of the white sheet ───────────────────────────────
 //
-// Algorithm (3 phases):
+// Approach: standard diagonal scoring over ALL white pixels, guarded by a
+// frame-corner brightness check to reject bright backgrounds.
 //
-//   1. Build a downsampled white-pixel mask (luminance > WHITE_LUM).
+//   Frame-corner check (runs first):
+//     Sample the 4 corners of the video frame.  If ≥ 2 are bright (≥ WHITE_LUM),
+//     the ambient background is too light to reliably distinguish paper edges
+//     → return null.  When the paper is on a DARK surface, the frame corners are
+//     always dark even when the paper fills 90 %+ of the frame.
 //
-//   2. Identify BOUNDARY pixels — white pixels that are adjacent to at least
-//      one non-white pixel.  Scoring only boundary pixels solves the "static
-//      green rectangle" bug: when the entire background is bright, ALL pixels
-//      score as white and the diagonal algorithm anchors corners at the frame
-//      edges producing a full-frame rectangle.  Bright backgrounds have no
-//      interior boundary, so they produce zero edge pixels and return null.
+//   Diagonal scoring (all white pixels):
+//     TL = min(x+y)  → closest to top-left corner
+//     TR = max(x-y)  → closest to top-right corner
+//     BL = max(y-x)  → closest to bottom-left corner
+//     BR = max(x+y)  → closest to bottom-right corner
 //
-//   3. Apply diagonal scoring to those boundary pixels:
-//        TL = min(x+y)  → corner closest to top-left
-//        TR = max(x-y)  → corner closest to top-right
-//        BL = max(y-x)  → corner closest to bottom-left
-//        BR = max(x+y)  → corner closest to bottom-right
-//      These four extrema form the true perspective-correct quadrilateral of
-//      the sheet even when it is tilted — unlike an axis-aligned bounding box.
+//   Why NOT boundary-only scoring (previous attempt):
+//     When the paper fills the top portion of the frame, only its BOTTOM EDGE
+//     touches a dark region — the top/left/right paper edges are at the frame
+//     boundary with no contrast.  Boundary-only scoring then finds zero boundary
+//     pixels at the top, and all 4 corners collapse to the bottom edge, drawing
+//     the polygon on the desk instead of the paper.
 
 function detectCorners(
   ctx: CanvasRenderingContext2D,
@@ -111,58 +114,49 @@ function detectCorners(
   const imgData = ctx.getImageData(0, 0, W, H);
   const pix = imgData.data;
 
-  // ── Phase 1: downsampled white mask ──────────────────────────────────────
-  const sw = Math.ceil(W / SAMPLE_STEP);
-  const sh = Math.ceil(H / SAMPLE_STEP);
-  const mask = new Uint8Array(sw * sh);
-  let totalWhite = 0;
-  const total = sw * sh;
+  // Inline luminance helper
+  const lum = (x: number, y: number) => {
+    const i = (y * W + x) * 4;
+    return 0.299 * (pix[i] ?? 0) + 0.587 * (pix[i + 1] ?? 0) + 0.114 * (pix[i + 2] ?? 0);
+  };
 
-  for (let sy = 0; sy < sh; sy++) {
-    for (let sx = 0; sx < sw; sx++) {
-      const px = sx * SAMPLE_STEP, py = sy * SAMPLE_STEP;
-      const i  = (py * W + px) * 4;
-      const lum = 0.299 * (pix[i] ?? 0) + 0.587 * (pix[i + 1] ?? 0) + 0.114 * (pix[i + 2] ?? 0);
-      if (lum > WHITE_LUM) { mask[sy * sw + sx] = 1; totalWhite++; }
-    }
-  }
+  // ── Frame-corner brightness check ────────────────────────────────────────
+  // Reject if ≥ 2 frame corners are bright (bright background / no dark surface).
+  const margin = SAMPLE_STEP * 2;
+  const brightFrameCorners = [
+    lum(margin, margin),
+    lum(W - margin, margin),
+    lum(margin, H - margin),
+    lum(W - margin, H - margin),
+  ].filter(l => l > WHITE_LUM).length;
+  if (brightFrameCorners >= 2) return null;
 
-  if (totalWhite < MIN_WHITE_COUNT) return null;
-
-  // ── Phase 2: diagonal-score BOUNDARY pixels only ─────────────────────────
+  // ── Diagonal scoring over all white pixels ────────────────────────────────
   let tlScore =  Infinity, tlX = 0, tlY = 0;
   let trScore = -Infinity, trX = W, trY = 0;
   let blScore = -Infinity, blX = 0, blY = H;
   let brScore = -Infinity, brX = W, brY = H;
-  let edgeCount = 0;
+  let whiteCount = 0;
+  const total = Math.floor(W / SAMPLE_STEP) * Math.floor(H / SAMPLE_STEP);
 
-  for (let sy = 1; sy < sh - 1; sy++) {
-    for (let sx = 1; sx < sw - 1; sx++) {
-      if (!mask[sy * sw + sx]) continue;
-      // Boundary = white pixel with at least one non-white 4-neighbour
-      const isEdge =
-        !mask[(sy - 1) * sw + sx] || !mask[(sy + 1) * sw + sx] ||
-        !mask[sy * sw + (sx - 1)] || !mask[sy * sw + (sx + 1)];
-      if (!isEdge) continue;
-
-      edgeCount++;
-      const x = sx * SAMPLE_STEP, y = sy * SAMPLE_STEP;
-      if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
-      if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
-      if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
-      if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+  for (let y = 0; y < H; y += SAMPLE_STEP) {
+    for (let x = 0; x < W; x += SAMPLE_STEP) {
+      if (lum(x, y) > WHITE_LUM) {
+        whiteCount++;
+        if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
+        if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
+        if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
+        if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+      }
     }
   }
 
-  if (edgeCount < 10) return null;
+  if (whiteCount < MIN_WHITE_COUNT) return null;
 
-  // ── Phase 3: sanity checks ────────────────────────────────────────────────
+  // ── Sanity check: minimum span ────────────────────────────────────────────
   const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
   const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
-  // Must occupy a meaningful portion of the frame
   if (spanW < W * 0.15 || spanH < H * 0.12) return null;
-  // Must NOT span nearly the whole frame (rejects bright-background false positives)
-  if (spanW > W * 0.97 || spanH > H * 0.97) return null;
 
   return {
     corners: [
@@ -171,7 +165,7 @@ function detectCorners(
       { x: brX, y: brY }, // BR
       { x: blX, y: blY }, // BL
     ],
-    coverage: totalWhite / total,
+    coverage: whiteCount / total,
   };
 }
 
@@ -181,18 +175,6 @@ function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
     const pb = b[i];
     return pb !== undefined && Math.abs(pa.x - pb.x) < STABLE_PX && Math.abs(pa.y - pb.y) < STABLE_PX;
   });
-}
-
-// Map a video-space point to canvas display-space, accounting for object-fit:cover
-function videoToDisplay(
-  x: number, y: number,
-  vW: number, vH: number,
-  eW: number, eH: number,
-): Corner {
-  const scale = Math.max(eW / vW, eH / vH);
-  const offX  = (vW * scale - eW) / 2;
-  const offY  = (vH * scale - eH) / 2;
-  return { x: x * scale - offX, y: y * scale - offY };
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -214,10 +196,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [torchOn, setTorchOn]             = useState(false);
   const [stableProgress, setStableProgress] = useState(0); // 0-1 countdown to auto-capture
 
+  // ── SVG overlay viewBox — updated once when video metadata loads ──────────
+  const [svgVW, setSvgVW] = useState(CAPTURE_W);
+  const [svgVH, setSvgVH] = useState(CAPTURE_H);
+
   // ── Camera refs ────────────────────────────────────────────────────────────
   const videoRef    = useRef<HTMLVideoElement>(null);
-  const overlayRef  = useRef<HTMLCanvasElement>(null);  // drawing overlay
-  const detectRef   = useRef<HTMLCanvasElement>(null);  // offscreen detection
+  const detectRef   = useRef<HTMLCanvasElement>(null);  // offscreen detection (hidden)
   const streamRef   = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stableRef   = useRef<{ corners: Corner[]; since: number } | null>(null);
@@ -270,40 +255,31 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   }, []);
 
   // ── Edge detection loop ────────────────────────────────────────────────────
+  // Uses an offscreen canvas to grab pixel data; drawing is done by the SVG
+  // overlay in the JSX — no canvas drawing here.
   const startDetection = useCallback(() => {
     capturedRef.current = false;
 
     intervalRef.current = setInterval(() => {
       if (capturedRef.current) return;
-      const video   = videoRef.current;
-      const detect  = detectRef.current;
-      const overlay = overlayRef.current;
-      if (!video || !detect || !overlay || video.readyState < 2) return;
+      const video  = videoRef.current;
+      const detect = detectRef.current;
+      if (!video || !detect || video.readyState < 2) return;
 
       const vW = video.videoWidth  || CAPTURE_W;
       const vH = video.videoHeight || CAPTURE_H;
-      // Display dimensions (CSS pixels) — used for the overlay canvas
-      const eW = video.clientWidth  || vW;
-      const eH = video.clientHeight || vH;
 
-      // Detection canvas: full video resolution for accuracy
+      // Offscreen canvas: full video resolution for accuracy
       detect.width  = vW;
       detect.height = vH;
-      // Overlay canvas: matches display size so coordinates are pixel-perfect
-      overlay.width  = eW;
-      overlay.height = eH;
 
       const dCtx = detect.getContext('2d', { willReadFrequently: true });
-      const oCtx = overlay.getContext('2d');
-      if (!dCtx || !oCtx) return;
-
-      // Draw current frame into offscreen detection canvas (full res)
+      if (!dCtx) return;
       dCtx.drawImage(video, 0, 0, vW, vH);
 
       // Detect corners of the white sheet
       const result = detectCorners(dCtx, vW, vH);
       setSheetCoverage(result?.coverage ?? 0);
-      oCtx.clearRect(0, 0, eW, eH);
 
       if (!result) {
         setDetectedCorners(null);
@@ -314,39 +290,6 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
       const { corners } = result;
       setDetectedCorners(corners);
-
-      // Convert video-space corners → display-space corners
-      const dCorners = corners.map(c => videoToDisplay(c.x, c.y, vW, vH, eW, eH));
-
-      // ── Draw guide polygon (display coords) ─────────────────────────────
-      // Thin 2 px stroke + very subtle fill — professional, non-distracting.
-      const c0 = dCorners[0]!;
-      oCtx.beginPath();
-      oCtx.moveTo(c0.x, c0.y);
-      dCorners.slice(1).forEach(c => oCtx.lineTo(c.x, c.y));
-      oCtx.closePath();
-      oCtx.fillStyle = 'rgba(138, 170, 25, 0.08)';
-      oCtx.fill();
-      oCtx.strokeStyle = '#8AAA19';
-      oCtx.lineWidth   = 2;
-      oCtx.stroke();
-
-      // Corner L-brackets (arms directed toward polygon centroid)
-      const ARM = 18;
-      const pcx = dCorners.reduce((s, p) => s + p.x, 0) / 4;
-      const pcy = dCorners.reduce((s, p) => s + p.y, 0) / 4;
-      dCorners.forEach(c => {
-        const dx = Math.sign(pcx - c.x);
-        const dy = Math.sign(pcy - c.y);
-        oCtx.beginPath();
-        oCtx.moveTo(c.x + dx * ARM, c.y);
-        oCtx.lineTo(c.x, c.y);
-        oCtx.lineTo(c.x, c.y + dy * ARM);
-        oCtx.strokeStyle = '#8AAA19';
-        oCtx.lineWidth   = 3;
-        oCtx.lineCap     = 'round';
-        oCtx.stroke();
-      });
 
       // Stability check
       const now = Date.now();
@@ -473,12 +416,12 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   // ── Overlay UI ────────────────────────────────────────────────────────────
   const scannerOverlay = scanState && scanState !== 'done' ? (
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col" style={{ touchAction: 'none' }}>
-      {/* Scan-line keyframe — injected once inside the overlay */}
+      {/* SVG scan-line keyframe — moves the SVG <line> y attributes */}
       <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes scanLine {
-          0%   { top: 5%; }
-          50%  { top: 90%; }
-          100% { top: 5%; }
+        @keyframes svgScanLine {
+          0%   { transform: translateY(0); }
+          50%  { transform: translateY(800px); }
+          100% { transform: translateY(0); }
         }
       ` }} />
 
@@ -590,41 +533,83 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         {scanState === 'scanning' && (
           <div className="relative w-full flex flex-col items-center gap-3">
             {/* Video + overlay wrapper */}
-            <div className="relative w-full overflow-hidden rounded-xl bg-black" style={{ maxHeight: '62vh' }}>
+            <div className="relative w-full overflow-hidden rounded-xl bg-black" style={{ maxHeight: '65vh' }}>
               <video
                 ref={videoRef}
                 muted
                 playsInline
-                className="w-full h-full object-cover block"
+                className="w-full block"
+                style={{ display: 'block' }}
+                onLoadedMetadata={() => {
+                  if (videoRef.current) {
+                    setSvgVW(videoRef.current.videoWidth  || CAPTURE_W);
+                    setSvgVH(videoRef.current.videoHeight || CAPTURE_H);
+                  }
+                }}
               />
 
-              {/* Overlay canvas — pixel-matched to display size for accurate alignment */}
-              <canvas
-                ref={overlayRef}
+              {/*
+                SVG overlay — uses the SAME coordinate space as the video.
+                viewBox matches the raw video pixel dimensions; preserveAspectRatio
+                "xMidYMid slice" replicates `object-fit:cover` exactly, so polygon
+                points in video-pixel space align perfectly with the live feed.
+                No manual coordinate conversion needed.
+              */}
+              <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
-              />
+                viewBox={`0 0 ${svgVW} ${svgVH}`}
+                preserveAspectRatio="xMidYMid slice"
+              >
+                {detectedCorners && (() => {
+                  const pts = detectedCorners.map(c => `${c.x},${c.y}`).join(' ');
+                  const cx  = detectedCorners.reduce((s, c) => s + c.x, 0) / 4;
+                  const cy  = detectedCorners.reduce((s, c) => s + c.y, 0) / 4;
+                  const ARM = 50; // in video pixels — looks ~18px on typical display
+                  return (
+                    <>
+                      {/* Polygon: subtle fill + thin 2px-equivalent stroke */}
+                      <polygon
+                        points={pts}
+                        fill="rgba(138,170,25,0.08)"
+                        stroke="#8AAA19"
+                        strokeWidth="6"
+                        strokeLinejoin="round"
+                      />
+                      {/* L-bracket corner markers */}
+                      {detectedCorners.map((c, i) => {
+                        const dx = Math.sign(cx - c.x) || 1;
+                        const dy = Math.sign(cy - c.y) || 1;
+                        return (
+                          <polyline
+                            key={i}
+                            points={`${c.x + dx * ARM},${c.y} ${c.x},${c.y} ${c.x},${c.y + dy * ARM}`}
+                            fill="none"
+                            stroke="#8AAA19"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        );
+                      })}
+                    </>
+                  );
+                })()}
 
-              {/* CamScanner-style animated scan line — visible while searching */}
-              {!detectedCorners && (
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                  <div
-                    className="absolute left-0 right-0 h-0.5"
-                    style={{
-                      top: 0,
-                      background: 'linear-gradient(to right, transparent, #8AAA19, transparent)',
-                      boxShadow: '0 0 8px 2px rgba(138,170,25,0.5)',
-                      animation: 'scanLine 2s ease-in-out infinite',
-                    }}
+                {/* Animated scan line — visible while no sheet detected */}
+                {!detectedCorners && (
+                  <line
+                    x1="0" x2={svgVW} y1={svgVH * 0.1} y2={svgVH * 0.1}
+                    stroke="#8AAA19" strokeWidth="4" opacity="0.7"
+                    style={{ animation: 'svgScanLine 2s ease-in-out infinite' }}
                   />
-                </div>
-              )}
+                )}
+              </svg>
 
               {/* "Manténgase quieto" overlay — visible during stability countdown */}
               {detectedCorners && stableProgress > 0 && (
                 <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none">
                   <div className="bg-black/70 backdrop-blur-sm rounded-full px-4 py-1.5 flex items-center gap-2">
                     <span className="text-white text-xs font-bold tracking-wide">¡Manténgase quieto!</span>
-                    {/* Mini progress bar */}
                     <div className="w-16 h-1.5 bg-white/20 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[#8AAA19] rounded-full transition-all duration-100"
