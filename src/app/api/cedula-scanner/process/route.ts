@@ -56,47 +56,80 @@ export async function POST(req: NextRequest) {
 
     const warpedBuffer = Buffer.from(warpedRgba);
 
-    // ── 4. Adobe Scan-style grayscale pipeline ────────────────────────────────
+    // ── 4. Adobe Scan-style pipeline: homomorphic background division ────────────
     //
-    //   Goal: professional document scan — pure-white paper, dark legible ink,
-    //         preserved cédula photo detail. Equivalent to what CamScanner /
-    //         Adobe Scan produce with their "B&W document" mode.
+    //   WHY previous approaches failed
+    //   ────────────────────────────────
+    //   normalise() / CLAHE both failed because the perspective warp fills every
+    //   pixel outside the detected quadrilateral with white (255).  Those synthetic
+    //   border pixels anchor the "white point" at 255, so the real paper (captured
+    //   at ~150-200 gray by the phone camera) never reaches 255 — it stays gray.
     //
-    //   Step 1 — greyscale
-    //     Standard luma conversion. Single channel going forward.
+    //   THE CORRECT TECHNIQUE
+    //   ──────────────────────
+    //   Homomorphic filtering / background division:
     //
-    //   Step 2 — normalise({ lower:1, upper:96 })
-    //     Global exposure correction: maps the 1st–96th percentile to 0–255.
-    //     upper:96 clips the top 4 % (specular glare hotspots) from the white
-    //     point so the glare doesn't anchor 255 and leave the actual paper gray.
-    //     After this step the paper is at ~200-240 (light gray), not yet white.
+    //     out(x,y) = clamp( pixel(x,y) / background(x,y) × 255 , 0, 255 )
     //
-    //   Step 3 — clahe({ width:256, height:256, maxSlope:3 })
-    //     Contrast Limited Adaptive Histogram Equalization.
-    //     The A4 output (1240×1754 px) is divided into ~5×7 tiles of 256×256 px.
-    //     Within each tile the algorithm independently redistributes the histogram
-    //     (capped at slope 3 to prevent noise amplification).
-    //     Effect: each tile's local maximum (the gray paper) maps to pure white;
-    //     ink and photo details retain their relative tones.  This is the same
-    //     technique used internally by Adobe Scan to neutralise uneven phone
-    //     lighting without blowing out document content.
-    //     maxSlope:3 = moderate clip limit — aggressive enough to whiten paper,
-    //     safe enough not to create ring artifacts around the cédula photo.
+    //   The "background" is estimated by HEAVILY blurring the grayscale image
+    //   (downsample ×8 → Gaussian σ=15 → upsample ×8, equivalent to σ≈120 px on
+    //   the full image).  At σ=120 px the blur:
+    //     • Spans the cédula card (~500 px wide) → background inside the card
+    //       is influenced mostly by the surrounding white paper → stays near 180
+    //     • Accurately tracks the slow illumination gradient across the page
     //
-    //   Step 4 — sharpen({ sigma:0.5, m1:0, m2:1.0 })
-    //     Slightly stronger sharpening than before (m2 raised 0.7→1.0) to restore
-    //     crispness after CLAHE's slight smoothing.  m1:0 skips flat-area halos.
+    //   Result interpretation (typical phone capture values):
+    //     Paper  pixel≈180  bg≈175  → 180/175 × 255 = 262  → clamped 255 (white ✓)
+    //     Ink    pixel≈50   bg≈175  → 50/175  × 255 ≈  73             (dark grey ✓)
+    //     Photo  pixel≈120  bg≈165  → 120/165 × 255 ≈ 185            (mid grey  ✓)
+    //     Glare  pixel≈240  bg≈175  → 240/175 × 255 = 349  → clamped 255 (white ✓)
+    //     Synth. white  255  bg≈255  → 255/255 × 255 = 255             (white ✓)
     //
-    //   Deliberately omitted:
-    //     • linear(a,b)  — was causing the "rough photocopy" texture complaint.
-    //     • threshold    — binarises to pure B&W, destroys photo on cédula.
-    const processedBuffer = await sharp(warpedBuffer, {
+    //   This is exactly what Adobe Scan / CamScan do in "Grayscale document" mode.
+
+    // (a) Greyscale — 1 channel per pixel
+    //     .removeAlpha() first guarantees 3→1 channel conversion (not 4→2)
+    const { data: grayBuf, info: grayInfo } = await sharp(warpedBuffer, {
       raw: { width: OUT_W, height: OUT_H, channels: 4 },
     })
+      .removeAlpha()
       .greyscale()
-      .normalise({ lower: 1, upper: 96 })
-      .clahe({ width: 256, height: 256, maxSlope: 3 })
-      .sharpen({ sigma: 0.5, m1: 0, m2: 1.0 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const grayChannels = grayInfo.channels; // 1 after removeAlpha+greyscale
+
+    // (b) Illumination background estimate
+    //     downsample ×8 → blur σ=15 → upsample ×8
+    //     Effective σ ≈ 120 px on the A4 output.
+    const DSAMPLE = 8;
+    const dsW     = Math.round(OUT_W / DSAMPLE); // 155 px
+    const dsH     = Math.round(OUT_H / DSAMPLE); // 219 px
+
+    const { data: bgBuf } = await sharp(grayBuf, {
+      raw: { width: OUT_W, height: OUT_H, channels: grayChannels },
+    })
+      .resize(dsW, dsH, { kernel: 'cubic' })
+      .blur(15)
+      .resize(OUT_W, OUT_H, { kernel: 'cubic' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // (c) Per-pixel division: removes illumination field, maps paper → white
+    const N       = OUT_W * OUT_H;
+    const normBuf = Buffer.alloc(N);
+    for (let i = 0; i < N; i++) {
+      const p  = grayBuf.readUInt8(i * grayChannels);
+      const bg = bgBuf.readUInt8(i * grayChannels);
+      // Clamp background minimum at 30 to avoid amplifying pitch-black regions
+      normBuf[i] = Math.min(255, Math.round(p / Math.max(bg, 30) * 255));
+    }
+
+    // (d) Sharpen text edges and encode
+    const processedBuffer = await sharp(normBuf, {
+      raw: { width: OUT_W, height: OUT_H, channels: 1 },
+    })
+      .sharpen({ sigma: 0.6, m1: 0, m2: 1.5 })
       .jpeg({ quality: 95, mozjpeg: false })
       .toBuffer();
 
