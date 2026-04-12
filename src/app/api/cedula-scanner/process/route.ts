@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 import { computeHomography, invertHomography, warpPerspective } from '@/lib/utils/perspective-transform';
 
-// A4 portrait at 150 DPI → 1240 × 1754 px
-const OUT_W = 1240;
-const OUT_H = 1754;
+// Letter portrait at 150 DPI → 1275 × 1650 px  (8.5" × 11")
+const OUT_W = 1275;
+const OUT_H = 1650;
 
 export async function POST(req: NextRequest) {
   try {
@@ -121,8 +121,12 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < N; i++) {
       const p  = grayBuf.readUInt8(i * grayChannels);
       const bg = bgBuf.readUInt8(i * grayChannels);
-      // Clamp background minimum at 30 to avoid amplifying pitch-black regions
-      normBuf[i] = Math.min(255, Math.round(p / Math.max(bg, 30) * 255));
+      // If background estimate is very low (<50), this pixel is in a genuinely dark
+      // region (table edge that bled into the warp).  Keep it dark — don't amplify
+      // dark/dark → 1.0 → 255 (white), which produces white lateral stripes.
+      normBuf[i] = bg < 50
+        ? p
+        : Math.min(255, Math.round(p / bg * 255));
     }
 
     // (d) Sharpen text edges and encode

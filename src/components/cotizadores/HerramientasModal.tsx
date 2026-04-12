@@ -39,9 +39,12 @@ export default function HerramientasModal({ onClose }: Props) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Intercept scan completion — show download UI instead of wizard inject
+  // Intercept scan completion — auto-download immediately then show confirmation UI
   function handleScanComplete(f: FileAttachment | null) {
-    if (f) setScannedFile(f);
+    if (!f) return;
+    setScannedFile(f);
+    downloadAttachment(f);
+    setDownloaded(true);
   }
 
   function handleDownload() {

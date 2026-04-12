@@ -47,9 +47,9 @@ const CAPTURE_H = 960;
 const SAMPLE_STEP = 8;          // sample every Nth pixel (finer = more accurate corners)
 const WHITE_LUM = 175;          // luminance threshold to classify a pixel as "white sheet"
 const MIN_WHITE_COUNT = 60;     // minimum sampled white pixels to consider sheet present
-const STABLE_MS = 1500;         // ms corners must stay stable before auto-capture
-const STABLE_PX = 14;           // max pixel drift still considered "stable"
-const SCAN_INTERVAL_MS = 180;   // edge detection runs every 180ms
+const STABLE_MS = 800;          // ms corners must stay stable before auto-capture
+const STABLE_PX = 18;           // max pixel drift still considered "stable"
+const SCAN_INTERVAL_MS = 80;    // edge detection runs every 80ms
 
 // ── Helper: convert base64 image (JPEG or PNG) → PDF → FileAttachment ──────────
 
@@ -58,27 +58,33 @@ async function imgBase64ToPdfAttachment(imgBase64: string): Promise<FileAttachme
   const base64Data = imgBase64.replace(/^data:image\/\w+;base64,/, '');
   const imgBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
-  // A4 portrait in PDF points (72dpi): 595.28 × 841.89
+  // Letter portrait in PDF points (72dpi): 612 × 792  (8.5" × 11")
   const pdfDoc = await PDFDocument.create();
-  const page   = pdfDoc.addPage([595.28, 841.89]);
+  const page   = pdfDoc.addPage([612, 792]);
   const img    = isJpeg
     ? await pdfDoc.embedJpg(imgBytes)
     : await pdfDoc.embedPng(imgBytes);
 
   const { width: imgW, height: imgH } = img.scale(1);
-  const scaleW = 595.28 / imgW;
-  const scaleH = 841.89 / imgH;
+  const scaleW = 612 / imgW;
+  const scaleH = 792 / imgH;
   const scale  = Math.min(scaleW, scaleH);
 
   page.drawImage(img, {
-    x: (595.28 - imgW * scale) / 2,
-    y: (841.89 - imgH * scale) / 2,
+    x: (612 - imgW * scale) / 2,
+    y: (792 - imgH * scale) / 2,
     width:  imgW * scale,
     height: imgH * scale,
   });
 
   const pdfBytes = await pdfDoc.save();
-  const base64   = btoa(String.fromCharCode(...pdfBytes));
+  // Chunked conversion — avoids "Maximum call stack size exceeded" on large PDFs
+  let binary = '';
+  const CHUNK = 8192;
+  for (let i = 0; i < pdfBytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...Array.from(pdfBytes.subarray(i, i + CHUNK)));
+  }
+  const base64 = btoa(binary);
   return { base64, name: 'cedula_escaneada.pdf', mimeType: 'application/pdf' };
 }
 
@@ -394,7 +400,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       setTimeout(() => setScanState(null), 800);
     } catch {
       setProcessingErr('Error al generar el PDF. Intenta de nuevo.');
-      setScanState('preview');
+      setScanState('instructions');
     }
   }, [previewSrc, onChange]);
 

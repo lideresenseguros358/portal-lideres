@@ -89,15 +89,15 @@ export function warpPerspective(
   for (let dy = 0; dy < dstH; dy++) {
     for (let dx = 0; dx < dstW; dx++) {
       const { x: sx, y: sy } = applyH(Hinv, dx, dy);
-      const x0 = Math.floor(sx), y0 = Math.floor(sy);
-      const x1 = x0 + 1,         y1 = y0 + 1;
-      const fx = sx - x0,         fy = sy - y0;
-      const di = (dy * dstW + dx) * 4;
 
-      if (x0 < 0 || y0 < 0 || x1 >= srcW || y1 >= srcH) {
-        dst[di] = 255; dst[di+1] = 255; dst[di+2] = 255; dst[di+3] = 255;
-        continue;
-      }
+      // Clamp source coords to valid bilinear range — replicates border pixel instead
+      // of white-filling, which eliminates white lateral stripes at warp edges.
+      const sxc = Math.max(0, Math.min(srcW - 1 - 1e-6, sx));
+      const syc = Math.max(0, Math.min(srcH - 1 - 1e-6, sy));
+      const x0  = Math.floor(sxc), y0 = Math.floor(syc);
+      const x1  = x0 + 1,          y1 = y0 + 1;
+      const fx  = sxc - x0,        fy = syc - y0;
+      const di  = (dy * dstW + dx) * 4;
 
       const i00 = (y0*srcW + x0)*4, i10 = (y0*srcW + x1)*4;
       const i01 = (y1*srcW + x0)*4, i11 = (y1*srcW + x1)*4;
