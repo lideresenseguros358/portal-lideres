@@ -148,16 +148,12 @@ export default function HerramientasModal({ onClose }: Props) {
           </div>
         </div>
       ) : (
-        /* CedulaDocScanner — triggers its own full-screen portal for scanning */
-        <div>
-          <p className="text-sm text-gray-600 mb-3">
-            El escáner se abrirá en pantalla completa. Al finalizar, podrás descargar el PDF.
-          </p>
-          <CedulaDocScanner
-            value={null}
-            onChange={handleScanComplete}
-          />
-        </div>
+        /* CedulaDocScanner with skipChoice — opens scanner overlay immediately */
+        <CedulaDocScanner
+          value={null}
+          onChange={handleScanComplete}
+          skipChoice
+        />
       )}
     </div>
   );

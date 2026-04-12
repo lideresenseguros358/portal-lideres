@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FaTimes, FaCamera, FaCheck, FaRedo, FaFileUpload, FaCheckCircle } from 'react-icons/fa';
+import { FaTimes, FaCamera, FaCheck, FaRedo, FaFileUpload, FaCheckCircle, FaLightbulb } from 'react-icons/fa';
 import { PDFDocument } from 'pdf-lib';
 import type { FileAttachment } from './broker/BrokerExtraStep';
 
@@ -34,8 +34,8 @@ interface Props {
   value: FileAttachment | null;
   onChange: (f: FileAttachment | null) => void;
   error?: string;
-  /** Fallback to standard upload (no scanner) */
-  fallbackFileInput?: boolean;
+  /** Skip the "¿Ya tienes copia?" choice and open the scanner directly on mount */
+  skipChoice?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function CedulaDocScanner({ value, onChange, error }: Props) {
+export default function CedulaDocScanner({ value, onChange, error, skipChoice }: Props) {
   // ── Static file upload ref (for "Sí, ya tengo copia") ──────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +149,7 @@ export default function CedulaDocScanner({ value, onChange, error }: Props) {
   const [processingErr, setProcessingErr] = useState<string | null>(null);
   const [detectedCorners, setDetectedCorners] = useState<Corner[] | null>(null);
   const [sheetCoverage, setSheetCoverage] = useState(0);
+  const [torchOn, setTorchOn]             = useState(false);
 
   // ── Camera refs ────────────────────────────────────────────────────────────
   const videoRef    = useRef<HTMLVideoElement>(null);
@@ -179,6 +180,7 @@ export default function CedulaDocScanner({ value, onChange, error }: Props) {
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     stableRef.current = null;
     capturedRef.current = false;
+    setTorchOn(false);
   }, []);
 
   // ── Start camera ───────────────────────────────────────────────────────────
@@ -305,6 +307,17 @@ export default function CedulaDocScanner({ value, onChange, error }: Props) {
     }, SCAN_INTERVAL_MS);
   }, [stopCamera]);
 
+  // ── Torch toggle (mobile flash) ───────────────────────────────────────────
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      setTorchOn(next);
+    } catch { /* torch not supported on this device — fail silently */ }
+  }, [torchOn]);
+
   // ── Transition handlers ────────────────────────────────────────────────────
   const openScanner = useCallback(() => {
     setProcessingErr(null);
@@ -349,6 +362,18 @@ export default function CedulaDocScanner({ value, onChange, error }: Props) {
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => () => stopCamera(), [stopCamera]);
 
+  // ── skipChoice: open scanner directly on mount ────────────────────────────
+  useEffect(() => {
+    if (skipChoice && mounted && !scanState) {
+      setProcessingErr(null);
+      setPreviewSrc(null);
+      setDetectedCorners(null);
+      setScanState('instructions');
+    }
+  // openScanner deps — replicated inline to avoid stale closure
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipChoice, mounted]);
+
   // ── Overlay UI ────────────────────────────────────────────────────────────
   const scannerOverlay = scanState && scanState !== 'done' ? (
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col" style={{ touchAction: 'none' }}>
@@ -367,9 +392,25 @@ export default function CedulaDocScanner({ value, onChange, error }: Props) {
               : ''}
           </p>
         </div>
-        <button onClick={closeScanner} className="text-white p-2 hover:text-gray-300 transition-colors">
-          <FaTimes size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Torch / flash — only while camera is active */}
+          {scanState === 'scanning' && (
+            <button
+              onClick={toggleTorch}
+              title={torchOn ? 'Apagar flash' : 'Encender flash'}
+              className={`p-2 rounded-lg transition-all ${
+                torchOn
+                  ? 'text-amber-400 bg-amber-400/20 hover:bg-amber-400/30'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/10'
+              }`}
+            >
+              <FaLightbulb size={18} />
+            </button>
+          )}
+          <button onClick={closeScanner} className="text-white p-2 hover:text-gray-300 transition-colors">
+            <FaTimes size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Body */}
