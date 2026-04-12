@@ -56,17 +56,33 @@ export async function POST(req: NextRequest) {
 
     const warpedBuffer = Buffer.from(warpedRgba);
 
-    // ── 4. Gentle scan enhancement ────────────────────────────────────────
-    //   greyscale → auto-levels → subtle sharpening → mild contrast lift
-    //   NO threshold / binarise: keep grayscale so text and detail are preserved
+    // ── 4. Professional grayscale scan ────────────────────────────────────────
+    //
+    //   Goal: clean B&W photocopy look — white paper, dark ink, preserved detail.
+    //
+    //   Pipeline (ordered):
+    //     greyscale      → convert to luminance channel
+    //     normalise      → stretch 1st–96th percentile to 0–255.
+    //                      lower:1  ignores stray-dark noise at black point.
+    //                      upper:96 clips the top 4 % (glare hotspots) when
+    //                      computing the white point, so beige/cream paper maps
+    //                      to true white instead of light-grey.
+    //     sharpen        → very subtle unsharp-mask (sigma 0.4, m2 0.7) to
+    //                      improve text legibility without pixel artefacts.
+    //                      m1=0 skips flat-area enhancement; m2 kept low so
+    //                      edges are crisp but not jagged or "photocopier harsh".
+    //
+    //   Deliberately omitted:
+    //     • linear(a,b)  — stacking a contrast lift on top of normalise produces
+    //                      the "rough photocopy" texture the user complained about.
+    //     • threshold    — binarises to pure B&W and destroys the photo on the cédula.
     const processedBuffer = await sharp(warpedBuffer, {
       raw: { width: OUT_W, height: OUT_H, channels: 4 },
     })
       .greyscale()
-      .normalise()                         // auto white/black point
-      .linear(1.12, -8)                    // mild contrast lift (was 1.4 / -30)
-      .sharpen({ sigma: 0.7, m1: 0, m2: 1.2 }) // subtle sharpening (was sigma 1.2 / m2 3)
-      .jpeg({ quality: 92, mozjpeg: false })
+      .normalise({ lower: 1, upper: 96 })
+      .sharpen({ sigma: 0.4, m1: 0, m2: 0.7 })
+      .jpeg({ quality: 95, mozjpeg: false })
       .toBuffer();
 
     // ── 5. Return base64 JPEG ─────────────────────────────────────────────

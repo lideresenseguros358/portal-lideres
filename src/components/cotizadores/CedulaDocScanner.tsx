@@ -82,16 +82,26 @@ async function imgBase64ToPdfAttachment(imgBase64: string): Promise<FileAttachme
   return { base64, name: 'cedula_escaneada.pdf', mimeType: 'application/pdf' };
 }
 
-// ── Helper: detect 4 corners of the white sheet via diagonal scoring ──────────
+// ── Helper: detect 4 corners of the white sheet ───────────────────────────────
 //
-// For each "white" pixel we keep track of 4 extreme points:
-//   TL = min(x+y)  → closest to top-left
-//   TR = max(x-y)  → closest to top-right
-//   BL = max(y-x)  → closest to bottom-left
-//   BR = max(x+y)  → closest to bottom-right
+// Algorithm (3 phases):
 //
-// This produces the actual quadrilateral corners of the sheet even when tilted,
-// unlike a simple bounding box which always gives an axis-aligned rectangle.
+//   1. Build a downsampled white-pixel mask (luminance > WHITE_LUM).
+//
+//   2. Identify BOUNDARY pixels — white pixels that are adjacent to at least
+//      one non-white pixel.  Scoring only boundary pixels solves the "static
+//      green rectangle" bug: when the entire background is bright, ALL pixels
+//      score as white and the diagonal algorithm anchors corners at the frame
+//      edges producing a full-frame rectangle.  Bright backgrounds have no
+//      interior boundary, so they produce zero edge pixels and return null.
+//
+//   3. Apply diagonal scoring to those boundary pixels:
+//        TL = min(x+y)  → corner closest to top-left
+//        TR = max(x-y)  → corner closest to top-right
+//        BL = max(y-x)  → corner closest to bottom-left
+//        BR = max(x+y)  → corner closest to bottom-right
+//      These four extrema form the true perspective-correct quadrilateral of
+//      the sheet even when it is tilted — unlike an axis-aligned bounding box.
 
 function detectCorners(
   ctx: CanvasRenderingContext2D,
@@ -101,34 +111,58 @@ function detectCorners(
   const imgData = ctx.getImageData(0, 0, W, H);
   const pix = imgData.data;
 
-  let tlScore =  Infinity, tlX = 0,   tlY = 0;
-  let trScore = -Infinity, trX = W,   trY = 0;
-  let blScore = -Infinity, blX = 0,   blY = H;
-  let brScore = -Infinity, brX = W,   brY = H;
-  let whiteCount = 0;
-  const total = Math.floor(W / SAMPLE_STEP) * Math.floor(H / SAMPLE_STEP);
+  // ── Phase 1: downsampled white mask ──────────────────────────────────────
+  const sw = Math.ceil(W / SAMPLE_STEP);
+  const sh = Math.ceil(H / SAMPLE_STEP);
+  const mask = new Uint8Array(sw * sh);
+  let totalWhite = 0;
+  const total = sw * sh;
 
-  for (let y = 0; y < H; y += SAMPLE_STEP) {
-    for (let x = 0; x < W; x += SAMPLE_STEP) {
-      const i = (y * W + x) * 4;
-      // luminance (perceived brightness)
+  for (let sy = 0; sy < sh; sy++) {
+    for (let sx = 0; sx < sw; sx++) {
+      const px = sx * SAMPLE_STEP, py = sy * SAMPLE_STEP;
+      const i  = (py * W + px) * 4;
       const lum = 0.299 * (pix[i] ?? 0) + 0.587 * (pix[i + 1] ?? 0) + 0.114 * (pix[i + 2] ?? 0);
-      if (lum > WHITE_LUM) {
-        whiteCount++;
-        if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
-        if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
-        if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
-        if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
-      }
+      if (lum > WHITE_LUM) { mask[sy * sw + sx] = 1; totalWhite++; }
     }
   }
 
-  if (whiteCount < MIN_WHITE_COUNT) return null;
+  if (totalWhite < MIN_WHITE_COUNT) return null;
 
-  // Sanity check: sheet must occupy a reasonable area
+  // ── Phase 2: diagonal-score BOUNDARY pixels only ─────────────────────────
+  let tlScore =  Infinity, tlX = 0, tlY = 0;
+  let trScore = -Infinity, trX = W, trY = 0;
+  let blScore = -Infinity, blX = 0, blY = H;
+  let brScore = -Infinity, brX = W, brY = H;
+  let edgeCount = 0;
+
+  for (let sy = 1; sy < sh - 1; sy++) {
+    for (let sx = 1; sx < sw - 1; sx++) {
+      if (!mask[sy * sw + sx]) continue;
+      // Boundary = white pixel with at least one non-white 4-neighbour
+      const isEdge =
+        !mask[(sy - 1) * sw + sx] || !mask[(sy + 1) * sw + sx] ||
+        !mask[sy * sw + (sx - 1)] || !mask[sy * sw + (sx + 1)];
+      if (!isEdge) continue;
+
+      edgeCount++;
+      const x = sx * SAMPLE_STEP, y = sy * SAMPLE_STEP;
+      if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
+      if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
+      if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
+      if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+    }
+  }
+
+  if (edgeCount < 10) return null;
+
+  // ── Phase 3: sanity checks ────────────────────────────────────────────────
   const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
   const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
+  // Must occupy a meaningful portion of the frame
   if (spanW < W * 0.15 || spanH < H * 0.12) return null;
+  // Must NOT span nearly the whole frame (rejects bright-background false positives)
+  if (spanW > W * 0.97 || spanH > H * 0.97) return null;
 
   return {
     corners: [
@@ -137,7 +171,7 @@ function detectCorners(
       { x: brX, y: brY }, // BR
       { x: blX, y: blY }, // BL
     ],
-    coverage: whiteCount / total,
+    coverage: totalWhite / total,
   };
 }
 
@@ -285,38 +319,33 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       const dCorners = corners.map(c => videoToDisplay(c.x, c.y, vW, vH, eW, eH));
 
       // ── Draw guide polygon (display coords) ─────────────────────────────
+      // Thin 2 px stroke + very subtle fill — professional, non-distracting.
       const c0 = dCorners[0]!;
       oCtx.beginPath();
       oCtx.moveTo(c0.x, c0.y);
       dCorners.slice(1).forEach(c => oCtx.lineTo(c.x, c.y));
       oCtx.closePath();
-
-      // Semi-transparent fill
-      oCtx.fillStyle = 'rgba(138, 170, 25, 0.12)';
+      oCtx.fillStyle = 'rgba(138, 170, 25, 0.08)';
       oCtx.fill();
-
-      // Stroke
       oCtx.strokeStyle = '#8AAA19';
-      oCtx.lineWidth   = 3;
+      oCtx.lineWidth   = 2;
       oCtx.stroke();
 
-      // Corner brackets (L-shapes, 20px arms)
-      const ARM = 22;
-      dCorners.forEach((c, idx) => {
-        // Direction vectors toward the center of the polygon
-        const cx = dCorners.reduce((s, p) => s + p.x, 0) / 4;
-        const cy = dCorners.reduce((s, p) => s + p.y, 0) / 4;
-        const dx = Math.sign(cx - c.x);
-        const dy = Math.sign(cy - c.y);
+      // Corner L-brackets (arms directed toward polygon centroid)
+      const ARM = 18;
+      const pcx = dCorners.reduce((s, p) => s + p.x, 0) / 4;
+      const pcy = dCorners.reduce((s, p) => s + p.y, 0) / 4;
+      dCorners.forEach(c => {
+        const dx = Math.sign(pcx - c.x);
+        const dy = Math.sign(pcy - c.y);
         oCtx.beginPath();
         oCtx.moveTo(c.x + dx * ARM, c.y);
         oCtx.lineTo(c.x, c.y);
         oCtx.lineTo(c.x, c.y + dy * ARM);
         oCtx.strokeStyle = '#8AAA19';
-        oCtx.lineWidth   = 4;
+        oCtx.lineWidth   = 3;
         oCtx.lineCap     = 'round';
         oCtx.stroke();
-        void idx;
       });
 
       // Stability check
@@ -581,6 +610,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                   <div
                     className="absolute left-0 right-0 h-0.5"
                     style={{
+                      top: 0,
                       background: 'linear-gradient(to right, transparent, #8AAA19, transparent)',
                       boxShadow: '0 0 8px 2px rgba(138,170,25,0.5)',
                       animation: 'scanLine 2s ease-in-out infinite',
@@ -635,7 +665,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           <div className="w-full max-w-sm space-y-4">
             <div className="rounded-xl overflow-hidden border-2 border-[#8AAA19]/40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewSrc} alt="Vista previa de la cédula escaneada" className="w-full block" />
+              <img src={previewSrc} alt="Vista previa de la cédula escaneada" className="w-full block max-h-[55vh] object-contain bg-white" />
             </div>
             <div className="flex gap-3">
               <button
