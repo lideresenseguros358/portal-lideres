@@ -56,21 +56,21 @@ export async function POST(req: NextRequest) {
 
     const warpedBuffer = Buffer.from(warpedRgba);
 
-    // ── 4. Photocopy effect with Sharp ────────────────────────────────────
-    //   greyscale → normalise → sharpen → threshold → high-contrast B&W
+    // ── 4. Gentle scan enhancement ────────────────────────────────────────
+    //   greyscale → auto-levels → subtle sharpening → mild contrast lift
+    //   NO threshold / binarise: keep grayscale so text and detail are preserved
     const processedBuffer = await sharp(warpedBuffer, {
       raw: { width: OUT_W, height: OUT_H, channels: 4 },
     })
       .greyscale()
-      .normalise()
-      .sharpen({ sigma: 1.2, m1: 0.5, m2: 3 })
-      .linear(1.4, -30)          // increase contrast: multiply + shift
-      .threshold(148)             // binarise — crisp B&W photocopy look
-      .png({ compressionLevel: 8 })
+      .normalise()                         // auto white/black point
+      .linear(1.12, -8)                    // mild contrast lift (was 1.4 / -30)
+      .sharpen({ sigma: 0.7, m1: 0, m2: 1.2 }) // subtle sharpening (was sigma 1.2 / m2 3)
+      .jpeg({ quality: 92, mozjpeg: false })
       .toBuffer();
 
-    // ── 5. Return base64 PNG ───────────────────────────────────────────────
-    const resultBase64 = `data:image/png;base64,${processedBuffer.toString('base64')}`;
+    // ── 5. Return base64 JPEG ─────────────────────────────────────────────
+    const resultBase64 = `data:image/jpeg;base64,${processedBuffer.toString('base64')}`;
 
     return NextResponse.json({ processedBase64: resultBase64 });
 

@@ -153,6 +153,7 @@ export default function HerramientasModal({ onClose }: Props) {
           value={null}
           onChange={handleScanComplete}
           skipChoice
+          onClose={() => setToolView(null)}
         />
       )}
     </div>

@@ -36,28 +36,34 @@ interface Props {
   error?: string;
   /** Skip the "¿Ya tienes copia?" choice and open the scanner directly on mount */
   skipChoice?: boolean;
+  /** Called when the user closes the scanner (used in standalone/Herramientas mode) */
+  onClose?: () => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CAPTURE_W = 1280;
 const CAPTURE_H = 960;
-const SAMPLE_STEP = 10;         // sample every Nth pixel for speed
-const WHITE_THRESHOLD = 195;    // R,G,B must all exceed this to be "white"
+const SAMPLE_STEP = 8;          // sample every Nth pixel (finer = more accurate corners)
+const WHITE_LUM = 175;          // luminance threshold to classify a pixel as "white sheet"
+const MIN_WHITE_COUNT = 60;     // minimum sampled white pixels to consider sheet present
 const STABLE_MS = 1500;         // ms corners must stay stable before auto-capture
-const STABLE_PX = 12;           // max pixel drift still considered "stable"
-const SCAN_INTERVAL_MS = 200;   // edge detection runs every 200ms
+const STABLE_PX = 14;           // max pixel drift still considered "stable"
+const SCAN_INTERVAL_MS = 180;   // edge detection runs every 180ms
 
-// ── Helper: convert base64 PNG → PDF → FileAttachment ─────────────────────────
+// ── Helper: convert base64 image (JPEG or PNG) → PDF → FileAttachment ──────────
 
-async function pngBase64ToPdfAttachment(pngBase64: string): Promise<FileAttachment> {
-  const base64Data = pngBase64.replace(/^data:image\/png;base64,/, '');
-  const pngBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+async function imgBase64ToPdfAttachment(imgBase64: string): Promise<FileAttachment> {
+  const isJpeg = imgBase64.startsWith('data:image/jpeg');
+  const base64Data = imgBase64.replace(/^data:image\/\w+;base64,/, '');
+  const imgBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
   // A4 portrait in PDF points (72dpi): 595.28 × 841.89
   const pdfDoc = await PDFDocument.create();
   const page   = pdfDoc.addPage([595.28, 841.89]);
-  const img    = await pdfDoc.embedPng(pngBytes);
+  const img    = isJpeg
+    ? await pdfDoc.embedJpg(imgBytes)
+    : await pdfDoc.embedPng(imgBytes);
 
   const { width: imgW, height: imgH } = img.scale(1);
   const scaleW = 595.28 / imgW;
@@ -76,53 +82,63 @@ async function pngBase64ToPdfAttachment(pngBase64: string): Promise<FileAttachme
   return { base64, name: 'cedula_escaneada.pdf', mimeType: 'application/pdf' };
 }
 
-// ── Helper: detect white-sheet bounding box in a video frame ──────────────────
+// ── Helper: detect 4 corners of the white sheet via diagonal scoring ──────────
+//
+// For each "white" pixel we keep track of 4 extreme points:
+//   TL = min(x+y)  → closest to top-left
+//   TR = max(x-y)  → closest to top-right
+//   BL = max(y-x)  → closest to bottom-left
+//   BR = max(x+y)  → closest to bottom-right
+//
+// This produces the actual quadrilateral corners of the sheet even when tilted,
+// unlike a simple bounding box which always gives an axis-aligned rectangle.
 
-interface SheetBounds {
-  minX: number; minY: number;
-  maxX: number; maxY: number;
-  coverage: number; // fraction of canvas that is "white"
-}
-
-function detectSheet(
+function detectCorners(
   ctx: CanvasRenderingContext2D,
   W: number,
   H: number,
-): SheetBounds | null {
+): { corners: Corner[]; coverage: number } | null {
   const imgData = ctx.getImageData(0, 0, W, H);
   const pix = imgData.data;
 
-  let minX = W, minY = H, maxX = 0, maxY = 0, whiteCount = 0;
-  const total = (W / SAMPLE_STEP) * (H / SAMPLE_STEP);
+  let tlScore =  Infinity, tlX = 0,   tlY = 0;
+  let trScore = -Infinity, trX = W,   trY = 0;
+  let blScore = -Infinity, blX = 0,   blY = H;
+  let brScore = -Infinity, brX = W,   brY = H;
+  let whiteCount = 0;
+  const total = Math.floor(W / SAMPLE_STEP) * Math.floor(H / SAMPLE_STEP);
 
   for (let y = 0; y < H; y += SAMPLE_STEP) {
     for (let x = 0; x < W; x += SAMPLE_STEP) {
       const i = (y * W + x) * 4;
-      if ((pix[i] ?? 0) > WHITE_THRESHOLD && (pix[i + 1] ?? 0) > WHITE_THRESHOLD && (pix[i + 2] ?? 0) > WHITE_THRESHOLD) {
+      // luminance (perceived brightness)
+      const lum = 0.299 * (pix[i] ?? 0) + 0.587 * (pix[i + 1] ?? 0) + 0.114 * (pix[i + 2] ?? 0);
+      if (lum > WHITE_LUM) {
         whiteCount++;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+        if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
+        if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
+        if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
+        if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
       }
     }
   }
 
-  const coverage = whiteCount / total;
-  if (coverage < 0.10 || (maxX - minX) < 80 || (maxY - minY) < 80) return null;
+  if (whiteCount < MIN_WHITE_COUNT) return null;
 
-  return { minX, minY, maxX, maxY, coverage };
-}
+  // Sanity check: sheet must occupy a reasonable area
+  const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
+  const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
+  if (spanW < W * 0.15 || spanH < H * 0.12) return null;
 
-function boundsToCorners(b: SheetBounds): Corner[] {
-  // pad slightly inward so sheet edge is inside polygon
-  const pad = 4;
-  return [
-    { x: b.minX + pad, y: b.minY + pad }, // TL
-    { x: b.maxX - pad, y: b.minY + pad }, // TR
-    { x: b.maxX - pad, y: b.maxY - pad }, // BR
-    { x: b.minX + pad, y: b.maxY - pad }, // BL
-  ];
+  return {
+    corners: [
+      { x: tlX, y: tlY }, // TL
+      { x: trX, y: trY }, // TR
+      { x: brX, y: brY }, // BR
+      { x: blX, y: blY }, // BL
+    ],
+    coverage: whiteCount / total,
+  };
 }
 
 function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
@@ -133,9 +149,21 @@ function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
   });
 }
 
+// Map a video-space point to canvas display-space, accounting for object-fit:cover
+function videoToDisplay(
+  x: number, y: number,
+  vW: number, vH: number,
+  eW: number, eH: number,
+): Corner {
+  const scale = Math.max(eW / vW, eH / vH);
+  const offX  = (vW * scale - eW) / 2;
+  const offY  = (vH * scale - eH) / 2;
+  return { x: x * scale - offX, y: y * scale - offY };
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function CedulaDocScanner({ value, onChange, error, skipChoice }: Props) {
+export default function CedulaDocScanner({ value, onChange, error, skipChoice, onClose }: Props) {
   // ── Static file upload ref (for "Sí, ya tengo copia") ──────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,6 +178,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
   const [detectedCorners, setDetectedCorners] = useState<Corner[] | null>(null);
   const [sheetCoverage, setSheetCoverage] = useState(0);
   const [torchOn, setTorchOn]             = useState(false);
+  const [stableProgress, setStableProgress] = useState(0); // 0-1 countdown to auto-capture
 
   // ── Camera refs ────────────────────────────────────────────────────────────
   const videoRef    = useRef<HTMLVideoElement>(null);
@@ -181,6 +210,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
     stableRef.current = null;
     capturedRef.current = false;
     setTorchOn(false);
+    setStableProgress(0);
   }, []);
 
   // ── Start camera ───────────────────────────────────────────────────────────
@@ -218,55 +248,86 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
 
       const vW = video.videoWidth  || CAPTURE_W;
       const vH = video.videoHeight || CAPTURE_H;
+      // Display dimensions (CSS pixels) — used for the overlay canvas
+      const eW = video.clientWidth  || vW;
+      const eH = video.clientHeight || vH;
 
+      // Detection canvas: full video resolution for accuracy
       detect.width  = vW;
       detect.height = vH;
-      overlay.width  = vW;
-      overlay.height = vH;
+      // Overlay canvas: matches display size so coordinates are pixel-perfect
+      overlay.width  = eW;
+      overlay.height = eH;
 
       const dCtx = detect.getContext('2d', { willReadFrequently: true });
       const oCtx = overlay.getContext('2d');
       if (!dCtx || !oCtx) return;
 
-      // Draw current frame into offscreen canvas
+      // Draw current frame into offscreen detection canvas (full res)
       dCtx.drawImage(video, 0, 0, vW, vH);
 
-      // Detect white region
-      const bounds = detectSheet(dCtx, vW, vH);
-      setSheetCoverage(bounds?.coverage ?? 0);
-      oCtx.clearRect(0, 0, vW, vH);
+      // Detect corners of the white sheet
+      const result = detectCorners(dCtx, vW, vH);
+      setSheetCoverage(result?.coverage ?? 0);
+      oCtx.clearRect(0, 0, eW, eH);
 
-      if (!bounds) {
+      if (!result) {
         setDetectedCorners(null);
         stableRef.current = null;
+        setStableProgress(0);
         return;
       }
 
-      const corners = boundsToCorners(bounds);
+      const { corners } = result;
       setDetectedCorners(corners);
 
-      // Draw guide polygon
+      // Convert video-space corners → display-space corners
+      const dCorners = corners.map(c => videoToDisplay(c.x, c.y, vW, vH, eW, eH));
+
+      // ── Draw guide polygon (display coords) ─────────────────────────────
+      const c0 = dCorners[0]!;
       oCtx.beginPath();
-      oCtx.moveTo(corners[0]!.x, corners[0]!.y);
-      corners.slice(1).forEach(c => oCtx.lineTo(c.x, c.y));
+      oCtx.moveTo(c0.x, c0.y);
+      dCorners.slice(1).forEach(c => oCtx.lineTo(c.x, c.y));
       oCtx.closePath();
+
+      // Semi-transparent fill
+      oCtx.fillStyle = 'rgba(138, 170, 25, 0.12)';
+      oCtx.fill();
+
+      // Stroke
       oCtx.strokeStyle = '#8AAA19';
-      oCtx.lineWidth   = 4;
+      oCtx.lineWidth   = 3;
       oCtx.stroke();
 
-      // Draw corner dots
-      corners.forEach(c => {
+      // Corner brackets (L-shapes, 20px arms)
+      const ARM = 22;
+      dCorners.forEach((c, idx) => {
+        // Direction vectors toward the center of the polygon
+        const cx = dCorners.reduce((s, p) => s + p.x, 0) / 4;
+        const cy = dCorners.reduce((s, p) => s + p.y, 0) / 4;
+        const dx = Math.sign(cx - c.x);
+        const dy = Math.sign(cy - c.y);
         oCtx.beginPath();
-        oCtx.arc(c.x, c.y, 8, 0, Math.PI * 2);
-        oCtx.fillStyle = '#8AAA19';
-        oCtx.fill();
+        oCtx.moveTo(c.x + dx * ARM, c.y);
+        oCtx.lineTo(c.x, c.y);
+        oCtx.lineTo(c.x, c.y + dy * ARM);
+        oCtx.strokeStyle = '#8AAA19';
+        oCtx.lineWidth   = 4;
+        oCtx.lineCap     = 'round';
+        oCtx.stroke();
+        void idx;
       });
 
       // Stability check
       const now = Date.now();
       if (stableRef.current && cornersAreSimilar(corners, stableRef.current.corners)) {
-        if (now - stableRef.current.since >= STABLE_MS) {
-          // ── AUTO-CAPTURE ──────────────────────────────────────────────────
+        const elapsed  = now - stableRef.current.since;
+        const progress = Math.min(elapsed / STABLE_MS, 1);
+        setStableProgress(progress);
+
+        if (elapsed >= STABLE_MS) {
+          // ── AUTO-CAPTURE ────────────────────────────────────────────────
           capturedRef.current = true;
           if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
 
@@ -275,7 +336,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
           capCanvas.width  = vW;
           capCanvas.height = vH;
           capCanvas.getContext('2d')!.drawImage(video, 0, 0, vW, vH);
-          const imageBase64 = capCanvas.toDataURL('image/jpeg', 0.92);
+          const imageBase64 = capCanvas.toDataURL('image/jpeg', 0.95);
 
           stopCamera();
           setScanState('processing');
@@ -303,6 +364,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
         }
       } else {
         stableRef.current = { corners, since: now };
+        setStableProgress(0);
       }
     }, SCAN_INTERVAL_MS);
   }, [stopCamera]);
@@ -328,8 +390,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
 
   const closeScanner = useCallback(() => {
     stopCamera();
-    setScanState(null);
-  }, [stopCamera]);
+    if (skipChoice && onClose) {
+      // Standalone mode: let the parent unmount us — don't render choice UI
+      onClose();
+    } else {
+      setScanState(null);
+    }
+  }, [stopCamera, skipChoice, onClose]);
 
   const goToConfirm = useCallback(() => setScanState('confirm'), []);
 
@@ -349,7 +416,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
     if (!previewSrc) return;
     setScanState('processing');
     try {
-      const attachment = await pngBase64ToPdfAttachment(previewSrc);
+      const attachment = await imgBase64ToPdfAttachment(previewSrc);
       onChange(attachment);
       setScanState('done');
       setTimeout(() => setScanState(null), 800);
@@ -377,6 +444,14 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
   // ── Overlay UI ────────────────────────────────────────────────────────────
   const scannerOverlay = scanState && scanState !== 'done' ? (
     <div className="fixed inset-0 z-[9999] bg-black flex flex-col" style={{ touchAction: 'none' }}>
+      {/* Scan-line keyframe — injected once inside the overlay */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes scanLine {
+          0%   { top: 5%; }
+          50%  { top: 90%; }
+          100% { top: 5%; }
+        }
+      ` }} />
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-black/80 flex-shrink-0">
@@ -485,31 +560,64 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice }:
         {/* ── SCANNING ─────────────────────────────────────────── */}
         {scanState === 'scanning' && (
           <div className="relative w-full flex flex-col items-center gap-3">
-            {/* Video feed */}
-            <div className="relative w-full max-h-[60vh] overflow-hidden rounded-xl">
+            {/* Video + overlay wrapper */}
+            <div className="relative w-full overflow-hidden rounded-xl bg-black" style={{ maxHeight: '62vh' }}>
               <video
                 ref={videoRef}
                 muted
                 playsInline
                 className="w-full h-full object-cover block"
               />
-              {/* Overlay canvas for detected polygon */}
+
+              {/* Overlay canvas — pixel-matched to display size for accurate alignment */}
               <canvas
                 ref={overlayRef}
                 className="absolute inset-0 w-full h-full pointer-events-none"
-                style={{ objectFit: 'cover' }}
               />
+
+              {/* CamScanner-style animated scan line — visible while searching */}
+              {!detectedCorners && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  <div
+                    className="absolute left-0 right-0 h-0.5"
+                    style={{
+                      background: 'linear-gradient(to right, transparent, #8AAA19, transparent)',
+                      boxShadow: '0 0 8px 2px rgba(138,170,25,0.5)',
+                      animation: 'scanLine 2s ease-in-out infinite',
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* "Manténgase quieto" overlay — visible during stability countdown */}
+              {detectedCorners && stableProgress > 0 && (
+                <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none">
+                  <div className="bg-black/70 backdrop-blur-sm rounded-full px-4 py-1.5 flex items-center gap-2">
+                    <span className="text-white text-xs font-bold tracking-wide">¡Manténgase quieto!</span>
+                    {/* Mini progress bar */}
+                    <div className="w-16 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#8AAA19] rounded-full transition-all duration-100"
+                        style={{ width: `${stableProgress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            {/* Hidden offscreen canvas */}
+
+            {/* Hidden offscreen detection canvas */}
             <canvas ref={detectRef} className="hidden" />
 
-            {/* Status bar */}
-            <div className={`w-full max-w-sm rounded-xl px-4 py-3 text-center text-sm font-semibold transition-colors ${
-              detectedCorners ? 'bg-[#8AAA19]/20 text-[#8AAA19] border border-[#8AAA19]/40' : 'bg-white/10 text-gray-300'
+            {/* Status bar below camera */}
+            <div className={`w-full max-w-sm rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition-all duration-300 ${
+              detectedCorners
+                ? 'bg-[#8AAA19]/20 text-[#8AAA19] border border-[#8AAA19]/40'
+                : 'bg-white/10 text-gray-400'
             }`}>
               {detectedCorners
-                ? `Hoja detectada — mantén la cámara firme ${STABLE_MS / 1000}s`
-                : 'Apunta la cámara a la hoja blanca sobre fondo oscuro'}
+                ? `Hoja detectada (${Math.round(sheetCoverage * 100)}%)`
+                : 'Apunta a la hoja blanca sobre fondo oscuro'}
             </div>
           </div>
         )}
