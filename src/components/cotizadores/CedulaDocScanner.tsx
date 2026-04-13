@@ -240,6 +240,67 @@ function calculateAverageLuminance(
   return count > 0 ? totalLum / count : 128;
 }
 
+// ── Helper: robust camera access with fallbacks for Android/iOS compatibility ──
+// Attempts multiple constraint profiles to maximize compatibility
+async function requestCameraStream(): Promise<{ stream: MediaStream | null; error?: string }> {
+  // Strategy: try increasingly permissive constraints to maximize compatibility
+  const strategies: MediaStreamConstraints[] = [
+    // Strategy 1: Ideal 1280x960 with environment facing (iOS + modern Android)
+    {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 960 },
+      },
+      audio: false,
+    },
+    // Strategy 2: Exact resolution requirement removed, just facing mode (older Android)
+    {
+      video: {
+        facingMode: { ideal: 'environment' },
+      },
+      audio: false,
+    },
+    // Strategy 3: No facing mode preference, let device choose (fallback)
+    {
+      video: true,
+      audio: false,
+    },
+  ];
+
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(strategies[i]);
+      return { stream };
+    } catch (err) {
+      lastError = err as Error;
+      // Continue to next strategy
+    }
+  }
+
+  // Determine specific error message based on error type
+  let errorMsg = 'No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.';
+
+  if (lastError) {
+    const errorName = lastError.name;
+    if (errorName === 'NotAllowedError') {
+      errorMsg = 'Permiso denegado. Por favor, activa el acceso a la cámara en tu dispositivo.';
+    } else if (errorName === 'NotFoundError') {
+      errorMsg = 'No se encontró cámara en tu dispositivo.';
+    } else if (errorName === 'NotReadableError') {
+      errorMsg = 'La cámara está siendo usada por otra aplicación. Cierra otras apps e intenta de nuevo.';
+    } else if (errorName === 'OverconstrainedError') {
+      errorMsg = 'Tu dispositivo no soporta los requisitos de cámara especificados.';
+    } else if (errorName === 'TypeError') {
+      errorMsg = 'Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox o Safari.';
+    }
+  }
+
+  return { stream: null, error: errorMsg };
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function CedulaDocScanner({ value, onChange, error, skipChoice, onClose }: Props) {
@@ -248,7 +309,18 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   // ── Portal mount ───────────────────────────────────────────────────────────
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const [cameraSupported, setCameraSupported] = useState(true);
+  useEffect(() => {
+    setMounted(true);
+    // Check if camera API is supported
+    const hasCamera = !!(
+      navigator?.mediaDevices?.getUserMedia ||
+      (navigator as any)?.getUserMedia ||
+      (navigator as any)?.webkitGetUserMedia ||
+      (navigator as any)?.mozGetUserMedia
+    );
+    setCameraSupported(hasCamera);
+  }, []);
 
   // ── Scanner state ──────────────────────────────────────────────────────────
   const [scanState, setScanState]         = useState<ScanState | null>(null);
@@ -300,23 +372,21 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   // ── Start camera ───────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: CAPTURE_W },
-          height: { ideal: CAPTURE_H },
-        },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-    } catch {
-      setProcessingErr('No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.');
+    const { stream, error } = await requestCameraStream();
+    if (error || !stream) {
+      setProcessingErr(error || 'No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.');
       setScanState('instructions');
+      return;
+    }
+    streamRef.current = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      try {
+        await videoRef.current.play();
+      } catch (err) {
+        setProcessingErr('Error al reproducir video. Intenta de nuevo.');
+        setScanState('instructions');
+      }
     }
   }, []);
 
@@ -631,12 +701,21 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                 ref={videoRef}
                 muted
                 playsInline
+                autoPlay
                 className="w-full block"
-                style={{ display: 'block' }}
+                style={{ display: 'block', objectFit: 'cover' }}
                 onLoadedMetadata={() => {
                   if (videoRef.current) {
                     setSvgVW(videoRef.current.videoWidth  || CAPTURE_W);
                     setSvgVH(videoRef.current.videoHeight || CAPTURE_H);
+                  }
+                }}
+                onPlay={() => {
+                  // Ensure video is actually playing (some Android devices need this)
+                  if (videoRef.current && videoRef.current.paused) {
+                    videoRef.current.play().catch(() => {
+                      // Autoplay may be blocked, but user interaction already happened
+                    });
                   }
                 }}
               />
@@ -815,11 +894,20 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         <button
           type="button"
           onClick={openScanner}
-          className="flex flex-col items-center gap-2 px-3 py-4 border-2 border-[#010139]/20 rounded-xl hover:border-[#010139] bg-[#010139]/5 hover:bg-[#010139]/10 transition-all text-center"
+          disabled={!cameraSupported}
+          className={`flex flex-col items-center gap-2 px-3 py-4 border-2 rounded-xl transition-all text-center ${
+            cameraSupported
+              ? 'border-[#010139]/20 hover:border-[#010139] bg-[#010139]/5 hover:bg-[#010139]/10'
+              : 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-60'
+          }`}
         >
-          <FaCamera className="text-[#010139]" size={20} />
-          <span className="text-xs font-semibold text-[#010139]">No, escanear</span>
-          <span className="text-xs text-gray-400">Usar cámara</span>
+          <FaCamera className={cameraSupported ? 'text-[#010139]' : 'text-gray-400'} size={20} />
+          <span className={`text-xs font-semibold ${cameraSupported ? 'text-[#010139]' : 'text-gray-500'}`}>
+            {cameraSupported ? 'No, escanear' : 'Cámara no disponible'}
+          </span>
+          <span className="text-xs text-gray-400">
+            {cameraSupported ? 'Usar cámara' : 'Navegador no soportado'}
+          </span>
         </button>
       </div>
 
@@ -830,6 +918,12 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {!cameraSupported && (
+        <p className="text-amber-600 text-xs font-medium bg-amber-50 px-3 py-2 rounded-lg">
+          Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox, Edge o Safari en iOS.
+        </p>
+      )}
 
       {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
 
