@@ -46,14 +46,16 @@ interface Props {
 
 const CAPTURE_W = 1280;
 const CAPTURE_H = 960;
-const SAMPLE_STEP = 6;          // sample every Nth pixel (finer = more accurate corners, was 8)
-const WHITE_LUM = 205;          // luminance threshold to classify a pixel as "white sheet" (was 175, stricter for external objects)
-const MIN_WHITE_COUNT = 120;    // minimum sampled white pixels to consider sheet present (was 60, stricter)
-const STABLE_MS = 800;          // ms corners must stay stable before auto-capture
-const STABLE_PX = 25;           // max pixel drift still considered "stable" (was 18, more tolerant)
-const SCAN_INTERVAL_MS = 80;    // edge detection runs every 80ms
-const MIN_ASPECT_RATIO = 1.1;   // min aspect ratio for detected sheet (letter is ~1.3, portrait oriented)
-const MAX_ASPECT_RATIO = 1.5;   // max aspect ratio for detected sheet
+const SAMPLE_STEP = 6;
+const WHITE_LUM = 185;          // 185 = detects real paper in varied lighting without catching light-grey objects
+const MIN_WHITE_COUNT = 80;     // enough white pixels to confirm paper presence (not a small bright object)
+const STABLE_MS = 800;
+const STABLE_PX = 25;
+const SCAN_INTERVAL_MS = 80;
+// Aspect ratio of the BOUNDING BOX of detected corners — NOT the paper itself.
+// When paper is tilted the bbox ratio shifts a lot, so keep range wide.
+const MIN_ASPECT_RATIO = 0.5;
+const MAX_ASPECT_RATIO = 3.0;
 const AUTO_TORCH_LOW = 75;      // luminance threshold to ENABLE torch (low light detected)
 const AUTO_TORCH_HIGH = 110;    // luminance threshold to DISABLE torch (high light detected, hysteresis)
 
@@ -133,18 +135,17 @@ function detectCorners(
   };
 
   // ── Frame-corner brightness check ────────────────────────────────────────
-  // Reject if ≥ 2 frame corners are bright (bright background / no dark surface).
-  // Also reject if ANY corner is extremely bright (>245) which indicates backlit/bright environment
+  // Reject if ≥ 3 frame corners are bright — paper on a bright surface is
+  // indistinguishable from the background.  Threshold raised from 2 to 3
+  // so a single bright corner (e.g. a lamp reflection) doesn't block detection.
   const margin = SAMPLE_STEP * 2;
-  const frameCornerBrightness = [
+  const brightFrameCorners = [
     lum(margin, margin),
     lum(W - margin, margin),
     lum(margin, H - margin),
     lum(W - margin, H - margin),
-  ];
-  const brightFrameCorners = frameCornerBrightness.filter(l => l > WHITE_LUM).length;
-  const extremelyBrightCorners = frameCornerBrightness.filter(l => l > 245).length;
-  if (brightFrameCorners >= 2 || extremelyBrightCorners >= 1) return null;
+  ].filter(l => l > WHITE_LUM).length;
+  if (brightFrameCorners >= 3) return null;
 
   // ── Diagonal scoring over all white pixels ────────────────────────────────
   let tlScore =  Infinity, tlX = 0, tlY = 0;
@@ -172,16 +173,16 @@ function detectCorners(
   const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
   const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
 
-  // Stricter span requirements to reject small/partial objects
-  if (spanW < W * 0.20 || spanH < H * 0.18) return null;
+  // Minimum span: paper must occupy a meaningful portion of the frame
+  if (spanW < W * 0.15 || spanH < H * 0.12) return null;
 
-  // Aspect ratio validation: letter paper is ~1.3 (11" / 8.5")
-  // Reject if too wide or too tall (likely external objects)
+  // Bounding-box aspect ratio guard (very wide or very narrow = not paper)
   const aspectRatio = spanW / spanH;
   if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) return null;
 
-  // ── Interior density check: validate the inside has enough white pixels ─────
-  // This prevents detecting hollow or partially white shapes
+  // ── Interior density check ────────────────────────────────────────────────
+  // Sample the interior of the bounding box. At least 40% must be white —
+  // this rules out small bright objects (mouse, cup) whose bbox interior is mostly dark.
   const minX = Math.min(tlX, blX);
   const maxX = Math.max(trX, brX);
   const minY = Math.min(tlY, trY);
@@ -195,8 +196,7 @@ function detectCorners(
       if (lum(x, y) > WHITE_LUM) interiorWhiteCount++;
     }
   }
-  // Interior must be at least 50% white
-  if (interiorSamples > 0 && interiorWhiteCount / interiorSamples < 0.5) return null;
+  if (interiorSamples > 0 && interiorWhiteCount / interiorSamples < 0.40) return null;
 
   return {
     corners: [
