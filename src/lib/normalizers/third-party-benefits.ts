@@ -243,14 +243,16 @@ function normalizeRegional(plan: AutoThirdPartyPlan, planType: 'basic' | 'premiu
 function normalizeAncon(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium'): NormalizedPlanBenefits {
   const isBasic = planType === 'basic';
 
-  // Use actual limits from coverageList (SOBAT plans have different limits per plan)
-  const lcLimit = findCovLimit(plan, 'LC') || (isBasic ? '$5,000' : '$10,000');
-  const dpaLimit = findCovLimit(plan, 'DPA') || (isBasic ? '$5,000' : '$10,000');
-  const amLimit = findCovLimit(plan, 'AM', 'GM');
+  // ANCON SOBAT plans: ambos tienen LC 5,000/persona – 10,000/accidente y DPA 5,000.
+  // La API devuelve límites simples sin split per-persona/per-accidente, así que usamos
+  // los valores correctos conocidos como fallback.
+  const lcLimit = '$5,000 / $10,000';
+  const dpaLimit = '$5,000';
+  // GM: plan básico NO lo incluye; plan premium incluye 500/persona – 2,500/accidente
+  const amLimit = isBasic ? null : (findCovLimit(plan, 'AM', 'GM') || '$500 / $2,500');
   const maLimit = findCovLimit(plan, 'MA');
 
   const gruaBenefit = findBenefit(plan, 'grúa', 'grua');
-  const legalBenefit = findBenefit(plan, 'legal');
 
   const coverages: StandardBenefit[] = [
     { key: 'bodilyInjury', label: 'Lesiones Corporales', icon: '🩹', status: included(formatLimit(lcLimit)?.amount, formatLimit(lcLimit)?.detail) },
@@ -263,15 +265,14 @@ function normalizeAncon(plan: AutoThirdPartyPlan, planType: 'basic' | 'premium')
       status: maLimit ? included(formatLimit(maLimit)?.amount) : excluded() },
     { key: 'accidentalDeathPassengers', label: 'Muerte Accidental Pasajeros', icon: '👥', status: excluded() },
     { key: 'funeralExpenses', label: 'Gastos Funerarios', icon: '⚱️', status: excluded() },
-    { key: 'accidentAssistance', label: 'Asistencia en Accidentes', icon: '🚨', status: excluded() },
-    { key: 'ambulance', label: 'Ambulancia', icon: '🚑', status: excluded() },
+    { key: 'accidentAssistance', label: 'Asistencia en Accidentes', icon: '🚨', status: isBasic ? excluded() : included() },
+    { key: 'ambulance', label: 'Ambulancia', icon: '🚑', status: isBasic ? excluded() : included() },
     { key: 'roadAssistance', label: 'Asistencia Vial', icon: '🔧', status: excluded() },
     { key: 'towing', label: 'Grúa', icon: '🚛',
-      status: gruaBenefit
-        ? included(undefined, extractDetail(gruaBenefit) || 'Por accidente y avería — Máximo B/.150')
-        : excluded() },
-    { key: 'legalAssistance', label: 'Asistencia Legal', icon: '⚖️',
-      status: legalBenefit ? included() : excluded() },
+      status: isBasic
+        ? excluded()
+        : included(undefined, gruaBenefit ? (extractDetail(gruaBenefit) || '1 por avería y 1 por colisión — Máximo B/.150/año') : '1 por avería y 1 por colisión — Máximo B/.150/año') },
+    { key: 'legalAssistance', label: 'Asistencia Legal', icon: '⚖️', status: isBasic ? excluded() : included() },
   ];
 
   return { coverages, benefits };
