@@ -44,12 +44,16 @@ interface Props {
 
 const CAPTURE_W = 1280;
 const CAPTURE_H = 960;
-const SAMPLE_STEP = 8;          // sample every Nth pixel (finer = more accurate corners)
-const WHITE_LUM = 175;          // luminance threshold to classify a pixel as "white sheet"
-const MIN_WHITE_COUNT = 60;     // minimum sampled white pixels to consider sheet present
+const SAMPLE_STEP = 6;          // sample every Nth pixel (finer = more accurate corners, was 8)
+const WHITE_LUM = 205;          // luminance threshold to classify a pixel as "white sheet" (was 175, stricter for external objects)
+const MIN_WHITE_COUNT = 120;    // minimum sampled white pixels to consider sheet present (was 60, stricter)
 const STABLE_MS = 800;          // ms corners must stay stable before auto-capture
-const STABLE_PX = 18;           // max pixel drift still considered "stable"
+const STABLE_PX = 25;           // max pixel drift still considered "stable" (was 18, more tolerant)
 const SCAN_INTERVAL_MS = 80;    // edge detection runs every 80ms
+const MIN_ASPECT_RATIO = 1.1;   // min aspect ratio for detected sheet (letter is ~1.3, portrait oriented)
+const MAX_ASPECT_RATIO = 1.5;   // max aspect ratio for detected sheet
+const AUTO_TORCH_LOW = 75;      // luminance threshold to ENABLE torch (low light detected)
+const AUTO_TORCH_HIGH = 110;    // luminance threshold to DISABLE torch (high light detected, hysteresis)
 
 // ── Helper: convert base64 image (JPEG or PNG) → PDF → FileAttachment ──────────
 
@@ -128,14 +132,17 @@ function detectCorners(
 
   // ── Frame-corner brightness check ────────────────────────────────────────
   // Reject if ≥ 2 frame corners are bright (bright background / no dark surface).
+  // Also reject if ANY corner is extremely bright (>245) which indicates backlit/bright environment
   const margin = SAMPLE_STEP * 2;
-  const brightFrameCorners = [
+  const frameCornerBrightness = [
     lum(margin, margin),
     lum(W - margin, margin),
     lum(margin, H - margin),
     lum(W - margin, H - margin),
-  ].filter(l => l > WHITE_LUM).length;
-  if (brightFrameCorners >= 2) return null;
+  ];
+  const brightFrameCorners = frameCornerBrightness.filter(l => l > WHITE_LUM).length;
+  const extremelyBrightCorners = frameCornerBrightness.filter(l => l > 245).length;
+  if (brightFrameCorners >= 2 || extremelyBrightCorners >= 1) return null;
 
   // ── Diagonal scoring over all white pixels ────────────────────────────────
   let tlScore =  Infinity, tlX = 0, tlY = 0;
@@ -162,7 +169,32 @@ function detectCorners(
   // ── Sanity check: minimum span ────────────────────────────────────────────
   const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
   const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
-  if (spanW < W * 0.15 || spanH < H * 0.12) return null;
+
+  // Stricter span requirements to reject small/partial objects
+  if (spanW < W * 0.20 || spanH < H * 0.18) return null;
+
+  // Aspect ratio validation: letter paper is ~1.3 (11" / 8.5")
+  // Reject if too wide or too tall (likely external objects)
+  const aspectRatio = spanW / spanH;
+  if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) return null;
+
+  // ── Interior density check: validate the inside has enough white pixels ─────
+  // This prevents detecting hollow or partially white shapes
+  const minX = Math.min(tlX, blX);
+  const maxX = Math.max(trX, brX);
+  const minY = Math.min(tlY, trY);
+  const maxY = Math.max(blY, brY);
+
+  let interiorWhiteCount = 0;
+  let interiorSamples = 0;
+  for (let y = minY + SAMPLE_STEP * 2; y < maxY - SAMPLE_STEP * 2; y += SAMPLE_STEP) {
+    for (let x = minX + SAMPLE_STEP * 2; x < maxX - SAMPLE_STEP * 2; x += SAMPLE_STEP) {
+      interiorSamples++;
+      if (lum(x, y) > WHITE_LUM) interiorWhiteCount++;
+    }
+  }
+  // Interior must be at least 50% white
+  if (interiorSamples > 0 && interiorWhiteCount / interiorSamples < 0.5) return null;
 
   return {
     corners: [
@@ -183,6 +215,31 @@ function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
   });
 }
 
+// ── Helper: calculate average luminance of video frame ──────────────────────
+function calculateAverageLuminance(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+): number {
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const pix = imgData.data;
+  let totalLum = 0;
+  let count = 0;
+
+  // Sample every 16th pixel for speed
+  const samplingStep = 16;
+  for (let i = 0; i < pix.length; i += samplingStep * 4) {
+    const r = pix[i] ?? 0;
+    const g = pix[i + 1] ?? 0;
+    const b = pix[i + 2] ?? 0;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    totalLum += lum;
+    count++;
+  }
+
+  return count > 0 ? totalLum / count : 128;
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function CedulaDocScanner({ value, onChange, error, skipChoice, onClose }: Props) {
@@ -201,6 +258,8 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [sheetCoverage, setSheetCoverage] = useState(0);
   const [torchOn, setTorchOn]             = useState(false);
   const [stableProgress, setStableProgress] = useState(0); // 0-1 countdown to auto-capture
+  const [avgLuminance, setAvgLuminance] = useState(128); // for display/debugging
+  const autoTorchRef = useRef(false); // tracks if auto-torch is currently managing torch state
 
   // ── SVG overlay viewBox — updated once when video metadata loads ──────────
   const [svgVW, setSvgVW] = useState(CAPTURE_W);
@@ -234,6 +293,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     stableRef.current = null;
     capturedRef.current = false;
+    autoTorchRef.current = false; // reset auto-torch tracking
     setTorchOn(false);
     setStableProgress(0);
   }, []);
@@ -282,6 +342,32 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       const dCtx = detect.getContext('2d', { willReadFrequently: true });
       if (!dCtx) return;
       dCtx.drawImage(video, 0, 0, vW, vH);
+
+      // Calculate average luminance for auto-torch
+      const avgLum = calculateAverageLuminance(dCtx, vW, vH);
+      setAvgLuminance(avgLum);
+
+      // ── Auto-torch logic with hysteresis ─────────────────────────────────
+      // Enable if below LOW threshold, disable if above HIGH threshold
+      const shouldTorchBeOn = autoTorchRef.current
+        ? avgLum > AUTO_TORCH_HIGH // if torch is on, keep it on until we reach HIGH
+        ? false
+        : true
+        : avgLum < AUTO_TORCH_LOW; // if torch is off, turn on only if below LOW
+
+      if (shouldTorchBeOn !== autoTorchRef.current) {
+        autoTorchRef.current = shouldTorchBeOn;
+        // Auto-apply torch change
+        const track = streamRef.current?.getVideoTracks()[0];
+        if (track) {
+          try {
+            track.applyConstraints({ advanced: [{ torch: shouldTorchBeOn } as MediaTrackConstraintSet] });
+            setTorchOn(shouldTorchBeOn);
+          } catch {
+            // torch not supported or already applied — ignore
+          }
+        }
+      }
 
       // Detect corners of the white sheet
       const result = detectCorners(dCtx, vW, vH);
@@ -355,6 +441,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     try {
       await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
       setTorchOn(next);
+      autoTorchRef.current = false; // user manual toggle disables auto-torch
     } catch { /* torch not supported on this device — fail silently */ }
   }, [torchOn]);
 
