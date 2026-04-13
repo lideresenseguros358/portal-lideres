@@ -346,6 +346,9 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stableRef   = useRef<{ corners: Corner[]; since: number } | null>(null);
   const capturedRef = useRef(false);
+  // When stream is pre-acquired (via permission step), attach it to video once
+  // the 'scanning' state renders the <video> element into the DOM.
+  const preloadedStreamRef = useRef(false);
 
   // ── File upload handler (classic) ──────────────────────────────────────────
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -367,7 +370,8 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     stableRef.current = null;
     capturedRef.current = false;
-    autoTorchRef.current = false; // reset auto-torch tracking
+    autoTorchRef.current = false;
+    preloadedStreamRef.current = false;
     setTorchOn(false);
     setStableProgress(0);
   }, []);
@@ -542,40 +546,35 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   const goToConfirm = useCallback(() => setScanState('confirm'), []);
 
+  // ── Request camera permission + immediately launch into scanning ─────────────
+  // Android fix: do NOT stop the stream after getting permission — reuse it directly.
+  // Making two getUserMedia calls in sequence (permission check then real scan) is
+  // what causes NotAllowedError on Android even when the user already granted access.
   const requestCameraPermission = useCallback(async () => {
-    // This just requests the permission without starting the camera
-    // It helps the browser show the native permission dialog
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-      // If successful, stop the stream and move to confirm
-      stream.getTracks().forEach(track => track.stop());
-      setProcessingErr(null);
-      setScanState('confirm');
-    } catch (err) {
-      const error = err as Error;
-      let errorMsg = 'No se pudo acceder a la cámara.';
+    setProcessingErr(null);
 
-      if (error.name === 'NotAllowedError') {
-        setPermissionRetries(prev => prev + 1);
-        if (permissionRetries < 2) {
-          errorMsg = 'Permiso denegado. Toca "Reintentar" para solicitar nuevamente.';
-        } else {
-          errorMsg = 'Permiso denegado múltiples veces. Abre Configuración > Aplicaciones > Tu navegador > Permisos > Cámara y actívalo manualmente.';
+    const { stream, error } = await requestCameraStream();
+
+    if (error || !stream) {
+      setPermissionRetries(prev => {
+        const next = prev + 1;
+        let msg = error ?? 'No se pudo acceder a la cámara.';
+        if (next >= 2) {
+          msg = 'Permiso denegado. En Chrome: toca ··· → Configuración → Permisos del sitio → Cámara → busca este sitio y actívalo.';
         }
-      } else if (error.name === 'NotFoundError') {
-        errorMsg = 'No se encontró cámara en tu dispositivo.';
-      } else if (error.name === 'NotReadableError') {
-        errorMsg = 'La cámara está siendo usada por otra aplicación. Cierra otras apps e intenta de nuevo.';
-      } else if (error.name === 'TypeError') {
-        errorMsg = 'Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox, Edge o Safari.';
-      }
-
-      setProcessingErr(errorMsg);
+        setProcessingErr(msg);
+        return next;
+      });
+      return;
     }
-  }, [permissionRetries]);
+
+    // Stream is live — store it and mark it as preloaded so the useEffect below
+    // can attach it to the <video> element once 'scanning' renders it into the DOM.
+    streamRef.current = stream;
+    preloadedStreamRef.current = true;
+    setScanState('scanning');
+    // startDetection is called from the useEffect that watches scanState → 'scanning'
+  }, []);
 
   const startScan = useCallback(async () => {
     setScanState('scanning');
@@ -605,6 +604,23 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  // ── Attach preloaded stream once the <video> element enters the DOM ─────────
+  // When the user comes from the 'camera-permission' step, we already have a live
+  // stream in streamRef but the <video> element doesn't exist yet (it only renders
+  // when scanState === 'scanning'). This effect fires after every state change and,
+  // the first time it sees both the video element AND a preloaded stream, it wires
+  // them up and kicks off edge detection.
+  useEffect(() => {
+    if (scanState !== 'scanning' || !preloadedStreamRef.current) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    preloadedStreamRef.current = false; // consume the flag — only wire up once
+    video.srcObject = streamRef.current;
+    video.play().catch(() => {/* autoplay policy — onPlay handles retry */});
+    startDetection();
+  }, [scanState, startDetection]);
 
   // ── skipChoice: open scanner directly on mount ────────────────────────────
   useEffect(() => {
