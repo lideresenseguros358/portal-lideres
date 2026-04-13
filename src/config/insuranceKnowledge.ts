@@ -164,8 +164,9 @@ Registro: NoAU 15.05.04.
 - IMPACTO EN COSTO: La cláusula de maduración hace el costo de seguro del Universal I más alto que el del Universal II. Con la misma prima mensual, Universal I genera MENOS ahorro acumulado a largo plazo.
 - Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
 - Tasa corriente: puede ser mayor a la garantizada según las inversiones de ASSA.
-- Rescate parcial: Disponible a partir del año 2. Hasta el valor de rescate menos $1,000.00.
-- Cargo por rescate: Se aplica durante los primeros 10 años.
+- RETIRO PARCIAL (póliza sigue activa): Disponible a partir del año 2. El cliente puede retirar fondos disponibles siempre que el fondo quede con un SALDO MÍNIMO REQUERIDO de $1,000.00. Ese $1,000.00 NO es un cargo, multa ni descuento — es el saldo mínimo que debe permanecer en la póliza para que ésta siga vigente y generando rendimientos. Analogía para el cliente: funciona como el saldo mínimo de una cuenta bancaria.
+- CANCELACIÓN TOTAL (rescate total): El cliente recibe el 100% del valor acumulado, incluyendo el saldo mínimo. A ese total se restan ÚNICAMENTE los Cargos por Rescate Anticipado si aún están vigentes. El saldo mínimo de $1,000.00 NO aplica en cancelación total — desaparece porque la póliza se cierra.
+- Cargo por rescate anticipado: Se aplica durante los primeros 10 años (penalidad de ASSA por cancelar antes de este plazo). Concepto distinto e independiente del saldo mínimo.
 - Primas flexibles: Prima mínima o depósitos adicionales en cualquier momento.
 - Deducción mensual del valor acumulado: costo de mortalidad + cargos sobre prima + cargo por derecho de póliza.
 - Préstamos: Disponibles sobre el valor de rescate.
@@ -177,8 +178,9 @@ Registro: AUII 15.05.07.
 - SIN cláusula de maduración a los 95 años. Al vencimiento (95 años), la póliza entrega únicamente el VALOR ACUMULADO. No existe pago del beneficio de muerte en vida.
 - IMPACTO EN COSTO: Sin la cláusula de maduración, el costo de seguro es más bajo que Universal I. Con la misma prima mensual, Universal II acumula MÁS ahorro a largo plazo.
 - Tasa de interés garantizada: mínimo 3.5% anual sobre el valor acumulado.
-- Rescate parcial: Disponible a partir del año 2. Hasta el valor de rescate menos $1,000.00.
-- Cargo por rescate: Primeros 10 años.
+- RETIRO PARCIAL (póliza sigue activa): Disponible a partir del año 2. El cliente puede retirar fondos disponibles siempre que el fondo quede con un SALDO MÍNIMO REQUERIDO de $1,000.00. Ese $1,000.00 NO es un cargo, multa ni descuento — es el saldo mínimo que debe permanecer en la póliza para que ésta siga vigente y generando rendimientos. Analogía: como el saldo mínimo de una cuenta bancaria.
+- CANCELACIÓN TOTAL (rescate total): El cliente recibe el 100% del valor acumulado, incluyendo el saldo mínimo. A ese total se restan ÚNICAMENTE los Cargos por Rescate Anticipado si aún están vigentes. El saldo mínimo de $1,000.00 NO aplica en cancelación total — desaparece porque la póliza se cierra.
+- Cargo por rescate anticipado: Primeros 10 años (penalidad de ASSA por cancelar anticipadamente; concepto distinto al saldo mínimo).
 - Préstamos: Disponibles sobre el valor de rescate.
 - Primas flexibles: Prima mínima + depósitos adicionales en cualquier momento.
 Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
@@ -189,11 +191,30 @@ Registro: APII 15.05.07.
 - Tasa de interés garantizada: mínimo 4.5% anual (la más alta de los 3 planes universales).
 - Ideal para: Acumulación de patrimonio + protección. El plan más orientado al ahorro a largo plazo.
 - Al vencimiento (95 años): entrega únicamente el VALOR ACUMULADO.
-- Rescate parcial: Disponible a partir del año 6 (más restrictivo que los planes Universal). Hasta el valor de rescate menos $2,500.00.
-- Cargo por rescate: Primeros 10 años.
-- Préstamos: NO disponibles (a diferencia de Universal I y II).
+- RETIRO PARCIAL (póliza sigue activa): Disponible a partir del año 6 (más restrictivo que los planes Universal). El cliente puede retirar el monto disponible siempre que el fondo quede con un SALDO MÍNIMO REQUERIDO de $2,500.00. CRÍTICO: Los $2,500.00 NO son un cargo, multa, descuento ni penalidad. Son el saldo mínimo que debe permanecer en el fondo para que la póliza continúe vigente, activa y generando el rendimiento garantizado del 4.5%. Analogía didáctica para usar con el cliente: "Imagina que tienes una cuenta de inversión; el banco exige que siempre queden $2,500 para que la cuenta siga abierta y generando intereses. Ese dinero es tuyo — no lo pierdas, simplemente no puedes retirarlo mientras mantengas la póliza activa."
+- CANCELACIÓN TOTAL (rescate total): Si el cliente decide cerrar la póliza por completo, la regla del saldo mínimo desaparece. El cliente recibe el 100% de su valor acumulado total, incluyendo esos $2,500. A ese total ÚNICAMENTE se restan los Cargos por Rescate Anticipado si la cancelación ocurre dentro de los primeros 10 años. Después del año 10, el cliente recibe el 100% sin ningún descuento.
+- Cargo por rescate anticipado: Primeros 10 años (penalidad de ASSA por cancelación antes de este plazo). CONCEPTO DISTINTO E INDEPENDIENTE del saldo mínimo: uno es una restricción de liquidez para mantener la póliza activa; el otro es una penalidad que aplica solo al cancelar totalmente en los primeros 10 años.
+- Préstamos: NO disponibles en Patrimonial II (a diferencia de Universal I y II).
 - Primas flexibles: Prima mínima + depósitos adicionales.
 Contratos complementarios disponibles: BIPA, ECM, EG, AP, OA.
+
+⛔ REGLA DE LENGUAJE PROHIBIDO — RETIROS Y RESCATES (APLICA A TODOS LOS PLANES UNIVERSALES ASSA):
+Esta regla es INAMOVIBLE. Lissa tiene estrictamente PROHIBIDO usar las siguientes frases al hablar del saldo mínimo requerido ($1,000 en Universal I/II y $2,500 en Patrimonial II):
+  ✗ PROHIBIDO: "se te descuentan $X"
+  ✗ PROHIBIDO: "te restamos $X"
+  ✗ PROHIBIDO: "te cobran $X"
+  ✗ PROHIBIDO: "hay un cargo de $X por el retiro"
+  ✗ PROHIBIDO: "recibes el valor menos $X" (cuando habla del saldo mínimo — solo es válido para cargos por rescate anticipado)
+
+Frases CORRECTAS y OBLIGATORIAS cuando se refiera al saldo mínimo:
+  ✓ CORRECTO: "Debes mantener un saldo mínimo de $X para que la póliza siga vigente"
+  ✓ CORRECTO: "El fondo debe quedar con al menos $X para que la póliza continúe activa"
+  ✓ CORRECTO: "Los $X son el saldo mínimo requerido, no un descuento — ese dinero es tuyo"
+  ✓ CORRECTO en cancelación total: "Recibes el 100% de tu fondo; solo se aplican los cargos por rescate anticipado si cancelas antes del año 10"
+
+ESCENARIO TIPO — Cómo debe responder Lissa:
+Pregunta: "Si cancelo mi póliza Patrimonial II, ¿me cobran los $2,500?"
+Respuesta correcta: "No, los $2,500 no son un cobro en absoluto. Son el saldo mínimo requerido para mantener la póliza activa cuando haces retiros parciales — similar al saldo mínimo de una cuenta bancaria. Si decides cancelar la póliza por completo, esa restricción desaparece y recibes el 100% de tu fondo acumulado. Lo único que podría descontarse sería la penalidad por rescate anticipado si cancelas dentro de los primeros 10 años."
 
 ## Plan 5: VIDA SEGURA (Plan de Vida Universal — EXCLUSIVO ASSA)
 Código: PVU-VS002-07-REV.04.2021 | Autorización: Resolución N° DRLA-045 de 13 de julio de 2022.

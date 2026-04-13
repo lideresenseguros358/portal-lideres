@@ -376,7 +376,7 @@ export const GLOSSARY = {
   },
   vida: {
     beneficiario: 'Persona que recibe el capital asegurado si el asegurado fallece.',
-    valorRescate: 'Monto acumulado en pólizas con ahorro, retirable al cancelar antes de vencimiento.',
+    valorRescate: 'Monto acumulado en el fondo de pólizas con componente de ahorro (Universal I, II, Patrimonial II). DOS escenarios con reglas distintas: (1) RETIRO PARCIAL (póliza activa): el cliente retira fondos pero debe dejar un saldo mínimo requerido — $1,000 en Universal I/II, $2,500 en Patrimonial II. Ese saldo mínimo NO es un cargo ni un descuento; es el mínimo para que la póliza siga viva y generando rendimientos. (2) CANCELACIÓN TOTAL: el cliente recibe el 100% de su fondo, sin restricción de saldo mínimo; solo aplican cargos por rescate anticipado si cancela en los primeros 10 años. REGLA DE LENGUAJE: NUNCA decir "te cobran/descuentan/restan $X" al hablar del saldo mínimo.',
     vidaTemporal: 'Cobertura por plazo fijo. Si fallece en ese plazo, se paga. Sin ahorro.',
     vidaConAhorro: 'Protección + inversión. Prima se acumula como valor de rescate.',
     vidaDeudor: 'Vinculada a préstamo. Si fallece, la aseguradora paga el saldo.',
