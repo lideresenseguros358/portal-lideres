@@ -29,7 +29,8 @@ type ScanState =
   | 'scanning'
   | 'processing'
   | 'preview'
-  | 'done';
+  | 'done'
+  | 'desktop-adjust';   // NEW — desktop manual corner adjustment
 
 interface Props {
   value: FileAttachment | null;
@@ -301,6 +302,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [isWebView, setIsWebView]             = useState(false);
   const [isAndroid, setIsAndroid]             = useState(false);
   const [permState, setPermState]             = useState<PermissionState | 'unsupported'>('prompt');
+  const [isDesktop, setIsDesktop]             = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -312,6 +314,10 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     setCameraSupported(hasCamera && env.isSecure);
 
     queryCameraPermission().then(setPermState);
+
+    // Detect desktop: fine pointer (mouse) = desktop
+    const mq = window.matchMedia('(pointer: fine)');
+    setIsDesktop(mq.matches);
   }, []);
 
   // ── Scanner state ──────────────────────────────────────────────────────────
@@ -325,6 +331,15 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [avgLuminance, setAvgLuminance] = useState(128); // for display/debugging
   const [permissionRetries, setPermissionRetries] = useState(0); // track permission retry attempts
   const autoTorchRef = useRef(false); // tracks if auto-torch is currently managing torch state
+
+  // ── Desktop state ──────────────────────────────────────────────────────────
+  const [desktopImg, setDesktopImg]       = useState<string | null>(null);
+  const [desktopImgNW, setDesktopImgNW]   = useState(0);
+  const [desktopImgNH, setDesktopImgNH]   = useState(0);
+  const [manualCorners, setManualCorners] = useState<Corner[]>([]);
+  const desktopFileRef = useRef<HTMLInputElement>(null);
+  const draggingRef    = useRef<number | null>(null);
+  const svgDesktopRef  = useRef<SVGSVGElement>(null);
 
   // ── SVG overlay viewBox — updated once when video metadata loads ──────────
   const [svgVW, setSvgVW] = useState(CAPTURE_W);
@@ -522,6 +537,8 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   const closeScanner = useCallback(() => {
     stopCamera();
+    setDesktopImg(null);
+    setManualCorners([]);
     if (skipChoice && onClose) {
       // Standalone mode: let the parent unmount us — don't render choice UI
       onClose();
@@ -584,8 +601,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const retake = useCallback(() => {
     setPreviewSrc(null);
     setProcessingErr(null);
-    setScanState('instructions');
-  }, []);
+    // On desktop: go back to corner adjustment if we still have the image loaded
+    if (desktopImg) {
+      setScanState('desktop-adjust');
+    } else {
+      setScanState('instructions');
+    }
+  }, [desktopImg]);
 
   const approve = useCallback(async () => {
     if (!previewSrc) return;
@@ -600,6 +622,105 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       setScanState('instructions');
     }
   }, [previewSrc, onChange]);
+
+  // ── Desktop file handler ───────────────────────────────────────────────────
+  const handleDesktopFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        setDesktopImgNW(img.naturalWidth);
+        setDesktopImgNH(img.naturalHeight);
+        // Initialize corners at 10% inset from each corner
+        const px = img.naturalWidth * 0.1;
+        const py = img.naturalHeight * 0.1;
+        setManualCorners([
+          { x: px,                       y: py },                        // TL
+          { x: img.naturalWidth - px,    y: py },                        // TR
+          { x: img.naturalWidth - px,    y: img.naturalHeight - py },    // BR
+          { x: px,                       y: img.naturalHeight - py },    // BL
+        ]);
+        setDesktopImg(dataUrl);
+        setProcessingErr(null);
+        setScanState('desktop-adjust');
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  // ── Desktop: apply perspective correction ──────────────────────────────────
+  const applyDesktopCorrection = useCallback(async () => {
+    if (!desktopImg || manualCorners.length !== 4) return;
+    setScanState('processing');
+
+    fetch('/api/cedula-scanner/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: desktopImg,   // already a data URL
+        corners: manualCorners,    // [TL, TR, BR, BL] in natural image pixels
+        srcW: desktopImgNW,
+        srcH: desktopImgNH,
+      }),
+    })
+      .then(r => r.json())
+      .then(async (res: { processedBase64?: string; error?: string }) => {
+        if (res.processedBase64) {
+          setPreviewSrc(res.processedBase64);
+          setScanState('preview');
+        } else {
+          setProcessingErr(res.error || 'Error al procesar la imagen.');
+          setScanState('desktop-adjust');
+        }
+      })
+      .catch(() => {
+        setProcessingErr('Error de conexión. Intenta de nuevo.');
+        setScanState('desktop-adjust');
+      });
+  }, [desktopImg, manualCorners, desktopImgNW, desktopImgNH]);
+
+  // ── Desktop: SVG drag handlers ─────────────────────────────────────────────
+  const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (draggingRef.current === null) return;
+    const svgEl = e.currentTarget;
+    const rect  = svgEl.getBoundingClientRect();
+    const scaleX = desktopImgNW / rect.width;
+    const scaleY = desktopImgNH / rect.height;
+    const x = Math.max(0, Math.min(desktopImgNW, (e.clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(desktopImgNH, (e.clientY - rect.top)  * scaleY));
+    const idx = draggingRef.current;
+    setManualCorners(prev => prev.map((c, i) => i === idx ? { x, y } : c));
+  }, [desktopImgNW, desktopImgNH]);
+
+  const handleSvgTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (draggingRef.current === null) return;
+    const touch  = e.touches[0];
+    if (!touch) return;
+    const svgEl  = e.currentTarget;
+    const rect   = svgEl.getBoundingClientRect();
+    const scaleX = desktopImgNW / rect.width;
+    const scaleY = desktopImgNH / rect.height;
+    const x = Math.max(0, Math.min(desktopImgNW, (touch.clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(desktopImgNH, (touch.clientY - rect.top)  * scaleY));
+    const idx = draggingRef.current;
+    setManualCorners(prev => prev.map((c, i) => i === idx ? { x, y } : c));
+  }, [desktopImgNW, desktopImgNH]);
+
+  // Clear drag on pointer up (window-level to catch mouse released outside SVG)
+  useEffect(() => {
+    const clear = () => { draggingRef.current = null; };
+    window.addEventListener('mouseup', clear);
+    window.addEventListener('touchend', clear);
+    return () => {
+      window.removeEventListener('mouseup', clear);
+      window.removeEventListener('touchend', clear);
+    };
+  }, []);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => () => stopCamera(), [stopCamera]);
@@ -648,7 +769,9 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-black/80 flex-shrink-0">
         <div>
-          <p className="text-white font-bold text-sm">Escanear cédula</p>
+          <p className="text-white font-bold text-sm">
+            {scanState === 'desktop-adjust' ? 'Ajustar bordes del documento' : 'Escanear cédula'}
+          </p>
           <p className="text-[#8AAA19] text-xs">
             {scanState === 'scanning'
               ? (detectedCorners
@@ -656,6 +779,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                 : 'Buscando hoja en blanco…')
               : scanState === 'processing' ? 'Procesando…'
               : scanState === 'preview' ? 'Vista previa — aprueba o vuelve a tomar'
+              : scanState === 'desktop-adjust' ? 'Arrastra las esquinas para alinear con el documento'
               : ''}
           </p>
         </div>
@@ -1000,10 +1124,114 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           </div>
         )}
 
+        {/* ── DESKTOP-ADJUST ────────────────────────────────────── */}
+        {scanState === 'desktop-adjust' && desktopImg && (
+          <div className="w-full flex flex-col items-center gap-4" style={{ maxWidth: 720 }}>
+            {/* Image + SVG overlay container — preserves aspect ratio */}
+            <div
+              className="relative w-full overflow-hidden rounded-xl border border-white/20"
+              style={{ aspectRatio: `${desktopImgNW} / ${desktopImgNH}`, maxHeight: '70vh' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={desktopImg}
+                alt="Imagen cargada"
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: 'fill' }}
+                draggable={false}
+              />
+              <svg
+                ref={svgDesktopRef}
+                className="absolute inset-0 w-full h-full"
+                viewBox={`0 0 ${desktopImgNW} ${desktopImgNH}`}
+                preserveAspectRatio="none"
+                style={{ cursor: draggingRef.current !== null ? 'grabbing' : 'default', touchAction: 'none' }}
+                onMouseMove={handleSvgMouseMove}
+                onTouchMove={handleSvgTouchMove}
+              >
+                {/* Crop polygon */}
+                {manualCorners.length === 4 && (() => {
+                  const pts = manualCorners.map(c => `${c.x},${c.y}`).join(' ');
+                  const cx  = manualCorners.reduce((s, c) => s + c.x, 0) / 4;
+                  const cy  = manualCorners.reduce((s, c) => s + c.y, 0) / 4;
+                  const ARM = Math.min(desktopImgNW, desktopImgNH) * 0.05;
+                  return (
+                    <>
+                      <polygon
+                        points={pts}
+                        fill="rgba(138,170,25,0.12)"
+                        stroke="#8AAA19"
+                        strokeWidth={Math.max(desktopImgNW, desktopImgNH) * 0.003}
+                        strokeLinejoin="round"
+                      />
+                      {/* L-bracket corner markers */}
+                      {manualCorners.map((c, i) => {
+                        const dx = Math.sign(cx - c.x) || 1;
+                        const dy = Math.sign(cy - c.y) || 1;
+                        return (
+                          <polyline
+                            key={`bracket-${i}`}
+                            points={`${c.x + dx * ARM},${c.y} ${c.x},${c.y} ${c.x},${c.y + dy * ARM}`}
+                            fill="none"
+                            stroke="#8AAA19"
+                            strokeWidth={Math.max(desktopImgNW, desktopImgNH) * 0.005}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        );
+                      })}
+                      {/* Draggable corner handles */}
+                      {manualCorners.map((corner, i) => (
+                        <circle
+                          key={`handle-${i}`}
+                          cx={corner.x}
+                          cy={corner.y}
+                          r={Math.min(desktopImgNW, desktopImgNH) * 0.025}
+                          fill="rgba(138,170,25,0.3)"
+                          stroke="#8AAA19"
+                          strokeWidth={Math.max(desktopImgNW, desktopImgNH) * 0.004}
+                          style={{ cursor: 'grab', touchAction: 'none' }}
+                          onMouseDown={(e) => { e.preventDefault(); draggingRef.current = i; }}
+                          onTouchStart={(e) => { e.preventDefault(); draggingRef.current = i; }}
+                        />
+                      ))}
+                    </>
+                  );
+                })()}
+              </svg>
+            </div>
+
+            <p className="text-gray-300 text-sm text-center px-2">
+              Arrastra las esquinas para alinear con los bordes del documento
+            </p>
+
+            {processingErr && (
+              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2 w-full">
+                {processingErr}
+              </p>
+            )}
+
+            <div className="flex gap-3 w-full" style={{ maxWidth: 400 }}>
+              <button
+                onClick={() => { desktopFileRef.current?.click(); }}
+                className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+              >
+                Volver a elegir
+              </button>
+              <button
+                onClick={applyDesktopCorrection}
+                className="flex-1 py-3 text-sm font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors flex items-center justify-center gap-2"
+              >
+                <FaCheck size={12} /> Aplicar corrección
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Footer */}
-      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm' || scanState === 'camera-permission') && (
+      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm' || scanState === 'camera-permission' || scanState === 'desktop-adjust') && (
         <div className="flex-shrink-0 px-4 py-3 bg-black/80 text-center">
           <p className="text-xs text-gray-500">La imagen se procesa en el servidor y se adjunta como PDF al formulario</p>
         </div>
@@ -1049,23 +1277,29 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           <span className="text-xs text-gray-400">Subir foto o PDF</span>
         </button>
 
-        {/* No → open scanner */}
+        {/* No → open scanner (desktop: file picker; mobile: camera) */}
         <button
           type="button"
-          onClick={openScanner}
-          disabled={!cameraSupported}
+          onClick={() => {
+            if (isDesktop) {
+              desktopFileRef.current?.click();
+            } else {
+              openScanner();
+            }
+          }}
+          disabled={!isDesktop && !cameraSupported}
           className={`flex flex-col items-center gap-2 px-3 py-4 border-2 rounded-xl transition-all text-center ${
-            cameraSupported
+            isDesktop || cameraSupported
               ? 'border-[#010139]/20 hover:border-[#010139] bg-[#010139]/5 hover:bg-[#010139]/10'
               : 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-60'
           }`}
         >
-          <FaCamera className={cameraSupported ? 'text-[#010139]' : 'text-gray-400'} size={20} />
-          <span className={`text-xs font-semibold ${cameraSupported ? 'text-[#010139]' : 'text-gray-500'}`}>
-            {cameraSupported ? 'No, escanear' : 'Cámara no disponible'}
+          <FaCamera className={isDesktop || cameraSupported ? 'text-[#010139]' : 'text-gray-400'} size={20} />
+          <span className={`text-xs font-semibold ${isDesktop || cameraSupported ? 'text-[#010139]' : 'text-gray-500'}`}>
+            {isDesktop ? 'No, cargar imagen' : cameraSupported ? 'No, escanear' : 'Cámara no disponible'}
           </span>
           <span className="text-xs text-gray-400">
-            {cameraSupported ? 'Usar cámara' : 'Navegador no soportado'}
+            {isDesktop ? 'Seleccionar archivo' : cameraSupported ? 'Usar cámara' : 'Navegador no soportado'}
           </span>
         </button>
       </div>
@@ -1078,7 +1312,16 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         onChange={handleFileChange}
       />
 
-      {!cameraSupported && (
+      {/* Hidden desktop file input — triggers desktop-adjust flow */}
+      <input
+        ref={desktopFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleDesktopFile}
+      />
+
+      {!isDesktop && !cameraSupported && (
         <p className="text-amber-600 text-xs font-medium bg-amber-50 px-3 py-2 rounded-lg">
           Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox, Edge o Safari en iOS.
         </p>
