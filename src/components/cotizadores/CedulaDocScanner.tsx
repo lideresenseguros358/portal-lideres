@@ -241,65 +241,52 @@ function calculateAverageLuminance(
   return count > 0 ? totalLum / count : 128;
 }
 
+// ── Helper: detect environment ────────────────────────────────────────────────
+function detectEnvironment() {
+  const ua = navigator.userAgent;
+  const isAndroid   = /Android/i.test(ua);
+  const isIOS       = /iPhone|iPad|iPod/i.test(ua);
+  // WebView signals: "wv" token OR known in-app browser strings
+  const isWebView   = /wv\b/.test(ua) || /FBAN|FBAV|Instagram|Twitter|Snapchat|Line|TikTok|MicroMessenger|GSA/.test(ua);
+  const isChrome    = /Chrome\//.test(ua) && !/Edg\/|OPR\//.test(ua);
+  const isSamsung   = /SamsungBrowser/.test(ua);
+  const isSecure    = location.protocol === 'https:' || location.hostname === 'localhost';
+  return { isAndroid, isIOS, isWebView, isChrome, isSamsung, isSecure };
+}
+
+// ── Helper: query Permissions API (may be unsupported on some browsers) ────────
+async function queryCameraPermission(): Promise<PermissionState | 'unsupported'> {
+  try {
+    if (!navigator.permissions?.query) return 'unsupported';
+    const status = await navigator.permissions.query({ name: 'camera' as PermissionName });
+    return status.state;
+  } catch {
+    return 'unsupported';
+  }
+}
+
 // ── Helper: robust camera access with fallbacks for Android/iOS compatibility ──
-// Attempts multiple constraint profiles to maximize compatibility
-async function requestCameraStream(): Promise<{ stream: MediaStream | null; error?: string }> {
-  // Strategy: try increasingly permissive constraints to maximize compatibility
+async function requestCameraStream(): Promise<{ stream: MediaStream | null; errorName?: string }> {
   const strategies: MediaStreamConstraints[] = [
-    // Strategy 1: Ideal 1280x960 with environment facing (iOS + modern Android)
-    {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 960 },
-      },
-      audio: false,
-    },
-    // Strategy 2: Exact resolution requirement removed, just facing mode (older Android)
-    {
-      video: {
-        facingMode: { ideal: 'environment' },
-      },
-      audio: false,
-    },
-    // Strategy 3: No facing mode preference, let device choose (fallback)
-    {
-      video: true,
-      audio: false,
-    },
+    // 1 — ideal rear camera at preferred resolution
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false },
+    // 2 — rear camera, no resolution hint (older Android)
+    { video: { facingMode: { ideal: 'environment' } }, audio: false },
+    // 3 — any camera (absolute fallback)
+    { video: true, audio: false },
   ];
 
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < strategies.length; i++) {
+  let lastErrorName = '';
+  for (const constraints of strategies) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(strategies[i]);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       return { stream };
     } catch (err) {
-      lastError = err as Error;
-      // Continue to next strategy
+      lastErrorName = (err as Error).name;
+      if (lastErrorName === 'NotAllowedError') break; // retrying won't help — permission denied
     }
   }
-
-  // Determine specific error message based on error type
-  let errorMsg = 'No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.';
-
-  if (lastError) {
-    const errorName = lastError.name;
-    if (errorName === 'NotAllowedError') {
-      errorMsg = 'Permiso denegado. Por favor, activa el acceso a la cámara en tu dispositivo.';
-    } else if (errorName === 'NotFoundError') {
-      errorMsg = 'No se encontró cámara en tu dispositivo.';
-    } else if (errorName === 'NotReadableError') {
-      errorMsg = 'La cámara está siendo usada por otra aplicación. Cierra otras apps e intenta de nuevo.';
-    } else if (errorName === 'OverconstrainedError') {
-      errorMsg = 'Tu dispositivo no soporta los requisitos de cámara especificados.';
-    } else if (errorName === 'TypeError') {
-      errorMsg = 'Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox o Safari.';
-    }
-  }
-
-  return { stream: null, error: errorMsg };
+  return { stream: null, errorName: lastErrorName };
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -308,19 +295,23 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   // ── Static file upload ref (for "Sí, ya tengo copia") ──────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Portal mount ───────────────────────────────────────────────────────────
+  // ── Portal mount + environment detection ─────────────────────────────────
   const [mounted, setMounted] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
+  const [isWebView, setIsWebView]             = useState(false);
+  const [isAndroid, setIsAndroid]             = useState(false);
+  const [permState, setPermState]             = useState<PermissionState | 'unsupported'>('prompt');
+
   useEffect(() => {
     setMounted(true);
-    // Check if camera API is supported
-    const hasCamera = !!(
-      navigator?.mediaDevices?.getUserMedia ||
-      (navigator as any)?.getUserMedia ||
-      (navigator as any)?.webkitGetUserMedia ||
-      (navigator as any)?.mozGetUserMedia
-    );
-    setCameraSupported(hasCamera);
+    const env = detectEnvironment();
+    setIsWebView(env.isWebView);
+    setIsAndroid(env.isAndroid);
+
+    const hasCamera = !!(navigator?.mediaDevices?.getUserMedia);
+    setCameraSupported(hasCamera && env.isSecure);
+
+    queryCameraPermission().then(setPermState);
   }, []);
 
   // ── Scanner state ──────────────────────────────────────────────────────────
@@ -547,33 +538,41 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const goToConfirm = useCallback(() => setScanState('confirm'), []);
 
   // ── Request camera permission + immediately launch into scanning ─────────────
-  // Android fix: do NOT stop the stream after getting permission — reuse it directly.
-  // Making two getUserMedia calls in sequence (permission check then real scan) is
-  // what causes NotAllowedError on Android even when the user already granted access.
   const requestCameraPermission = useCallback(async () => {
     setProcessingErr(null);
 
-    const { stream, error } = await requestCameraStream();
+    // Re-check permission state before attempting (may have changed since mount)
+    const currentPerm = await queryCameraPermission();
+    setPermState(currentPerm);
 
-    if (error || !stream) {
-      setPermissionRetries(prev => {
-        const next = prev + 1;
-        let msg = error ?? 'No se pudo acceder a la cámara.';
-        if (next >= 2) {
-          msg = 'Permiso denegado. En Chrome: toca ··· → Configuración → Permisos del sitio → Cámara → busca este sitio y actívalo.';
-        }
-        setProcessingErr(msg);
-        return next;
-      });
+    if (currentPerm === 'denied') {
+      // Cannot show dialog — browser already blocked this site. Guide user.
+      setProcessingErr('__denied__');
       return;
     }
 
-    // Stream is live — store it and mark it as preloaded so the useEffect below
-    // can attach it to the <video> element once 'scanning' renders it into the DOM.
+    const { stream, errorName } = await requestCameraStream();
+
+    if (!stream) {
+      if (errorName === 'NotAllowedError') {
+        // User tapped "Deny" on the native dialog just now
+        await queryCameraPermission().then(setPermState);
+        setProcessingErr('__denied__');
+      } else if (errorName === 'NotFoundError') {
+        setProcessingErr('No se encontró cámara en tu dispositivo.');
+      } else if (errorName === 'NotReadableError') {
+        setProcessingErr('La cámara está siendo usada por otra aplicación. Ciérrala e intenta de nuevo.');
+      } else {
+        setProcessingErr('No se pudo acceder a la cámara. Intenta de nuevo.');
+      }
+      setPermissionRetries(r => r + 1);
+      return;
+    }
+
+    // Stream is live — go straight to scanning, wire up video via useEffect
     streamRef.current = stream;
     preloadedStreamRef.current = true;
     setScanState('scanning');
-    // startDetection is called from the useEffect that watches scanState → 'scanning'
   }, []);
 
   const startScan = useCallback(async () => {
@@ -723,47 +722,106 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         )}
 
         {/* ── CAMERA PERMISSION ─────────────────────────────────── */}
-        {scanState === 'camera-permission' && (
-          <div className="w-full max-w-sm space-y-5">
-            <div className="rounded-2xl border-2 border-blue-400/40 bg-blue-400/5 p-6 text-center space-y-4">
-              <FaCamera size={40} className="mx-auto text-blue-400" />
-              <div>
-                <p className="text-white font-bold text-lg mb-2">Se necesita acceso a la cámara</p>
-                <p className="text-gray-300 text-sm">
-                  Toca "Permitir" en el siguiente paso para autorizar el acceso a la cámara de tu dispositivo.
-                </p>
+        {scanState === 'camera-permission' && (() => {
+          const isDenied = processingErr === '__denied__' || permState === 'denied';
+
+          // In-app browser (WhatsApp, Gmail, etc.) — can't grant camera, must open in Chrome
+          if (isWebView) {
+            return (
+              <div className="w-full max-w-sm space-y-4">
+                <div className="rounded-2xl border-2 border-amber-400/40 bg-amber-400/5 p-6 text-center space-y-3">
+                  <FaCamera size={36} className="mx-auto text-amber-400" />
+                  <p className="text-white font-bold text-base">Abre el portal en Chrome</p>
+                  <p className="text-gray-300 text-sm">
+                    Estás usando un navegador interno (WhatsApp, Gmail u otra app) que no permite acceso a la cámara.
+                  </p>
+                  <div className="bg-amber-400/10 border border-amber-400/20 rounded-lg p-3 text-left space-y-1.5 text-xs text-gray-300">
+                    <p className="font-bold text-amber-300">Cómo abrir en Chrome:</p>
+                    <p>1. Toca los tres puntos <strong>⋮</strong> arriba a la derecha</p>
+                    <p>2. Selecciona <strong>"Abrir en Chrome"</strong></p>
+                    <p>3. Regresa al escáner desde Chrome</p>
+                  </div>
+                </div>
+                <button onClick={() => setScanState('instructions')} className="w-full py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors">
+                  Volver
+                </button>
               </div>
-              <div className="bg-blue-400/10 border border-blue-400/20 rounded-lg px-3 py-2 text-xs text-gray-400">
-                {permissionRetries > 0 ? (
-                  <p>Intento {permissionRetries}. Si aparece un diálogo, toca "Permitir".</p>
-                ) : (
-                  <p>Tu navegador te mostrará un diálogo solicitando permiso.</p>
+            );
+          }
+
+          // Permission previously denied by the browser (site-level block)
+          if (isDenied) {
+            return (
+              <div className="w-full max-w-sm space-y-4">
+                <div className="rounded-2xl border-2 border-red-400/40 bg-red-400/5 p-6 space-y-4">
+                  <p className="text-white font-bold text-base text-center">Cámara bloqueada en este sitio</p>
+                  <p className="text-gray-300 text-sm text-center">
+                    Chrome bloqueó el acceso a la cámara para esta página. Sigue estos pasos para activarla:
+                  </p>
+                  {isAndroid ? (
+                    <div className="bg-black/30 rounded-lg p-3 space-y-2 text-sm text-gray-200">
+                      <p className="font-bold text-white">En Chrome Android:</p>
+                      <p>1. Toca el ícono <strong>🔒</strong> o <strong>ⓘ</strong> en la barra de dirección</p>
+                      <p>2. Toca <strong>"Permisos"</strong></p>
+                      <p>3. Toca <strong>"Cámara"</strong> → selecciona <strong>"Permitir"</strong></p>
+                      <p>4. Regresa y toca <strong>"Reintentar"</strong> abajo</p>
+                    </div>
+                  ) : (
+                    <div className="bg-black/30 rounded-lg p-3 space-y-2 text-sm text-gray-200">
+                      <p className="font-bold text-white">En Safari iOS:</p>
+                      <p>1. Abre <strong>Ajustes</strong> del iPhone</p>
+                      <p>2. Busca <strong>Safari</strong> → <strong>Configuración de sitios web</strong></p>
+                      <p>3. Toca <strong>Cámara</strong> → Permitir</p>
+                      <p>4. Regresa y toca <strong>"Reintentar"</strong> abajo</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setScanState('instructions')} className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors">
+                    Volver
+                  </button>
+                  <button
+                    onClick={() => { setProcessingErr(null); requestCameraPermission(); }}
+                    className="flex-1 py-3 text-sm font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <FaCamera size={14} /> Reintentar
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // Normal first-time prompt
+          return (
+            <div className="w-full max-w-sm space-y-5">
+              <div className="rounded-2xl border-2 border-blue-400/40 bg-blue-400/5 p-6 text-center space-y-4">
+                <FaCamera size={40} className="mx-auto text-blue-400" />
+                <div>
+                  <p className="text-white font-bold text-lg mb-2">Se necesita acceso a la cámara</p>
+                  <p className="text-gray-300 text-sm">
+                    Tu navegador te mostrará un diálogo. Toca <strong className="text-white">"Permitir"</strong> para continuar.
+                  </p>
+                </div>
+                {processingErr && (
+                  <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                    {processingErr}
+                  </p>
                 )}
               </div>
+              <div className="flex gap-3">
+                <button onClick={() => setScanState('instructions')} className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors">
+                  Volver
+                </button>
+                <button
+                  onClick={requestCameraPermission}
+                  className="flex-1 py-3 text-sm font-bold bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <FaCamera size={14} /> {permissionRetries > 0 ? 'Reintentar' : 'Permitir'}
+                </button>
+              </div>
             </div>
-
-            {processingErr && (
-              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-                {processingErr}
-              </p>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setScanState('instructions')}
-                className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
-              >
-                Volver
-              </button>
-              <button
-                onClick={requestCameraPermission}
-                className="flex-1 py-3 text-sm font-bold bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <FaCamera size={14} /> {permissionRetries > 0 ? 'Reintentar' : 'Permitir'}
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── CONFIRM (gatekeeper) ──────────────────────────────── */}
         {scanState === 'confirm' && (
