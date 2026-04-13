@@ -126,6 +126,37 @@ function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
           </a>
         )}
 
+        {/* Attachment chips */}
+        {Array.isArray(msg.metadata?.attachments) && msg.metadata.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {msg.metadata.attachments.map((att: any) => {
+              const url = msg.metadata?.attachment_signed_urls?.[att.name];
+              return url ? (
+                <a
+                  key={att.name}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-200 rounded text-[10px] text-gray-600 hover:bg-gray-100 hover:border-gray-300 transition-colors max-w-[180px] truncate"
+                  title={att.name}
+                >
+                  <FaPaperclip className="text-[8px] flex-shrink-0" />
+                  <span className="truncate">{att.name}</span>
+                </a>
+              ) : (
+                <span
+                  key={att.name}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-50 border border-gray-200 rounded text-[10px] text-gray-400 max-w-[180px] truncate"
+                  title={att.name}
+                >
+                  <FaPaperclip className="text-[8px] flex-shrink-0" />
+                  <span className="truncate">{att.name}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         {/* Body */}
         {expanded && msg.body_html ? (
           <div

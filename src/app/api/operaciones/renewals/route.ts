@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { RENEWAL_STATUSES } from '@/types/operaciones.types';
+import { deleteCaseAttachments } from '@/lib/operaciones/deleteAttachments';
 
 // ═══════════════════════════════════════════════════════
 // OPERACIONES — Renewals API (unified ops_cases)
@@ -189,6 +190,11 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase.from('ops_cases').update(update).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
 
+        // Delete stored attachments on closure
+        if (status === 'cerrado_renovado' || status === 'cerrado_cancelado') {
+          deleteCaseAttachments(id); // fire-and-forget
+        }
+
         // Mark first response if transitioning to en_revision
         if (status === 'en_revision') {
           await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: currentUserId });
@@ -227,6 +233,8 @@ export async function POST(req: NextRequest) {
         }).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
 
+        deleteCaseAttachments(id); // fire-and-forget
+
         // Update policy dates if policy_id provided
         if (policy_id) {
           await supabase.from('policies').update({
@@ -260,6 +268,8 @@ export async function POST(req: NextRequest) {
           closed_at: new Date().toISOString(),
         }).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
+
+        deleteCaseAttachments(id); // fire-and-forget
 
         // Mark policy inactive if policy_id provided
         if (policy_id) {

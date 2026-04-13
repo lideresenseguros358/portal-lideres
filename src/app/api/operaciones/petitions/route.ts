@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PETITION_STATUSES, generateTicketNumber } from '@/types/operaciones.types';
 import { createNotification } from '@/lib/notifications/create';
+import { deleteCaseAttachments } from '@/lib/operaciones/deleteAttachments';
 
 async function getCurrentUserId(): Promise<string | null> {
   try {
@@ -241,6 +242,11 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase.from('ops_cases').update(update).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
 
+        // Delete stored attachments on closure
+        if (status === 'cerrado' || status === 'perdido') {
+          deleteCaseAttachments(id); // fire-and-forget
+        }
+
         // Mark first response if transitioning to en_gestion
         if (status === 'en_gestion') {
           try { await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: currentUserId }); } catch { /* */ }
@@ -282,6 +288,8 @@ export async function POST(req: NextRequest) {
           closed_at: new Date().toISOString(),
         }).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
+
+        deleteCaseAttachments(id); // fire-and-forget
 
         await supabase.from('ops_case_history').insert({
           case_id: id,
@@ -338,6 +346,8 @@ export async function POST(req: NextRequest) {
           status: 'cerrado',
           closed_at: new Date().toISOString(),
         }).eq('id', id);
+
+        deleteCaseAttachments(id); // fire-and-forget
 
         // Log conversion
         await supabase.from('ops_case_history').insert({

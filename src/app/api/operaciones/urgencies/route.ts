@@ -6,6 +6,7 @@ import { URGENCY_STATUSES, generateTicketNumber } from '@/types/operaciones.type
 import { evaluateUrgencyEffectiveness } from '@/lib/ai/evaluateEffectiveness';
 import { learnFromHumanIntervention } from '@/lib/ai/learnFromHuman';
 import { createNotification } from '@/lib/notifications/create';
+import { deleteCaseAttachments } from '@/lib/operaciones/deleteAttachments';
 
 // ═══════════════════════════════════════════════════════
 // OPERACIONES — Urgencies Inbox API (full rewrite)
@@ -297,6 +298,11 @@ export async function POST(req: NextRequest) {
 
         const { error: updErr } = await supabase.from('ops_cases').update(update).eq('id', id);
         if (updErr) throw updErr;
+
+        // Delete stored attachments on closure
+        if (newStatus === 'resuelto' || newStatus === 'cerrado') {
+          deleteCaseAttachments(id); // fire-and-forget
+        }
 
         // Mark first response on en_atencion
         if (newStatus === 'en_atencion') {

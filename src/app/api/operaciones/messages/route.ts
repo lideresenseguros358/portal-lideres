@@ -36,8 +36,24 @@ export async function GET(request: NextRequest) {
 
       if (error) throw error;
 
+      // Generate signed URLs for stored attachments (1-hour expiry)
+      const messagesWithUrls = await Promise.all((data || []).map(async (m: any) => {
+        const attachments = m.metadata?.attachments;
+        if (!Array.isArray(attachments) || attachments.length === 0) return m;
+        const signedUrls: Record<string, string> = {};
+        await Promise.all(attachments.map(async (att: any) => {
+          try {
+            const { data: signed } = await (supabase as any).storage
+              .from('ops-attachments')
+              .createSignedUrl(att.path, 3600);
+            if (signed?.signedUrl) signedUrls[att.name] = signed.signedUrl;
+          } catch { /* non-fatal */ }
+        }));
+        return { ...m, metadata: { ...m.metadata, attachment_signed_urls: signedUrls } };
+      }));
+
       return NextResponse.json({
-        messages: data || [],
+        messages: messagesWithUrls,
         total: count || 0,
         page,
         limit,
@@ -137,20 +153,23 @@ export async function POST(request: NextRequest) {
       let zeptoMessageId: string | undefined;
       let sendError: string | undefined;
 
-      // ── Convert file attachments to base64 for Zepto ──
-      const zeptoAttachments: ZeptoAttachment[] = [];
+      // ── Read file buffers once (reused for Zepto + storage) ──
+      const fileData: Array<{ name: string; buffer: Buffer; type: string; size: number }> = [];
       for (const file of files) {
         try {
           const buffer = Buffer.from(await file.arrayBuffer());
-          zeptoAttachments.push({
-            content: buffer.toString('base64'),
-            mime_type: file.type || 'application/octet-stream',
-            name: file.name,
-          });
+          fileData.push({ name: file.name, buffer, type: file.type || 'application/octet-stream', size: file.size });
         } catch (err) {
           console.error(`[API messages] Failed to read attachment ${file.name}:`, err);
         }
       }
+
+      // ── Convert to base64 for Zepto ──
+      const zeptoAttachments: ZeptoAttachment[] = fileData.map(f => ({
+        content: f.buffer.toString('base64'),
+        mime_type: f.type,
+        name: f.name,
+      }));
       if (zeptoAttachments.length > 0) {
         console.log(`[API messages] ${zeptoAttachments.length} attachment(s): ${zeptoAttachments.map(a => a.name).join(', ')}`);
       }
@@ -220,6 +239,31 @@ export async function POST(request: NextRequest) {
         console.warn(`[API messages] No recipient email — message recorded but NOT sent`);
       }
 
+      // ── Upload attachments to Supabase storage ──
+      const storageAttachments: Array<{ name: string; path: string; size: number; mime_type: string }> = [];
+      if (fileData.length > 0) {
+        const folderToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        for (const f of fileData) {
+          try {
+            const safeName = f.name.replace(/[^a-zA-Z0-9._\-()\s]/g, '_');
+            const path = `cases/${outCaseId}/${folderToken}/${safeName}`;
+            const { error: upErr } = await (supabase as any).storage
+              .from('ops-attachments')
+              .upload(path, f.buffer, { contentType: f.type, upsert: true });
+            if (!upErr) {
+              storageAttachments.push({ name: f.name, path, size: f.size, mime_type: f.type });
+            } else {
+              console.error(`[API messages] Storage upload failed for ${f.name}:`, upErr);
+            }
+          } catch (err) {
+            console.error(`[API messages] Storage upload error for ${f.name}:`, err);
+          }
+        }
+        if (storageAttachments.length > 0) {
+          console.log(`[API messages] ✓ Stored ${storageAttachments.length} attachment(s) for case ${outCaseId}`);
+        }
+      }
+
       // Insert outbound message record
       const attachmentNames = zeptoAttachments.map(a => a.name);
       const { error: insErr } = await (supabase as any)
@@ -242,6 +286,7 @@ export async function POST(request: NextRequest) {
             send_error: sendError || null,
             has_attachments: attachmentNames.length > 0,
             attachment_names: attachmentNames.length > 0 ? attachmentNames : undefined,
+            attachments: storageAttachments.length > 0 ? storageAttachments : undefined,
             ...(metadata_extra || {}),
           },
         });
