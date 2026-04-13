@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaTimes, FaPencilAlt, FaSave, FaSpinner, FaUser, FaBriefcase, FaHome, FaHeartbeat, FaShieldAlt, FaLock, FaDollarSign, FaMapMarkerAlt, FaGem } from 'react-icons/fa';
+import { FaTimes, FaPencilAlt, FaSave, FaSpinner, FaUser, FaBriefcase, FaHome, FaHeartbeat, FaShieldAlt, FaLock, FaDollarSign, FaMapMarkerAlt, FaGem, FaFlask, FaExclamationTriangle } from 'react-icons/fa';
 
 // ════════════════════════════════════════════
 // TYPES
@@ -45,6 +45,7 @@ const VIDA_SECTIONS: SectionDef[] = [
       { key: 'nombre', label: 'Nombre' },
       { key: 'apellido', label: 'Apellido' },
       { key: 'fecha_nacimiento', label: 'Fecha de nacimiento' },
+      { key: 'sexo', label: 'Sexo', format: (v: any) => v === 'M' ? 'Masculino' : v === 'F' ? 'Femenino' : '—' },
       { key: 'edad', label: 'Edad', suffix: ' años' },
       { key: 'celular', label: 'Celular' },
       { key: 'correo', label: 'Correo' },
@@ -245,6 +246,7 @@ function setNestedValue(obj: any, path: string, key: string, value: any): any {
 
 function formatValue(val: any, field: FieldDef): string {
   if (val === null || val === undefined || val === '') return '—';
+  if (field.format) return field.format(val);
   if (field.type === 'boolean') return val ? 'Sí' : 'No';
   if (field.type === 'number' && typeof val === 'number') {
     const formatted = val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -420,6 +422,177 @@ function SectionWrapper({ title, icon, children }: { title: string; icon: React.
       </div>
       <div className="p-3">{children}</div>
     </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// IMC — COMPUTED FROM altura_m + peso_lbs
+// ════════════════════════════════════════════
+
+function calcIMC(alturaMeter: number, pesoLbs: number): { value: number; label: string; warning: boolean } | null {
+  if (!alturaMeter || !pesoLbs) return null;
+  const pulgadas = alturaMeter * 39.3701;
+  const imc = (pesoLbs * 703) / (pulgadas * pulgadas);
+  let label = '';
+  let warning = false;
+  if (imc < 18.5)      { label = 'Bajo peso';   warning = true; }
+  else if (imc < 25)   { label = 'Normal';        warning = false; }
+  else if (imc < 30)   { label = 'Sobrepeso';     warning = true; }
+  else                  { label = 'Obesidad';      warning = true; }
+  return { value: imc, label, warning };
+}
+
+function ImcCard({ details }: { details: any }) {
+  const alt = details?.salud?.altura_m;
+  const pes = details?.salud?.peso_lbs;
+  const result = calcIMC(Number(alt), Number(pes));
+  if (!result) return null;
+
+  const colorMap = {
+    'Bajo peso':  'bg-red-50 border-red-200 text-red-700',
+    'Normal':     'bg-green-50 border-green-200 text-green-700',
+    'Sobrepeso':  'bg-yellow-50 border-yellow-200 text-yellow-700',
+    'Obesidad':   'bg-red-50 border-red-200 text-red-700',
+  } as Record<string, string>;
+  const color = colorMap[result.label] || 'bg-gray-50 border-gray-200 text-gray-700';
+
+  return (
+    <SectionWrapper title="IMC — Índice de Masa Corporal" icon={<FaHeartbeat />}>
+      <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${color}`}>
+        <div className="flex items-center gap-2">
+          {result.warning && <FaExclamationTriangle className="text-[11px] flex-shrink-0" />}
+          <span className="text-xs font-bold">{result.value.toFixed(1)}</span>
+          <span className="text-xs font-medium">— {result.label}</span>
+        </div>
+        <div className="text-[10px] text-gray-500 text-right">
+          <span>{Number(alt).toFixed(2)} m · {Number(pes).toFixed(0)} lbs</span>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1.5">
+        Rangos: &lt;18.5 Bajo peso · 18.5–24.9 Normal · 25–29.9 Sobrepeso · ≥30 Obesidad
+      </p>
+    </SectionWrapper>
+  );
+}
+
+// ════════════════════════════════════════════
+// REQUISITOS DE ASEGURABILIDAD (vida-specific)
+// Mirrors calcularRequisitos logic from VidaWizard
+// ════════════════════════════════════════════
+
+const REQ_META_MODAL: Record<string, { label: string; detalle: string }> = {
+  examen_medico_urinalisis_nicotina: { label: 'EXM/UL — Examen Médico y Uroanálisis', detalle: 'Incluye prueba de nicotina' },
+  lab_a: { label: 'LAB A', detalle: 'Biometría hemática completa, VSG, glicemia, HbA1c, perfil lipídico, creatinina, BUN, transaminasas, bilirrubina, fosfatasa alcalina, ácido úrico' },
+  ecg: { label: 'ECG — Electrocardiograma', detalle: 'En reposo' },
+  psa_41_plus: { label: 'PSA — Antígeno Prostático', detalle: 'Solo para hombres mayores de 41 años' },
+  ecgm: { label: 'ECGM — Electrocardiograma con Esfuerzo', detalle: 'Prueba de esfuerzo' },
+  form_activos_pasivos: { label: 'Formulario de Activos y Pasivos', detalle: 'Declaración financiera de activos y pasivos' },
+  cuestionario_financiero: { label: 'Cuestionario Financiero', detalle: 'Evaluación del perfil financiero del asegurado' },
+};
+
+type ReqRow = { min: number; max: number; reqs: Record<string, boolean> };
+type ReqGroup = { edadMin: number; edadMax: number; rangos: ReqRow[] };
+
+const TABLA_REQ_MODAL: ReqGroup[] = [
+  { edadMin: 0,  edadMax: 19, rangos: [
+    { min: 25000, max: Infinity, reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+  ]},
+  { edadMin: 20, edadMax: 45, rangos: [
+    { min: 25000,   max: 400000,  reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 400001,  max: 500000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 500001,  max: 750000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 750001,  max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: true,  cuestionario_financiero: false } },
+    { min: 1000001, max: 2000000, reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: true,  cuestionario_financiero: true  } },
+    { min: 2000001, max: Infinity,reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: true  } },
+  ]},
+  { edadMin: 46, edadMax: 55, rangos: [
+    { min: 25000,   max: 200000,  reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 200001,  max: 300000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: false, psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 300001,  max: 500000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 500001,  max: 750000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 750001,  max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: true,  cuestionario_financiero: false } },
+    { min: 1000001, max: Infinity,reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: true  } },
+  ]},
+  { edadMin: 56, edadMax: 60, rangos: [
+    { min: 25000,   max: 75000,   reqs: { examen_medico_urinalisis_nicotina: false, lab_a: false, ecg: false, psa_41_plus: false, ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 75001,   max: 100000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: false, psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 100001,  max: 500000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 500001,  max: 750000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 750001,  max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: false } },
+    { min: 1000001, max: Infinity,reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: true  } },
+  ]},
+  { edadMin: 61, edadMax: Infinity, rangos: [
+    { min: 25000,   max: 200000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: false, ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 200001,  max: 750000,  reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: false, form_activos_pasivos: false, cuestionario_financiero: false } },
+    { min: 750001,  max: 1000000, reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: false } },
+    { min: 1000001, max: Infinity,reqs: { examen_medico_urinalisis_nicotina: true,  lab_a: true,  ecg: true,  psa_41_plus: true,  ecgm: true,  form_activos_pasivos: true,  cuestionario_financiero: true  } },
+  ]},
+];
+
+function computeRequisitos(details: any): { key: string; label: string; detalle: string }[] {
+  const edad = Number(details?.datos_personales?.edad || details?.calculo?.edad || 0);
+  const suma = Number(details?.calculo?.suma_asegurada_solicitada || 0);
+  const esFumador = details?.salud?.fuma_actualmente === true;
+  const esMasculino = details?.datos_personales?.sexo === 'M';
+  if (!edad || !suma) return [];
+  const grupo = TABLA_REQ_MODAL.find(g => edad >= g.edadMin && edad <= g.edadMax);
+  if (!grupo) return [];
+  const rango = grupo.rangos.find(r => suma >= r.min && suma <= r.max) ?? grupo.rangos[grupo.rangos.length - 1];
+  if (!rango) return [];
+  const reqs = { ...rango.reqs };
+  if (esFumador) reqs.examen_medico_urinalisis_nicotina = true;
+  if (!esMasculino || edad <= 41) reqs.psa_41_plus = false;
+  return Object.entries(reqs)
+    .filter(([, v]) => v)
+    .map(([k]) => {
+      const meta = REQ_META_MODAL[k] ?? { label: k, detalle: '' };
+      return { key: k, label: meta.label, detalle: meta.detalle };
+    });
+}
+
+function RequisitosCard({ details }: { details: any }) {
+  const reqs = computeRequisitos(details);
+  const edad = Number(details?.datos_personales?.edad || details?.calculo?.edad || 0);
+  const suma = Number(details?.calculo?.suma_asegurada_solicitada || 0);
+  const esFumador = details?.salud?.fuma_actualmente === true;
+
+  return (
+    <SectionWrapper title="Requisitos de Asegurabilidad" icon={<FaFlask />}>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {edad > 0 && (
+          <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+            Edad: {edad} años
+          </span>
+        )}
+        {suma > 0 && (
+          <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+            Suma asegurada: ${suma.toLocaleString('en-US')}
+          </span>
+        )}
+        {esFumador && (
+          <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+            Fumador activo
+          </span>
+        )}
+      </div>
+      {reqs.length === 0 ? (
+        <p className="text-xs text-green-700 font-medium bg-green-50 rounded-lg px-3 py-2 border border-green-100">
+          ✓ Sin requisitos médicos para este perfil
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {reqs.map((r) => (
+            <div key={r.key} className="flex flex-col gap-0.5 px-2.5 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+              <span className="text-[11px] font-semibold text-blue-800">{r.label}</span>
+              {r.detalle && <span className="text-[10px] text-blue-600">{r.detalle}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-gray-400 mt-2">
+        Calculados según tabla ASSA vigente — edad, suma acumulada, tabaquismo y sexo.
+      </p>
+    </SectionWrapper>
   );
 }
 
@@ -601,8 +774,14 @@ export default function PetQuoteDetailModal({ open, onClose, caseId, ramo, clien
                   : <SectionView key={i} section={section} details={currentDetails} />
               ))}
 
-              {/* Tipo propuesta (vida only) */}
-              {!editing && ramo === 'vida' && <TipoPropuestaView details={currentDetails} />}
+              {/* Vida-only extras (view mode only) */}
+              {!editing && ramo === 'vida' && (
+                <>
+                  <TipoPropuestaView details={currentDetails} />
+                  <ImcCard details={currentDetails} />
+                  <RequisitosCard details={currentDetails} />
+                </>
+              )}
             </>
           )}
         </div>
