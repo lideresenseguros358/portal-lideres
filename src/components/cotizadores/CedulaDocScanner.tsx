@@ -24,6 +24,7 @@ interface Corner { x: number; y: number; }
 type ScanState =
   | 'choice'
   | 'instructions'
+  | 'camera-permission'
   | 'confirm'
   | 'scanning'
   | 'processing'
@@ -331,6 +332,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [torchOn, setTorchOn]             = useState(false);
   const [stableProgress, setStableProgress] = useState(0); // 0-1 countdown to auto-capture
   const [avgLuminance, setAvgLuminance] = useState(128); // for display/debugging
+  const [permissionRetries, setPermissionRetries] = useState(0); // track permission retry attempts
   const autoTorchRef = useRef(false); // tracks if auto-torch is currently managing torch state
 
   // ── SVG overlay viewBox — updated once when video metadata loads ──────────
@@ -533,7 +535,47 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     }
   }, [stopCamera, skipChoice, onClose]);
 
+  const goToCameraPermission = useCallback(() => {
+    setPermissionRetries(0);
+    setScanState('camera-permission');
+  }, []);
+
   const goToConfirm = useCallback(() => setScanState('confirm'), []);
+
+  const requestCameraPermission = useCallback(async () => {
+    // This just requests the permission without starting the camera
+    // It helps the browser show the native permission dialog
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      // If successful, stop the stream and move to confirm
+      stream.getTracks().forEach(track => track.stop());
+      setProcessingErr(null);
+      setScanState('confirm');
+    } catch (err) {
+      const error = err as Error;
+      let errorMsg = 'No se pudo acceder a la cámara.';
+
+      if (error.name === 'NotAllowedError') {
+        setPermissionRetries(prev => prev + 1);
+        if (permissionRetries < 2) {
+          errorMsg = 'Permiso denegado. Toca "Reintentar" para solicitar nuevamente.';
+        } else {
+          errorMsg = 'Permiso denegado múltiples veces. Abre Configuración > Aplicaciones > Tu navegador > Permisos > Cámara y actívalo manualmente.';
+        }
+      } else if (error.name === 'NotFoundError') {
+        errorMsg = 'No se encontró cámara en tu dispositivo.';
+      } else if (error.name === 'NotReadableError') {
+        errorMsg = 'La cámara está siendo usada por otra aplicación. Cierra otras apps e intenta de nuevo.';
+      } else if (error.name === 'TypeError') {
+        errorMsg = 'Tu navegador no soporta acceso a cámara. Usa Chrome, Firefox, Edge o Safari.';
+      }
+
+      setProcessingErr(errorMsg);
+    }
+  }, [permissionRetries]);
 
   const startScan = useCallback(async () => {
     setScanState('scanning');
@@ -656,11 +698,54 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
             )}
 
             <button
-              onClick={goToConfirm}
+              onClick={goToCameraPermission}
               className="w-full py-3 text-sm font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors"
             >
               Continuar
             </button>
+          </div>
+        )}
+
+        {/* ── CAMERA PERMISSION ─────────────────────────────────── */}
+        {scanState === 'camera-permission' && (
+          <div className="w-full max-w-sm space-y-5">
+            <div className="rounded-2xl border-2 border-blue-400/40 bg-blue-400/5 p-6 text-center space-y-4">
+              <FaCamera size={40} className="mx-auto text-blue-400" />
+              <div>
+                <p className="text-white font-bold text-lg mb-2">Se necesita acceso a la cámara</p>
+                <p className="text-gray-300 text-sm">
+                  Toca "Permitir" en el siguiente paso para autorizar el acceso a la cámara de tu dispositivo.
+                </p>
+              </div>
+              <div className="bg-blue-400/10 border border-blue-400/20 rounded-lg px-3 py-2 text-xs text-gray-400">
+                {permissionRetries > 0 ? (
+                  <p>Intento {permissionRetries}. Si aparece un diálogo, toca "Permitir".</p>
+                ) : (
+                  <p>Tu navegador te mostrará un diálogo solicitando permiso.</p>
+                )}
+              </div>
+            </div>
+
+            {processingErr && (
+              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                {processingErr}
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setScanState('instructions')}
+                className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+              >
+                Volver
+              </button>
+              <button
+                onClick={requestCameraPermission}
+                className="flex-1 py-3 text-sm font-bold bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <FaCamera size={14} /> {permissionRetries > 0 ? 'Reintentar' : 'Permitir'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -844,7 +929,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       </div>
 
       {/* Footer */}
-      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm') && (
+      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm' || scanState === 'camera-permission') && (
         <div className="flex-shrink-0 px-4 py-3 bg-black/80 text-center">
           <p className="text-xs text-gray-500">La imagen se procesa en el servidor y se adjunta como PDF al formulario</p>
         </div>
