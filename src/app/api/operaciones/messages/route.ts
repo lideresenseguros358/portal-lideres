@@ -45,20 +45,32 @@ export async function GET(request: NextRequest) {
     }
 
     if (unclassified === 'true') {
-      // Unclassified messages (not discarded)
+      // Unclassified messages — exclude: outbound, portal sender, auto-replies, discarded
       const { data, error, count } = await (supabase as any)
         .from('ops_case_messages')
         .select('*', { count: 'exact' })
         .eq('unclassified', true)
+        .neq('direction', 'outbound')
+        .neq('from_email', 'portal@lideresenseguros.com')
         .order('received_at', { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (error) throw error;
 
-      // Filter out discarded in application layer
-      const filtered = (data || []).filter(
-        (m: any) => !m.metadata?.discarded,
-      );
+      // Filter out discarded + residual noise in application layer
+      const AUTO_SUBJECTS = [
+        'expediente portal', 'out of office', 'fuera de oficina', 'ausente',
+        'automatic reply', 'auto reply', 'auto-reply', 'delivery failed',
+        'undeliverable', 'failure notice', 'mail delivery failed',
+      ];
+      const filtered = (data || []).filter((m: any) => {
+        if (m.metadata?.discarded) return false;
+        const from = (m.from_email || '').toLowerCase();
+        if (/no.?reply|noreply|mailer.?daemon|postmaster/i.test(from)) return false;
+        const subj = (m.subject || '').toLowerCase();
+        if (AUTO_SUBJECTS.some(kw => subj.includes(kw))) return false;
+        return true;
+      });
 
       return NextResponse.json({
         messages: filtered,

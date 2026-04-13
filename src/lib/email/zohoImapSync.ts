@@ -124,14 +124,36 @@ export async function run(): Promise<SyncResult> {
           const parsed = await parseImapMessage(msg);
           if (!parsed) continue;
 
-          // ── Subject filter: only ingest portal-originated emails ──
-          // Accept: "Expediente Portal ..." subjects (sent by our portal)
-          // Accept: subjects containing ticket references (replies to our threads)
+          // ── Noise filter: reject system-generated / portal-outbound / auto-reply emails ──
           const subjectLower = (parsed.subject || '').toLowerCase();
-          const isPortalEmail = subjectLower.includes('expediente portal');
-          const hasTicketRef = /(?:PET|REN|URG|MOR)-\d{4}-\d{5}/i.test(parsed.subject);
-          if (!isPortalEmail && !hasTicketRef) {
-            console.log(`[IMAP-SYNC] Skipping non-portal email: "${parsed.subject.substring(0, 80)}" from ${parsed.fromEmail}`);
+          const fromLower = parsed.fromEmail.toLowerCase();
+
+          // Skip our own portal outbound emails echoed back to inbox
+          if (fromLower === 'portal@lideresenseguros.com') {
+            console.log(`[IMAP-SYNC] Skip portal-outbound from ${parsed.fromEmail}: "${parsed.subject.substring(0, 60)}"`);
+            continue;
+          }
+
+          // Skip portal-generated notification subjects (Expediente Portal ...)
+          if (subjectLower.includes('expediente portal')) {
+            console.log(`[IMAP-SYNC] Skip expediente-portal subject: "${parsed.subject.substring(0, 60)}"`);
+            continue;
+          }
+
+          // Skip no-reply / mailer-daemon senders
+          if (/no.?reply|noreply|mailer.?daemon|postmaster/i.test(fromLower)) {
+            console.log(`[IMAP-SYNC] Skip no-reply sender: ${parsed.fromEmail}`);
+            continue;
+          }
+
+          // Skip auto-replies and delivery failure notifications
+          const AUTO_SUBJECTS = [
+            'out of office', 'fuera de oficina', 'ausente', 'automatic reply',
+            'auto reply', 'auto-reply', 'delivery failed', 'undeliverable',
+            'failure notice', 'mail delivery failed', 'devolucion', 'devuelta',
+          ];
+          if (AUTO_SUBJECTS.some(kw => subjectLower.includes(kw))) {
+            console.log(`[IMAP-SYNC] Skip auto-reply/delivery-failure: "${parsed.subject.substring(0, 60)}"`);
             continue;
           }
 
