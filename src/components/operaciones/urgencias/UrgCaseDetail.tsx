@@ -384,23 +384,12 @@ export default function UrgCaseDetail({
   const [showReassign, setShowReassign] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [activeView, setActiveView] = useState<'history' | 'compose' | 'payment_link'>('history');
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [emailBody, setEmailBody] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [tramitePago, setTramitePago] = useState('');
   const [customTramite, setCustomTramite] = useState('');
   const [msgRefreshKey, setMsgRefreshKey] = useState(0);
-  const actionsRef = useRef<HTMLDivElement>(null);
-
-  // Close actions dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
   const applyTemplate = (key: string) => {
     setEmailBody(EMAIL_TEMPLATES[key] || '');
@@ -968,41 +957,23 @@ export default function UrgCaseDetail({
           </div>
 
           {!isClosed && (
-            <div className="relative" ref={actionsRef}>
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setActionsOpen(!actionsOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white rounded-lg text-[11px] font-semibold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
+                onClick={() => setActiveView('compose')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors duration-150 ${
+                  activeView === 'compose' ? 'bg-blue-600 text-white' : 'bg-[#010139] text-white hover:bg-[#020270]'
+                }`}
               >
-                <FaEllipsisH className="text-[9px]" /> Acciones
+                <FaEnvelope className="text-[9px]" /> Correo
               </button>
-              {actionsOpen && (
-                <div className="absolute right-0 bottom-full mb-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
-                  <button
-                    onClick={() => { setActiveView('compose'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'compose' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaEnvelope className="text-[10px]" /> Enviar Correo
-                  </button>
-                  <button
-                    onClick={() => { setActiveView('payment_link'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'payment_link' ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaLink className="text-[10px]" /> Enlace de Pago
-                  </button>
-                  <button
-                    onClick={() => { setActiveView('history'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'history' ? 'bg-gray-100 text-gray-800 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaHistory className="text-[10px]" /> Ver Histórico
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={() => setActiveView('payment_link')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors duration-150 ${
+                  activeView === 'payment_link' ? 'bg-[#7a9916] text-white' : 'bg-[#8AAA19] text-white hover:bg-[#7a9916]'
+                }`}
+              >
+                <FaLink className="text-[9px]" /> Enlace
+              </button>
             </div>
           )}
         </div>
