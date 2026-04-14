@@ -250,13 +250,24 @@ export async function POST(request: NextRequest) {
       // PROTOCOLO 2B (guardia final) — nunca enviar body vacío a Meta Graph API.
       const rawReply = result.aiReply.trim();
 
-      // Limpieza de citas de knowledge-base inyectadas por Vertex AI
-      // Elimina patrones como [base_de_conocimientos_lissa] y corchetes residuales
+      // Limpieza "Black Hole" — atrapa [cite:...] y variantes Markdown escapadas (\[cite:...\])
       console.log('[WHATSAPP] -> TEXTO SUCIO:', rawReply);
-      const safeReply = rawReply
-        .replace(/\s*\]+\]/gi, '')
-        .replace(/\s*\[base_de_conocimientos[^\]]*\]/gi, '')
-        .trim();
+      let safeReply = rawReply;
+
+      // 1. Atrapa [cite:...] y también \[cite:...\] (Markdown escapado)
+      safeReply = safeReply.replace(/\\?\[\s*cite:.*?\\?\]/gi, '');
+
+      // 2. Atrapa variaciones de [knowledge] directamente por si acaso
+      safeReply = safeReply.replace(/\\?\[\s*knowledge\s*\\?\]/gi, '');
+      safeReply = safeReply.replace(/cite:\s*knowledge/gi, '');
+
+      // 3. Arreglar puntuación huérfana (ej. si al borrar la cita queda un espacio antes de un punto: "accidente .")
+      safeReply = safeReply.replace(/\s+\./g, '.');
+      safeReply = safeReply.replace(/\s+,/g, ',');
+
+      // 4. Eliminar espacios dobles y limpiar bordes
+      safeReply = safeReply.replace(/\s{2,}/g, ' ').trim();
+
       console.log('[WHATSAPP] -> TEXTO LIMPIO:', safeReply);
 
       if (!safeReply) {

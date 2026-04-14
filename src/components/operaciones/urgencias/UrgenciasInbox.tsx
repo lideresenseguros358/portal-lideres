@@ -398,33 +398,54 @@ export default function UrgenciasInbox({ initialCaseId }: { initialCaseId?: stri
       addToast('No hay email del cliente para enviar', 'error');
       return;
     }
+    const c = selectedCase;
+    const subject = `[${c.ticket}] Urgencia — ${c.client_name || 'Cliente'}`;
+    const assignedMaster = masters.find((m) => m.id === c.assigned_master_id);
+
     try {
-      const res = await fetch('/api/operaciones/email', {
+      const res = await fetch('/api/operaciones/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'send_email',
-          to_email: selectedCase.client_email,
-          subject: `[${selectedCase.ticket}] Urgencia — ${selectedCase.client_name || 'Cliente'}`,
-          body_html: `<p>${body.replace(/\n/g, '<br/>')}</p>`,
+          action: 'record_outbound',
+          case_id: c.id,
+          subject,
           body_text: body,
-          case_id: selectedCase.id,
-          user_id: null,
+          to_emails: c.client_email ? [c.client_email] : [],
+          from_email: 'portal@lideresenseguros.com',
+          master_name: assignedMaster?.full_name || null,
+          master_email: assignedMaster?.email || null,
         }),
       });
       const json = await res.json();
-      if (json.email_sent) {
+      if (!res.ok || json.error) {
+        addToast(json.error || 'Error al enviar correo', 'error');
+      } else if (json.email_sent === false) {
+        addToast(`Correo registrado pero no enviado: ${json.email_error || 'error Zepto'}`, 'error');
+      } else {
         addToast('Correo enviado exitosamente');
-        // Mark first response if not yet responded
-        if (!selectedCase.first_response_at) {
+        if (!c.first_response_at) {
           handleRefreshList();
         }
-      } else {
-        addToast(json.email_error || 'Error al enviar correo', 'error');
       }
     } catch {
       addToast('Error de conexión al enviar correo', 'error');
     }
+
+    // Log email_sent activity
+    try {
+      await fetch('/api/operaciones/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_activity',
+          action_type: 'email_sent',
+          entity_type: 'case',
+          entity_id: c.id,
+          metadata: { ticket: c.ticket, template, to: c.client_email, subject },
+        }),
+      });
+    } catch { /* non-fatal */ }
   };
 
   const handleSendPaymentLink = async (paymentLinkUrl: string, tramite: string) => {

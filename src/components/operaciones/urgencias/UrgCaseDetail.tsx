@@ -185,6 +185,14 @@ function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
         {hasAttach && <FaPaperclip className="text-gray-300 text-[9px]" />}
       </div>
       <p className="text-[10px] text-gray-500 mb-1 font-medium">{msg.subject}</p>
+      {/* Send error indicator */}
+      {msg.direction === 'outbound' && msg.metadata?.send_error && (
+        <div className="flex items-center gap-1 px-2 py-1 mb-1.5 bg-red-50 border border-red-200 rounded-md">
+          <FaExclamationTriangle className="text-red-400 text-[9px] flex-shrink-0" />
+          <span className="text-[10px] text-red-600 font-medium">No enviado — {msg.metadata.send_error}</span>
+        </div>
+      )}
+
       {/* Payment link badge */}
       {msg.metadata?.payment_link && (
         <a

@@ -318,7 +318,12 @@ export async function POST(request: NextRequest) {
         console.log(`[API messages] first_response_at marked for case ${outCaseId}`);
       }
 
-      return NextResponse.json({ success: true, action: 'outbound_recorded' });
+      return NextResponse.json({
+        success: true,
+        action: 'outbound_recorded',
+        email_sent: !sendError,
+        email_error: sendError || null,
+      });
     }
 
     if (!action || !message_id) {

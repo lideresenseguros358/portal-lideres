@@ -318,7 +318,10 @@ export default function PeticionesInbox({ initialCaseId }: { initialCaseId?: str
     const assignedMaster = masters.find((m) => m.id === c.assigned_master_id);
 
     // 1. Record outbound message + send via Zepto (with attachments if any)
+    let sendOk = true;
+    let sendErrMsg = '';
     try {
+      let res: Response;
       if (attachments && attachments.length > 0) {
         // Use FormData to send files
         const fd = new FormData();
@@ -335,9 +338,9 @@ export default function PeticionesInbox({ initialCaseId }: { initialCaseId?: str
         for (const file of attachments) {
           fd.append('file', file, file.name);
         }
-        await fetch('/api/operaciones/messages', { method: 'POST', body: fd });
+        res = await fetch('/api/operaciones/messages', { method: 'POST', body: fd });
       } else {
-        await fetch('/api/operaciones/messages', {
+        res = await fetch('/api/operaciones/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -352,8 +355,23 @@ export default function PeticionesInbox({ initialCaseId }: { initialCaseId?: str
           }),
         });
       }
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        sendOk = false;
+        sendErrMsg = json.error || 'Error al registrar el correo';
+      } else if (json.email_sent === false) {
+        sendOk = false;
+        sendErrMsg = json.email_error || 'El correo no pudo ser enviado (error Zepto)';
+      }
     } catch (err) {
+      sendOk = false;
+      sendErrMsg = 'Error de conexión al enviar correo';
       console.error('[PeticionesInbox] record_outbound failed:', err);
+    }
+
+    if (!sendOk) {
+      setToast({ message: sendErrMsg, type: 'error' });
+      return;
     }
 
     // 2. Log email_sent activity
@@ -380,7 +398,7 @@ export default function PeticionesInbox({ initialCaseId }: { initialCaseId?: str
         'Correo enviado — caso pasó a En Gestión'
       );
     } else {
-      setToast({ message: 'Correo registrado en bitácora', type: 'success' });
+      setToast({ message: 'Correo enviado exitosamente', type: 'success' });
       refresh();
     }
   };
