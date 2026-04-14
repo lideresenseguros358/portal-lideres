@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
           case_id: outCaseId,
           unclassified: false,
           direction: 'outbound',
-          provider: 'zoho_smtp',
+          provider: 'zepto',
           message_id: smtpMessageId || message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           from_email: senderAddr,
           to_emails: recipientList,

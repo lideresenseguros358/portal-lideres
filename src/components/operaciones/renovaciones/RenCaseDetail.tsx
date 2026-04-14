@@ -192,7 +192,7 @@ function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
 // MESSAGE THREAD PANEL
 // ════════════════════════════════════════════
 
-function MessageThread({ caseId }: { caseId: string }) {
+function MessageThread({ caseId, refreshKey = 0 }: { caseId: string; refreshKey?: number }) {
   const [messages, setMessages] = useState<OpsCaseMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -217,6 +217,14 @@ function MessageThread({ caseId }: { caseId: string }) {
   useEffect(() => {
     fetchMessages(page);
   }, [fetchMessages, page]);
+
+  // Re-fetch when parent signals a new message was sent
+  useEffect(() => {
+    if (refreshKey > 0) {
+      setPage(1);
+      fetchMessages(1);
+    }
+  }, [refreshKey, fetchMessages]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -309,7 +317,7 @@ interface CaseDetailProps {
   onCancel: () => void;
   onReassign: (masterId: string) => void;
   onShowHistory: () => void;
-  onSendEmail: (body: string, template: string, attachments?: File[]) => void;
+  onSendEmail: (body: string, template: string, attachments?: File[]) => Promise<void>;
   onSendPaymentLink: (paymentLink: string, tramite: string) => void;
   masters: MasterUser[];
 }
@@ -329,6 +337,7 @@ export default function RenCaseDetail({
   const [paymentLink, setPaymentLink] = useState('');
   const [tramitePago, setTramitePago] = useState('');
   const [customTramite, setCustomTramite] = useState('');
+  const [msgRefreshKey, setMsgRefreshKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 
@@ -369,13 +378,14 @@ export default function RenCaseDetail({
     setEmailTemplate(key);
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!emailBody.trim()) return;
-    onSendEmail(emailBody, emailTemplate, attachments.length > 0 ? attachments : undefined);
+    await onSendEmail(emailBody, emailTemplate, attachments.length > 0 ? attachments : undefined);
     setEmailBody('');
     setEmailTemplate('');
     setAttachments([]);
     setActiveView('history');
+    setMsgRefreshKey((k) => k + 1);
   };
 
   return (
@@ -648,7 +658,7 @@ export default function RenCaseDetail({
                 <p className="text-[10px] text-gray-600 leading-relaxed">{c.last_email_summary}</p>
               </div>
             )}
-            <MessageThread caseId={c.id} />
+            <MessageThread caseId={c.id} refreshKey={msgRefreshKey} />
           </>
         )}
 

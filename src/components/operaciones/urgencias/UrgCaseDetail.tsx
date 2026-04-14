@@ -253,7 +253,7 @@ function MessageBubble({ msg }: { msg: OpsCaseMessage }) {
 // EMAIL THREAD PANEL (for email-sourced urgencies)
 // ════════════════════════════════════════════
 
-function MessageThread({ caseId }: { caseId: string }) {
+function MessageThread({ caseId, refreshKey = 0 }: { caseId: string; refreshKey?: number }) {
   const [messages, setMessages] = useState<OpsCaseMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -276,6 +276,14 @@ function MessageThread({ caseId }: { caseId: string }) {
   }, [caseId]);
 
   useEffect(() => { fetchMessages(page); }, [fetchMessages, page]);
+
+  // Re-fetch when parent signals a new message was sent
+  useEffect(() => {
+    if (refreshKey > 0) {
+      setPage(1);
+      fetchMessages(1);
+    }
+  }, [refreshKey, fetchMessages]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -357,7 +365,7 @@ interface CaseDetailProps {
   onAddNote: (note: string, noteType: string) => Promise<void>;
   onReEvaluate: () => void;
   onOpenChat: () => void;
-  onSendEmail: (body: string, template: string) => void;
+  onSendEmail: (body: string, template: string) => Promise<void>;
   onSendPaymentLink: (paymentLink: string, tramite: string) => void;
   masters: MasterUser[];
 }
@@ -382,6 +390,7 @@ export default function UrgCaseDetail({
   const [paymentLink, setPaymentLink] = useState('');
   const [tramitePago, setTramitePago] = useState('');
   const [customTramite, setCustomTramite] = useState('');
+  const [msgRefreshKey, setMsgRefreshKey] = useState(0);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // Close actions dropdown on outside click
@@ -398,12 +407,13 @@ export default function UrgCaseDetail({
     setEmailTemplate(key);
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!emailBody.trim()) return;
-    onSendEmail(emailBody, emailTemplate);
+    await onSendEmail(emailBody, emailTemplate);
     setEmailBody('');
     setEmailTemplate('');
     setActiveView('history');
+    setMsgRefreshKey((k) => k + 1);
   };
 
   const handleSendPaymentLink = () => {
@@ -865,7 +875,7 @@ export default function UrgCaseDetail({
 
         {/* ── VIEW: Message History (email-sourced) ── */}
         {isEmail && activeView === 'history' && (
-          <MessageThread caseId={c.id} />
+          <MessageThread caseId={c.id} refreshKey={msgRefreshKey} />
         )}
 
         {/* ── VIEW: Email Composer ── */}
