@@ -58,8 +58,7 @@ const SCAN_INTERVAL_MS = 80;
 // When paper is tilted the bbox ratio shifts a lot, so keep range wide.
 const MIN_ASPECT_RATIO = 0.5;
 const MAX_ASPECT_RATIO = 3.0;
-const AUTO_TORCH_LOW = 75;      // luminance threshold to ENABLE torch (low light detected)
-const AUTO_TORCH_HIGH = 110;    // luminance threshold to DISABLE torch (high light detected, hysteresis)
+const AUTO_TORCH_LOW = 75;      // luminance threshold to auto-enable torch (fires once; user disables manually)
 
 // ── Helper: convert base64 image (JPEG or PNG) → PDF → FileAttachment ──────────
 
@@ -499,6 +498,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       detect.width  = vW;
       detect.height = vH;
 
+      // Keep SVG viewBox in sync with actual camera resolution.
+      // onLoadedMetadata can fire before React re-renders, causing a stale
+      // viewBox if the camera returns a different resolution than the defaults.
+      // setSvgVW/setSvgVH are stable setters — React skips re-render if unchanged.
+      setSvgVW(vW);
+      setSvgVH(vH);
+
       const dCtx = detect.getContext('2d', { willReadFrequently: true });
       if (!dCtx) return;
       dCtx.drawImage(video, 0, 0, vW, vH);
@@ -507,24 +513,20 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       const avgLum = calculateAverageLuminance(dCtx, vW, vH);
       setAvgLuminance(avgLum);
 
-      // ── Auto-torch logic with hysteresis ─────────────────────────────────
-      // Enable if below LOW threshold, disable if above HIGH threshold
-      const shouldTorchBeOn = autoTorchRef.current
-        ? avgLum > AUTO_TORCH_HIGH // if torch is on, keep it on until we reach HIGH
-        ? false
-        : true
-        : avgLum < AUTO_TORCH_LOW; // if torch is off, turn on only if below LOW
-
-      if (shouldTorchBeOn !== autoTorchRef.current) {
-        autoTorchRef.current = shouldTorchBeOn;
-        // Auto-apply torch change
+      // ── Auto-torch: only auto-enable, never auto-disable ─────────────────
+      // Hysteresis (on/off thresholds) caused rapid oscillation: turning the
+      // torch on raises luminance above AUTO_TORCH_HIGH → immediately turns
+      // off → luminance drops below AUTO_TORCH_LOW → turns on again → loop.
+      // Fix: auto-torch fires once when dark; user manually turns it off.
+      if (!autoTorchRef.current && avgLum < AUTO_TORCH_LOW) {
+        autoTorchRef.current = true;
         const track = streamRef.current?.getVideoTracks()[0];
         if (track) {
           try {
-            track.applyConstraints({ advanced: [{ torch: shouldTorchBeOn } as MediaTrackConstraintSet] });
-            setTorchOn(shouldTorchBeOn);
+            track.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] });
+            setTorchOn(true);
           } catch {
-            // torch not supported or already applied — ignore
+            // torch not supported on this device — ignore
           }
         }
       }
@@ -1170,7 +1172,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 viewBox={`0 0 ${svgVW} ${svgVH}`}
-                preserveAspectRatio="xMidYMid slice"
+                preserveAspectRatio="xMidYMin slice"
               >
                 {detectedCorners && (() => {
                   const pts = detectedCorners.map(c => `${c.x},${c.y}`).join(' ');
