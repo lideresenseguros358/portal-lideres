@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { sendZeptoEmail, type ZeptoAttachment } from '@/lib/email/zepto-api';
+import { sendZohoSmtpEmail, type SmtpAttachment } from '@/lib/email/zoho-smtp';
 import { wrapInBrandedTemplate } from '@/lib/email/templates/OpsEmailTemplates';
 
 export const runtime = 'nodejs';
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
 
       const recipientList: string[] = to_emails || [];
       const senderAddr = from_email || 'portal@lideresenseguros.com';
-      let zeptoMessageId: string | undefined;
+      let smtpMessageId: string | undefined;
       let sendError: string | undefined;
 
-      // ── Read file buffers once (reused for Zepto + storage) ──
+      // ── Read file buffers once (reused for SMTP + storage) ──
       const fileData: Array<{ name: string; buffer: Buffer; type: string; size: number }> = [];
       for (const file of files) {
         try {
@@ -164,14 +164,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ── Convert to base64 for Zepto ──
-      const zeptoAttachments: ZeptoAttachment[] = fileData.map(f => ({
+      // ── Convert to base64 for SMTP ──
+      const smtpAttachments: SmtpAttachment[] = fileData.map(f => ({
         content: f.buffer.toString('base64'),
         mime_type: f.type,
         name: f.name,
       }));
-      if (zeptoAttachments.length > 0) {
-        console.log(`[API messages] ${zeptoAttachments.length} attachment(s): ${zeptoAttachments.map(a => a.name).join(', ')}`);
+      if (smtpAttachments.length > 0) {
+        console.log(`[API messages] ${smtpAttachments.length} attachment(s): ${smtpAttachments.map(a => a.name).join(', ')}`);
       }
 
       // ── Resolve assigned master from case if not provided by frontend ──
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
 </div>`;
       }
 
-      // ── Actually send the email via ZeptoMail (skip if already sent by another API) ──
+      // ── Actually send the email via Zoho SMTP ──
       if (!skip_send && recipientList.length > 0 && recipientList[0]) {
         // Build body content from text or html
         const bodyContent = body_html
@@ -218,21 +218,21 @@ export async function POST(request: NextRequest) {
         const html = wrapInBrandedTemplate(bodyContent + signatureHtml);
 
         for (const recipientEmail of recipientList) {
-          const result = await sendZeptoEmail({
+          const result = await sendZohoSmtpEmail({
             to: recipientEmail,
             subject: subject || '(sin asunto)',
             htmlBody: html,
             textBody: body_text || undefined,
             replyTo: senderAddr,
-            attachments: zeptoAttachments.length > 0 ? zeptoAttachments : undefined,
+            attachments: smtpAttachments.length > 0 ? smtpAttachments : undefined,
           });
 
           if (result.success) {
-            zeptoMessageId = result.messageId;
-            console.log(`[API messages] ✓ Email sent to ${recipientEmail} via Zepto (msgId: ${result.messageId})`);
+            smtpMessageId = result.messageId;
+            console.log(`[API messages] ✓ Email sent to ${recipientEmail} via Zoho SMTP (msgId: ${result.messageId})`);
           } else {
             sendError = result.error;
-            console.error(`[API messages] ✗ Zepto send failed for ${recipientEmail}:`, result.error);
+            console.error(`[API messages] ✗ Zoho SMTP send failed for ${recipientEmail}:`, result.error);
           }
         }
       } else {
@@ -265,15 +265,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Insert outbound message record
-      const attachmentNames = zeptoAttachments.map(a => a.name);
+      const attachmentNames = smtpAttachments.map(a => a.name);
       const { error: insErr } = await (supabase as any)
         .from('ops_case_messages')
         .insert({
           case_id: outCaseId,
           unclassified: false,
           direction: 'outbound',
-          provider: 'zepto',
-          message_id: zeptoMessageId || message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          provider: 'zoho_smtp',
+          message_id: smtpMessageId || message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           from_email: senderAddr,
           to_emails: recipientList,
           subject: subject || '',
@@ -282,7 +282,7 @@ export async function POST(request: NextRequest) {
           received_at: new Date().toISOString(),
           metadata: {
             sent_by: user_id || null,
-            zepto_message_id: zeptoMessageId || null,
+            smtp_message_id: smtpMessageId || null,
             send_error: sendError || null,
             has_attachments: attachmentNames.length > 0,
             attachment_names: attachmentNames.length > 0 ? attachmentNames : undefined,
