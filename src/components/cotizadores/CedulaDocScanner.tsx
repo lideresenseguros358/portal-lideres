@@ -49,7 +49,8 @@ interface Props {
 const CAPTURE_W = 1280;
 const CAPTURE_H = 960;
 const SAMPLE_STEP = 6;
-const WHITE_LUM = 185;          // 185 = detects real paper in varied lighting without catching light-grey objects
+const WHITE_LUM = 185;          // presence check: frame rejection, white-pixel count, interior density
+const WHITE_LUM_CORNER = 200;   // corner scoring: stricter — prevents grayish background from defining guide corners
 const MIN_WHITE_COUNT = 80;     // enough white pixels to confirm paper presence (not a small bright object)
 const STABLE_MS = 800;
 const STABLE_PX = 25;
@@ -148,7 +149,11 @@ function detectCorners(
   ].filter(l => l > WHITE_LUM).length;
   if (brightFrameCorners >= 3) return null;
 
-  // ── Diagonal scoring over all white pixels ────────────────────────────────
+  // ── Diagonal scoring ─────────────────────────────────────────────────────
+  // Two-pass logic in one loop:
+  //   WHITE_LUM (185)        → counts pixels for presence detection (sensitive)
+  //   WHITE_LUM_CORNER (200) → defines corner positions (strict, excludes grayish
+  //                            background that would shift guides off the paper)
   let tlScore =  Infinity, tlX = 0, tlY = 0;
   let trScore = -Infinity, trX = W, trY = 0;
   let blScore = -Infinity, blX = 0, blY = H;
@@ -158,12 +163,15 @@ function detectCorners(
 
   for (let y = 0; y < H; y += SAMPLE_STEP) {
     for (let x = 0; x < W; x += SAMPLE_STEP) {
-      if (lum(x, y) > WHITE_LUM) {
+      const l = lum(x, y);
+      if (l > WHITE_LUM) {
         whiteCount++;
-        if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
-        if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
-        if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
-        if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+        if (l > WHITE_LUM_CORNER) {          // strict: only clearly-white pixels define corners
+          if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
+          if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
+          if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
+          if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+        }
       }
     }
   }
