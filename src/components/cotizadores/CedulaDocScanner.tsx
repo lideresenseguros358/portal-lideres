@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { FaTimes, FaCamera, FaCheck, FaRedo, FaFileUpload, FaCheckCircle, FaLightbulb } from 'react-icons/fa';
+import { FaTimes, FaCamera, FaCheck, FaRedo, FaFileUpload, FaCheckCircle, FaLightbulb, FaPencilAlt } from 'react-icons/fa';
 import { PDFDocument } from 'pdf-lib';
 import type { FileAttachment } from './broker/BrokerExtraStep';
 
@@ -30,7 +30,9 @@ type ScanState =
   | 'processing'
   | 'preview'
   | 'done'
-  | 'desktop-adjust';   // NEW — desktop manual corner adjustment
+  | 'desktop-adjust'    // manual corner adjustment (desktop & mobile attach)
+  | 'desktop-upload'    // file picker prompt (desktop skipChoice / mobile attach path)
+  | 'mobile-choice';    // mobile: choose between camera scan or attach image
 
 interface Props {
   value: FileAttachment | null;
@@ -332,7 +334,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const [permissionRetries, setPermissionRetries] = useState(0); // track permission retry attempts
   const autoTorchRef = useRef(false); // tracks if auto-torch is currently managing torch state
 
-  // ── Desktop state ──────────────────────────────────────────────────────────
+  // ── Desktop / manual-adjust state ─────────────────────────────────────────
   const [desktopImg, setDesktopImg]       = useState<string | null>(null);
   const [desktopImgNW, setDesktopImgNW]   = useState(0);
   const [desktopImgNH, setDesktopImgNH]   = useState(0);
@@ -340,6 +342,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const desktopFileRef = useRef<HTMLInputElement>(null);
   const draggingRef    = useRef<number | null>(null);
   const svgDesktopRef  = useRef<SVGSVGElement>(null);
+
+  // ── Captured raw data (mobile camera → edit corners) ──────────────────────
+  // Stored after auto-capture so the user can re-adjust corners via pencil icon.
+  const [capturedRawImg, setCapturedRawImg]         = useState<string | null>(null);
+  const [capturedRawCorners, setCapturedRawCorners] = useState<Corner[]>([]);
+  const [capturedRawSrcW, setCapturedRawSrcW]       = useState(0);
+  const [capturedRawSrcH, setCapturedRawSrcH]       = useState(0);
 
   // ── SVG overlay viewBox — updated once when video metadata loads ──────────
   const [svgVW, setSvgVW] = useState(CAPTURE_W);
@@ -384,9 +393,9 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
   // ── Start camera ───────────────────────────────────────────────────────────
   const startCamera = useCallback(async () => {
-    const { stream, error } = await requestCameraStream();
-    if (error || !stream) {
-      setProcessingErr(error || 'No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.');
+    const { stream, errorName } = await requestCameraStream();
+    if (errorName || !stream) {
+      setProcessingErr(errorName || 'No se pudo acceder a la cámara. Permite el acceso e intenta de nuevo.');
       setScanState('instructions');
       return;
     }
@@ -484,6 +493,12 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           capCanvas.getContext('2d')!.drawImage(video, 0, 0, vW, vH);
           const imageBase64 = capCanvas.toDataURL('image/jpeg', 0.95);
 
+          // Store raw capture so user can re-edit corners via pencil icon
+          setCapturedRawImg(imageBase64);
+          setCapturedRawCorners([...corners]);
+          setCapturedRawSrcW(vW);
+          setCapturedRawSrcH(vH);
+
           stopCamera();
           setScanState('processing');
 
@@ -500,12 +515,12 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                 setScanState('preview');
               } else {
                 setProcessingErr(res.error || 'Error al procesar la imagen.');
-                setScanState('instructions');
+                setScanState('mobile-choice');
               }
             })
             .catch(() => {
               setProcessingErr('Error de conexión. Intenta de nuevo.');
-              setScanState('instructions');
+              setScanState('mobile-choice');
             });
         }
       } else {
@@ -539,6 +554,8 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     stopCamera();
     setDesktopImg(null);
     setManualCorners([]);
+    setCapturedRawImg(null);
+    setCapturedRawCorners([]);
     if (skipChoice && onClose) {
       // Standalone mode: let the parent unmount us — don't render choice UI
       onClose();
@@ -546,6 +563,23 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       setScanState(null);
     }
   }, [stopCamera, skipChoice, onClose]);
+
+  // ── Edit corners after camera auto-capture ─────────────────────────────────
+  // Loads the raw captured frame into the desktop-adjust flow so the user can
+  // manually reposition the corner guides and re-apply perspective correction.
+  const editCorners = useCallback(() => {
+    if (capturedRawImg && capturedRawCorners.length === 4) {
+      setDesktopImg(capturedRawImg);
+      setDesktopImgNW(capturedRawSrcW);
+      setDesktopImgNH(capturedRawSrcH);
+      setManualCorners(capturedRawCorners);
+      setScanState('desktop-adjust');
+    } else if (desktopImg) {
+      // File-upload path — corners already loaded, just re-open adjust screen
+      setScanState('desktop-adjust');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capturedRawImg, capturedRawCorners, capturedRawSrcW, capturedRawSrcH, desktopImg]);
 
   const goToCameraPermission = useCallback(() => {
     setPermissionRetries(0);
@@ -601,13 +635,18 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   const retake = useCallback(() => {
     setPreviewSrc(null);
     setProcessingErr(null);
-    // On desktop: go back to corner adjustment if we still have the image loaded
+    // If we have a file-uploaded image: go back to corner adjustment
     if (desktopImg) {
       setScanState('desktop-adjust');
+    } else if (isDesktop) {
+      setScanState('desktop-upload');
     } else {
-      setScanState('instructions');
+      // Mobile camera path: clear captured raw data and restart
+      setCapturedRawImg(null);
+      setCapturedRawCorners([]);
+      setScanState('mobile-choice');
     }
-  }, [desktopImg]);
+  }, [desktopImg, isDesktop]);
 
   const approve = useCallback(async () => {
     if (!previewSrc) return;
@@ -615,11 +654,16 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
     try {
       const attachment = await imgBase64ToPdfAttachment(previewSrc);
       onChange(attachment);
+      // Clear all capture state on success
+      setCapturedRawImg(null);
+      setCapturedRawCorners([]);
+      setDesktopImg(null);
+      setManualCorners([]);
       setScanState('done');
       setTimeout(() => setScanState(null), 800);
     } catch {
       setProcessingErr('Error al generar el PDF. Intenta de nuevo.');
-      setScanState('instructions');
+      setScanState('preview');
     }
   }, [previewSrc, onChange]);
 
@@ -748,11 +792,16 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       setProcessingErr(null);
       setPreviewSrc(null);
       setDetectedCorners(null);
-      setScanState('instructions');
+      if (isDesktop) {
+        // Desktop: skip camera — go straight to file upload prompt
+        setScanState('desktop-upload');
+      } else {
+        // Mobile: show choice between camera scan or attach image
+        setScanState('mobile-choice');
+      }
     }
-  // openScanner deps — replicated inline to avoid stale closure
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skipChoice, mounted]);
+  }, [skipChoice, mounted, isDesktop]);
 
   // ── Overlay UI ────────────────────────────────────────────────────────────
   const scannerOverlay = scanState && scanState !== 'done' ? (
@@ -770,7 +819,10 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       <div className="flex items-center justify-between px-4 py-3 bg-black/80 flex-shrink-0">
         <div>
           <p className="text-white font-bold text-sm">
-            {scanState === 'desktop-adjust' ? 'Ajustar bordes del documento' : 'Escanear cédula'}
+            {scanState === 'desktop-adjust' ? 'Ajustar bordes del documento'
+              : scanState === 'desktop-upload' ? 'Escanear cédula — PC'
+              : scanState === 'mobile-choice' ? 'Escanear cédula'
+              : 'Escanear cédula'}
           </p>
           <p className="text-[#8AAA19] text-xs">
             {scanState === 'scanning'
@@ -780,10 +832,22 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
               : scanState === 'processing' ? 'Procesando…'
               : scanState === 'preview' ? 'Vista previa — aprueba o vuelve a tomar'
               : scanState === 'desktop-adjust' ? 'Arrastra las esquinas para alinear con el documento'
+              : scanState === 'desktop-upload' ? 'Adjunta una foto del documento'
+              : scanState === 'mobile-choice' ? 'Elige cómo capturar el documento'
               : ''}
           </p>
         </div>
         <div className="flex items-center gap-1">
+          {/* Edit corners — pencil icon shown in preview when raw capture is available */}
+          {scanState === 'preview' && (capturedRawImg || desktopImg) && (
+            <button
+              onClick={editCorners}
+              title="Editar esquinas manualmente"
+              className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <FaPencilAlt size={16} />
+            </button>
+          )}
           {/* Torch / flash — only while camera is active */}
           {scanState === 'scanning' && (
             <button
@@ -1124,6 +1188,95 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           </div>
         )}
 
+        {/* ── MOBILE-CHOICE ────────────────────────────────────── */}
+        {scanState === 'mobile-choice' && (
+          <div className="w-full max-w-sm space-y-4">
+            {processingErr && (
+              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                {processingErr}
+              </p>
+            )}
+            <p className="text-gray-300 text-sm text-center px-2">
+              ¿Cómo deseas capturar el documento?
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Escanear con cámara */}
+              <button
+                onClick={() => { setProcessingErr(null); setScanState('instructions'); }}
+                disabled={!cameraSupported}
+                className={`flex flex-col items-center gap-3 px-4 py-6 rounded-2xl border-2 transition-all ${
+                  cameraSupported
+                    ? 'border-[#010139]/40 bg-[#010139]/10 hover:bg-[#010139]/20 hover:border-[#010139]'
+                    : 'border-gray-600 bg-gray-800/50 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <FaCamera size={32} className={cameraSupported ? 'text-white' : 'text-gray-500'} />
+                <div className="text-center">
+                  <p className={`text-sm font-bold ${cameraSupported ? 'text-white' : 'text-gray-500'}`}>Escanear</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Usar cámara</p>
+                </div>
+              </button>
+              {/* Adjuntar imagen */}
+              <button
+                onClick={() => { setProcessingErr(null); setScanState('desktop-upload'); }}
+                className="flex flex-col items-center gap-3 px-4 py-6 rounded-2xl border-2 border-[#8AAA19]/40 bg-[#8AAA19]/10 hover:bg-[#8AAA19]/20 hover:border-[#8AAA19] transition-all"
+              >
+                <FaFileUpload size={32} className="text-[#8AAA19]" />
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">Adjuntar</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Desde galería</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── DESKTOP-UPLOAD ───────────────────────────────────── */}
+        {scanState === 'desktop-upload' && (
+          <div className="w-full max-w-sm space-y-5">
+            <div className="rounded-2xl border-2 border-[#8AAA19]/40 bg-[#8AAA19]/5 p-6 text-center space-y-4">
+              <FaFileUpload size={40} className="mx-auto text-[#8AAA19]" />
+              <div>
+                <p className="text-white font-bold text-lg mb-2">Adjuntar imagen del documento</p>
+                <p className="text-gray-300 text-sm">
+                  {isDesktop
+                    ? 'Selecciona una foto de la cédula. Luego podrás ajustar los bordes manualmente antes de aplicar la corrección.'
+                    : 'Selecciona una foto desde tu galería. Luego ajustarás los bordes manualmente para encuadrar el documento.'}
+                </p>
+              </div>
+              <ul className="text-left space-y-1.5 text-xs text-gray-400">
+                <li className="flex items-start gap-2"><span className="text-[#8AAA19] font-bold mt-0.5">•</span>La imagen debe mostrar el documento completo</li>
+                <li className="flex items-start gap-2"><span className="text-[#8AAA19] font-bold mt-0.5">•</span>Formatos: JPG, PNG, WEBP, HEIC</li>
+                <li className="flex items-start gap-2"><span className="text-[#8AAA19] font-bold mt-0.5">•</span>Se aplicará corrección de perspectiva y filtro B&N</li>
+              </ul>
+            </div>
+
+            {processingErr && (
+              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                {processingErr}
+              </p>
+            )}
+
+            <div className={`flex gap-3 ${!isDesktop ? 'flex-col' : ''}`}>
+              {/* Back button — only on mobile (desktop has no prior step) */}
+              {!isDesktop && (
+                <button
+                  onClick={() => setScanState('mobile-choice')}
+                  className="w-full py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  Volver
+                </button>
+              )}
+              <button
+                onClick={() => desktopFileRef.current?.click()}
+                className="w-full py-3 text-sm font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors flex items-center justify-center gap-2"
+              >
+                <FaFileUpload size={14} /> Seleccionar imagen
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── DESKTOP-ADJUST ────────────────────────────────────── */}
         {scanState === 'desktop-adjust' && desktopImg && (
           <div className="w-full flex flex-col items-center gap-4" style={{ maxWidth: 720 }}>
@@ -1231,7 +1384,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       </div>
 
       {/* Footer */}
-      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm' || scanState === 'camera-permission' || scanState === 'desktop-adjust') && (
+      {(scanState === 'scanning' || scanState === 'instructions' || scanState === 'confirm' || scanState === 'camera-permission' || scanState === 'desktop-adjust' || scanState === 'desktop-upload' || scanState === 'mobile-choice') && (
         <div className="flex-shrink-0 px-4 py-3 bg-black/80 text-center">
           <p className="text-xs text-gray-500">La imagen se procesa en el servidor y se adjunta como PDF al formulario</p>
         </div>
@@ -1277,29 +1430,27 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
           <span className="text-xs text-gray-400">Subir foto o PDF</span>
         </button>
 
-        {/* No → open scanner (desktop: file picker; mobile: camera) */}
+        {/* No → open scanner (desktop: file picker; mobile: choice screen) */}
         <button
           type="button"
           onClick={() => {
             if (isDesktop) {
               desktopFileRef.current?.click();
             } else {
-              openScanner();
+              setProcessingErr(null);
+              setPreviewSrc(null);
+              setDetectedCorners(null);
+              setScanState('mobile-choice');
             }
           }}
-          disabled={!isDesktop && !cameraSupported}
-          className={`flex flex-col items-center gap-2 px-3 py-4 border-2 rounded-xl transition-all text-center ${
-            isDesktop || cameraSupported
-              ? 'border-[#010139]/20 hover:border-[#010139] bg-[#010139]/5 hover:bg-[#010139]/10'
-              : 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-60'
-          }`}
+          className="flex flex-col items-center gap-2 px-3 py-4 border-2 border-[#010139]/20 hover:border-[#010139] bg-[#010139]/5 hover:bg-[#010139]/10 rounded-xl transition-all text-center"
         >
-          <FaCamera className={isDesktop || cameraSupported ? 'text-[#010139]' : 'text-gray-400'} size={20} />
-          <span className={`text-xs font-semibold ${isDesktop || cameraSupported ? 'text-[#010139]' : 'text-gray-500'}`}>
-            {isDesktop ? 'No, cargar imagen' : cameraSupported ? 'No, escanear' : 'Cámara no disponible'}
+          <FaCamera className="text-[#010139]" size={20} />
+          <span className="text-xs font-semibold text-[#010139]">
+            {isDesktop ? 'No, cargar imagen' : 'No, escanear'}
           </span>
           <span className="text-xs text-gray-400">
-            {isDesktop ? 'Seleccionar archivo' : cameraSupported ? 'Usar cámara' : 'Navegador no soportado'}
+            {isDesktop ? 'Seleccionar archivo' : 'Cámara o galería'}
           </span>
         </button>
       </div>

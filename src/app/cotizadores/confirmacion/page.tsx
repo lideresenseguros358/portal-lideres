@@ -420,33 +420,16 @@ export default function ConfirmacionPage() {
                 </p>
               )}
             </div>
-          ) : policyData?.insurer?.toUpperCase().includes('REGIONAL') && policyData?.regionalPoliza ? (
-            <div className="mb-6">
-              <button
-                onClick={handleDownloadRegionalPdf}
-                disabled={downloadingPdf}
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mx-auto text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none"
-              >
-                {downloadingPdf ? (
-                  <>
-                    <svg className="w-5 h-5 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-white text-sm">Descargando...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaDownload className="text-lg text-white" />
-                    <span className="text-white">Descargar Póliza</span>
-                  </>
-                )}
-              </button>
-              {pdfError && (
-                <p className="text-xs text-amber-600 mt-2 text-center">
-                  {pdfError} — Se generó carátula alternativa
-                </p>
-              )}
+          ) : policyData?.insurer?.toUpperCase().includes('REGIONAL') ? (
+            <div className="mb-6 p-5 bg-blue-50 border-2 border-blue-200 rounded-xl text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <FaEnvelope className="text-blue-500 text-xl" />
+                <p className="text-sm font-bold text-blue-800">Tu carátula de póliza está en camino</p>
+              </div>
+              <p className="text-sm text-blue-700 leading-relaxed">
+                La carátula oficial de tu póliza será enviada por <strong>La Regional de Seguros</strong> directamente a tu correo electrónico en los próximos minutos.
+                Si no la encuentras en tu bandeja principal, recuerda revisar la carpeta de <strong>spam o correo no deseado</strong>.
+              </p>
             </div>
           ) : policyData?.pdfUrl ? (
             <a
@@ -467,9 +450,11 @@ export default function ConfirmacionPage() {
               <span className="text-white">Descargar Póliza</span>
             </button>
           )}
-          <p className="text-xs text-gray-500 mb-6">
-            Documento oficial emitido por la aseguradora
-          </p>
+          {!policyData?.insurer?.toUpperCase().includes('REGIONAL') && (
+            <p className="text-xs text-gray-500 mb-6">
+              Documento oficial emitido por la aseguradora
+            </p>
+          )}
 
           <div className="my-6 border-t border-gray-200"></div>
 

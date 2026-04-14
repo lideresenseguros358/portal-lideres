@@ -342,9 +342,52 @@ export async function POST(request: NextRequest) {
       console.warn('[IS EXPEDIENTE] ⚠️ authPdfBuffer quedó null — la debida diligencia NO se guardará en el expediente.');
     }
 
+    // ── Compute canonical URLs (used in ALL email builds) ─────────────────────
+    // NEXT_PUBLIC_SITE_URL is the canonical custom domain — never use VERCEL_URL
+    // which is the deployment-specific URL and causes email links to redirect to Vercel.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://portal.lideresenseguros.com';
+    const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
+    const caratulaUrl = isFedpa && nroPoliza
+      ? `${siteUrl}/api/fedpa/caratula?poliza=${encodeURIComponent(nroPoliza)}&env=PROD`
+      : '';
+    let resolvedPdfUrl = (formData.get('pdfUrl') as string) || '';
+    if (resolvedPdfUrl && resolvedPdfUrl.startsWith('/')) {
+      resolvedPdfUrl = `${siteUrl}${resolvedPdfUrl}`;
+    }
+
+    // ── Resolve broker email for CC on portal expediente ──────────────────────
+    // The assigned broker (bypass broker or master-assigned broker) receives a copy
+    // of the portal expediente email so they have the full case record.
+    let portalBrokerEmail: string | null = null;
+    if (policyId) {
+      try {
+        const sbAdminBroker = getSupabaseAdmin();
+        const { data: policyRow } = await sbAdminBroker
+          .from('policies')
+          .select('broker_id')
+          .eq('id', policyId)
+          .single();
+        if (policyRow?.broker_id) {
+          const { data: brokerRow } = await sbAdminBroker
+            .from('brokers')
+            .select('email')
+            .eq('id', policyRow.broker_id)
+            .single();
+          const bEmail = (brokerRow as any)?.email as string | undefined;
+          // Don't CC if it's already one of the fixed recipients (portal/office)
+          if (bEmail && bEmail !== 'portal@lideresenseguros.com' && bEmail !== OFFICE_EMAIL) {
+            portalBrokerEmail = bEmail;
+            console.log('[IS EXPEDIENTE] Broker asignado (CC expediente):', portalBrokerEmail);
+          }
+        }
+      } catch (brokerLookupErr) {
+        console.warn('[IS EXPEDIENTE] No se pudo resolver broker email para CC:', brokerLookupErr);
+      }
+    }
+
     // Build email HTML
     const coberturaLabel = isCC ? 'Cobertura Completa' : 'Daños a Terceros';
-    
+
     const htmlBody = buildExpedienteEmail({
       nombreCompleto,
       cedula: clientData.cedula,
@@ -364,7 +407,8 @@ export async function POST(request: NextRequest) {
       cobertura: coberturaLabel,
       nroPoliza,
       attachmentCount: attachments.length,
-      pdfUrl: (formData.get('pdfUrl') as string) || '',
+      pdfUrl: resolvedPdfUrl,
+      caratulaUrl,
       insurerName,
     });
     
@@ -434,19 +478,25 @@ export async function POST(request: NextRequest) {
         cobertura: coberturaLabel,
         nroPoliza,
         attachmentCount: portalAttachments.length,
-        pdfUrl: (formData.get('pdfUrl') as string) || '',
+        pdfUrl: resolvedPdfUrl,
+        caratulaUrl,
         insurerName,
       });
 
-      console.log('[IS EXPEDIENTE] Enviando expediente portal a:', PORTAL_RECIPIENT);
+      // Recipients: portal (always) + broker assigned to the policy (if any)
+      const portalRecipients: string[] = [PORTAL_RECIPIENT];
+      if (portalBrokerEmail) {
+        portalRecipients.push(portalBrokerEmail);
+      }
+      console.log('[IS EXPEDIENTE] Enviando expediente portal a:', portalRecipients.join(', '));
       const portalResult = await sendZeptoWithAttachments({
-        to: PORTAL_RECIPIENT,
+        to: portalRecipients,
         subject: `Expediente Portal - ${insurerName} - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
         html: portalHtml,
         attachments: portalAttachments,
       });
       portalEmailOk = true;
-      console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', PORTAL_RECIPIENT, portalResult.messageId);
+      console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', portalRecipients.join(', '), portalResult.messageId);
     } catch (portalMailError: any) {
       portalEmailError = portalMailError.message;
       console.error('[IS EXPEDIENTE] ❌ Error enviando expediente portal:', portalMailError.message);
@@ -462,21 +512,6 @@ export async function POST(request: NextRequest) {
     const welcomeRecipient = clientEmail || OFFICE_EMAIL;
     
     try {
-      // Build download URLs for email links
-      // NEXT_PUBLIC_SITE_URL is the canonical custom domain — never use VERCEL_URL
-      // which is the deployment-specific URL and causes email links to redirect to Vercel
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://portal.lideresenseguros.com';
-      const isFedpa = (insurerName || '').toUpperCase().includes('FEDPA');
-      const caratulaUrl = isFedpa && nroPoliza
-        ? `${siteUrl}/api/fedpa/caratula?poliza=${encodeURIComponent(nroPoliza)}&env=PROD`
-        : '';
-
-      // Resolve pdfUrl: make relative paths absolute for email links
-      let resolvedPdfUrl = (formData.get('pdfUrl') as string) || '';
-      if (resolvedPdfUrl && resolvedPdfUrl.startsWith('/')) {
-        resolvedPdfUrl = `${siteUrl}${resolvedPdfUrl}`;
-      }
-
       const welcomeHtml = buildWelcomeEmail({
         nombreCompleto,
         cedula: clientData.cedula,
@@ -1017,7 +1052,15 @@ function buildWelcomeEmail(data: {
         </p>
       </div>` : ''}
 
-      ${data.caratulaUrl ? `
+      ${(data.insurerName || '').toUpperCase().includes('REGIONAL') ? `
+      <div style="background:#e8f4fd;border-left:4px solid #1565c0;border-radius:8px;padding:16px 20px;margin:20px 0;text-align:left;">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#0d47a1;">📬 Tu carátula de póliza está en camino</p>
+        <p style="margin:0;font-size:13px;color:#1565c0;line-height:1.6;">
+          La <strong>carátula oficial</strong> emitida por La Regional de Seguros será enviada a este correo en los próximos minutos.
+          Si no la recibe en su bandeja principal, por favor revise su carpeta de <strong>spam o correo no deseado</strong>.
+          Ante cualquier consulta, estamos disponibles por WhatsApp.
+        </p>
+      </div>` : data.caratulaUrl ? `
       <div style="text-align:center;margin:20px 0;">
         <a href="${data.caratulaUrl}" style="display:inline-block;background:#8AAA19;color:white;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Póliza Oficial</a>
         <p style="font-size:11px;color:#999;margin-top:8px;">Descargue su carátula de póliza oficial emitida por ${data.insurerName}</p>
@@ -1116,6 +1159,7 @@ function buildExpedienteEmail(data: {
   nroPoliza: string;
   attachmentCount: number;
   pdfUrl?: string;
+  caratulaUrl?: string;
   insurerName?: string;
 }): string {
   return `
@@ -1224,11 +1268,17 @@ function buildExpedienteEmail(data: {
         </div>
       </div>
       
-      ${data.pdfUrl ? `
-      <div style="text-align:center;margin:16px 0;">
-        <a href="${data.pdfUrl}" style="display:inline-block;background:#010139;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Carátula de Póliza</a>
-        <p style="font-size:11px;color:#999;margin-top:6px;">Documento oficial emitido por Internacional de Seguros</p>
-      </div>` : ''}
+      ${(data.insurerName || '').toUpperCase().includes('REGIONAL') ? `` :
+        data.caratulaUrl ? `
+      <div style="text-align:center;margin:20px 0;">
+        <a href="${data.caratulaUrl}" style="display:inline-block;background:#8AAA19;color:white;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Carátula de Póliza</a>
+        <p style="font-size:11px;color:#999;margin-top:8px;">Carátula oficial emitida por ${data.insurerName || 'la aseguradora'}</p>
+      </div>` :
+        data.pdfUrl ? `
+      <div style="text-align:center;margin:20px 0;">
+        <a href="${data.pdfUrl}" style="display:inline-block;background:#8AAA19;color:white;padding:13px 30px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Carátula de Póliza</a>
+        <p style="font-size:11px;color:#999;margin-top:8px;">Documento oficial emitido por ${data.insurerName || 'la aseguradora'}</p>
+      </div>` : ``}
 
       <div class="attachment-note">
         <strong>📎 ${data.attachmentCount} archivo(s) adjunto(s)</strong>
