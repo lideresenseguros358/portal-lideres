@@ -668,6 +668,12 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
   }, [previewSrc, onChange]);
 
   // ── Desktop file handler ───────────────────────────────────────────────────
+  // Images are resampled to MAX_UPLOAD_DIM on the longest side before storing.
+  // This caps the base64 JSON payload to ~1.5 MB, well within Next.js's 4 MB
+  // body limit. Camera captures are already limited to 1280×960 by the scanner;
+  // 2048 px gives more than enough source resolution for the perspective warp.
+  const MAX_UPLOAD_DIM = 2048;
+
   const handleDesktopFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -676,18 +682,29 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
       const dataUrl = reader.result as string;
       const img = new Image();
       img.onload = () => {
-        setDesktopImgNW(img.naturalWidth);
-        setDesktopImgNH(img.naturalHeight);
-        // Initialize corners at 10% inset from each corner
-        const px = img.naturalWidth * 0.1;
-        const py = img.naturalHeight * 0.1;
+        // Downsample if either dimension exceeds MAX_UPLOAD_DIM
+        const scale = Math.min(1, MAX_UPLOAD_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+        const nw = Math.round(img.naturalWidth  * scale);
+        const nh = Math.round(img.naturalHeight * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = nw;
+        canvas.height = nh;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, nw, nh);
+        const resized = canvas.toDataURL('image/jpeg', 0.92);
+
+        // Initialize corners at 10% inset
+        const px = nw * 0.1;
+        const py = nh * 0.1;
+        setDesktopImgNW(nw);
+        setDesktopImgNH(nh);
         setManualCorners([
-          { x: px,                       y: py },                        // TL
-          { x: img.naturalWidth - px,    y: py },                        // TR
-          { x: img.naturalWidth - px,    y: img.naturalHeight - py },    // BR
-          { x: px,                       y: img.naturalHeight - py },    // BL
+          { x: px,      y: py },       // TL
+          { x: nw - px, y: py },       // TR
+          { x: nw - px, y: nh - py },  // BR
+          { x: px,      y: nh - py },  // BL
         ]);
-        setDesktopImg(dataUrl);
+        setDesktopImg(resized);
         setProcessingErr(null);
         setScanState('desktop-adjust');
       };
@@ -868,8 +885,13 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-4 py-4 gap-4">
+      {/* Body — desktop-adjust gets its own tight layout (no scroll, no centering)
+              so the image fills exactly the remaining screen height on mobile */}
+      <div className={`flex-1 flex flex-col items-center ${
+        scanState === 'desktop-adjust'
+          ? 'overflow-hidden justify-start px-3 py-2 gap-2'
+          : 'overflow-y-auto justify-center px-4 py-4 gap-4'
+      }`}>
 
         {/* ── CHOICE ────────────────────────────────────────────── */}
         {scanState === 'choice' && null /* rendered below the portal trigger, not here */}
@@ -1279,11 +1301,18 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
         {/* ── DESKTOP-ADJUST ────────────────────────────────────── */}
         {scanState === 'desktop-adjust' && desktopImg && (
-          <div className="w-full flex flex-col items-center gap-4" style={{ maxWidth: 720 }}>
-            {/* Image + SVG overlay container — preserves aspect ratio */}
+          <div className="w-full flex flex-col items-center gap-2" style={{ maxWidth: 720 }}>
+            {/* Image + SVG overlay container.
+                maxHeight = 100vh minus the fixed chrome (header ~52px + body padding 16px +
+                instructions 16px + gaps 16px + buttons 30px + footer 40px = 170px).
+                width = min(100%, maxHeight × ratio) keeps portrait images fully visible. */}
             <div
-              className="relative w-full overflow-hidden rounded-xl border border-white/20"
-              style={{ aspectRatio: `${desktopImgNW} / ${desktopImgNH}`, maxHeight: '70vh' }}
+              className="relative rounded-xl border border-white/20"
+              style={{
+                aspectRatio: `${desktopImgNW} / ${desktopImgNH}`,
+                maxHeight: 'calc(100vh - 170px)',
+                width: `min(100%, calc((100vh - 170px) * ${desktopImgNW} / ${desktopImgNH}))`,
+              }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -1354,28 +1383,28 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
               </svg>
             </div>
 
-            <p className="text-gray-300 text-sm text-center px-2">
-              Arrastra las esquinas para alinear con los bordes del documento
+            <p className="text-gray-400 text-xs text-center px-1 flex-shrink-0">
+              Arrastra las esquinas para alinear con el documento
             </p>
 
             {processingErr && (
-              <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2 w-full">
+              <p className="text-red-400 text-xs text-center bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-1.5 w-full flex-shrink-0">
                 {processingErr}
               </p>
             )}
 
-            <div className="flex gap-3 w-full" style={{ maxWidth: 400 }}>
+            <div className="flex gap-2 w-full flex-shrink-0" style={{ maxWidth: 400 }}>
               <button
                 onClick={() => { desktopFileRef.current?.click(); }}
-                className="flex-1 py-3 text-sm font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+                className="flex-1 py-2 text-xs font-semibold border-2 border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
               >
                 Volver a elegir
               </button>
               <button
                 onClick={applyDesktopCorrection}
-                className="flex-1 py-3 text-sm font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2 text-xs font-bold bg-[#8AAA19] text-white rounded-xl hover:bg-[#6d8814] transition-colors flex items-center justify-center gap-1.5"
               >
-                <FaCheck size={12} /> Aplicar corrección
+                <FaCheck size={11} /> Aplicar corrección
               </button>
             </div>
           </div>
