@@ -211,6 +211,75 @@ function detectCorners(
   };
 }
 
+// Same as detectCorners but skips the frame-corner brightness check.
+// Uploaded photos often have bright/white backgrounds that would otherwise
+// trigger the frame-corner rejection and return null.
+function detectCornersRelaxed(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+): Corner[] | null {
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const pix = imgData.data;
+  const lum = (x: number, y: number) => {
+    const i = (y * W + x) * 4;
+    return 0.299 * (pix[i] ?? 0) + 0.587 * (pix[i + 1] ?? 0) + 0.114 * (pix[i + 2] ?? 0);
+  };
+
+  // No frame-corner brightness check for uploaded images
+
+  let tlScore =  Infinity, tlX = 0, tlY = 0;
+  let trScore = -Infinity, trX = W, trY = 0;
+  let blScore = -Infinity, blX = 0, blY = H;
+  let brScore = -Infinity, brX = W, brY = H;
+  let whiteCount = 0;
+  const total = Math.floor(W / SAMPLE_STEP) * Math.floor(H / SAMPLE_STEP);
+
+  for (let y = 0; y < H; y += SAMPLE_STEP) {
+    for (let x = 0; x < W; x += SAMPLE_STEP) {
+      if (lum(x, y) > WHITE_LUM) {
+        whiteCount++;
+        if (x + y < tlScore) { tlScore = x + y; tlX = x; tlY = y; }
+        if (x - y > trScore) { trScore = x - y; trX = x; trY = y; }
+        if (y - x > blScore) { blScore = y - x; blX = x; blY = y; }
+        if (x + y > brScore) { brScore = x + y; brX = x; brY = y; }
+      }
+    }
+  }
+
+  if (whiteCount < MIN_WHITE_COUNT) return null;
+
+  const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
+  const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
+
+  if (spanW < W * 0.15 || spanH < H * 0.12) return null;
+
+  const aspectRatio = spanW / spanH;
+  if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) return null;
+
+  const minX = Math.min(tlX, blX);
+  const maxX = Math.max(trX, brX);
+  const minY = Math.min(tlY, trY);
+  const maxY = Math.max(blY, brY);
+
+  let interiorWhiteCount = 0;
+  let interiorSamples = 0;
+  for (let y = minY + SAMPLE_STEP * 2; y < maxY - SAMPLE_STEP * 2; y += SAMPLE_STEP) {
+    for (let x = minX + SAMPLE_STEP * 2; x < maxX - SAMPLE_STEP * 2; x += SAMPLE_STEP) {
+      interiorSamples++;
+      if (lum(x, y) > WHITE_LUM) interiorWhiteCount++;
+    }
+  }
+  if (interiorSamples > 0 && interiorWhiteCount / interiorSamples < 0.40) return null;
+
+  return [
+    { x: tlX, y: tlY }, // TL
+    { x: trX, y: trY }, // TR
+    { x: brX, y: brY }, // BR
+    { x: blX, y: blY }, // BL
+  ];
+}
+
 function cornersAreSimilar(a: Corner[] | null, b: Corner[] | null): boolean {
   if (!a || !b) return false;
   return a.every((pa, i) => {
@@ -690,15 +759,17 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
         const canvas = document.createElement('canvas');
         canvas.width  = nw;
         canvas.height = nh;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, nw, nh);
+        const ctx2d = canvas.getContext('2d')!;
+        ctx2d.drawImage(img, 0, 0, nw, nh);
         const resized = canvas.toDataURL('image/jpeg', 0.92);
 
-        // Initialize corners at 10% inset
+        // Try auto-detecting document corners; fall back to 10% inset
+        const detected = detectCornersRelaxed(ctx2d, nw, nh);
         const px = nw * 0.1;
         const py = nh * 0.1;
         setDesktopImgNW(nw);
         setDesktopImgNH(nh);
-        setManualCorners([
+        setManualCorners(detected ?? [
           { x: px,      y: py },       // TL
           { x: nw - px, y: py },       // TR
           { x: nw - px, y: nh - py },  // BR
@@ -1301,17 +1372,16 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
 
         {/* ── DESKTOP-ADJUST ────────────────────────────────────── */}
         {scanState === 'desktop-adjust' && desktopImg && (
-          <div className="w-full flex flex-col items-center gap-2" style={{ maxWidth: 720 }}>
-            {/* Image + SVG overlay container.
-                maxHeight = 100vh minus the fixed chrome (header ~52px + body padding 16px +
-                instructions 16px + gaps 16px + buttons 30px + footer 40px = 170px).
-                width = min(100%, maxHeight × ratio) keeps portrait images fully visible. */}
+          <div className="flex-1 min-h-0 w-full flex flex-col items-center gap-2" style={{ maxWidth: 720 }}>
+            {/* Image area: flex-1 min-h-0 fills remaining body space */}
+            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+            {/* Image frame: aspect-ratio + max-width/max-height gives object-fit:contain behaviour */}
             <div
               className="relative rounded-xl border border-white/20"
               style={{
                 aspectRatio: `${desktopImgNW} / ${desktopImgNH}`,
-                maxHeight: 'calc(100vh - 170px)',
-                width: `min(100%, calc((100vh - 170px) * ${desktopImgNW} / ${desktopImgNH}))`,
+                maxWidth: '100%',
+                maxHeight: '100%',
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1382,6 +1452,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                 })()}
               </svg>
             </div>
+            </div>{/* end image area wrapper */}
 
             <p className="text-gray-400 text-xs text-center px-1 flex-shrink-0">
               Arrastra las esquinas para alinear con el documento
