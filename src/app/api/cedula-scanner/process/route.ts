@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     const srcPixels = new Uint8ClampedArray(rawData);
 
-    // ── 3. Perspective warp → Letter ────────────────────────────────────────
+    // ── 3. Perspective warp → Letter ───────────────────────────────────────
     const dstCorners = [
       { x: 0,         y: 0 },
       { x: OUT_W - 1, y: 0 },
@@ -56,41 +56,75 @@ export async function POST(req: NextRequest) {
 
     const warpedBuffer = Buffer.from(warpedRgba);
 
-    // ── 4. Clean color-document pipeline ────────────────────────────────────
+    // ── 4. Adobe Scan-style pipeline: homomorphic background division ───────
     //
-    //   WHY the previous homomorphic filter was removed
-    //   ─────────────────────────────────────────────────
-    //   The old pipeline:
-    //     grayscale → downsample×8 → Gaussian blur → upsample×8 (cubic) → divide
+    //   This is the SAME approach as before but with the artifact-line bug fixed.
     //
-    //   The cubic resize kernel overshoots at high-contrast edges (ringing /
-    //   Gibbs phenomenon).  When this wavy background estimate is used as the
-    //   divisor, the rings are amplified across the entire page as visible
-    //   horizontal / vertical bands.
+    //   WHY LINES APPEARED BEFORE
+    //   ──────────────────────────
+    //   The background estimate used `kernel: 'cubic'` for both the 8× downsample
+    //   AND the 8× upsample.  The cubic (Catmull-Rom) kernel has significant
+    //   negative lobes → overshoots at every high-contrast edge (text, stamps).
+    //   At ×8 upscale the ringing is amplified into visible horizontal/vertical
+    //   bands.  Dividing the original by this banded background then printed the
+    //   bands across the whole page.
     //
-    //   Additionally, the original reason for the filter (white synthetic border
-    //   pixels anchoring Sharp's normalise white-point) no longer applies:
-    //   warpPerspective now uses border-clamping (commit 4718084c), so out-of-
-    //   bounds pixels replicate the nearest source pixel (dark table) instead of
-    //   filling with white.
+    //   THE FIX
+    //   ────────
+    //   • Downsample with `mitchell` — Mitchell-Netravali has tiny negative lobes
+    //     (much less than cubic), gives smooth averaging without aliasing.
+    //   • Upsample with `linear`    — bilinear has ZERO negative lobes → zero
+    //     ringing.  The background estimate just needs to be smooth, not sharp.
     //
-    //   NEW PIPELINE — color, no artifacts
-    //   ────────────────────────────────────
-    //   • Keep RGB color — preserves the cédula photo and colored seals/text.
-    //   • normalise(2, 98): stretches contrast so phone-camera gray paper → white
-    //     and dark text → black.  The 2% / 98% percentile clip ignores the few
-    //     dark border-clamp pixels at the warp edges.
-    //   • sharpen: unsharp mask tuned for text — sharpens edges only (m1=0),
-    //     boosts fine strokes (m2=3), no flat-area ringing (sigma=1.2).
-    //   • JPEG 92%: well above the artifact threshold; good quality/size ratio.
+    //   Result: background estimate is artifact-free; division maps paper → white
+    //   and text → dark grey exactly as before, with no band artifacts.
 
-    const processedBuffer = await sharp(warpedBuffer, {
+    // (a) Greyscale — 1 channel per pixel
+    const { data: grayBuf, info: grayInfo } = await sharp(warpedBuffer, {
       raw: { width: OUT_W, height: OUT_H, channels: 4 },
     })
       .removeAlpha()
-      .normalise({ lower: 2, upper: 98 })
-      .sharpen({ sigma: 1.2, m1: 0, m2: 3 })
-      .jpeg({ quality: 92, mozjpeg: false })
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const grayChannels = grayInfo.channels; // 1 after removeAlpha+greyscale
+
+    // (b) Illumination background estimate
+    //     downsample ×8 → blur σ=15 → upsample ×8
+    //     Effective σ ≈ 120 px on the A4 output.
+    const DSAMPLE = 8;
+    const dsW     = Math.round(OUT_W / DSAMPLE); // ~159 px
+    const dsH     = Math.round(OUT_H / DSAMPLE); // ~206 px
+
+    const { data: bgBuf } = await sharp(grayBuf, {
+      raw: { width: OUT_W, height: OUT_H, channels: grayChannels },
+    })
+      .resize(dsW, dsH, { kernel: 'mitchell' }) // Mitchell: minimal ringing on downsample
+      .blur(15)
+      .resize(OUT_W, OUT_H, { kernel: 'linear' }) // bilinear: zero ringing on upsample
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // (c) Per-pixel division: removes illumination field, maps paper → white
+    const N       = OUT_W * OUT_H;
+    const normBuf = Buffer.alloc(N);
+    for (let i = 0; i < N; i++) {
+      const p  = grayBuf.readUInt8(i * grayChannels);
+      const bg = bgBuf.readUInt8(i * grayChannels);
+      // If background estimate is very low (<50), this pixel is in a genuinely dark
+      // region (table edge).  Keep it dark — don't amplify dark/dark → white.
+      normBuf[i] = bg < 50
+        ? p
+        : Math.min(255, Math.round(p / bg * 255));
+    }
+
+    // (d) Sharpen text edges and encode
+    const processedBuffer = await sharp(normBuf, {
+      raw: { width: OUT_W, height: OUT_H, channels: 1 },
+    })
+      .sharpen({ sigma: 0.6, m1: 0, m2: 1.5 })
+      .jpeg({ quality: 95, mozjpeg: false })
       .toBuffer();
 
     // ── 5. Return base64 JPEG ─────────────────────────────────────────────

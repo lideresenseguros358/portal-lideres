@@ -178,6 +178,12 @@ function detectCorners(
 
   if (whiteCount < MIN_WHITE_COUNT) return null;
 
+  // If no pixel exceeded the corner threshold the paper is too dim to locate
+  // precisely — return null rather than using the uninitialised frame-boundary
+  // defaults (0,0), (W,0), (W,H), (0,H) which pass all later checks and produce
+  // a full-frame guide rectangle that appears shifted below the actual document.
+  if (tlScore === Infinity) return null;
+
   // ── Sanity check: minimum span ────────────────────────────────────────────
   const spanW = Math.max(trX, brX) - Math.min(tlX, blX);
   const spanH = Math.max(blY, brY) - Math.min(tlY, trY);
@@ -1153,7 +1159,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
                 playsInline
                 autoPlay
                 className="w-full block"
-                style={{ display: 'block', objectFit: 'cover' }}
+                style={{ display: 'block' }}
                 onLoadedMetadata={() => {
                   if (videoRef.current) {
                     setSvgVW(videoRef.current.videoWidth  || CAPTURE_W);
@@ -1180,7 +1186,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
               <svg
                 className="absolute inset-0 w-full h-full pointer-events-none"
                 viewBox={`0 0 ${svgVW} ${svgVH}`}
-                preserveAspectRatio="xMidYMin slice"
+                preserveAspectRatio="xMidYMid slice"
               >
                 {detectedCorners && (() => {
                   const pts = detectedCorners.map(c => `${c.x},${c.y}`).join(' ');
