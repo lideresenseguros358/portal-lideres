@@ -606,62 +606,6 @@ export default function PetCaseDetail({
           </div>
         )}
 
-        {/* ── Actions Bar ── */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {activeView !== 'history' && (
-              <button
-                onClick={() => setActiveView('history')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors duration-150"
-              >
-                <FaArrowLeft className="text-[8px]" /> Volver al histórico
-              </button>
-            )}
-            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
-              {activeView === 'history' ? 'Histórico de Mensajes' : activeView === 'compose' ? 'Nuevo Correo' : 'Enlace de Pago'}
-            </span>
-          </div>
-
-          {!isClosed && (
-            <div className="relative" ref={actionsRef}>
-              <button
-                onClick={() => setActionsOpen(!actionsOpen)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white rounded-lg text-[11px] font-semibold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
-              >
-                <FaEllipsisH className="text-[9px]" /> Acciones
-              </button>
-              {actionsOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
-                  <button
-                    onClick={() => { setActiveView('compose'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'compose' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaEnvelope className="text-[10px]" /> Enviar Correo
-                  </button>
-                  <button
-                    onClick={() => { setActiveView('payment_link'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'payment_link' ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaLink className="text-[10px]" /> Enlace de Pago
-                  </button>
-                  <button
-                    onClick={() => { setActiveView('history'); setActionsOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
-                      activeView === 'history' ? 'bg-gray-100 text-gray-800 font-semibold' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <FaHistory className="text-[10px]" /> Ver Histórico
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* ── VIEW: Message History ── */}
         {activeView === 'history' && (
           <>
@@ -829,6 +773,62 @@ export default function PetCaseDetail({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Actions Bar — outside scroll container so dropdown is never clipped ── */}
+      <div className="border-t border-gray-100 px-4 py-2 flex-shrink-0 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {activeView !== 'history' && (
+            <button
+              onClick={() => setActiveView('history')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors duration-150"
+            >
+              <FaArrowLeft className="text-[8px]" /> Volver al histórico
+            </button>
+          )}
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+            {activeView === 'history' ? 'Histórico de Mensajes' : activeView === 'compose' ? 'Nuevo Correo' : 'Enlace de Pago'}
+          </span>
+        </div>
+
+        {!isClosed && (
+          <div className="relative" ref={actionsRef}>
+            <button
+              onClick={() => setActionsOpen(!actionsOpen)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white rounded-lg text-[11px] font-semibold cursor-pointer hover:bg-[#020270] transition-colors duration-150"
+            >
+              <FaEllipsisH className="text-[9px]" /> Acciones
+            </button>
+            {actionsOpen && (
+              <div className="absolute right-0 bottom-full mb-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+                <button
+                  onClick={() => { setActiveView('compose'); setActionsOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
+                    activeView === 'compose' ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FaEnvelope className="text-[10px]" /> Enviar Correo
+                </button>
+                <button
+                  onClick={() => { setActiveView('payment_link'); setActionsOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
+                    activeView === 'payment_link' ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FaLink className="text-[10px]" /> Enlace de Pago
+                </button>
+                <button
+                  onClick={() => { setActiveView('history'); setActionsOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 cursor-pointer transition-colors duration-100 ${
+                    activeView === 'history' ? 'bg-gray-100 text-gray-800 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FaHistory className="text-[10px]" /> Ver Histórico
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
