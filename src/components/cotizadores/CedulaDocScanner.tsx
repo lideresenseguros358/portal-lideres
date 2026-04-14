@@ -1380,7 +1380,7 @@ export default function CedulaDocScanner({ value, onChange, error, skipChoice, o
               className="relative rounded-xl border border-white/20"
               style={{
                 aspectRatio: `${desktopImgNW} / ${desktopImgNH}`,
-                maxWidth: '100%',
+                width: '100%',
                 maxHeight: '100%',
               }}
             >
