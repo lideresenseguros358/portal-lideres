@@ -176,9 +176,16 @@ export function CaseActionsRow({
       <div
         className="relative bg-white"
         style={{
-          transform: `translateX(${swipeX}px)`,
-          transition: swipeX === 0 || Math.abs(swipeX) === REVEAL_WIDTH_RIGHT || Math.abs(swipeX) === REVEAL_WIDTH_LEFT ? 'transform 0.22s ease' : 'none',
-          willChange: 'transform',
+          // Only apply transform/willChange when actually swiped.
+          // At rest (swipeX===0) we must NOT set any transform or will-change because
+          // either creates a new stacking context that breaks position:fixed children
+          // (the CaseDotsMenu fixed dropdown ends up positioned relative to this div
+          // instead of the viewport, making it appear off-screen).
+          ...(swipeX !== 0 && {
+            transform: `translateX(${swipeX}px)`,
+            willChange: 'transform',
+          }),
+          transition: 'transform 0.22s ease',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
