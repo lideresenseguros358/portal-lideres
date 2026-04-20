@@ -397,38 +397,44 @@ export async function POST(request: NextRequest) {
         return poliza;
       })(),
 
-      // ── Track 3: Solicitud PDF (no polizaNumber needed — start immediately) ──
-      generateAnconSolicitudPdf({
-        nombreCompleto,
-        genero: (sexo === 'M' || sexo === 'MASCULINO' || sexo === '1') ? 'M' : 'F',
-        fechaNacDia: fnDia || '',
-        fechaNacMes: fnMes || '',
-        fechaNacAnio: fnAnio || '',
-        cedula: cedula || pasaporte || ruc || '',
-        paisNacimiento: 'PANAMÁ',
-        nacionalidad: nacionalidad || 'PANAMEÑA',
-        paisResidencia: pais_residencia || 'PANAMÁ',
-        direccionResidencial: direccion || '',
-        email: email || '',
-        telResidencia: telefono_residencial || '',
-        celular: telefono_celular || '',
-        estadoCivil: (body as Record<string, string>).estado_civil || '',
-        profesion: profesion || '',
-        ocupacion: ocupacion || '',
-        empresa: (body as Record<string, string>).empresa || '',
-        nivelIngreso: nivelIngresoLabel,
-        anioVehiculo: ano || '',
-        marcaVehiculo: nombre_marca || '',
-        modeloVehiculo: nombre_modelo || '',
-        placa: placa || '',
-        motor: no_motor || '',
-        chasis: no_chasis || vin || '',
-        valorVehiculo,
-        acreedorHipotecario: nombre_acreedor || '',
-        firmaDataUrl,
-        fechaEmision: fechaEmisionStr,
-      }).then(buf => { log('2/4', `Solicitud PDF generada: ${buf.length} bytes`); return buf as Buffer | undefined; })
-        .catch((e: unknown) => { log('2/4', `Error solicitud PDF (soft-fail): ${e}`); return undefined as Buffer | undefined; }),
+      // ── Track 3: Solicitud PDF — usa archivo adjuntado por broker/master si existe, sino auto-genera ──
+      (async (): Promise<Buffer | undefined> => {
+        if (files['solicitudFile']) {
+          log('2/4', `Usando solicitud adjuntada por broker/master (${files['solicitudFile'].buffer.length} bytes)`);
+          return files['solicitudFile'].buffer;
+        }
+        return generateAnconSolicitudPdf({
+          nombreCompleto,
+          genero: (sexo === 'M' || sexo === 'MASCULINO' || sexo === '1') ? 'M' : 'F',
+          fechaNacDia: fnDia || '',
+          fechaNacMes: fnMes || '',
+          fechaNacAnio: fnAnio || '',
+          cedula: cedula || pasaporte || ruc || '',
+          paisNacimiento: 'PANAMÁ',
+          nacionalidad: nacionalidad || 'PANAMEÑA',
+          paisResidencia: pais_residencia || 'PANAMÁ',
+          direccionResidencial: direccion || '',
+          email: email || '',
+          telResidencia: telefono_residencial || '',
+          celular: telefono_celular || '',
+          estadoCivil: (body as Record<string, string>).estado_civil || '',
+          profesion: profesion || '',
+          ocupacion: ocupacion || '',
+          empresa: (body as Record<string, string>).empresa || '',
+          nivelIngreso: nivelIngresoLabel,
+          anioVehiculo: ano || '',
+          marcaVehiculo: nombre_marca || '',
+          modeloVehiculo: nombre_modelo || '',
+          placa: placa || '',
+          motor: no_motor || '',
+          chasis: no_chasis || vin || '',
+          valorVehiculo,
+          acreedorHipotecario: nombre_acreedor || '',
+          firmaDataUrl,
+          fechaEmision: fechaEmisionStr,
+        }).then(buf => { log('2/4', `Solicitud PDF generada: ${buf.length} bytes`); return buf as Buffer | undefined; })
+          .catch((e: unknown) => { log('2/4', `Error solicitud PDF (soft-fail): ${e}`); return undefined as Buffer | undefined; });
+      })(),
 
       // ── Track 4: Pre-warm getRequiredDocuments cache (silent — result used by uploadInspectionAndDocuments) ──
       getRequiredDocuments(tipo_de_cliente || 'N').catch(() => undefined),

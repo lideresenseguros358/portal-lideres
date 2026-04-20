@@ -12,7 +12,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes, FaLock } from 'react-icons/fa';
+import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes, FaLock, FaFileAlt } from 'react-icons/fa';
 import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
@@ -77,6 +77,8 @@ export default function EmitirDanosTercerosPage() {
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  // Broker/master: adjuntar solicitud ANCÓN en el paso de resumen
+  const [brokerSolicitudFile, setBrokerSolicitudFile] = useState<File | null>(null);
 
   // ═══ Session timeout (30 min) ═══
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
@@ -1246,9 +1248,14 @@ export default function EmitirDanosTercerosPage() {
           anconForm.append('masterBrokerId', effectiveBrokerId);
         }
 
-        // Firma digital para la Solicitud de Seguros PDF
-        if (signatureRef.current) {
+        // Firma digital para la Solicitud de Seguros PDF (solo usuarios normales)
+        if (!isMaster && !isBroker && signatureRef.current) {
           anconForm.append('firmaDataUrl', signatureRef.current);
+        }
+
+        // Broker/master: solicitud adjuntada por el usuario (reemplaza auto-generación)
+        if ((isMaster || isBroker) && brokerSolicitudFile) {
+          anconForm.append('solicitudFile', brokerSolicitudFile, brokerSolicitudFile.name);
         }
 
         // Attach document files
@@ -1726,10 +1733,15 @@ export default function EmitirDanosTercerosPage() {
   // ─── STEP 4: RESUMEN Y CONFIRMACIÓN (con declaración de veracidad) ───
   if (step === 'review') {
     const isInternacionalDT = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
+    const isAnconDT = !!(selectedPlan?._isReal && (selectedPlan?.isANCON || selectedPlan?.insurerName?.includes('ANCÓN') || selectedPlan?.insurerName?.includes('Ancon')));
 
     const handleEmitClick = () => {
       if (isMaster && !masterBrokerId) {
         toast.error('Por favor, asigna un corredor antes de emitir');
+        return;
+      }
+      if (isAnconDT && (isMaster || isBroker) && !brokerSolicitudFile) {
+        toast.error('Debes adjuntar la solicitud de ANCÓN para continuar');
         return;
       }
       if (!isMaster && !isBroker && !signatureDataUrl) {
@@ -1894,6 +1906,54 @@ export default function EmitirDanosTercerosPage() {
                   </div>
                 </div>
               )}
+
+              {/* Solicitud ANCÓN — solo broker/master en flujo ANCÓN */}
+              {isAnconDT && (isMaster || isBroker) && (
+                <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-orange-200">
+                  <h6 className="font-bold text-[#010139] mb-2 text-sm uppercase tracking-wide flex items-center gap-2">
+                    <FaFileAlt className="text-orange-500" /> Solicitud de Seguro ANCÓN
+                    <span className="text-red-500 text-xs font-normal ml-1">* Requerido</span>
+                  </h6>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Como corredor o master, debes adjuntar la solicitud de seguro firmada por el asegurado.
+                    El sistema utilizará este documento en lugar de generar uno automático.
+                  </p>
+                  {brokerSolicitudFile ? (
+                    <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <FaCheckCircle className="text-green-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-green-800 truncate">{brokerSolicitudFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setBrokerSolicitudFile(null)}
+                        className="ml-auto text-xs text-red-500 hover:text-red-700 flex-shrink-0"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-orange-300 rounded-lg cursor-pointer hover:bg-orange-50 transition-colors">
+                      <FaFileAlt className="text-3xl text-orange-400" />
+                      <span className="text-sm font-semibold text-orange-600">Adjuntar Solicitud</span>
+                      <span className="text-xs text-gray-400">PDF, JPG o PNG — máx. 5 MB</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 5 * 1024 * 1024) {
+                            toast.error('El archivo no puede superar 5 MB');
+                            return;
+                          }
+                          setBrokerSolicitudFile(f);
+                          toast.success('Solicitud adjuntada correctamente');
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Términos y Condiciones */}
@@ -1970,10 +2030,10 @@ export default function EmitirDanosTercerosPage() {
             <div className="mt-8">
               <button
                 onClick={handleEmitClick}
-                disabled={isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId)}
+                disabled={isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId) || (isAnconDT && (isMaster || isBroker) && !brokerSolicitudFile)}
                 className={`w-full py-5 px-6 rounded-xl font-bold text-xl
                   flex items-center justify-center gap-3 transition-all duration-200
-                  ${isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId)
+                  ${isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId) || (isAnconDT && (isMaster || isBroker) && !brokerSolicitudFile)
                     ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                     : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'}`}
                 type="button"

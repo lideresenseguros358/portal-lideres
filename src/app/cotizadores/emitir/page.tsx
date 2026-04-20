@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaLock, FaCheckCircle, FaTimes, FaCar, FaUser, FaShieldAlt, FaClipboardCheck } from 'react-icons/fa';
+import { FaLock, FaCheckCircle, FaTimes, FaCar, FaUser, FaShieldAlt, FaClipboardCheck, FaFileAlt } from 'react-icons/fa';
 import { useCotizadorEdit } from '@/context/CotizadorEditContext';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
@@ -64,6 +64,9 @@ export default function EmitirPage() {
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  // Broker/master: adjuntar solicitud ANCÓN (DT y CC) o formulario de inspección IS CC
+  const [brokerSolicitudFile, setBrokerSolicitudFile] = useState<File | null>(null);
+  const [brokerInspeccionFile, setBrokerInspeccionFile] = useState<File | null>(null);
 
   // ═══ Emission Loading Modal state ═══
   const [showEmissionModal, setShowEmissionModal] = useState(false);
@@ -202,8 +205,14 @@ export default function EmitirPage() {
     
     // Only CC (Cobertura Completa) needs inspection step
     // IS DT (Daños a Terceros) skips inspection and goes to payment
+    // IS CC + broker/master: skip inspection — adjuntan formulario en el paso de resumen
     const isCC = quoteData?.cobertura === 'COMPLETA';
-    if (isCC) {
+    const isISForVehicle = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
+    if (isCC && isISForVehicle && (isMaster || isBroker)) {
+      // Broker/master IS CC: no inspection photos — formulario se adjunta en resumen
+      setCompletedSteps(prev => [...prev, 'inspection']);
+      router.push('/cotizadores/emitir?step=payment-info');
+    } else if (isCC) {
       router.push('/cotizadores/emitir?step=inspection');
     } else {
       // Skip inspection for DT
@@ -650,9 +659,15 @@ export default function EmitirPage() {
         
         const isCC = quoteData.cobertura === 'COMPLETA';
         const tipoCobertura = isCC ? 'Cobertura Completa' : 'Daños a Terceros';
-        
-        if (isCC && !inspectionPhotos.length) {
-          throw new Error('Faltan fotos de inspección para Cobertura Completa');
+
+        if (isCC) {
+          if (isMaster || isBroker) {
+            if (!brokerInspeccionFile) {
+              throw new Error('Debes adjuntar el formulario de inspección para continuar');
+            }
+          } else if (!inspectionPhotos.length) {
+            throw new Error('Faltan fotos de inspección para Cobertura Completa');
+          }
         }
         
         // Emitir con API real de INTERNACIONAL
@@ -869,20 +884,24 @@ export default function EmitirPage() {
             expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
           }
           
-          // Inspection photos (only for CC)
-          if (isCC && inspectionPhotos.length > 0) {
-            for (const photo of inspectionPhotos) {
-              if (photo.file) {
-                expedienteForm.append(`photo_${photo.id}`, photo.file);
+          // Fotos de inspección (CC) — broker/master adjuntan su formulario en lugar de fotos
+          if (isCC) {
+            if ((isMaster || isBroker) && brokerInspeccionFile) {
+              expedienteForm.append('inspeccionFile', brokerInspeccionFile, brokerInspeccionFile.name);
+            } else if (inspectionPhotos.length > 0) {
+              for (const photo of inspectionPhotos) {
+                if (photo.file) {
+                  expedienteForm.append(`photo_${photo.id}`, photo.file);
+                }
               }
             }
           }
-          
+
           const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
             method: 'POST',
             body: expedienteForm,
           });
-          
+
           const expedienteResult = await expedienteResponse.json();
           if (expedienteResult.emails?.allOk) {
             console.log('[IS EXPEDIENTE] ✅ Emails enviados:', JSON.stringify(expedienteResult.emails));
@@ -1224,6 +1243,11 @@ export default function EmitirPage() {
         anconForm.append('emissionData', JSON.stringify(anconEmitBody));
         if (effectiveBrokerId) {
           anconForm.append('masterBrokerId', effectiveBrokerId);
+        }
+
+        // Broker/master: solicitud adjuntada (reemplaza auto-generación del PDF)
+        if ((isMaster || isBroker) && brokerSolicitudFile) {
+          anconForm.append('solicitudFile', brokerSolicitudFile, brokerSolicitudFile.name);
         }
 
         // Attach inspection photos
@@ -1835,6 +1859,16 @@ export default function EmitirPage() {
         toast.error('Por favor, asigna un corredor antes de emitir');
         return;
       }
+      // ANCON CC: broker/master debe adjuntar la solicitud
+      if (isAncon && (isMaster || isBroker) && !brokerSolicitudFile) {
+        toast.error('Debes adjuntar la solicitud de ANCÓN para continuar');
+        return;
+      }
+      // IS CC: broker/master debe adjuntar el formulario de inspección
+      if (isInternacional && isAutoCompleta && (isMaster || isBroker) && !brokerInspeccionFile) {
+        toast.error('Debes adjuntar el formulario de inspección para continuar');
+        return;
+      }
       if (!isMaster && !isBroker && !declarationAccepted) {
         toast.error('Debes aceptar los Términos y Condiciones para continuar');
         return;
@@ -2000,6 +2034,84 @@ export default function EmitirPage() {
                 </div>
               )}
 
+              {/* Solicitud ANCÓN — solo broker/master en flujo ANCÓN CC */}
+              {isAncon && (isMaster || isBroker) && (
+                <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-orange-200">
+                  <h6 className="font-bold text-[#010139] mb-2 text-sm uppercase tracking-wide flex items-center gap-2">
+                    <FaFileAlt className="text-orange-500" /> Solicitud de Seguro ANCÓN
+                    <span className="text-red-500 text-xs font-normal ml-1">* Requerido</span>
+                  </h6>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Como corredor o master, debes adjuntar la solicitud de seguro firmada por el asegurado.
+                    El sistema utilizará este documento en lugar de generar uno automático.
+                  </p>
+                  {brokerSolicitudFile ? (
+                    <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <FaCheckCircle className="text-green-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-green-800 truncate">{brokerSolicitudFile.name}</span>
+                      <button type="button" onClick={() => setBrokerSolicitudFile(null)} className="ml-auto text-xs text-red-500 hover:text-red-700 flex-shrink-0">Quitar</button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-orange-300 rounded-lg cursor-pointer hover:bg-orange-50 transition-colors">
+                      <FaFileAlt className="text-3xl text-orange-400" />
+                      <span className="text-sm font-semibold text-orange-600">Adjuntar Solicitud</span>
+                      <span className="text-xs text-gray-400">PDF, JPG o PNG — máx. 5 MB</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 5 * 1024 * 1024) { toast.error('El archivo no puede superar 5 MB'); return; }
+                          setBrokerSolicitudFile(f);
+                          toast.success('Solicitud adjuntada correctamente');
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {/* Formulario de Inspección IS — solo broker/master en flujo IS CC */}
+              {isInternacional && isAutoCompleta && (isMaster || isBroker) && (
+                <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-blue-200">
+                  <h6 className="font-bold text-[#010139] mb-2 text-sm uppercase tracking-wide flex items-center gap-2">
+                    <FaFileAlt className="text-blue-500" /> Formulario de Inspección IS
+                    <span className="text-red-500 text-xs font-normal ml-1">* Requerido</span>
+                  </h6>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Como corredor o master, debes adjuntar el formulario de inspección vehicular firmado.
+                    Este documento reemplaza las fotos de inspección del sistema.
+                  </p>
+                  {brokerInspeccionFile ? (
+                    <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <FaCheckCircle className="text-green-500 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-green-800 truncate">{brokerInspeccionFile.name}</span>
+                      <button type="button" onClick={() => setBrokerInspeccionFile(null)} className="ml-auto text-xs text-red-500 hover:text-red-700 flex-shrink-0">Quitar</button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center gap-2 p-5 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                      <FaFileAlt className="text-3xl text-blue-400" />
+                      <span className="text-sm font-semibold text-blue-600">Adjuntar Formulario de Inspección</span>
+                      <span className="text-xs text-gray-400">PDF, JPG o PNG — máx. 5 MB</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 5 * 1024 * 1024) { toast.error('El archivo no puede superar 5 MB'); return; }
+                          setBrokerInspeccionFile(f);
+                          toast.success('Formulario de inspección adjuntado');
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+
               {/* Signature indicator for IS */}
               {signatureDataUrl && (
                 <div className="bg-white rounded-lg p-4 shadow-sm flex items-center gap-3">
@@ -2068,9 +2180,15 @@ export default function EmitirPage() {
               <div className="mt-4">
                 <button
                   onClick={handleEmitClick}
-                  disabled={isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId)}
+                  disabled={
+                    isConfirming ||
+                    (!isMaster && !isBroker && !declarationAccepted) ||
+                    (isMaster && !masterBrokerId) ||
+                    (isAncon && (isMaster || isBroker) && !brokerSolicitudFile) ||
+                    (isInternacional && isAutoCompleta && (isMaster || isBroker) && !brokerInspeccionFile)
+                  }
                   className={`w-full py-5 px-6 rounded-xl font-bold text-xl flex items-center justify-center gap-3 transition-all duration-200
-                    ${isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId)
+                    ${isConfirming || (!isMaster && !isBroker && !declarationAccepted) || (isMaster && !masterBrokerId) || (isAncon && (isMaster || isBroker) && !brokerSolicitudFile) || (isInternacional && isAutoCompleta && (isMaster || isBroker) && !brokerInspeccionFile)
                       ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                       : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'}`}
                   type="button"
