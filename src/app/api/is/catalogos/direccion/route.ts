@@ -12,6 +12,7 @@ import { isGet } from '@/lib/is/http-client';
 import { IS_ENDPOINTS, type ISEnvironment, getISDefaultEnv } from '@/lib/is/config';
 import { URBANIZACIONES_FALLBACK } from '@/lib/is/urbanizaciones-fallback';
 import { PROVINCIAS_FALLBACK } from '@/lib/is/provincias-fallback';
+import { DISTRITOS_POR_PROVINCIA } from '@/lib/is/distritos-fallback';
 
 // In-memory cache for address catalogs (24h TTL — these rarely change)
 const addressCache = new Map<string, { data: any; exp: number }>();
@@ -69,6 +70,15 @@ export async function GET(request: NextRequest) {
     const response = await isGet<{ Table: any[] }>(endpoint, env);
 
     if (!response.success) {
+      // Fallback de distritos cuando IS API no responde
+      if (tipo === 'distritos') {
+        const codprovincia = parseInt(searchParams.get('codprovincia') || '0');
+        const fallback = DISTRITOS_POR_PROVINCIA[codprovincia];
+        if (fallback?.length) {
+          const sorted = [...fallback].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es'));
+          return NextResponse.json({ success: true, data: sorted, source: 'fallback' });
+        }
+      }
       return NextResponse.json({ error: response.error || 'Error consultando catálogo' }, { status: 500 });
     }
 

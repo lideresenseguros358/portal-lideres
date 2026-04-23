@@ -13,6 +13,7 @@ import CedulaQRScanner from './CedulaQRScanner';
 import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
 import type { Acreedor } from '@/lib/constants/acreedores';
+import { BARRIADAS_POR_PROVINCIA } from '@/lib/is/barriadas-por-provincia';
 
 interface EmissionDataFormProps {
   quoteData: any;
@@ -160,6 +161,17 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   const [corregimientos, setCorregimientos] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [urbanizaciones, setUrbanizaciones] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [loadingAddr, setLoadingAddr] = useState<string>('');
+
+  // Sentinel code for "Otro" in the barriada/urbanización dropdown
+  const OTRO_BARRIADA_DATO = 9999;
+
+  // Barriadas filtered by selected province — always includes "Otro" at the bottom
+  const filteredUrbanizaciones = useMemo(() => {
+    if (!formData.codProvincia) return urbanizaciones;
+    const allowed = new Set(BARRIADAS_POR_PROVINCIA[formData.codProvincia] ?? []);
+    if (allowed.size === 0) return urbanizaciones;
+    return urbanizaciones.filter(u => allowed.has(u.DATO));
+  }, [urbanizaciones, formData.codProvincia]);
   const catalogsFetched = useRef(false);
 
   // Fetch provincias + urbanizaciones on mount (only for IS) — guarded against StrictMode double-mount
@@ -227,7 +239,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
       const corr = corregimientos.find(c => c.DATO === formData.codCorregimiento);
       if (corr) parts.push(corr.TEXTO);
     }
-    if (formData.codUrbanizacion) {
+    if (formData.codUrbanizacion && formData.codUrbanizacion !== OTRO_BARRIADA_DATO) {
       const urb = urbanizaciones.find(u => u.DATO === formData.codUrbanizacion);
       if (urb) parts.push(urb.TEXTO);
     }
@@ -1088,7 +1100,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                     {errors.codCorregimiento && <p className="text-xs text-red-500 mt-1">{errors.codCorregimiento}</p>}
                   </div>
 
-                  {/* Urbanización */}
+                  {/* Urbanización / Barriada */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">
                       Urbanización / Barriada
@@ -1102,10 +1114,16 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       className="w-full px-3 py-2.5 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
                     >
                       <option value="">Seleccionar (opcional)</option>
-                      {[...urbanizaciones].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(u => (
+                      {[...filteredUrbanizaciones].sort((a, b) => a.TEXTO.localeCompare(b.TEXTO, 'es')).map(u => (
                         <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>
                       ))}
+                      <option value={OTRO_BARRIADA_DATO}>Otro</option>
                     </select>
+                    {formData.codUrbanizacion === OTRO_BARRIADA_DATO && (
+                      <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        Puedes ingresar tu barriada manualmente en el campo Dirección Completa.
+                      </p>
+                    )}
                   </div>
                 </div>
 

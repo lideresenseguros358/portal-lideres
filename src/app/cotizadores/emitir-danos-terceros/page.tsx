@@ -729,7 +729,7 @@ export default function EmitirDanosTercerosPage() {
             vcodprovincia: emissionData.codProvincia,
             vcoddistrito: emissionData.codDistrito,
             vcodcorregimiento: emissionData.codCorregimiento,
-            vcodurbanizacion: emissionData.codUrbanizacion || 0,
+            vcodurbanizacion: (emissionData.codUrbanizacion && emissionData.codUrbanizacion !== 9999) ? emissionData.codUrbanizacion : 0,
             vcasaapto: emissionData.casaApto || '',
             // Vehículo
             vcodmarca: vehicleData?.marcaCodigo || selectedPlan._vcodmarca,
