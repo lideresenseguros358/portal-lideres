@@ -211,12 +211,14 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
   }, []);
 
   // Fetch corregimientos when distrito changes
-  const fetchCorregimientos = useCallback((codProvincia: number, codDistrito: number) => {
+  // nomDistrito is passed so the route can use the name-based fallback regardless of IS API codes
+  const fetchCorregimientos = useCallback((codProvincia: number, codDistrito: number, nomDistrito = '') => {
     setCorregimientos([]);
     setFormData(prev => ({ ...prev, codCorregimiento: undefined, codUrbanizacion: undefined }));
     if (!codDistrito) return;
     setLoadingAddr('corregimientos');
-    fetch(`/api/is/catalogos/direccion?tipo=corregimientos&codpais=1&codprovincia=${codProvincia}&coddistrito=${codDistrito}`)
+    const nomParam = nomDistrito ? `&nomdistrito=${encodeURIComponent(nomDistrito)}` : '';
+    fetch(`/api/is/catalogos/direccion?tipo=corregimientos&codpais=1&codprovincia=${codProvincia}&coddistrito=${codDistrito}${nomParam}`)
       .then(r => r.json())
       .then(d => { if (d.data) setCorregimientos(d.data); })
       .catch(() => {})
@@ -1061,7 +1063,10 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                       onChange={(e) => {
                         const val = parseInt(e.target.value) || 0;
                         setFormData(prev => ({ ...prev, codDistrito: val || undefined }));
-                        if (formData.codProvincia) fetchCorregimientos(formData.codProvincia, val);
+                        if (formData.codProvincia) {
+                          const nom = distritos.find(d => d.DATO === val)?.TEXTO || '';
+                          fetchCorregimientos(formData.codProvincia, val, nom);
+                        }
                       }}
                       className={`w-full px-3 py-2.5 text-base border-2 rounded-lg focus:outline-none bg-white ${
                         errors.codDistrito ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
