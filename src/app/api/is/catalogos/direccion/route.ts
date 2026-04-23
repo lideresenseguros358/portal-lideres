@@ -26,21 +26,21 @@ const CACHE_TTL = 24 * 60 * 60 * 1000;
 function normalizeDistritos(rawData: any[]): { DATO: number; TEXTO: string }[] {
   return rawData
     .map((r: any) => {
-      const dato = r.codigoDistrito ?? r.codDistrito ?? r.codDistrito ?? r.codigo ?? r.id ?? 0;
+      const dato = r.codigoDistrito ?? r.codDistrito ?? r.codigo ?? r.id;
       const texto = r.nombreDistrito ?? r.nomDistrito ?? r.nombre ?? r.descripcion ?? '';
-      return { DATO: Number(dato), TEXTO: String(texto).trim() };
+      return { DATO: dato != null ? Number(dato) : NaN, TEXTO: String(texto).trim() };
     })
-    .filter(r => r.DATO > 0 && r.TEXTO.length > 0 && r.TEXTO !== 'NO' && r.TEXTO !== 'NO USA');
+    .filter(r => !isNaN(r.DATO) && r.TEXTO.length > 0 && r.TEXTO !== 'NO' && r.TEXTO !== 'NO USA');
 }
 
 function normalizeCorregimientos(rawData: any[]): { DATO: number; TEXTO: string }[] {
   return rawData
     .map((r: any) => {
-      const dato = r.codigoCorregimiento ?? r.codCorregimiento ?? r.codigo ?? r.id ?? 0;
+      const dato = r.codigoCorregimiento ?? r.codCorregimiento ?? r.codigo ?? r.id;
       const texto = r.nombreCorregimiento ?? r.nomCorregimiento ?? r.nombre ?? r.descripcion ?? '';
-      return { DATO: Number(dato), TEXTO: String(texto).trim() };
+      return { DATO: dato != null ? Number(dato) : NaN, TEXTO: String(texto).trim() };
     })
-    .filter(r => r.DATO > 0 && r.TEXTO.length > 0);
+    .filter(r => !isNaN(r.DATO) && r.TEXTO.length > 0);
 }
 
 /** Devuelve fallback de corregimientos por nombre de distrito (case-insensitive).

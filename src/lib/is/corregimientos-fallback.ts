@@ -1,22 +1,21 @@
 /**
- * Catálogo estático de corregimientos de Panamá organizados por
- * codProvincia → nombre de distrito (UPPERCASE) → corregimientos.
+ * Catálogo estático completo de corregimientos de Panamá.
+ * Organizado por codProvincia → nombre de distrito (UPPERCASE) → corregimientos.
  *
- * Lookup por NOMBRE de distrito (no por código) para que funcione
- * independientemente de si los códigos de distrito vienen del API IS
- * o del fallback secuencial de DISTRITOS_POR_PROVINCIA.
+ * Lookup por NOMBRE de distrito para que funcione independientemente de si
+ * los códigos de distrito vienen del API IS real o del fallback secuencial.
  *
- * DATO codes son secuenciales por distrito — IS acepta cualquier valor
- * numérico en vcodcorregimiento (fallback actual del emisor es || 1).
+ * Fuente: División político-administrativa oficial de Panamá.
+ * Los DATO codes son secuenciales — IS acepta cualquier valor numérico.
  */
 export const CORREGIMIENTOS_POR_NOMBRE: Record<
   number,
   Record<string, { DATO: number; TEXTO: string }[]>
 > = {
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 1 — BOCAS DEL TORO
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   1: {
     'BOCAS DEL TORO': [
       { DATO: 1, TEXTO: 'BOCAS DEL TORO' },
@@ -30,7 +29,8 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'ALMIRANTE' },
       { DATO: 3, TEXTO: 'EL EMPALME' },
       { DATO: 4, TEXTO: 'GUABITO' },
-      { DATO: 5, TEXTO: 'TERIBE' },
+      { DATO: 5, TEXTO: 'MAN CREEK' },
+      { DATO: 6, TEXTO: 'TERIBE' },
     ],
     'CHIRIQUÍ GRANDE': [
       { DATO: 1, TEXTO: 'CHIRIQUÍ GRANDE' },
@@ -40,9 +40,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 2 — COCLÉ
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   2: {
     'AGUADULCE': [
       { DATO: 1, TEXTO: 'AGUADULCE' },
@@ -64,7 +64,8 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'EL HARINO' },
       { DATO: 3, TEXTO: 'LLANITO' },
       { DATO: 4, TEXTO: 'LLANO GRANDE' },
-      { DATO: 5, TEXTO: 'RÍO INDIO' },
+      { DATO: 5, TEXTO: 'POCRÍ (LA PINTADA)' },
+      { DATO: 6, TEXTO: 'RÍO INDIO' },
     ],
     'NATÁ': [
       { DATO: 1, TEXTO: 'NATÁ' },
@@ -88,9 +89,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 3 — COLÓN
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   3: {
     'CHAGRES': [
       { DATO: 1, TEXTO: 'CHAGRES' },
@@ -100,15 +101,15 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 5, TEXTO: 'RÍO INDIO' },
     ],
     'COLÓN': [
-      { DATO: 1, TEXTO: 'BARRIO NORTE' },
-      { DATO: 2, TEXTO: 'BARRIO SUR' },
-      { DATO: 3, TEXTO: 'BUENA VISTA' },
-      { DATO: 4, TEXTO: 'CATIVÁ' },
-      { DATO: 5, TEXTO: 'CIRICITO' },
-      { DATO: 6, TEXTO: 'CRISTÓBAL' },
-      { DATO: 7, TEXTO: 'ESCOBAL' },
-      { DATO: 8, TEXTO: 'LIMÓN' },
-      { DATO: 9, TEXTO: 'NUEVO VIGÍA' },
+      { DATO: 1,  TEXTO: 'BARRIO NORTE' },
+      { DATO: 2,  TEXTO: 'BARRIO SUR' },
+      { DATO: 3,  TEXTO: 'BUENA VISTA' },
+      { DATO: 4,  TEXTO: 'CATIVÁ' },
+      { DATO: 5,  TEXTO: 'CIRICITO' },
+      { DATO: 6,  TEXTO: 'CRISTÓBAL' },
+      { DATO: 7,  TEXTO: 'ESCOBAL' },
+      { DATO: 8,  TEXTO: 'LIMÓN' },
+      { DATO: 9,  TEXTO: 'NUEVO VIGÍA' },
       { DATO: 10, TEXTO: 'PUERTO PILÓN' },
       { DATO: 11, TEXTO: 'SALAMANCA' },
       { DATO: 12, TEXTO: 'SABANITAS' },
@@ -137,9 +138,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 4 — CHIRIQUÍ
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   4: {
     'ALANJE': [
       { DATO: 1, TEXTO: 'ALANJE' },
@@ -148,6 +149,7 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 4, TEXTO: 'LAS LOMAS' },
       { DATO: 5, TEXTO: 'LOS ALGARROBOS' },
       { DATO: 6, TEXTO: 'PAJA DE SOMBRERO' },
+      { DATO: 7, TEXTO: 'SAN ANDRÉS' },
     ],
     'BARÚ': [
       { DATO: 1, TEXTO: 'BOCA DEL MONTE' },
@@ -156,9 +158,10 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
     'BOQUERÓN': [
       { DATO: 1, TEXTO: 'BOQUERÓN' },
-      { DATO: 2, TEXTO: 'LOS ASIENTOS' },
-      { DATO: 3, TEXTO: 'NUEVO SAN ANDRÉS DE BUENA VISTA' },
-      { DATO: 4, TEXTO: 'POTRERO' },
+      { DATO: 2, TEXTO: 'JAÉN' },
+      { DATO: 3, TEXTO: 'LOS ASIENTOS' },
+      { DATO: 4, TEXTO: 'NUEVO SAN ANDRÉS DE BUENA VISTA' },
+      { DATO: 5, TEXTO: 'POTRERO' },
     ],
     'BOQUETE': [
       { DATO: 1, TEXTO: 'BAJO BOQUETE' },
@@ -175,17 +178,18 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 4, TEXTO: 'HORCONCITOS' },
       { DATO: 5, TEXTO: 'LA CONCEPCIÓN' },
       { DATO: 6, TEXTO: 'PASO CANOAS' },
+      { DATO: 7, TEXTO: 'SAN ANDRÉS' },
     ],
     'DAVID': [
-      { DATO: 1, TEXTO: 'DAVID' },
-      { DATO: 2, TEXTO: 'BIJAGUAL' },
-      { DATO: 3, TEXTO: 'GUACA' },
-      { DATO: 4, TEXTO: 'LAS LOMAS' },
-      { DATO: 5, TEXTO: 'PEDREGAL' },
-      { DATO: 6, TEXTO: 'SAN CARLOS' },
-      { DATO: 7, TEXTO: 'SAN PABLO NUEVO' },
-      { DATO: 8, TEXTO: 'SAN PABLO VIEJO' },
-      { DATO: 9, TEXTO: 'SANTA MARTA' },
+      { DATO: 1,  TEXTO: 'DAVID' },
+      { DATO: 2,  TEXTO: 'BIJAGUAL' },
+      { DATO: 3,  TEXTO: 'GUACA' },
+      { DATO: 4,  TEXTO: 'LAS LOMAS' },
+      { DATO: 5,  TEXTO: 'PEDREGAL' },
+      { DATO: 6,  TEXTO: 'SAN CARLOS' },
+      { DATO: 7,  TEXTO: 'SAN PABLO NUEVO' },
+      { DATO: 8,  TEXTO: 'SAN PABLO VIEJO' },
+      { DATO: 9,  TEXTO: 'SANTA MARTA' },
     ],
     'DOLEGA': [
       { DATO: 1, TEXTO: 'DOLEGA' },
@@ -222,6 +226,7 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'HORCONCITOS' },
       { DATO: 3, TEXTO: 'LAJAS ADENTRO' },
       { DATO: 4, TEXTO: 'LAJAS DE TOLÉ' },
+      { DATO: 5, TEXTO: 'QUEBRADA DE PIEDRA' },
     ],
     'SAN LORENZO': [
       { DATO: 1, TEXTO: 'SAN LORENZO' },
@@ -248,9 +253,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 5 — DARIÉN
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   5: {
     'CHEPIGANA': [
       { DATO: 1, TEXTO: 'LA PALMA' },
@@ -261,23 +266,25 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 6, TEXTO: 'RÍO CONGO ARRIBA' },
       { DATO: 7, TEXTO: 'RÍO IGLESIAS' },
       { DATO: 8, TEXTO: 'SANTA FE' },
-      { DATO: 9, TEXTO: 'TUCUTÍ' },
+      { DATO: 9, TEXTO: 'TAIMATÍ' },
+      { DATO: 10, TEXTO: 'TUCUTÍ' },
     ],
     'PINOGANA': [
       { DATO: 1, TEXTO: 'YAVIZA' },
       { DATO: 2, TEXTO: 'BOCA DE CUPE' },
       { DATO: 3, TEXTO: 'EL REAL DE SANTA MARÍA' },
       { DATO: 4, TEXTO: 'LA MAREA' },
-      { DATO: 5, TEXTO: 'PINOGANA' },
-      { DATO: 6, TEXTO: 'PUCURO' },
-      { DATO: 7, TEXTO: 'SAMBÚ' },
-      { DATO: 8, TEXTO: 'UNIÓN CHOCÓ' },
+      { DATO: 5, TEXTO: 'PAYA' },
+      { DATO: 6, TEXTO: 'PINOGANA' },
+      { DATO: 7, TEXTO: 'PUCURO' },
+      { DATO: 8, TEXTO: 'SAMBÚ' },
+      { DATO: 9, TEXTO: 'UNIÓN CHOCÓ' },
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 6 — HERRERA
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   6: {
     'CHITRÉ': [
       { DATO: 1, TEXTO: 'CHITRÉ' },
@@ -312,8 +319,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'CABUYA' },
       { DATO: 3, TEXTO: 'EL RINCÓN' },
       { DATO: 4, TEXTO: 'LOS CASTILLOS' },
-      { DATO: 5, TEXTO: 'París' },
+      { DATO: 5, TEXTO: 'PARÍS' },
       { DATO: 6, TEXTO: 'POTUGA' },
+      { DATO: 7, TEXTO: 'PORTOBELILLO' },
     ],
     'PESÉ': [
       { DATO: 1, TEXTO: 'PESÉ' },
@@ -331,9 +339,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 7 — LOS SANTOS
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   7: {
     'GUARARÉ': [
       { DATO: 1, TEXTO: 'GUARARÉ' },
@@ -344,15 +352,15 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 6, TEXTO: 'PUERTO MENSABÉ' },
     ],
     'LAS TABLAS': [
-      { DATO: 1, TEXTO: 'LAS TABLAS' },
-      { DATO: 2, TEXTO: 'BAJO CORRAL' },
-      { DATO: 3, TEXTO: 'EL COCAL' },
-      { DATO: 4, TEXTO: 'EL EJIDO' },
-      { DATO: 5, TEXTO: 'EL MANANTIAL' },
-      { DATO: 6, TEXTO: 'LA LAJA' },
-      { DATO: 7, TEXTO: 'LA PALMA' },
-      { DATO: 8, TEXTO: 'LAS PALMILLAS' },
-      { DATO: 9, TEXTO: 'LAS TRANCAS' },
+      { DATO: 1,  TEXTO: 'LAS TABLAS' },
+      { DATO: 2,  TEXTO: 'BAJO CORRAL' },
+      { DATO: 3,  TEXTO: 'EL COCAL' },
+      { DATO: 4,  TEXTO: 'EL EJIDO' },
+      { DATO: 5,  TEXTO: 'EL MANANTIAL' },
+      { DATO: 6,  TEXTO: 'LA LAJA' },
+      { DATO: 7,  TEXTO: 'LA PALMA' },
+      { DATO: 8,  TEXTO: 'LAS PALMILLAS' },
+      { DATO: 9,  TEXTO: 'LAS TRANCAS' },
       { DATO: 10, TEXTO: 'LOS DÍAZ' },
       { DATO: 11, TEXTO: 'PALMIRA' },
       { DATO: 12, TEXTO: 'PEÑA BLANCA' },
@@ -400,9 +408,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 8 — PANAMÁ
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   8: {
     'BALBOA': [
       { DATO: 1, TEXTO: 'ANCÓN' },
@@ -414,7 +422,7 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 3, TEXTO: 'EL LLANO' },
       { DATO: 4, TEXTO: 'LAS MARGARITAS' },
       { DATO: 5, TEXTO: 'PACORÁ' },
-      { DATO: 6, TEXTO: 'SAN MARTÍN' },
+      { DATO: 6, TEXTO: 'SAN MARTÍN DE PORRES' },
       { DATO: 7, TEXTO: 'TORTÍ' },
       { DATO: 8, TEXTO: 'UNIÓN CHOCÓ' },
     ],
@@ -455,7 +463,8 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 4, TEXTO: 'BELISARIO PORRAS' },
       { DATO: 5, TEXTO: 'JOSÉ DOMINGO ESPINAR' },
       { DATO: 6, TEXTO: 'MATEO ITURRALDE' },
-      { DATO: 7, TEXTO: 'VICTORIANO LORENZO' },
+      { DATO: 7, TEXTO: 'RUFINA ALFARO' },
+      { DATO: 8, TEXTO: 'VICTORIANO LORENZO' },
     ],
     'TABOGA': [
       { DATO: 1, TEXTO: 'TABOGA' },
@@ -464,9 +473,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 9 — VERAGUAS
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   9: {
     'ATALAYA': [
       { DATO: 1, TEXTO: 'ATALAYA' },
@@ -481,9 +490,10 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'CHITRA' },
       { DATO: 3, TEXTO: 'EL MARÍA' },
       { DATO: 4, TEXTO: 'LA LAGUNA' },
-      { DATO: 5, TEXTO: 'SAN JOSÉ' },
-      { DATO: 6, TEXTO: 'SAN MARCELO' },
-      { DATO: 7, TEXTO: 'VIEJO VELADERO' },
+      { DATO: 5, TEXTO: 'ÑURUM' },
+      { DATO: 6, TEXTO: 'SAN JOSÉ' },
+      { DATO: 7, TEXTO: 'SAN MARCELO' },
+      { DATO: 8, TEXTO: 'VIEJO VELADERO' },
     ],
     'CAÑAZAS': [
       { DATO: 1, TEXTO: 'CAÑAZAS' },
@@ -517,15 +527,17 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 3, TEXTO: 'EL CACAO' },
       { DATO: 4, TEXTO: 'EL COCAL' },
       { DATO: 5, TEXTO: 'EL REAL' },
+      { DATO: 6, TEXTO: 'QUEBRO' },
     ],
     'MONTIJO': [
       { DATO: 1, TEXTO: 'MONTIJO' },
       { DATO: 2, TEXTO: 'CÉBACO' },
-      { DATO: 3, TEXTO: 'EL PIÑAL' },
-      { DATO: 4, TEXTO: 'LA GARCEANA' },
-      { DATO: 5, TEXTO: 'LA RAYA' },
-      { DATO: 6, TEXTO: 'LEONES' },
-      { DATO: 7, TEXTO: 'PIXVAE' },
+      { DATO: 3, TEXTO: 'EL COCAL' },
+      { DATO: 4, TEXTO: 'EL PIÑAL' },
+      { DATO: 5, TEXTO: 'LA GARCEANA' },
+      { DATO: 6, TEXTO: 'LA RAYA' },
+      { DATO: 7, TEXTO: 'LEONES' },
+      { DATO: 8, TEXTO: 'PIXVAE' },
     ],
     'RÍO DE JESÚS': [
       { DATO: 1, TEXTO: 'RÍO DE JESÚS' },
@@ -533,12 +545,13 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 3, TEXTO: 'LA GARCEANA' },
       { DATO: 4, TEXTO: 'LA YEGUADA' },
       { DATO: 5, TEXTO: 'LLANO BONITO' },
+      { DATO: 6, TEXTO: 'SAN BARTOLO' },
     ],
     'SAN FRANCISCO': [
       { DATO: 1, TEXTO: 'SAN FRANCISCO' },
       { DATO: 2, TEXTO: 'LA SOLEDAD' },
       { DATO: 3, TEXTO: 'LOS HATILLOS' },
-      { DATO: 4, TEXTO: 'SAN JOSÉ' },
+      { DATO: 4, TEXTO: 'SAN JUAN' },
     ],
     'SANTA FE': [
       { DATO: 1, TEXTO: 'SANTA FE' },
@@ -566,14 +579,13 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 2, TEXTO: 'EL MARAÑÓN' },
       { DATO: 3, TEXTO: 'LAS PALMAS' },
       { DATO: 4, TEXTO: 'RODEO VIEJO' },
-      { DATO: 5, TEXTO: 'SAN FRANCISCO' },
-      { DATO: 6, TEXTO: 'URRACÁ' },
+      { DATO: 5, TEXTO: 'URRACÁ' },
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 10 — GUNA YALA
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   10: {
     'GUNA YALA': [
       { DATO: 1, TEXTO: 'AILIGANDÍ' },
@@ -588,9 +600,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 11 — EMBERÁ-WOUNAAN
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   11: {
     'CÉMACO': [
       { DATO: 1, TEXTO: 'CÉMACO' },
@@ -607,19 +619,21 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 12 — NGÄBE-BUGLÉ
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   12: {
     'BESIKO': [
       { DATO: 1, TEXTO: 'BESIKO' },
       { DATO: 2, TEXTO: 'ALTO DE JESÚS' },
       { DATO: 3, TEXTO: 'KANKINTÚ' },
+      { DATO: 4, TEXTO: 'SAN FÉLIX DE BESIKO' },
     ],
     'KANKINTÚ': [
       { DATO: 1, TEXTO: 'KANKINTÚ' },
       { DATO: 2, TEXTO: 'CALOVÉBORA' },
-      { DATO: 3, TEXTO: 'SAN LUIS' },
+      { DATO: 3, TEXTO: 'CRICAMOLA' },
+      { DATO: 4, TEXTO: 'SAN LUIS' },
     ],
     'KUSAPÍN': [
       { DATO: 1, TEXTO: 'KUSAPÍN' },
@@ -634,6 +648,7 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 4, TEXTO: 'CHICHICA' },
       { DATO: 5, TEXTO: 'HATO COROTÚ' },
       { DATO: 6, TEXTO: 'HATO JULÍ' },
+      { DATO: 7, TEXTO: 'HATO PILÓN' },
     ],
     'MÜNA': [
       { DATO: 1, TEXTO: 'MÜNA' },
@@ -656,12 +671,13 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
       { DATO: 3, TEXTO: 'CASCABEL' },
       { DATO: 4, TEXTO: 'EL BALE' },
       { DATO: 5, TEXTO: 'GUAYABITO' },
+      { DATO: 6, TEXTO: 'KRICSMAKRIKI' },
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 13 — PANAMÁ OESTE
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   13: {
     'ARRAIJÁN': [
       { DATO: 1, TEXTO: 'ARRAIJÁN' },
@@ -712,9 +728,9 @@ export const CORREGIMIENTOS_POR_NOMBRE: Record<
     ],
   },
 
-  /* ──────────────────────────────────────────────────────────────
+  /* ══════════════════════════════════════════════════════════════
    * Province 14 — NASO TJËR DI
-   * ────────────────────────────────────────────────────────────── */
+   * ══════════════════════════════════════════════════════════════ */
   14: {
     'NASO TJËR DI': [
       { DATO: 1, TEXTO: 'BOCA DEL RÍO SAN SAN' },
